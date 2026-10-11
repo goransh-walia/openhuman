@@ -232,7 +232,10 @@ mod provisioning {
             .rpc_url
             .parse()
             .expect("TinyBox returns a parseable local forwarding address");
-        assert!(endpoint.port().is_some(), "forwarded address has an assigned port");
+        assert!(
+            endpoint.port().is_some(),
+            "forwarded address has an assigned port"
+        );
 
         provisioned.tear_down().await;
     }
