@@ -1,13 +1,12 @@
 use super::specs::tool_specs_for_loaded_config;
 use super::*;
-use tinymcp::ServerToolSpecExt;
 
 /// The `tools/list` result this config advertises, rendered through the same
 /// `tinymcp` conversion the served catalog uses.
 fn list_tools_result_for_config(config: &crate::config::Config) -> Value {
     let tools = tool_specs_for_loaded_config(config)
         .iter()
-        .map(|spec| server_tool_spec(spec).to_json())
+        .map(|spec| serde_json::to_value(server_tool_spec(spec)).expect("tool spec serializes"))
         .collect::<Vec<_>>();
     json!({ "tools": tools })
 }

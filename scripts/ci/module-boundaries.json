@@ -133,11 +133,6 @@
     },
     {
       "scope": "hosts",
-      "package": "tinyvoice",
-      "reason": "Capture and hotkey lifecycles need module operations."
-    },
-    {
-      "scope": "hosts",
       "package": "tinywallet-crypto",
       "reason": "Validation, transaction construction, web3 and x402 need module operations."
     },
@@ -150,11 +145,6 @@
       "scope": "hosts",
       "package": "tinywallet-x402",
       "reason": "Validation, transaction construction, web3 and x402 need module operations."
-    },
-    {
-      "scope": "hosts",
-      "package": "cpal",
-      "reason": "Voice capture and the accessibility microphone probe still link host audio-device access."
     }
   ],
   "excludedSubsystems": [

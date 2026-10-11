@@ -289,6 +289,50 @@ async fn bus_calls_preserve_tuple_arity_and_never_downgrade_confidentiality() {
 }
 
 #[cfg(feature = "modules")]
+#[tokio::test]
+async fn private_object_clients_dispatch_only_to_the_configured_object() {
+    use tinybus::{broker::Broker, transport::memory::MemoryBus, Connection, ObjectPath};
+    let bus = MemoryBus::new();
+    Broker::new().spawn(bus.clone());
+    let service = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let caller = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let root_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let child_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    service
+        .serve_at(
+            ObjectPath::new("/test/ModuleClient").unwrap(),
+            BusFixture(root_calls.clone()),
+        )
+        .await
+        .unwrap();
+    service
+        .serve_at(
+            ObjectPath::new("/test/ModuleClient/workspace_1").unwrap(),
+            BusFixture(child_calls.clone()),
+        )
+        .await
+        .unwrap();
+    service.request_name("test.ModuleClient").await.unwrap();
+    let proxy = caller
+        .proxy(
+            "test.ModuleClient",
+            "/test/ModuleClient/workspace_1",
+            "test.ModuleClient",
+        )
+        .unwrap();
+    let record = registry::find("tinysearch").unwrap();
+    let object = ModuleObjectClient { record, proxy };
+
+    assert_eq!(object.call::<u32>("Sum", (20_u32, 22_u32)).await, Ok(42));
+    assert_eq!(root_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(child_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[cfg(feature = "modules")]
 #[test]
 fn configured_client_timeout_overrides_the_default_for_fixture_calls() {
     use tinybus::{broker::Broker, transport::memory::MemoryBus, Connection, ObjectPath};

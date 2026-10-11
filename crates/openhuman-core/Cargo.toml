@@ -226,11 +226,11 @@ tinyconnectors-bus = { path = "../../vendor/tinyconnectors/crates/tinyconnectors
 # generates a settings schema for the desktop application from those types
 # rather than from a hand-kept copy.
 #
-# `tinymcp` v0.8.1 publishes contract 1.12, including configured directories,
-# explicit close and transition receipts, and cached tool reads. The native
-# registry entry pins the same v0.8.1 release and its verified platform digests.
-# The current host still calls the local library directly; switching those
-# callers to the bus remains a separate host-adapter change.
+# `tinymcp` v0.9.0 publishes contract 1.13, including module-owned server
+# protocol operations and HTTP session admission. The native registry entry
+# pins the same release and its verified platform digests. This host is moving
+# its server transport adapter to those bus operations; client adapter callers
+# remain a separate cutover slice.
 #
 # Correcting what this comment used to promise: dropping the path dependency does
 # NOT take reqwest/rusqlite with it. Measured in the kernel profile, `rusqlite` has
@@ -457,10 +457,6 @@ tinydocs-bus = { path = "../../vendor/tinydocs/crates/tinydocs-bus", optional = 
 # Optional: exclusive to the `voice` feature — default-OFF, product-ON, the
 # same split as `documents` above.
 tinyvoice-bus = { path = "../../vendor/tinyvoice/crates/tinyvoice-bus", optional = true }
-# `cpal` microphone capture (`voice::audio_capture`, `voice::always_on`) remains
-# on the library path until its module-owned lifecycle contract is released.
-# Hotkeys are already owned by the loaded TinyVoice module.
-tinyvoice = { path = "../../vendor/tinyvoice/crates/tinyvoice", default-features = false, features = ["capture"], optional = true }
 
 # TinyJuice — the compression wire contract, and nothing else.
 #
@@ -763,7 +759,6 @@ voice = [
     # only — `serde` and nothing else.
     "dep:tinyvoice-bus",
     "dep:lettre",
-    "dep:tinyvoice",
     # Podcast SMTP delivery uses the loadable Channels module. The always-on
     # bus dependency provides its upload vocabulary without linking providers.
     # `voice::live`: live voice agent sessions over tinyagents-live.

@@ -1,7 +1,7 @@
 # Loadable module boundary inventory
 
-Status: migration incomplete. This inventory records the pinned source at
-`ad89cddbca`; it does not assert that the host already uses only contracts.
+Status: migration incomplete. Completed adapters and the remaining linked
+implementation packages are recorded below; the exception list is still nonempty.
 The machine-readable dependency policy is
 [`scripts/ci/module-boundaries.json`](../scripts/ci/module-boundaries.json).
 
@@ -14,16 +14,16 @@ copying its implementation into a host, or accepting weaker isolation.
 | Owner | Linked implementation packages | Contract | Host consumers | Required module work |
 | --- | --- | --- | --- | --- |
 | tinyjuice | none (module loaded through TinyBus) | tinyjuice-bus | core tools, compression, CCR REPL | Complete: PR #59 provides module-owned compression, CCR queries, HTML extraction, schemas and declarations; the host retains turn-bound model callbacks and artifact authorization |
-| tinyconnectors | tinyconnectors, tinyconnectors-sync | tinyconnectors-bus | core integrations, credentials and triggers | Argument preparation, calendar defaults, task windows, structured provider errors, trigger archives; preserve sign-in/out reconciliation |
+| tinyconnectors | none | tinyconnectors-bus | core integrations, credentials and triggers | Module-backed argument preparation, action execution and trigger archives; host credential reconciliation and frozen tool restoration remain in OpenHuman |
 | tinymcp | tinymcp | tinymcp-bus | core MCP registry, supervisor, CLI stdio/HTTP server | Supervisor notifications, server protocol operations and callbacks for approved host tools/resources/prompts |
 | tinychannels | tinychannels, tinychannels-runtime (remaining runtime callers) | tinychannels-bus | core channels and podcast email, TinyHumans host, CLI REPL | Contract is pure; v0.1.18 supplies complete Discord response vocabulary provider connection preparation and health observations. Podcast SMTP, Discord discovery/permission checks, credential tests and connection validation/defaults and `doctor channels` health checks use confidential module calls. Remaining runtime callers need bus cutover with inbound/status callbacks and shutdown draining |
-| tinyhosts | tinyhosts | tinyhosts-bus | core hosting tools | Consume released Execute/Providers contract; keep workspace authorization, credentials, and approval policy in OpenHuman |
+| tinyhosts | none | tinyhosts-bus | core hosting tools | Released Execute/Providers contract consumed through the module; workspace authorization, credentials and approval policy remain in OpenHuman |
 | tinywallet | tinywallet-crypto, tinywallet-web3, tinywallet-x402 through remaining host imports | tinywallet-bus | core wallet/web3/x402 | Contract is pure at v0.13.0; native transfer preparation/execution use confidential module calls with host custody, exact approval binding and explicit close. Initialization, remaining validation, Web3 quotes/swaps, x402 payments, budgets and ledger still need host cutover |
-| tinybox | tinybox-core, tinybox-jail, tinybox-docker, tinybox-host, tinybox-ssh | tinybox-bus | core sandbox and security, desktop gateways | Pre-core gateways use the released v0.1.18 bus client. Core sandbox execution and shell analysis still require cutover |
-| tinycomputer | tinycomputer-accessibility | tinycomputer-bus | core voice, paste/focus and permission checks | Permission, focus, paste, Globe listener vocabulary/operations; preserve native thread and target rules |
-| tinyvoice | tinyvoice, cpal (also through accessibility probe) | tinyvoice-bus | core voice capture/hotkeys | Devices, recording/capture and hotkey lifecycle, bounded event batches; computer module permission decisions |
+| tinybox | tinybox-core, tinybox-jail, tinybox-docker | tinybox-bus | core sandbox and security, desktop gateways | Pre-core gateways use the released v0.1.18 bus client. Core sandbox execution and shell analysis still require cutover |
+| tinycomputer | none | tinycomputer-bus | core voice, paste/focus and permission checks | Permission, focus, paste and Globe listener operations use the module; native thread and target rules remain covered |
+| tinyvoice | None | tinyvoice-bus | core voice capture/hotkeys | Module-owned devices, recording and continuous capture, bounded audio reads/batches, explicit lease cleanup; computer module permission decisions |
 | tinyruntime | tinyruntime-pyserver | tinyruntime-bus | core Python worker, optional TinyJuice ML | Excluded from this migration: TinyRuntime is being removed separately |
-| tinydocs / tinymemory | pdf-extract, calamine through tinymemory-integrations/documents-office | tinydocs-bus | core memory converter and file sources | Replace OfficeConverter with bus DocumentConverter; XLSX extraction plus existing PDF/DOCX/PPTX metadata/format coverage |
+| tinydocs / tinymemory | none | tinydocs-bus | core memory converter and file sources | Bus DocumentConverter replaces OfficeConverter, including XLSX and existing PDF/DOCX/PPTX format coverage; ingestion metadata remains host-owned |
 | tinysearch | none observed | tinysearch-bus | core module search proxy | Preserve existing bus adapter; enforce contract and host dependency graphs |
 
 ## Gate behavior
@@ -319,3 +319,16 @@ The desktop lockfile also catches up the already-merged Wallet v0.13.0 pin.
 Its pure contract removes the two stale contract exceptions; eleven host
 implementation exceptions remain. Runtime channel dispatch and relay delivery
 still need migration.
+
+TinyVoice capture uses released v0.1.16 (contract 1.5), including owner-computed
+recording summaries and cancellation that waits for native finish cleanup. The
+host holds opaque reservations, reads WAV output in
+256 KiB slices, polls at most two continuous chunks per request, and releases
+leases on cancellation, sign-out and shutdown. Failed cleanup stays registered
+for retry. Microphone authorization remains a TinyComputer call; the host does
+not link TinyVoice or CPAL. The existing hotkey adapter remains module-backed.
+
+This cut removes the `tinyvoice` and `cpal` host exceptions, leaving nine
+implementation exceptions for Channels, MCP, Box and Wallet. The resolved
+voice-only normal/build graph falls from 323 packages to 318; this is a
+dependency count, with no inferred binary size or build-time reduction.

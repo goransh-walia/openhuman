@@ -186,6 +186,9 @@ pub mod always_on {
 
     /// No-op: nothing to stop.
     pub fn stop() {}
+
+    /// No-op: no module capture leases exist when voice is disabled.
+    pub async fn shutdown() {}
 }
 
 // ---------------------------------------------------------------------------

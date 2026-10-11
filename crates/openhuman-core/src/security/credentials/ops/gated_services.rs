@@ -208,10 +208,12 @@ pub async fn stop_credential_gated_services(config: &Config) {
     //    accumulate duplicate rdev listeners across logout → login cycles.
     crate::voice::dictation_listener::stop().await;
 
-    // 6. Always-on listening — disable the runtime gate so the mic capture loop
-    //    stops transcribing/delivering after logout (no audio processed while
-    //    logged out). Symmetric with start_login_gated_services step 3b.
-    crate::voice::always_on::stop();
+    // 6. Disable delivery and release module-owned microphone/output leases.
+    crate::voice::always_on::shutdown().await;
+    #[cfg(feature = "voice")]
+    if let Err(error) = crate::voice::capture_lease::close_all().await {
+        log::warn!("[services] voice capture cleanup pending: {error}");
+    }
 
     if let Err(error) = crate::integrations::composio::trigger_history::close_global().await {
         log::warn!("[composio][history] archive release failed on sign-out: {error}");

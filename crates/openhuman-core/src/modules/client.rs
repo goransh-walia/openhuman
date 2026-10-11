@@ -128,6 +128,42 @@ impl ModuleClient {
         decode_module_json(module, &response)
     }
 
+    /// Resolve a private proxy for an object returned by an owning module.
+    ///
+    /// Object paths are kept inside the owning host adapter; callers should
+    /// wrap this in a domain-specific client rather than expose the path as
+    /// product state.
+    #[cfg(feature = "modules")]
+    pub(crate) async fn object_client(
+        &self,
+        module: &str,
+        object_path: &str,
+    ) -> Result<ModuleObjectClient, ModuleCallError> {
+        let Some(record) = registry::find(module) else {
+            failure::report_unknown_module();
+            return Err(ModuleCallError::Unavailable);
+        };
+        if !self.config.modules.enabled {
+            failure::report(record, failure::Reason::Disabled);
+            return Err(ModuleCallError::Unavailable);
+        }
+        super::ops::ensure_loaded(&self.config, module)
+            .await
+            .map_err(|_| ModuleCallError::Unavailable)?;
+        let runtime = super::host::runtime().await.map_err(|_| {
+            failure::report(record, failure::Reason::TransportFailed);
+            ModuleCallError::TransportFailed
+        })?;
+        let proxy = runtime.proxy(record.bus_name, object_path).map_err(|_| {
+            failure::report(record, failure::Reason::IncompatibleContract);
+            ModuleCallError::IncompatibleContract
+        })?;
+        let proxy = self
+            .timeout
+            .map_or(proxy.clone(), |timeout| proxy.with_timeout(timeout));
+        Ok(ModuleObjectClient { record, proxy })
+    }
+
     /// Report a structurally invalid reply from a known module invocation.
     pub(crate) fn report_malformed_reply(module: &str) {
         if let Some(record) = registry::find(module) {
@@ -198,6 +234,35 @@ impl ModuleClient {
                 .map_or(proxy.clone(), |timeout| proxy.with_timeout(timeout));
             invoke_proxy(record, &proxy, member, args, confidential).await
         }
+    }
+}
+
+/// A validated proxy for a module-owned object path.
+///
+/// This stays crate-private so bus object identities do not become product
+/// state or leak into logs and controller responses.
+#[cfg(feature = "modules")]
+pub(crate) struct ModuleObjectClient {
+    record: &'static super::types::ModuleRecord,
+    proxy: tinybus::Proxy,
+}
+
+#[cfg(feature = "modules")]
+impl ModuleObjectClient {
+    pub(crate) async fn call<R: DeserializeOwned>(
+        &self,
+        member: &str,
+        args: impl Serialize,
+    ) -> Result<R, ModuleCallError> {
+        invoke_proxy(self.record, &self.proxy, member, args, false).await
+    }
+
+    pub(crate) async fn call_confidential<R: DeserializeOwned>(
+        &self,
+        member: &str,
+        args: impl Serialize,
+    ) -> Result<R, ModuleCallError> {
+        invoke_proxy(self.record, &self.proxy, member, args, true).await
     }
 }
 
