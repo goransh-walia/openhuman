@@ -177,7 +177,7 @@ impl Turn {
             + Sync
             + 'static,
     {
-        self.tool_hook(std::sync::Arc::new(crate::permission::PermissionHook(
+        self.tool_hook(std::sync::Arc::new(crate::permission::PermissionHook::new(
             callback,
         )))
     }
@@ -332,7 +332,7 @@ impl Turn {
     /// The message is untrusted data to read, not an instruction: skip the
     /// prompt-injection guard.
     ///
-    /// A reviewer must be able to read a PR diff that says "ignore previous
+    /// An analyst must be able to read a document that says "ignore previous
     /// instructions"; the guard would refuse it. Allowed **only** on an agent
     /// built with [`ToolScopeSpec::HostOnly`](crate::ToolScopeSpec::HostOnly),
     /// which has nothing it could be talked into doing. On any other agent

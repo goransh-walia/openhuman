@@ -6,7 +6,7 @@
 //! policy and, on stop, runs the raw samples through the `tinyvoice` module
 //! (downmix, resample, silence gate, WAV framing).
 
-use log::{debug, info, warn};
+use log::info;
 
 use crate::config::Config;
 
@@ -165,12 +165,17 @@ async fn finalize(config: &Config, raw: &RawRecording) -> Result<RecordingResult
 /// the captured audio. Recording runs on a dedicated OS thread inside
 /// `tinyvoice::capture` because `cpal::Stream` is `!Send` (it must be created
 /// and dropped on the same thread).
-pub fn start_recording() -> Result<RecordingHandle, String> {
+pub async fn start_recording(config: &Config) -> Result<RecordingHandle, String> {
+    crate::modules::accessibility::AccessibilityClient::new(config)
+        .microphone_permission(true)
+        .await
+        .map_err(|e| e.to_string())?;
+    let inner = tokio::task::spawn_blocking(|| tinyvoice::capture::start_recording(|| Ok(())))
+        .await
+        .map_err(|e| format!("microphone setup task failed: {e}"))?
+        .map_err(|e| e.to_string())?;
     Ok(RecordingHandle {
-        inner: Some(
-            tinyvoice::capture::start_recording(microphone_permission)
-                .map_err(|e| e.to_string())?,
-        ),
+        inner: Some(inner),
         #[cfg(test)]
         finalized: None,
     })
@@ -179,41 +184,4 @@ pub fn start_recording() -> Result<RecordingHandle, String> {
 /// List available input devices.
 pub fn list_input_devices() -> Result<Vec<String>, String> {
     tinyvoice::capture::list_input_devices().map_err(|e| e.to_string())
-}
-
-/// The host's microphone-permission policy for a one-shot recording.
-///
-/// Cross-platform pre-check: an undetermined state asks the OS for access (macOS
-/// may show a prompt) and re-checks; a denied state, or one still undetermined
-/// after asking, fails with the platform's explanation.
-fn microphone_permission() -> Result<(), String> {
-    use tinycomputer_accessibility::{
-        detect_microphone_permission, microphone_denied_message, request_microphone_access,
-        PermissionState,
-    };
-
-    let mic_perm = detect_microphone_permission();
-    debug!("{LOG_PREFIX} microphone permission state: {mic_perm:?}");
-
-    match mic_perm {
-        PermissionState::Unknown => {
-            info!("{LOG_PREFIX} microphone permission not yet determined — requesting access");
-            request_microphone_access();
-            // Re-check after request (macOS may have shown a prompt).
-            let updated = detect_microphone_permission();
-            debug!("{LOG_PREFIX} microphone permission after request: {updated:?}");
-            if matches!(updated, PermissionState::Denied | PermissionState::Unknown) {
-                let msg = microphone_denied_message();
-                warn!("{LOG_PREFIX} {msg}");
-                return Err(msg);
-            }
-        }
-        PermissionState::Denied => {
-            let msg = microphone_denied_message();
-            warn!("{LOG_PREFIX} {msg}");
-            return Err(msg);
-        }
-        _ => {} // Granted or Unsupported — proceed normally.
-    }
-    Ok(())
 }

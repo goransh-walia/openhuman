@@ -1,5 +1,6 @@
 use super::specs::tool_specs_for_loaded_config;
 use super::*;
+use tinymcp::ServerToolSpecExt;
 
 /// The `tools/list` result this config advertises, rendered through the same
 /// `tinymcp` conversion the served catalog uses.

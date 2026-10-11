@@ -84,7 +84,7 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
     config.action_dir_override = Some(config.action_dir.clone());
     config.save().await.unwrap();
     openhuman_core::core::auth::init_rpc_token_with_value(TOKEN).unwrap();
-    openhuman_core::security::keyring::init_workspace(scratch.path());
+    openhuman_core::security::secret_storage::init_workspace(scratch.path());
     let router = openhuman_rpc::server::build_core_http_router(false);
 
     assert_eq!(

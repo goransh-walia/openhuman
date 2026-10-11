@@ -17,7 +17,8 @@ use std::sync::Arc;
 use futures_util::future::BoxFuture;
 use serde_json::{Map, Value};
 use tinymcp::{
-    McpServerHandler, RequestContext, ResourceSpec, ServerInfo, ServerToolSpec, ToolCallError,
+    McpServerHandler, RequestContext, RequestContextExt, ResourceSpec, ServerInfo, ServerToolSpec,
+    ToolCallError,
 };
 
 use super::{resources, subagent_depth, tools};

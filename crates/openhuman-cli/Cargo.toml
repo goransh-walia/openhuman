@@ -237,6 +237,10 @@ name = "inference_provider_e2e"
 path = "../../tests/inference_provider_e2e.rs"
 
 [[test]]
+name = "keyring_headless_e2e"
+path = "../../tests/keyring_headless_e2e.rs"
+
+[[test]]
 name = "keyring_secretstore_e2e"
 path = "../../tests/keyring_secretstore_e2e.rs"
 
@@ -311,6 +315,8 @@ serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 tinyinference-llm = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm" }
 tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+# The completion log a detached sub-agent leaves, for the SaaS delivery-recovery e2e.
+tinyagents-tasks = { path = "../../vendor/tinyagents/crates/tinyagents-tasks" }
 toml = "1.0"
 tracing = "0.1"
 # The TinyComputer contract, for the live computer-use e2e (`computer_bali_live_e2e`).
@@ -350,11 +356,13 @@ wiremock = "0.6"
 
 [features]
 langfuse = ["openhuman-rpc/langfuse"]
+os-keyring = ["openhuman-rpc/os-keyring"]
 # The contributor set: the core's `[features] default` gates (listed, because
 # `openhuman-rpc`'s own default carries only its server and client) plus the
 # Jev ranker. The product lanes pass `--features
 # "$(scripts/ci/product-features.sh)"`; every product gate name resolves here.
 default = [
+    "os-keyring",
     "media",
     "skills",
     "flows",
@@ -385,7 +393,6 @@ web3 = ["openhuman-rpc/web3"]
 storage-sqlite = ["openhuman-rpc/storage-sqlite"]
 storage-mongodb = ["openhuman-rpc/storage-mongodb"]
 storage-file = ["openhuman-rpc/storage-file"]
-runtime-node = ["openhuman-rpc/runtime-node"]
 media = ["openhuman-rpc/media"]
 flows = ["openhuman-rpc/flows"]
 skills = ["openhuman-rpc/skills"]
@@ -403,3 +410,7 @@ bin-tools = ["dep:clap"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
+
+[[test]]
+name = "embeddings_opt_out"
+path = "../../tests/embeddings_opt_out.rs"

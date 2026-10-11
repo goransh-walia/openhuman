@@ -667,3 +667,27 @@ test("an app-only manifest change runs the security guard with its parser prereq
     assert.deepEqual(validatePlan(plan), []);
   }
 });
+
+test("module boundaries run for Rust and scripts changes in both profiles", () => {
+  for (const profile of ["hosted", "ex63"]) {
+    for (const area of ["rustCore", "rustTauri", "scripts"]) {
+      const plan = buildPlan({
+        profile,
+        areas: { ...NONE, [area]: true },
+        env: profile === "ex63" ? EX63_ENV : {},
+      });
+      const check = plan.lanes.flatMap(lane => lane.checks).find(check => check.name === "module-boundaries");
+      assert.equal(check.when, true, `${profile}:${area}`);
+      assert.equal(check.run, "bash scripts/ci-cancel-aware.sh node scripts/ci/check-module-boundaries.mjs");
+    }
+  }
+});
+
+
+test("module boundary policy and checker changes arm their own scripts lane", () => {
+  const filters = fs.readFileSync(path.join(repoRoot, ".github/ci-paths-filter.yml"), "utf8");
+  const scripts = filters.split(/^scripts:\s*$/m)[1].split(/^\S[^\n]*:/m)[0];
+  for (const file of ["scripts/ci/check-module-boundaries.mjs", "scripts/ci/module-boundaries.json"]) {
+    assert.ok(scripts.includes(`'${file}'`), `${file} must arm the scripts area`);
+  }
+});

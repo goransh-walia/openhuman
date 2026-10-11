@@ -43,7 +43,6 @@ pub fn chat_completion(content: &str) -> serde_json::Value {
 pub fn offline_config() -> Config {
     let mut config = Config::default();
     config.local_ai.runtime_enabled = false;
-    config.runtime_python.enabled = false;
     // Conversation memory ingest is intentionally fire-and-forget. It can
     // still be buffering after a turn returns, which is useful in the product
     // but unrelated to these tests' contracts and would race the final
@@ -379,14 +378,9 @@ where
     if offline() {
         // Set before starting any worker; fixtures never use operator credentials.
         std::env::set_var("OPENHUMAN_WORKSPACE", workspace);
+        std::env::remove_var("OPENHUMAN_KEYRING_MASTER_KEY");
         std::env::remove_var("OPENHUMAN_KEYRING_MASTER_KEY_FILE");
         std::env::remove_var("OPENHUMAN_KEYRING_BACKEND");
-        let key = format!(
-            "{}{}",
-            uuid::Uuid::new_v4().simple(),
-            uuid::Uuid::new_v4().simple()
-        );
-        std::env::set_var("OPENHUMAN_KEYRING_MASTER_KEY", key);
     }
     openhuman_embed::process::init_master_key()?;
     if offline() {

@@ -11,7 +11,8 @@ mod common;
 use std::time::Duration;
 
 use common::{
-    chat_requests, echo_inference, last_user_message, runtime_with_keyring, PointedTransport,
+    chat_requests, echo_inference, last_user_message, runtime_without_master_key as runtime,
+    PointedTransport,
 };
 use openhuman_embed::profiles::ProfileCredentialKind;
 use openhuman_embed::{
@@ -25,16 +26,16 @@ fn profiles_are_isolated_held_and_relayed() {
     let _ = env_logger::builder().is_test(true).try_init();
     // On a worker thread: a turn dispatched from the test thread itself would
     // overflow its default stack.
-    let root = tempfile::tempdir().expect("root");
-    let rt = runtime_with_keyring(&root.path().join("operator/workspace"));
-    rt.block_on(async { tokio::spawn(scenario(root)).await })
+    let rt = runtime();
+    rt.block_on(async { tokio::spawn(scenario()).await })
         .expect("scenario");
 }
 
-async fn scenario(root: tempfile::TempDir) {
+async fn scenario() {
     let inference = echo_inference().await;
     PointedTransport::install(&inference.uri());
 
+    let root = tempfile::tempdir().expect("root");
     let mut config = SaasConfig::new(root.path());
     config.max_profiles_open = 4;
     let profiles = ProfileRuntime::build(config).await.expect("boot");

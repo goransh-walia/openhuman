@@ -41,7 +41,7 @@ async fn truncation_doubles_the_cap_before_ordered_unpinned_fallback() {
     let outcome = CompletionLadder::new(rung(&first,"first"))
         .fallback(rung(&last,"last").unpinned())
         .truncation_retry(TruncationRetry::new(2,4096))
-        .complete(CompletionRequest::new("ignored",vec![ChatMessage::user("review").with_image("https://example.org/image.png")])
+        .complete(CompletionRequest::new("ignored",vec![ChatMessage::user("analysis").with_image("https://example.org/image.png")])
             .max_tokens(1024).provider_options(json!({"provider":{"only":["pinned"]},"reasoning":{"effort":"low"},"usage":{"include":true}})))
         .await.expect("fallback answers");
     assert_eq!(
@@ -80,7 +80,7 @@ async fn transport_failure_advances_but_invalid_routes_do_not() {
         .mount(&failing)
         .await;
     let last = scripted(vec![answer("actual", "stop", 0.02)]).await;
-    let request = CompletionRequest::new("ignored", vec![ChatMessage::user("review")]);
+    let request = CompletionRequest::new("ignored", vec![ChatMessage::user("analysis")]);
     let outcome = CompletionLadder::new(rung(&failing, "first"))
         .fallback(rung(&last, "last"))
         .complete(request.clone())
@@ -134,7 +134,7 @@ async fn retries_stop_at_the_ceiling_and_missing_caps_never_expand() {
     let server = scripted(vec![answer("actual", "length", 0.01)]).await;
     let ladder = CompletionLadder::new(rung(&server, "requested"))
         .truncation_retry(TruncationRetry::new(255, 1500));
-    let request = CompletionRequest::new("ignored", vec![ChatMessage::user("review")]);
+    let request = CompletionRequest::new("ignored", vec![ChatMessage::user("analysis")]);
     let error = ladder
         .complete(request.clone().max_tokens(1024))
         .await
@@ -151,7 +151,7 @@ async fn retries_stop_at_the_ceiling_and_missing_caps_never_expand() {
 #[tokio::test]
 async fn unpinned_rungs_are_terminal_and_success_never_tries_fallback() {
     let server = scripted(vec![answer("actual", "stop", 0.01)]).await;
-    let request = CompletionRequest::new("ignored", vec![ChatMessage::user("review")]);
+    let request = CompletionRequest::new("ignored", vec![ChatMessage::user("analysis")]);
     let error = CompletionLadder::new(rung(&server, "first").unpinned())
         .fallback(rung(&server, "next"))
         .complete(request.clone())
@@ -199,7 +199,7 @@ async fn fallback_uses_its_own_provider_pin_and_retries_from_its_own_cap() {
     )
     .truncation_retry(TruncationRetry::new(1, 128))
     .complete(
-        CompletionRequest::new("ignored", vec![ChatMessage::user("review")])
+        CompletionRequest::new("ignored", vec![ChatMessage::user("analysis")])
             .max_tokens(8)
             .provider_options(json!({"provider":{"only":["request-pin"]}})),
     )
@@ -237,7 +237,7 @@ async fn unpinned_rung_removes_its_own_pin_and_can_explicitly_clear_the_cap() {
     let error = CompletionLadder::new(choice)
         .truncation_retry(TruncationRetry::new(2, 128))
         .complete(
-            CompletionRequest::new("ignored", vec![ChatMessage::user("review")]).max_tokens(8),
+            CompletionRequest::new("ignored", vec![ChatMessage::user("analysis")]).max_tokens(8),
         )
         .await
         .unwrap_err();
@@ -262,7 +262,7 @@ async fn uppercase_max_tokens_retries_the_same_rung_and_counts_buyer_charges() {
         .fallback(rung(&fallback, "fallback"))
         .truncation_retry(TruncationRetry::new(1, 64))
         .complete(
-            CompletionRequest::new("ignored", vec![ChatMessage::user("review")]).max_tokens(16),
+            CompletionRequest::new("ignored", vec![ChatMessage::user("analysis")]).max_tokens(16),
         )
         .await
         .unwrap();
@@ -281,4 +281,174 @@ async fn uppercase_max_tokens_retries_the_same_rung_and_counts_buyer_charges() {
         let body: Value = serde_json::from_slice(&request.body).unwrap();
         assert_eq!(body["max_tokens"], cap);
     }
+}
+
+#[tokio::test]
+async fn physical_request_timeout_advances_to_a_healthy_route_without_known_charge() {
+    let delayed = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(answer("late", "stop", 0.01))
+                .set_delay(std::time::Duration::from_millis(5_000)),
+        )
+        .mount(&delayed)
+        .await;
+    let healthy = scripted(vec![answer("healthy", "stop", 0.02)]).await;
+    // Deserialization also pins the host-facing wire contract; before the
+    // passthrough this field is silently ignored and the primary keeps waiting.
+    let request: CompletionRequest = serde_json::from_value(json!({
+        "model":"ignored", "messages":[{"role":"user","text":"analysis"}],
+        "timeout_ms":50
+    }))
+    .unwrap();
+    let ladder =
+        CompletionLadder::new(rung(&delayed, "primary")).fallback(rung(&healthy, "fallback"));
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), ladder.complete(request))
+        .await
+        .expect("physical timeout must bound the stalled endpoint and reach fallback")
+        .expect("healthy route answers");
+    assert_eq!(result.attempts.len(), 2);
+    assert!(result.attempts[0].failed);
+    assert!(result.attempts[0].usage.is_none());
+    assert_eq!(result.response.answered_model.as_deref(), Some("healthy"));
+    assert_eq!(
+        result.total_usage.unwrap().cost_usd,
+        None,
+        "timed-out spend remains unknown"
+    );
+    assert_eq!(delayed.received_requests().await.unwrap().len(), 1);
+    assert_eq!(healthy.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn logical_deadline_and_cancellation_stop_before_fallback() {
+    use openhuman_embed::{cancellation::Cancellation, CoreError};
+    let delayed = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(answer("late", "stop", 0.01))
+                .set_delay(std::time::Duration::from_millis(5_000)),
+        )
+        .mount(&delayed)
+        .await;
+    let healthy = scripted(vec![answer("healthy", "stop", 0.02)]).await;
+    let first = Completer::new(Route::openai_compatible(
+        format!("{}/v1", delayed.uri()),
+        "fixture",
+    ))
+    .timeout(std::time::Duration::from_millis(50));
+    let error = CompletionLadder::new(CompletionRung::new(first, "primary"))
+        .fallback(rung(&healthy, "fallback"))
+        .complete(CompletionRequest::new(
+            "ignored",
+            vec![ChatMessage::user("analysis")],
+        ))
+        .await
+        .expect_err("logical deadline is terminal");
+    assert!(matches!(
+        error.last_error,
+        CoreError::DeadlineExceeded { .. }
+    ));
+    assert_eq!(error.attempts.len(), 1);
+    let cancelled_endpoint = MockServer::start().await;
+    let cancellation = Cancellation::default();
+    cancellation.cancel().await;
+    let first = Completer::new(Route::openai_compatible(
+        format!("{}/v1", cancelled_endpoint.uri()),
+        "fixture",
+    ))
+    .cancellation(cancellation);
+    let error = CompletionLadder::new(CompletionRung::new(first, "primary"))
+        .fallback(rung(&healthy, "fallback"))
+        .complete(CompletionRequest::new(
+            "ignored",
+            vec![ChatMessage::user("analysis")],
+        ))
+        .await
+        .expect_err("cancellation is terminal");
+    assert!(matches!(error.last_error, CoreError::Cancelled { .. }));
+    assert_eq!(error.attempts.len(), 1);
+    assert!(healthy.received_requests().await.unwrap().is_empty());
+    assert!(cancelled_endpoint
+        .received_requests()
+        .await
+        .unwrap()
+        .is_empty());
+    // A logical deadline may fire before HTTP dispatch on a loaded executor.
+    assert!(delayed.received_requests().await.unwrap().len() <= 1);
+}
+
+#[tokio::test]
+async fn timed_out_unknown_charge_preserves_reservation_and_budget_blocks_fallback() {
+    use openhuman_embed::{
+        budget::{Budget, CallBudget, ModelBudget, SpendLimits},
+        CoreError,
+    };
+    let delayed = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(answer("late", "stop", 0.01))
+                .set_delay(std::time::Duration::from_millis(5_000)),
+        )
+        .mount(&delayed)
+        .await;
+    let healthy = scripted(vec![answer("healthy", "stop", 0.02)]).await;
+    let policy = ModelBudget {
+        ledger: Budget::new(SpendLimits {
+            tokens: None,
+            cost_micros: Some(100),
+        }),
+        call: CallBudget {
+            input_tokens: 1_000,
+            output_tokens: 20,
+            cost_micros: 100,
+        },
+    };
+    let client = |server: &MockServer| {
+        Completer::new(Route::openai_compatible(
+            format!("{}/v1", server.uri()),
+            "fixture",
+        ))
+        .budget(policy.clone())
+    };
+    let request: CompletionRequest = serde_json::from_value(json!({
+        "model":"ignored", "messages":[{"role":"user","text":"analysis"}],
+        "max_tokens":20,"timeout_ms":50
+    }))
+    .unwrap();
+    let ladder = CompletionLadder::new(CompletionRung::new(client(&delayed), "primary"))
+        .fallback(CompletionRung::new(client(&healthy), "fallback"));
+    let error = tokio::time::timeout(std::time::Duration::from_secs(2), ladder.complete(request))
+        .await
+        .expect("physical timeout is bounded")
+        .expect_err("unknown charge consumes the reservation");
+    assert!(matches!(error.last_error, CoreError::BudgetExceeded { .. }));
+    assert_eq!(error.attempts.len(), 2);
+    assert_eq!(policy.ledger.snapshot().spent.cost_micros, 100);
+    assert!(healthy.received_requests().await.unwrap().is_empty());
+    assert_eq!(delayed.received_requests().await.unwrap().len(), 1);
+}
+
+#[test]
+fn physical_timeout_is_optional_and_round_trips_without_changing_old_requests() {
+    let request: CompletionRequest = serde_json::from_value(json!({
+        "model":"m", "messages":[]
+    }))
+    .unwrap();
+    assert_eq!(request.timeout_ms, None);
+    assert!(serde_json::to_value(&request)
+        .unwrap()
+        .get("timeout_ms")
+        .is_none());
+    let bounded = request.timeout_ms(120_000);
+    let serialized = serde_json::to_value(&bounded).unwrap();
+    assert_eq!(serialized["timeout_ms"], 120_000);
+    assert_eq!(
+        serde_json::from_value::<CompletionRequest>(serialized).unwrap(),
+        bounded
+    );
 }

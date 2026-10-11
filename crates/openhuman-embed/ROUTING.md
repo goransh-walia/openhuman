@@ -14,8 +14,8 @@ let ladder = CompletionLadder::new(CompletionRung::new(completer.clone(), "opena
     .fallback(CompletionRung::new(completer, "minimax/minimax-m3").unpinned())
     .truncation_retry(TruncationRetry::new(2, 4096));
 let outcome = ladder.complete(
-    CompletionRequest::new("overridden-by-rung", vec![ChatMessage::user("Review the attached image.")
-        .with_image("https://example.org/review.png")])
+    CompletionRequest::new("overridden-by-rung", vec![ChatMessage::user("Describe the attached image.")
+        .with_image("https://example.org/image.png")])
         .max_tokens(1024)
         .provider_options(serde_json::json!({"provider": {"only": ["preferred"]}, "usage": {"include": true}})),
 ).await?;
@@ -40,6 +40,19 @@ routing advances. RPC provider/transport failures also advance; local route
 or security errors stop immediately. Error strings are never classified as
 HTTP statuses. A route's own provider compatibility behavior remains owned
 by TinyInference.
+
+`CompletionRequest::timeout_ms(120_000)` bounds each physical provider HTTP
+request to 120 seconds. Each ladder attempt and structured repair dispatch uses
+that bound; it is not a total ladder deadline. With the field unset, transport
+defaults remain unchanged. A physical timeout is an RPC transport failure and
+can advance to the next rung. Any timed-out attempt has unknown cost, so the
+ladder's aggregate cost remains `None`; budgeted calls retain the conservative
+reservation when no authoritative usage arrived, which can block later calls.
+
+`Completer::timeout(duration)` instead bounds the entire logical call, including
+structured repairs. Its typed `DeadlineExceeded` is terminal, and cancellation
+is also terminal: neither advances to a fallback. Hosts can use both timeouts
+when they need a physical request bound and a separate logical deadline.
 
 An `unpinned()` rung must be last. It removes the gateway's `provider` object,
 while keeping model, reasoning, usage options and images. This lets the final

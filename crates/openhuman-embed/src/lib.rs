@@ -83,6 +83,8 @@ pub use openhuman_core::tools::{PermissionLevel, Tool, ToolExposure, ToolResult}
 pub use openhuman_core::{
     CoreBuilder, CoreRuntime, DaemonConfig, DomainSet, HostKind, ServiceSet, TokenSource,
 };
+/// Declarative execution requirements for host-owned tools, from the core's vendored contract.
+pub use tinytools::ToolPolicy;
 
 /// Live agent-turn progress for in-process embedders.
 pub mod agent_progress {
@@ -120,7 +122,6 @@ pub mod fanout;
 mod harness;
 pub mod identity;
 pub mod memory;
-#[cfg(feature = "modules")]
 pub mod modules;
 mod permission;
 pub use permission::PermissionFuture;
@@ -129,10 +130,10 @@ pub mod observe;
 pub mod process;
 #[cfg(feature = "channels")]
 pub mod profiles;
-pub mod repository;
 /// Explicit ordered fallback and truncation policies.
 pub mod routing;
 mod runtime;
+pub mod secret_storage;
 mod turn;
 mod turn_cancellation;
 mod turn_meter;

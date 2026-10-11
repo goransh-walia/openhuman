@@ -171,7 +171,7 @@ pub mod dictation_listener {
     pub async fn start_if_enabled(_config: &Config) {}
 
     /// No-op: nothing to stop.
-    pub fn stop() {}
+    pub async fn stop() {}
 }
 
 // ---------------------------------------------------------------------------

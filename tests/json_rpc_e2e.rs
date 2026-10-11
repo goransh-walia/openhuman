@@ -40,14 +40,11 @@ static JSON_RPC_AUTH_INIT: OnceLock<()> = OnceLock::new();
 /// process-global, so parallel tests would clobber each other and hit the wrong `config.toml` or
 /// inherited `VITE_BACKEND_URL`.
 static JSON_RPC_E2E_ENV_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
-static JSON_RPC_E2E_KEYRING_INIT: OnceLock<()> = OnceLock::new();
 static CHAT_COMPLETION_MODELS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 static CHAT_COMPLETION_REQUESTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
 
 async fn json_rpc_e2e_env_lock_async() -> tokio::sync::MutexGuard<'static, ()> {
-    JSON_RPC_E2E_KEYRING_INIT.get_or_init(|| unsafe {
-        std::env::set_var("OPENHUMAN_KEYRING_BACKEND", "file");
-    });
+    env_guard::init_keyring_workspace();
     let mutex = JSON_RPC_E2E_ENV_LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
     // A tokio mutex is never poisoned, so a panic in one test cannot cascade to the others.
     mutex.lock().await
@@ -1024,11 +1021,10 @@ async fn wait_for_chat_completion_request_with_message(message: &str) -> Value {
 }
 
 async fn encrypt_test_mnemonic() -> String {
-    let _keyring_backend_guard = EnvVarGuard::set("OPENHUMAN_KEYRING_BACKEND", "file");
     let config = openhuman_core::config::load_config_with_timeout()
         .await
         .expect("load config for encrypted test mnemonic");
-    openhuman_core::security::keyring::init_workspace(&config.workspace_dir);
+    openhuman_core::security::secret_storage::init_workspace(&config.workspace_dir);
     openhuman_core::security::encryption::rpc::encrypt_secret(
         &config,
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
@@ -1610,14 +1606,13 @@ async fn json_rpc_tool_registry_lists_and_gets_entries() {
 }
 
 #[tokio::test]
-async fn json_rpc_harness_init_status_returns_snapshot_envelope() {
+async fn json_rpc_removed_harness_init_status_is_not_found() {
     let _env_lock = json_rpc_e2e_env_lock_async().await;
     let (rpc_addr, rpc_join) = serve_on_ephemeral(build_core_http_router(false)).await;
     let rpc_base = format!("http://{rpc_addr}");
 
-    // status is read-only — no provisioning is triggered, so it is safe in CI
-    // (we deliberately do NOT call `openhuman.harness_init_run`, which would
-    // attempt real Python/Node/spaCy downloads).
+    // The obsolete provisioning flow was removed; its status method must not
+    // reappear through host controller registration.
     let resp = post_json_rpc(
         &rpc_base,
         44_711,
@@ -1625,30 +1620,11 @@ async fn json_rpc_harness_init_status_returns_snapshot_envelope() {
         json!({}),
     )
     .await;
-    let result = assert_no_jsonrpc_error(&resp, "harness_init_status");
-
-    let snapshot = result
-        .get("snapshot")
-        .expect("harness_init_status should return a snapshot object");
-    let overall = snapshot
-        .get("overall")
-        .and_then(Value::as_str)
-        .expect("snapshot.overall should be a string");
-    assert!(
-        ["idle", "running", "done", "failed"].contains(&overall),
-        "overall should be a known lifecycle state, got {overall}"
-    );
-    let steps = snapshot
-        .get("steps")
-        .and_then(Value::as_array)
-        .expect("snapshot.steps should be an array");
-    let ids: Vec<&str> = steps
-        .iter()
-        .filter_map(|s| s.get("id").and_then(Value::as_str))
-        .collect();
-    assert!(
-        ids.contains(&"python_runtime") && ids.contains(&"node_runtime"),
-        "snapshot should list the registered steps, got {ids:?}"
+    let error = resp.get("error").expect("removed method must fail");
+    assert_eq!(error.get("code").and_then(Value::as_i64), Some(-32000));
+    assert_eq!(
+        error.get("message").and_then(Value::as_str),
+        Some("unknown method: openhuman.harness_init_status")
     );
 
     rpc_join.abort();

@@ -74,6 +74,14 @@ pub async fn start_if_enabled(app_config: &Config) {
         return;
     }
 
+    if let Err(error) = crate::modules::accessibility::AccessibilityClient::new(app_config)
+        .microphone_permission(false)
+        .await
+    {
+        log::warn!("{LOG_PREFIX} could not authorize microphone capture: {error}");
+        RUNNING.store(false, Ordering::SeqCst);
+        return;
+    }
     let vad = tinyvoice::vad_config_from_server_config(&app_config.voice_server);
     let config = app_config.clone();
     log::info!(

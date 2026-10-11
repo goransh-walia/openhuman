@@ -243,21 +243,11 @@ fn inference_engine_compiled_in_when_feature_on() {
     const { assert!(crate::inference::INFERENCE_COMPILED_IN) };
 }
 
-/// With the `inference` feature off, the marker flips and `cpal` leaves the
-/// dependency graph. The observable effect is the microphone-permission probe:
-/// it reports `Unknown` rather than a real verdict, because there is no
-/// audio-device API compiled in to ask. Speech-to-text is unaffected in either
-/// direction — it is a hosted HTTP call now, not an in-process engine.
+/// The host marker follows the inference gate without linking audio-device code.
 #[test]
 #[cfg(not(feature = "inference"))]
 fn inference_engine_compiled_out_when_feature_off() {
-    use tinycomputer_accessibility::{detect_microphone_permission, PermissionState};
     const { assert!(!crate::inference::INFERENCE_COMPILED_IN) };
-    assert_eq!(
-        detect_microphone_permission(),
-        PermissionState::Unknown,
-        "without `inference` there is no audio-device API to probe"
-    );
 }
 
 /// With the `skills` feature on (the default), all three skill domains are
@@ -1282,7 +1272,6 @@ fn carved_out_families_report_their_own_group() {
         // Mis-tagged before the realignment: these live inside a named family
         // directory but answered `Platform`, so `harness()` registered nothing
         // for them despite claiming to enable their family.
-        ("harness_init", DomainGroup::Agent),
         ("ai", DomainGroup::Agent),
         ("auth", DomainGroup::Security),
         ("devices", DomainGroup::Security),
@@ -1328,7 +1317,6 @@ fn platform_holds_only_kernel_surfaces() {
                     | "dashboard"
                     | "notification"
                     | "sandbox"
-                    | "harness_init"
                     | "ai"
                     | "auth"
                     | "devices"
@@ -1340,21 +1328,12 @@ fn platform_holds_only_kernel_surfaces() {
     }
 }
 
-/// `harness()` claims agent + memory + threads + config + security. Before the
-/// realignment it silently dropped several of their namespaces into `Platform`,
-/// most damagingly `harness_init` — an agent harness that never runs harness
-/// init. This asserts the claim is now true.
+/// `harness()` claims agent + memory + threads + config + security. This
+/// asserts the enabled families are registered.
 #[test]
 fn harness_preset_registers_the_families_it_claims() {
     let harness = crate::core::runtime::DomainSet::harness();
-    for ns in [
-        "harness_init",
-        "ai",
-        "auth",
-        "devices",
-        "workspace",
-        "memory",
-    ] {
+    for ns in ["ai", "auth", "devices", "workspace", "memory"] {
         let group =
             group_for_namespace(ns).unwrap_or_else(|| panic!("namespace `{ns}` is not registered"));
         assert!(
@@ -1414,7 +1393,7 @@ fn embedded_preset_excludes_desktop_and_hosted() {
 // `tool_group()` (tools/ops.rs), `StoreInitPlan` and `DomainSubscriberPlan`.
 // Adding a variant compiles cleanly while leaving a tool ungated or a store
 // unkeyed — both of which actually happened during the realignment (#5332):
-// `harness_init` stayed in Platform, and `people`'s store keyed on a different
+// `people`'s store keyed on a different
 // group than its controllers, which would have served an RPC surface with no
 // store behind it. These tests close that gap.
 
@@ -1487,36 +1466,6 @@ fn memory_controllers_form_one_contiguous_run_in_aggregator_order() {
     assert_eq!(
         registered, aggregator,
         "registry order for memory.* diverges from the memory schemas aggregator"
-    );
-}
-
-// ---- runtime-node gate -----------------------------------------------------
-
-#[test]
-#[cfg(feature = "runtime-node")]
-fn javascript_controllers_registered_when_feature_on() {
-    let ns: Vec<&str> = all_controller_schemas()
-        .iter()
-        .map(|s| s.namespace)
-        .collect();
-    assert!(
-        ns.contains(&"javascript"),
-        "runtime-node ON must register the `javascript` namespace"
-    );
-}
-
-/// The half that proves the gate removes anything: absent, not
-/// registered-and-failing.
-#[test]
-#[cfg(not(feature = "runtime-node"))]
-fn javascript_controllers_absent_when_feature_off() {
-    let ns: Vec<&str> = all_controller_schemas()
-        .iter()
-        .map(|s| s.namespace)
-        .collect();
-    assert!(
-        !ns.contains(&"javascript"),
-        "runtime-node OFF must not register the `javascript` namespace"
     );
 }
 

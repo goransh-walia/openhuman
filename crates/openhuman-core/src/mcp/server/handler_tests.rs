@@ -1,5 +1,5 @@
 use serde_json::{json, Map, Value};
-use tinymcp::{McpServerHandler, RequestContext, RequestHeaders, ToolCallError};
+use tinymcp::{McpServerHandler, RequestContext, RequestHeaders, RequestHeadersExt, ToolCallError};
 
 use super::*;
 use crate::mcp::server::subagent_depth::{HEADER_SUBAGENT_DEPTH, MAX_SUBAGENT_DEPTH};

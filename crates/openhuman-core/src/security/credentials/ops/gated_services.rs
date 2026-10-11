@@ -206,12 +206,16 @@ pub async fn stop_credential_gated_services(config: &Config) {
 
     // 5. Dictation listener — abort the hotkey forwarder task so it doesn't
     //    accumulate duplicate rdev listeners across logout → login cycles.
-    crate::voice::dictation_listener::stop();
+    crate::voice::dictation_listener::stop().await;
 
     // 6. Always-on listening — disable the runtime gate so the mic capture loop
     //    stops transcribing/delivering after logout (no audio processed while
     //    logged out). Symmetric with start_login_gated_services step 3b.
     crate::voice::always_on::stop();
+
+    if let Err(error) = crate::integrations::composio::trigger_history::close_global().await {
+        log::warn!("[composio][history] archive release failed on sign-out: {error}");
+    }
 
     log::info!("[services] all login-gated services stopped");
 }

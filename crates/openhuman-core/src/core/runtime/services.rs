@@ -18,6 +18,8 @@
 // this file is plain field access on OpenHuman's own `Config`.
 use crate::config::Config;
 use crate::core::runtime::ServiceSet;
+#[cfg(feature = "channels")]
+use tinychannels_runtime::config::ChannelsConfigExt as _;
 
 /// The long-lived background services a runtime started, so it can stop them.
 ///
@@ -425,15 +427,6 @@ pub async fn start_boot_once_jobs(services: ServiceSet, config: &Config) {
     // The orphaned-run sweep does NOT live here. It runs in
     // `CoreBuilder::build`, which every runtime goes through — these jobs only
     // run from `serve()`, so a build-only embedder would never be swept.
-
-    if services.harness_init {
-        let cfg_for_init = config.clone();
-        tokio::spawn(async move {
-            crate::agent::harness_init::run_harness_init(cfg_for_init).await;
-        });
-    } else {
-        log::debug!("[runtime] harness init disabled by ServiceSet");
-    }
 
     if services.skill_catalog_refresh {
         crate::skills::catalog::ops::start_boot_catalog_refresh();

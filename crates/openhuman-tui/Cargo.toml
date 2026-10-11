@@ -16,7 +16,9 @@ publish = false
 # core's whole `default`.
 [features]
 langfuse = ["openhuman-rpc/langfuse"]
+os-keyring = ["openhuman-rpc/os-keyring"]
 default = [
+    "os-keyring",
     "crash-reporting",
     "media",
     "skills",
@@ -43,7 +45,6 @@ web3 = ["openhuman-rpc/web3"]
 storage-sqlite = ["openhuman-rpc/storage-sqlite"]
 storage-mongodb = ["openhuman-rpc/storage-mongodb"]
 storage-file = ["openhuman-rpc/storage-file"]
-runtime-node = ["openhuman-rpc/runtime-node"]
 media = ["openhuman-rpc/media"]
 flows = ["openhuman-rpc/flows"]
 skills = ["openhuman-rpc/skills"]

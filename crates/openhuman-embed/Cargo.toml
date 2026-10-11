@@ -12,7 +12,7 @@ publish = false
 langfuse = ["openhuman-core/langfuse"]
 # `channels` is in core's default set already; enabling it here too compiles
 # the `Runtime::channels` facade in a default build.
-default = ["openhuman-core/default", "channels"]
+default = ["openhuman-core/default", "channels", "modules"]
 http-server = ["openhuman-core/http-server"]
 inference = ["openhuman-core/inference"]
 documents = ["openhuman-core/documents"]
@@ -26,7 +26,6 @@ web3 = ["openhuman-core/web3"]
 storage-sqlite = ["openhuman-core/storage-sqlite"]
 storage-mongodb = ["openhuman-core/storage-mongodb"]
 storage-file = ["openhuman-core/storage-file"]
-runtime-node = ["openhuman-core/runtime-node"]
 media = ["openhuman-core/media"]
 flows = ["openhuman-core/flows"]
 skills = ["openhuman-core/skills"]
@@ -122,3 +121,12 @@ required-features = ["channels"]
 [[example]]
 name = "storage"
 required-features = ["storage-sqlite"]
+
+# SaaS profiles are exposed only when the channel facade is compiled.
+[[test]]
+name = "saas_profiles"
+required-features = ["channels"]
+
+[[example]]
+name = "profiles"
+required-features = ["channels"]
