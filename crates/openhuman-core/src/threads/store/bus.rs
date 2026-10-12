@@ -32,6 +32,7 @@ use crate::core::events::DomainEvent;
 use tinybus::EventHandler;
 use tinybus::SubscriptionHandle;
 use tinychannels_bus::ChannelMessage;
+#[cfg(test)]
 use tinychannels_runtime::context::conversation_history_key;
 
 use super::{
@@ -247,9 +248,7 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                         sender,
                         reply_target,
                         thread_ts: thread_ts.as_deref(),
-                        tinychannels_session_key: inbound_envelope
-                            .as_ref()
-                            .map(tinychannels_session_key),
+                        inbound_envelope: inbound_envelope.as_ref(),
                         content,
                         role: "user",
                         success: None,
@@ -258,7 +257,9 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                         model: None,
                         source: "channel_received",
                     },
-                ) {
+                )
+                .await
+                {
                     log::warn!(
                         "{LOG_PREFIX} failed to persist inbound channel message channel={} message_id={} error={}",
                         channel,
@@ -305,7 +306,7 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                         sender,
                         reply_target,
                         thread_ts: thread_ts.as_deref(),
-                        tinychannels_session_key: None,
+                        inbound_envelope: None,
                         content: response,
                         role: "assistant",
                         success: Some(*success),
@@ -314,7 +315,9 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                         model: Some(model),
                         source: "channel_processed",
                     },
-                ) {
+                )
+                .await
+                {
                     log::warn!(
                         "{LOG_PREFIX} failed to persist processed channel message channel={} message_id={} error={}",
                         channel,
@@ -334,7 +337,7 @@ struct ChannelTurnDescriptor<'a> {
     sender: &'a str,
     reply_target: &'a str,
     thread_ts: Option<&'a str>,
-    tinychannels_session_key: Option<String>,
+    inbound_envelope: Option<&'a tinychannels_bus::ChannelInboundEnvelope>,
     content: &'a str,
     role: &'a str,
     success: Option<bool>,
@@ -344,16 +347,48 @@ struct ChannelTurnDescriptor<'a> {
     source: &'a str,
 }
 
-fn persist_channel_turn(
+async fn persist_channel_turn(
     workspace_dir: &Path,
     descriptor: ChannelTurnDescriptor<'_>,
 ) -> Result<(), String> {
-    let thread_id = persisted_channel_thread_id(
-        descriptor.channel,
-        descriptor.sender,
-        descriptor.reply_target,
-        descriptor.thread_ts,
-    );
+    #[cfg(test)]
+    let client = crate::channels::module_fixture::client().await;
+    #[cfg(not(test))]
+    let client = {
+        let config = crate::config::rpc::load_config_with_timeout().await?;
+        if config.workspace_dir != workspace_dir {
+            return Err("channel workspace changed".into());
+        }
+        crate::modules::client::ModuleClient::new(config)
+    };
+    let prepared: tinychannels_bus::module_inbound::PreparedChannelInbound = client
+        .call_confidential(
+            "tinychannels",
+            tinychannels_bus::methods::PREPARE_CHANNEL_INBOUND,
+            (
+                tinychannels_bus::module_inbound::PrepareChannelInboundRequest {
+                    namespace: "main".into(),
+                    session_policy: Default::default(),
+                    source: tinychannels_bus::module_inbound::ChannelInboundSource::Legacy {
+                        message: ChannelMessage {
+                            id: descriptor.message_id.into(),
+                            sender: descriptor.sender.into(),
+                            reply_target: descriptor.reply_target.into(),
+                            content: descriptor.content.into(),
+                            channel: descriptor.channel.into(),
+                            timestamp: 0,
+                            thread_ts: descriptor.thread_ts.map(ToOwned::to_owned),
+                            sender_name: None,
+                        },
+                        envelope: descriptor.inbound_envelope.cloned(),
+                    },
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let thread_id = format!("channel:{}", prepared.history_key);
+    let session_key = descriptor.inbound_envelope.map(|_| prepared.session_key);
     let title = channel_thread_title(
         descriptor.channel,
         descriptor.sender,
@@ -401,7 +436,7 @@ fn persist_channel_turn(
                 "channelSender": descriptor.sender,
                 "replyTarget": descriptor.reply_target,
                 "threadTs": descriptor.thread_ts,
-                "tinychannelsSessionKey": descriptor.tinychannels_session_key,
+                "tinychannelsSessionKey": session_key,
                 "sourceEvent": descriptor.source,
                 "success": descriptor.success,
                 "elapsedMs": descriptor.elapsed_ms,
@@ -423,14 +458,7 @@ fn persist_channel_turn(
     Ok(())
 }
 
-fn tinychannels_session_key(envelope: &tinychannels_bus::ChannelInboundEnvelope) -> String {
-    tinychannels_runtime::channel::build_session_key_for_inbound_envelope(
-        "main",
-        envelope,
-        tinychannels_bus::channel::SessionKeyPolicy::default(),
-    )
-}
-
+#[cfg(test)]
 fn persisted_channel_thread_id(
     channel: &str,
     sender: &str,

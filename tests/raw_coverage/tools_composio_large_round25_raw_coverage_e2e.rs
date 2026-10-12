@@ -24,7 +24,7 @@ use openhuman_core::integrations::composio::ops::{
 use openhuman_core::integrations::composio::{
     invalidate_connected_integrations_cache, FetchConnectedIntegrationsStatus,
 };
-use openhuman_core::tools::ComposioListToolsTool;
+use openhuman_core::integrations::composio::tools::ComposioListToolsTool;
 use tinytools::{Tool, ToolCallOptions};
 
 static ENV_LOCK: &OnceLock<tokio::sync::Mutex<()>> = &crate::SHARED_ENV_LOCK;

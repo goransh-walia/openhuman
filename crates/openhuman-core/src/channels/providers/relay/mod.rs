@@ -6,8 +6,9 @@
 //! For each message it calls `channel_relay_inbound` under that user's scope.
 //! The core:
 //!
-//! 1. validates the message ([`params`]) and derives its thread,
-//!    `channel:<channel>/<sender>/<chat>` (`channels::bus::derive_inbound_thread_id`);
+//! 1. validates the message ([`params`]) and asks TinyChannels' confidential
+//!    `PrepareChannelIdentity` operation for its canonical thread id,
+//!    `channel:<channel>/<sender>/<chat>`;
 //! 2. records the message on that thread in the caller's workspace
 //!    ([`store`]), refusing a duplicate `message_id`;
 //! 3. runs the turn through the channel dispatch pipeline

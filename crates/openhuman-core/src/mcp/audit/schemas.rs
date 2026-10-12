@@ -113,7 +113,7 @@ fn handle_list(params: Map<String, Value>) -> ControllerFuture {
             "[mcp_audit] handle_list querying store workspace={} query={query:?}",
             config.workspace_dir.display()
         );
-        let records = match crate::mcp::audit::list_writes(&config, &query) {
+        let records = match crate::mcp::audit::list_writes(&config, &query).await {
             Ok(records) => {
                 log::trace!(
                     "[mcp_audit] handle_list store success records={}",

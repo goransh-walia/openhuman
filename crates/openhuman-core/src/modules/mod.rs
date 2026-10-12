@@ -30,7 +30,9 @@
 //! - [`documents`] — the host half of the `tinydocs` module's three operations.
 //! - [`browser`] and [`browser_task`] — TinyComputer browser members and tasks
 //!   without linking the browser engine into the core; [`browser_sites`] keeps
-//!   what finished tasks learned about each site for the next task there.
+//!   what finished tasks learned about each site for the next task there, and
+//!   [`browser_profile`] tells whether a Chrome holds the persistent profile
+//!   and claims it for a browser about to start.
 //! - [`wallet`] — the host half of the `tinywallet` module, which builds and
 //!   assembles transactions while the signing key stays in this process.
 //! - [`host`] — the module broker, connection and loader.
@@ -44,6 +46,8 @@ pub mod boot;
 #[cfg(feature = "modules")]
 pub mod browser;
 #[cfg(feature = "modules")]
+pub(crate) mod browser_profile;
+#[cfg(feature = "modules")]
 pub(crate) mod browser_sites;
 #[cfg(feature = "modules")]
 pub mod browser_task;
@@ -51,9 +55,9 @@ pub mod browser_task;
 mod browser_task_report;
 #[cfg(feature = "channels")]
 pub(crate) mod channel_controller;
-#[cfg(feature = "voice")]
-pub mod channel_email;
 pub(crate) mod channel_health;
+#[cfg(all(feature = "channels", feature = "modules"))]
+pub(crate) mod channel_runtime;
 pub mod client;
 #[cfg(feature = "modules")]
 pub mod computer;
@@ -93,6 +97,10 @@ pub mod wallet;
 mod wallet_host;
 #[cfg(feature = "web3")]
 pub(crate) mod wallet_service;
+#[cfg(feature = "web3")]
+pub(crate) mod web3_service;
+#[cfg(feature = "web3")]
+pub(crate) mod x402_service;
 
 #[cfg(feature = "modules")]
 pub use ops::{ensure_loaded, ensure_loaded_within, state_of, LoadError};

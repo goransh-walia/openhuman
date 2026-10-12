@@ -1,8 +1,9 @@
 # Loadable module boundary inventory
 
-Status: migration incomplete. Completed adapters and the remaining linked
-implementation packages are recorded below; the exception list is still nonempty.
-The machine-readable dependency policy is
+Status: the Channels, MCP, Wallet and TinyBox host cutovers are merged, and the
+final scoped local acceptance passed. The module-boundary gate reports zero
+violations, zero exceptions and no pending contracts; TinyRuntime remains
+explicitly excluded for separate removal work. The machine-readable dependency policy is
 [`scripts/ci/module-boundaries.json`](../scripts/ci/module-boundaries.json).
 
 Every owner below is the canonical upstream under
@@ -15,11 +16,11 @@ copying its implementation into a host, or accepting weaker isolation.
 | --- | --- | --- | --- | --- |
 | tinyjuice | none (module loaded through TinyBus) | tinyjuice-bus | core tools, compression, CCR REPL | Complete: PR #59 provides module-owned compression, CCR queries, HTML extraction, schemas and declarations; the host retains turn-bound model callbacks and artifact authorization |
 | tinyconnectors | none | tinyconnectors-bus | core integrations, credentials and triggers | Module-backed argument preparation, action execution and trigger archives; host credential reconciliation and frozen tool restoration remain in OpenHuman |
-| tinymcp | tinymcp | tinymcp-bus | core MCP registry, supervisor, CLI stdio/HTTP server | Supervisor notifications, server protocol operations and callbacks for approved host tools/resources/prompts |
-| tinychannels | tinychannels, tinychannels-runtime (remaining runtime callers) | tinychannels-bus | core channels and podcast email, TinyHumans host, CLI REPL | Contract is pure; v0.1.18 supplies complete Discord response vocabulary provider connection preparation and health observations. Podcast SMTP, Discord discovery/permission checks, credential tests and connection validation/defaults and `doctor channels` health checks use confidential module calls. Remaining runtime callers need bus cutover with inbound/status callbacks and shutdown draining |
+| tinymcp | none in normal/build host dependencies | tinymcp-bus | core MCP registry, supervisor, CLI stdio/HTTP server | Merged host adapters use the released v0.14.3 module for registry, supervisor, client and server protocol operations, with approved host callbacks kept in OpenHuman. The 62-member artifact and local focused, lifecycle, registry, native and build gates pass; frozen recorded tool declarations are restored independently of the current catalog |
+| tinychannels | tinychannels, tinychannels-runtime, tinychannels-module (test-only) | tinychannels-bus | core channels, TinyHumans host, CLI REPL | Contract 16 (operation 1.17) is pure; scoped providers, inbound/identity/outbound preparation, remote commands, runtime limits, typing and progressive delivery execute through confidential module calls. Host-owned policy, credentials, persistence and callbacks remain in OpenHuman. Both host implementation exceptions are removed; the 254-test focused suite and released-artifact runtime fixture pass |
 | tinyhosts | none | tinyhosts-bus | core hosting tools | Released Execute/Providers contract consumed through the module; workspace authorization, credentials and approval policy remain in OpenHuman |
-| tinywallet | tinywallet-crypto, tinywallet-web3, tinywallet-x402 through remaining host imports | tinywallet-bus | core wallet/web3/x402 | Contract is pure at v0.13.0; native transfer preparation/execution use confidential module calls with host custody, exact approval binding and explicit close. Initialization, remaining validation, Web3 quotes/swaps, x402 payments, budgets and ledger still need host cutover |
-| tinybox | tinybox-core, tinybox-jail, tinybox-docker | tinybox-bus | core sandbox and security, desktop gateways | Pre-core gateways use the released v0.1.18 bus client. Core sandbox execution and shell analysis still require cutover |
+| tinywallet | none in normal/build host dependencies | tinywallet-bus | core wallet/web3/x402 | Complete: v0.19.0 contract 1.13 owns mnemonic validation/derivation, native transactions, Web3 quotes/execution, ERC-20 encoding, and x402 payment parsing/budgets/ledger. OpenHuman retains encrypted-key custody, authenticated transport, explicit approval, and lifecycle orchestration |
+| tinybox | tinybox-core (test-only) | tinybox-bus | core sandbox and security, desktop gateways | Merged host cutover uses TinyBox v0.1.24 for sandbox/resource lifecycle, collected and supervised execution, jailed and native shell execution, Docker control, local grants, file transfer and port forwarding. Host authorization and the security floor remain in OpenHuman |
 | tinycomputer | none | tinycomputer-bus | core voice, paste/focus and permission checks | Permission, focus, paste and Globe listener operations use the module; native thread and target rules remain covered |
 | tinyvoice | None | tinyvoice-bus | core voice capture/hotkeys | Module-owned devices, recording and continuous capture, bounded audio reads/batches, explicit lease cleanup; computer module permission decisions |
 | tinyruntime | tinyruntime-pyserver | tinyruntime-bus | core Python worker, optional TinyJuice ML | Excluded from this migration: TinyRuntime is being removed separately |
@@ -92,7 +93,7 @@ remain unchanged until compatible upstream releases are available.
 | TinyComputer native permissions, confidential focus/paste and reliable Globe leases/read/shutdown | [tinycomputer#87](https://github.com/tinyhumansai/tinycomputer/pull/87) | 1,372 all-feature and 1,367 default tests; 90-member compiled artifact verification; independent ownership and event-loss review accepted; macOS cross-check and 233-file coverage gate pass; physical macOS helper not exercised on Linux |
 | TinyConnectors argument preparation, task filtering, structured provider errors and leased archives | [tinyconnectors#46](https://github.com/tinyhumansai/tinyconnectors/pull/46) | 423 tests; dynamic artifact calls; user archive lifecycle fixtures; pure contract audit; per-file coverage at least 90% |
 | TinyChannels contract vocabulary separated from provider, relay, pairing and runtime behavior | [tinychannels#56](https://github.com/tinyhumansai/tinychannels/pull/56) | 1,174 default and 1,180 all-feature tests; independent contract audit and relocation review accepted; bus files at least 98.65% coverage; legacy provider/worker coverage gaps disclosed |
-| TinyBox pure contract, shell facts, reserved sandbox/process handles and acknowledged cleanup/shutdown | [tinybox#30](https://github.com/tinyhumansai/tinybox/pull/30) | 710 default and all-feature tests; 57 source files at least 90% coverage; compiled native-process artifact verification; independent lifecycle review accepted; supervised execution currently limited to Unix passthrough |
+| TinyBox pure contract, shell facts, reserved sandbox/process handles and acknowledged cleanup/shutdown | [tinybox#30](https://github.com/tinyhumansai/tinybox/pull/30) | 710 default and all-feature tests; 57 source files at least 90% coverage; compiled native-process artifact verification; independent lifecycle review accepted; at PR #30, supervised execution was limited to Unix passthrough |
 | TinyWallet pure contracts, address validation and stateless EVM construction with exact approval facts | [tinywallet#56](https://github.com/tinyhumansai/tinywallet/pull/56) | 745 all-feature and 601 default tests; four-chain signing and native/ERC-20/contract construction through the compiled artifact; pure contract audit; all 95 source files at least 90% coverage; independent construction review accepted |
 | TinyWallet module-owned Web3 and x402 operations with scoped service handles | [tinywallet#62](https://github.com/tinyhumansai/tinywallet/pull/62) | Independent verification at ec22874: 60 module tests, every source file at least 90% coverage, and Rust 1.88 native runners execute two signing tests plus one lifecycle test. Hosted coverage passes; signed-payment budget accounting remains under review repair before merge and compatible release |
 | TinyVoice device enumeration, recording/continuous capture, reserved hotkey leases, replayable batches and acknowledged shutdown | [tinyvoice#23](https://github.com/tinyhumansai/tinyvoice/pull/23) | Contract 1.4; 32-member compiled artifact; 88 module tests; independent hotkey, Windows owner and Xvfb cleanup fixtures; pure contract audit, own-module formatting and Windows GNU test cross-check; formatted module source coverage 1,592/1,743 (91.34%), with the existing physical-device exclusion; no physical Windows/MSVC or macOS input validation |
@@ -112,10 +113,12 @@ OpenHuman adapters remain outstanding.
 Published v0.1.13 contains the earlier implementation-bearing contract, so that
 release does not unblock this contract cut.
 
-TinyBox currently refuses supervised execution on unsupported backends and platforms.
-Docker supervision is implemented in PR 30 and still undergoing lifecycle review.
-Namespace/SSH and native Windows supervision, streaming, file transfer, forwarding
-and gateway operations remain required before migrating its host callers.
+TinyBox v0.1.24 supplies the host's sandbox operations through the released
+module, including Docker and namespace/SSH backend selection, supervised process
+output, jailed and native shell execution, local grant resolution, file transfer
+and port forwarding. Availability still depends on the backend and platform
+facts returned by the module; OpenHuman retains command authorization and its
+security floor.
 
 TinyRuntime is now excluded from the active migration because it is being removed
 separately. The previously published owning PR remains recorded above; the frozen
@@ -332,3 +335,119 @@ This cut removes the `tinyvoice` and `cpal` host exceptions, leaving nine
 implementation exceptions for Channels, MCP, Box and Wallet. The resolved
 voice-only normal/build graph falls from 323 packages to 318; this is a
 dependency count, with no inferred binary size or build-time reduction.
+
+## Scoped channel runtime prerequisites
+
+Upstream [tinychannels#68](https://github.com/tinyhumansai/tinychannels/pull/68)
+moves listener reconnect supervision into the module.
+[tinychannels#69](https://github.com/tinyhumansai/tinychannels/pull/69) adds
+inert runtime reservations and private provider/callback objects. Runtime
+activation and cleanup remain owned by the module when a caller cancels.
+Each private object retains its original callback destination through shutdown;
+stopping one runtime cannot close another identity's provider with the same name.
+
+Released v0.1.20 supplies contract revision 10 and operation version 1.11.
+All eleven archives and the checksum manifest were verified against downloaded
+bytes, GitHub asset digests and asset sizes. The released Linux artifact passed
+a runtime-isolation and cleanup fixture using OpenHuman's current TinyBus kernel.
+The owner workspace passed 1,306 tests and two actual compiled-artifact fixtures.
+
+These are upstream prerequisites. The host provider, relay and delivery adapters
+still need migration; both Channels implementation exceptions remain until
+those callers and their dependency graphs are cut over.
+
+
+## Channel message preparation and hosted ingress
+
+The host now pins verified TinyChannels v0.1.26 (contract 16, operation 1.17).
+All eleven published archives and their checksum manifest were checked against
+actual downloaded bytes, GitHub digests, and sizes. Published Linux module
+fixtures pass with both the owning loader and OpenHuman's shipped TinyBus kernel.
+They exercise confidential inbound/identity preparation and isolated runtime
+shutdown.
+
+Rich outbound normalization and idempotency preparation execute through
+`PrepareOutboundIntent`; hosted inbound conversations obtain their existing
+persisted identifiers through `PrepareChannelIdentity`. Disabled or unavailable
+modules fail the affected operation. Channel session cancellation and product
+configuration remain host-owned. Unreachable host-side segmented delivery was
+removed without changing the active direct-delivery path.
+
+Focused host validation passes 225 channel tests, eight controller adapter tests,
+and fourteen module registry tests. Boundary enforcement reports zero violations
+and zero stale exceptions, with nine temporary implementation exceptions still
+present across Channels, MCP, Box, and Wallet. Both Channels implementation
+exceptions remain pending provider, relay, remote-command, and progressive
+runtime cutover.
+
+Hosted progressive replies now run through a private runtime's `ExecuteProgressive`
+handle. OpenHuman supplies ordered turn facts and captured managed transport;
+the module owns delivery choreography and idempotency. A released-artifact host
+fixture passes callback isolation, acknowledged stop, and final-send replay,
+alongside four lease validation and cancellation tests. Native providers, relay,
+remote-command host adapters and context helpers are still being migrated;
+both Channels implementation exceptions remain.
+
+
+## Full Channels host cutover validation
+
+The native-provider, relay, remote-command, typing, approval presentation and
+progressive-delivery adapters now use the minimal bus contract. Provider
+implementations and compatibility wrappers are available only to unit tests.
+The root contract fixture links the owning module in dev-dependencies and
+communicates with it over TinyBus; shipped hosts never link that fixture.
+
+The dependency checker reports zero violations, zero stale exceptions, four
+remaining temporary exceptions (MCP and Wallet), and no pending contracts.
+`scripts/assert-shed.sh channels tinychannels tinychannels-runtime
+tinychannels-module` passes. The dependency simulator reports 308 resolved
+packages / 284 package names for `--no-default-features --features channels`,
+compared with 346 packages / 318 names in the primary base checkout. These
+are dependency counts, not measured build-time or binary-size improvements.
+
+The focused host tests and build are queued for final validation. Earlier
+225-test channel results above describe the earlier adapter revision and do
+not establish acceptance of this full cutover.
+
+
+## TinyWallet wallet, Web3, and x402 host cutover
+
+TinyWallet v0.19.0 (contract 1.13) is pinned at released source
+`722e7cc9e00a45997765e47c41f3bf451f7911d7`. Wallet setup, mnemonic validation
+and derivation, transaction construction and signing, Web3 quote execution,
+ERC-20 calldata encoding, and x402 payment parsing, budgets and ledger now run
+through the compiled module. OpenHuman keeps encrypted-key custody, authenticated
+HTTP/RPC transport, explicit quote/payment approval and user-scoped lifecycle
+management. The host has no normal/build dependency on
+`tinywallet-crypto`, `tinywallet-web3` or `tinywallet-x402`; the wallet module
+implementation remains only a test fixture dependency.
+
+The v0.19.0 release provides 17 platform archives. Independent local verification
+matched every downloaded archive against its GitHub digest and the embedded
+`modules.toml` hash; the released Ubuntu artifact also passed the TinyBus
+operation and signing E2E. The module-boundary audit reports zero violations
+and no remaining Wallet implementation exceptions. TinyRuntime remains excluded
+from this migration.
+
+## Current delivery status
+
+Channels host PR [#7502](https://github.com/tinyhumansai/openhuman/pull/7502) and MCP host PR [#7503](https://github.com/tinyhumansai/openhuman/pull/7503) are merged. Wallet PR [#7489](https://github.com/tinyhumansai/openhuman/pull/7489), TinyBox PR [#7469](https://github.com/tinyhumansai/openhuman/pull/7469), and the MCP lifecycle follow-up [#7515](https://github.com/tinyhumansai/openhuman/pull/7515) are also merged.
+
+Final scoped acceptance passed on Linux: the MCP focused suite passed 165 tests, including all 22 lifecycle tests; registry tests passed 14/14; Channels passed 254 focused tests and a released-artifact runtime fixture; TinyBox passed its released-artifact fixture; MCP's released-artifact registry E2E passed 6/6; thread-store tests passed 22/22; and the embed lifecycle test passed. Default and product CLI builds, minimal and loader-disabled checks, the dependency-boundary audit, crate-chain check and feature-forwarding check also passed. These results do not claim runtime testing on every supported platform.
+
+TinyRuntime is excluded as requested. Broader bus error reporting and Sentry coverage are deferred to separate work; the existing reporting path remains in place.
+
+## TinyMCP compatible release pin
+
+The registry pins TinyMCP v0.14.3, built from source
+`10b03d1ab00ecbd08bd41d5e83a5c350cbd7e357`. All 17 platform archives match the
+published checksum manifest, GitHub asset digests and sizes. The downloaded
+Ubuntu artifact loads through OpenHuman's TinyBus revision and exposes the
+expected 62-member interface (module descriptor contract 1.21). Registry
+metadata includes the Arch ARM archive and the renamed Arch archive basenames.
+
+The final Linux host focused tests and product builds passed; release
+verification was also checked separately against all 17 published archives.
+Actual-source HTTP/session regressions passed 11 tests covering host
+credential-header removal, terminal callback draining, lost-reply retry and
+rejected DELETE preservation.

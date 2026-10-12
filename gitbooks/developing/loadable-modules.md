@@ -32,7 +32,7 @@ in [the module-boundary inventory](../../docs/module-boundary-inventory.md).
 
 ## The registry
 
-`crates/openhuman-core/src/modules/registry/` compiles in fourteen released
+`crates/openhuman-core/src/modules/registry/` compiles in eleven released
 records, plus the TinySecurity admission record when `security-module` is
 enabled. Only this registry may select an artifact. Nothing reads a module name
 from config and goes looking for it.
@@ -47,11 +47,11 @@ from config and goes looking for it.
 | `tinyvoice` | Audio framing, VAD, wake-word gating, hallucination detection |
 | `tinymcp` | The MCP client and registry |
 | `tinyconnectors` | OAuth connector actions and triggers |
-| `tinybox` | Sandbox capability discovery |
+| `tinybox` | Sandbox/resource lifecycle, bounded and supervised execution, jail and Docker operations, shell execution, file transfer and port forwarding |
 | `tinychannels` | Messaging channel transports |
 | `tinyhosts` | Hosting provider operations |
 
-Each record carries a version, the release it came from, and one `PlatformAsset` per supported build. Thirteen of the fourteen publish eleven builds: `ubuntu-24.04` and `ubuntu-22.04` on `x86_64` and `arm64`, `macos-26` and `macos-15` on `arm64` and `x86_64`, `windows-2025-x86_64`, `windows-2022-x86_64` and `windows-11-arm64`. `tinycomputer` publishes seven because it has no Linux backend.
+Each record carries a version, the release it came from, and one `PlatformAsset` per supported build. Seven records publish eleven builds: `ubuntu-24.04` and `ubuntu-22.04` on `x86_64` and `arm64`, `macos-26` and `macos-15` on `arm64` and `x86_64`, `windows-2025-x86_64`, `windows-2022-x86_64` and `windows-11-arm64`. TinyComputer publishes sixteen assets; TinyBox, TinyMCP and TinyWallet each publish seventeen, adding Arch Linux and Fedora builds. Asset availability is module-specific, so a release's count should not be inferred from another module's matrix.
 
 Every asset carries a SHA-256 copied verbatim from the published release's own checksum file. Do not compute a replacement pin from a local build. The digest must describe the artifact the release workflow signed, not the one on your machine.
 

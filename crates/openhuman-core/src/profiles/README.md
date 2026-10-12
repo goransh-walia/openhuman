@@ -269,8 +269,10 @@ A profile holds one thread per conversation, whatever interface it came in on:
   direct `load_or_init` calls, environment writes and `home_dir()` lookups.
   Detached work uses `spawn_scoped` so it keeps its profile.
 - **Host tools are opt-in and confined.** A user's context has no `Platform`
-  family, so shell and file tools are absent unless the operator lists their
-  group in `tool_allowlist`:
+  family. The standalone SaaS CLI has no host-tool adapter and exposes no
+  shell or file tools, even when their group is in `tool_allowlist`. An
+  embedding host must supply profile tool adapters and a permission callback;
+  the allowlist limits which host groups those adapters may expose:
   - `host_files` (`file_read`, `file_write`, `edit`, `apply_patch`, `grep`,
     `glob`, `list`, `csv_export`, `read_workspace_state`) runs in-process,
     confined by the forced policy to the profile's `sandbox/`. In SaaS the
@@ -285,6 +287,14 @@ A profile holds one thread per conversation, whatever interface it came in on:
     hard-denied whatever the allowlist says (`tools::HARD_DENIED`).
   - There is no per-user approval surface, so the approval gate never parks
     in SaaS: it allows tools from an allowlisted group and refuses the rest.
+  - An embedding operator can also name `cron`, `current_time` and
+    `resolve_time` in `tool_scope(ToolScopeSpec::Named(..))`
+    (`tools::OPERATOR_ADMITTABLE`); only those three are registered despite
+    their family being off, and only when named. Cron stays bound by
+    `[cron] agent_jobs_only`. An embedded (library) agent gets the same three
+    by naming them in its own definition's scope (`HostOverrides::named_tools`).
+  - `max_tool_iterations` caps tool rounds per profile turn (chat, relay and
+    cron), forced as `agent.max_tool_iterations_override`.
 - **The user surface is an allowlist.** Within the user families, only the
   methods on `surface::USER_METHODS` are live: thread reads and writes
   (including `threads_delete` and `threads_purge`, confined to the caller),
@@ -421,3 +431,70 @@ channel threads, `409`) and `crates/openhuman-embed/tests/saas_profiles.rs`
   installed through one node is only readable there unless secrets live in
   the storage backend.
 - Existing `agents/u-*` data is orphaned.
+
+## In-process host capabilities
+
+`openhuman_embed::ProfileRuntimeBuilder` accepts the existing `HostTools`
+factory, `ToolScopeSpec::Named` (or `HostOnly`) and an asynchronous
+`can_use_tool` callback. Registration contains exactly the selected admitted
+native and host tools. A wildcard is refused. SaaS hard denies, host group
+opt-ins, the profile lease fence and channel permission ceilings remain
+stronger than the callback. With no callback, execution is denied.
+Operations requiring supervised approval must use `Named`; `HostOnly` does
+not provide the static operator allowlist used for that exemption.
+
+The factory receives the exact durable chat or relay thread through
+`TurnContext::session_id`; its ambient tenant
+(`openhuman_embed::current_tenant`) is the owning profile. During
+execution, `openhuman_embed::current_turn_origin` exposes the task's original
+`AgentTurnOrigin`, including channel sender and reply target. Concurrent
+messages do not mutate another turn's routing context.
+
+Channel permissions default to read-only, including unknown channels. Hosts
+must explicitly configure `web_channel` and their relayed channel to `Write`
+or `Execute` for memory or cron mutation. This grants only a ceiling: a named
+tool and the callback are still required. Ordinary public channel agents keep
+their read-only posture. Dangerous profile ceilings are refused.
+
+`memory_engine` supplies the existing `MemoryEngine` contract through each
+profile's local adapters. Requests retain the forced `user:<profile-id>` root;
+a mismatched config fails closed. The process-global host engine is still
+ignored in SaaS. Resolution refuses a profile whose lease expired or was
+latched, including queued workers resolving after lease loss. This is an
+admission check: an external engine call already admitted can still finish
+if lease loss happens while it is in flight; the generic `MemoryEngine`
+contract does not provide atomic storage fencing.
+
+Native assembly remains within the profile domain families registered at boot.
+Currently that includes memory and threads; selecting another family does not
+enable it. Provider credentials, operator-selected additional native domains
+and scheduled profile turn resolution are separate capabilities; selecting a
+native tool does not start a driver.
+
+## Scheduled jobs (`cron.rs`)
+
+A hosted profile has no scheduler of its own. When a host installs a
+`cron::host_delivery::CronDelivery` (`ProfileRuntimeBuilder::cron_delivery` in
+the embed crate), the background tick calls `cron::sweep` once a minute: for
+every provisioned profile it reads the due agent jobs straight from the shared
+storage backend (a closed profile is seen without being opened), opens the
+profile, claims each `(job, scheduled time)` occurrence in the store
+(`cron::claims`, an absent-only write with a lease, so two nodes never both run
+it) and runs the claimed jobs under that profile's context with the ordinary
+dispatcher. An `origin`-mode reply goes to the host with the profile id, the
+thread the job was created in and its `JobOrigin`; `NO_REPLY` is never
+delivered. Shell and flow jobs are not run. Without a shared backend there is
+nothing to sweep.
+
+On shutdown a sweep in flight is not awaited: its claims lapse after ten
+minutes and another node may then run the interrupted occurrence again.
+
+## One turn at a time per profile
+
+Chat turns (`web_chat::run_chat_task`), relayed-message turns
+(`run_relay_turn`) and the cron sweep's runs of one profile take that
+profile's gate ([`turn_gate`](turn_gate.rs)) for the whole turn, so they
+queue instead of overlapping. A due cron occurrence waits behind an in-flight
+chat turn rather than being skipped; the sweep takes the gate before claiming
+the occurrence so the wait does not use up the claim lease. Different
+profiles never contend, and work with no profile (desktop) is not gated.

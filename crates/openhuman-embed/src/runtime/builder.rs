@@ -14,12 +14,12 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use openhuman_core::agent::session_store::SessionStoreProvider;
 use openhuman_core::backend::BackendTransport;
 use openhuman_core::config::Config;
 use openhuman_core::core::runtime::{DomainSet, ServiceSet, TokenSource};
 use openhuman_core::core::types::HostKind;
 use openhuman_core::tools::toolpacks::ToolGroups;
+use tinyagents_session::port::SessionStoreProvider;
 
 use super::seams::HostSeams;
 use super::ApiKey;
@@ -33,6 +33,13 @@ pub(crate) use super::build::apply_provider;
 /// Whether `services` asks for any background work.
 pub(crate) fn requests_background_services(services: ServiceSet) -> bool {
     services != ServiceSet::none()
+}
+
+/// Whether [`RuntimeBuilder::build`] starts `services` itself: only when they
+/// ask for background work and the host did not
+/// [defer](RuntimeBuilder::defer_services) them.
+pub(crate) fn starts_services_on_build(services: ServiceSet, deferred: bool) -> bool {
+    !deferred && requests_background_services(services)
 }
 
 #[cfg(test)]
@@ -78,6 +85,7 @@ pub struct RuntimeBuilder {
     pub(super) provider: Provider,
     pub(super) access: Access,
     pub(super) services: Option<ServiceSet>,
+    pub(super) defer_services: bool,
     pub(super) domains: Option<DomainSet>,
     pub(super) tool_groups: Option<ToolGroups>,
     pub(super) host_kind: HostKind,
@@ -91,6 +99,7 @@ pub struct RuntimeBuilder {
     pub(super) backend_transport: Option<Arc<dyn BackendTransport>>,
     pub(super) memory_engine: Option<Arc<dyn tinymemory_api::MemoryEngine>>,
     pub(super) session_store: Option<Arc<dyn SessionStoreProvider>>,
+    pub(super) cron_delivery: Option<Arc<dyn openhuman_core::cron::host_delivery::CronDelivery>>,
     pub(super) seams: HostSeams,
     pub(super) max_agents: usize,
     pub(super) agent_defaults: super::AgentDefaults,
@@ -122,6 +131,7 @@ impl RuntimeBuilder {
             provider: Provider::inherit(),
             access: Access::default(),
             services: None,
+            defer_services: false,
             domains: None,
             tool_groups: None,
             host_kind: HostKind::Library,
@@ -135,6 +145,7 @@ impl RuntimeBuilder {
             backend_transport: None,
             memory_engine: None,
             session_store: None,
+            cron_delivery: None,
             seams: HostSeams::default(),
             max_agents: DEFAULT_MAX_AGENTS,
             agent_defaults: super::AgentDefaults::default(),
@@ -252,6 +263,24 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Route the replies of the agents' scheduled jobs yourself.
+    ///
+    /// An `origin`-mode run of an agent's cron job hands its output to
+    /// [`CronDelivery::deliver`](crate::CronDelivery::deliver) with the agent
+    /// id, the thread the job was created in and its
+    /// [`JobOrigin`](crate::JobOrigin), instead of writing into a local thread
+    /// or channel; a run that answers `NO_REPLY`, or fails, is never delivered.
+    /// Jobs still run only while their agent is live (the scheduler service
+    /// must be on). It is process-wide, as the runtime is, and the core has no
+    /// uninstall for it: it stays installed for the life of the process.
+    pub fn cron_delivery(
+        mut self,
+        delivery: Arc<dyn openhuman_core::cron::host_delivery::CronDelivery>,
+    ) -> Self {
+        self.cron_delivery = Some(delivery);
+        self
+    }
+
     /// The most agents this runtime hosts at once; [`crate::Runtime::agent`]
     /// returns [`AgentError::AgentLimit`](crate::AgentError::AgentLimit)
     /// beyond it. Removed and dropped agents do not count. Defaults to
@@ -357,6 +386,22 @@ impl RuntimeBuilder {
     /// bound does not start them twice.
     pub fn services(mut self, services: ServiceSet) -> Self {
         self.services = Some(services);
+        self
+    }
+
+    /// Build without starting the background services the [`ServiceSet`]
+    /// selects; the host starts them with
+    /// [`Runtime::start_services`](crate::Runtime::start_services) once it is
+    /// ready.
+    ///
+    /// For a host that registers
+    /// [`Runtime::on_system_job`](crate::Runtime::on_system_job) handlers:
+    /// a job stored by an earlier process can be due the moment the
+    /// scheduler starts, and a system job with no handler yet is announced
+    /// and recorded `ok` without running. Build deferred, register every
+    /// handler, upsert the jobs, then start.
+    pub fn defer_services(mut self) -> Self {
+        self.defer_services = true;
         self
     }
 

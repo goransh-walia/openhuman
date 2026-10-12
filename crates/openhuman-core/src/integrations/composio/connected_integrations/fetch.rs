@@ -4,12 +4,13 @@
 //! on a miss), plus their small toolkit-membership/description helpers.
 
 use std::sync::atomic::Ordering;
-use std::time::Instant;
 
 use crate::agent::prompts::ConnectedIntegration;
 use crate::config::Config;
 
-use super::cache::{cache_key, CachedIntegrations, CACHE_GENERATION, INTEGRATIONS_CACHE};
+use super::cache::{
+    cache_generation, checked_cache_key, store_fetched_integrations, INTEGRATIONS_CACHE,
+};
 use super::fetch_uncached::fetch_connected_integrations_uncached;
 
 /// Fetch the user's active Composio connections and their available
@@ -19,7 +20,7 @@ use super::fetch_uncached::fetch_connected_integrations_uncached;
 /// data injected into system prompts — both the agent turn loop and
 /// the debug dump CLI call this function.
 ///
-/// Results are cached process-wide (keyed by credential identity) and
+/// Results are cached process-wide (keyed by storage scope and credential identity) and
 /// returned instantly on subsequent calls. The cache is invalidated
 /// when a connection changes (via [`invalidate_connected_integrations_cache`]
 /// or `list_connections` reconciliation), or on process restart.
@@ -64,6 +65,13 @@ pub enum FetchConnectedIntegrationsStatus {
 pub async fn fetch_connected_integrations_status(
     config: &Config,
 ) -> FetchConnectedIntegrationsStatus {
+    // A task that lost its SaaS profile must neither reuse another profile's
+    // snapshot nor request and cache connections under operator credentials.
+    if let Err(error) = crate::storage::current_scope() {
+        tracing::warn!(operation = "fetch", error_kind = ?error.kind(),
+            "[composio][integrations] scope_resolution_refused");
+        return FetchConnectedIntegrationsStatus::Unavailable;
+    }
     // Composio switched off: nothing to ask. An authoritative empty set also
     // keeps the first turn from awaiting a hosted round trip.
     if config.composio.mode.trim() == crate::config::schema::COMPOSIO_MODE_DISABLED {
@@ -86,8 +94,10 @@ pub async fn fetch_connected_integrations_status(
     {
         return FetchConnectedIntegrationsStatus::Authoritative(Vec::new());
     }
-    let key = cache_key(config);
 
+    let Some(key) = checked_cache_key(config) else {
+        return FetchConnectedIntegrationsStatus::Unavailable;
+    };
     // A connection event or a divergent list_connections response invalidates
     // this snapshot. Idle time alone must never put a network request on the
     // first-token path.
@@ -104,25 +114,14 @@ pub async fn fetch_connected_integrations_status(
         }
     }
 
-    let generation = CACHE_GENERATION.load(Ordering::SeqCst);
+    let epoch = cache_generation(&key);
+    let generation = epoch.load(Ordering::SeqCst);
     match fetch_connected_integrations_uncached(config).await {
         Some(result) => {
             // Backend was reachable — cache the result (even if empty).
-            if let Ok(mut guard) = INTEGRATIONS_CACHE.write() {
-                if CACHE_GENERATION.load(Ordering::SeqCst) == generation {
-                    guard.insert(
-                        key,
-                        CachedIntegrations {
-                            entries: result.clone(),
-                            cached_at: Instant::now(),
-                        },
-                    );
-                } else {
-                    tracing::debug!(
-                        "[composio][integrations] discarded fetch invalidated in flight"
-                    );
-                    return FetchConnectedIntegrationsStatus::Unavailable;
-                }
+            if !store_fetched_integrations(key, &epoch, generation, result.clone()) {
+                tracing::debug!("[composio][integrations] discarded fetch invalidated in flight");
+                return FetchConnectedIntegrationsStatus::Unavailable;
             }
             FetchConnectedIntegrationsStatus::Authoritative(result)
         }
@@ -189,6 +188,6 @@ pub(crate) fn resolve_toolkit_description(
     slug: &str,
 ) -> String {
     catalog_descriptions.get(slug).cloned().unwrap_or_else(|| {
-        crate::integrations::composio::providers::toolkit_description(slug).to_string()
+        crate::integrations::composio::contract::toolkit_description(slug).to_string()
     })
 }

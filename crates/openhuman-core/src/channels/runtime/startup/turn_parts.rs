@@ -9,16 +9,16 @@
 use super::chat_workload::{resolve_chat_workload, ChatWorkloadResolution};
 use super::prompt::format_access_context;
 use crate::agent::host_runtime;
-use crate::channels::context::{effective_channel_message_timeout_secs, ChannelRuntimeContext};
+use crate::channels::context::ChannelRuntimeContext;
 use crate::channels::system_prompt::{ChannelPromptInputs, ChannelSystemPrompt};
 use crate::config::Config;
 use crate::inference::provider;
 use crate::security::SecurityPolicy;
-use crate::skills::Workflow;
 use crate::tools;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tinyskills::Skill as Workflow;
 use tinytools::Tool;
 
 /// The process-independent pieces of a channel turn.
@@ -141,30 +141,48 @@ pub(crate) fn build_channel_turn_parts(
         config.workspace_dir.clone(),
     )?;
     let workspace = config.workspace_dir.clone();
-    let tools_registry = Arc::new(tools::ops::all_tools_with_runtime(
-        Arc::new(config.clone()),
-        security,
-        runtime,
-        audit,
-        // `all_tools_with_runtime` no longer takes a memory handle — the two
-        // tools that needed one resolve the guarded driver per call.
-        &config.browser,
-        &config.http_request,
-        &config.action_dir,
-        &config.agents,
-        config,
-        None,
-    ));
+    let capabilities = crate::profiles::capabilities::ProfileCapabilities::current();
+    let tools_registry = Arc::new(if capabilities.is_some() {
+        // The profile host route builds the selected belt once with the exact
+        // durable thread. No second, unnamed factory invocation is needed here.
+        Vec::new()
+    } else {
+        tools::ops::all_tools_with_runtime(
+            Arc::new(config.clone()),
+            security,
+            runtime,
+            audit,
+            // `all_tools_with_runtime` no longer takes a memory handle — the two
+            // tools that needed one resolve the guarded driver per call.
+            &config.browser,
+            &config.http_request,
+            &config.action_dir,
+            &config.agents,
+            config,
+            None,
+        )
+    });
 
-    let skills = crate::skills::load_workflow_metadata(&workspace);
+    let skills = if capabilities.is_some() {
+        Vec::new()
+    } else {
+        crate::skills::load_workflow_metadata(&workspace)
+    };
 
-    let tool_descs: Vec<(String, String)> = default_tool_descs(config)
-        .into_iter()
-        .filter(|(name, _)| {
-            descs == PromptToolDescs::Fixed || tools_registry.iter().any(|t| t.name() == *name)
-        })
-        .map(|(name, desc)| (name.to_string(), desc.to_string()))
-        .collect();
+    let tool_descs: Vec<(String, String)> = if capabilities.is_some() {
+        tools_registry
+            .iter()
+            .map(|tool| (tool.name().to_owned(), tool.description().to_owned()))
+            .collect()
+    } else {
+        default_tool_descs(config)
+            .into_iter()
+            .filter(|(name, _)| {
+                descs == PromptToolDescs::Fixed || tools_registry.iter().any(|t| t.name() == *name)
+            })
+            .map(|(name, desc)| (name.to_string(), desc.to_string()))
+            .collect()
+    };
 
     let bootstrap_max_chars = if config.agent.compact_context {
         Some(6000)
@@ -214,8 +232,10 @@ pub(crate) fn runtime_context(
     config: &Config,
     parts: ChannelTurnParts,
     channels_by_name: Arc<HashMap<String, Arc<dyn crate::channels::Channel>>>,
+    message_timeout_secs: u64,
 ) -> ChannelRuntimeContext {
     ChannelRuntimeContext {
+        relay_thread: None,
         channels_by_name,
         turn_model_source: None,
         default_provider: Arc::new(parts.provider_name),
@@ -232,9 +252,7 @@ pub(crate) fn runtime_context(
         reliability: Arc::new(config.reliability.clone()),
         provider_runtime_options: parts.provider_runtime_options,
         workspace_dir: Arc::new(config.workspace_dir.clone()),
-        message_timeout_secs: effective_channel_message_timeout_secs(
-            config.channels_config.message_timeout_secs,
-        ),
+        message_timeout_secs,
         multimodal: config.multimodal.clone(),
         multimodal_files: config.multimodal_files.clone(),
         // Crate-native turn models for the channel turn (Phase 3 P3-B).

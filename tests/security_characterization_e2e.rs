@@ -259,8 +259,10 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
 
 #[tokio::test]
 async fn in_process_policy_latency_baseline() {
-    // Measure the existing tool decision hot path, with policy enforcement on.
-    // No time threshold: record the baseline before choosing a bus budget.
+    use openhuman_core::security::policy::{CommandClass, GateDecision};
+    // Measure the host-owned gate and path checks, with policy enforcement on.
+    // Shell parsing now belongs to TinyBox; this baseline does not time its
+    // module call. No time threshold: record host work before choosing a bus budget.
     let scratch = tempfile::tempdir().unwrap();
     let mut config = Config::default();
     config.autonomy.enabled = true;
@@ -272,7 +274,10 @@ async fn in_process_policy_latency_baseline() {
         openhuman_core::security::SecurityPolicy::from_config(&config.autonomy, &state, &action);
     let path = action.join("baseline.txt").display().to_string();
     let evaluate = || {
-        assert!(std::hint::black_box(policy.check_gated_command("ls")).is_ok());
+        assert_eq!(
+            std::hint::black_box(policy.gate_decision(CommandClass::Read)),
+            GateDecision::Allow,
+        );
         assert!(std::hint::black_box(policy.is_path_string_allowed(&path)));
     };
     for _ in 0..100 {
@@ -286,7 +291,7 @@ async fn in_process_policy_latency_baseline() {
     }
     samples.sort_unstable();
     println!(
-        "security in-process baseline: samples={} checks_per_sample=2 p50_ns={} p99_ns={}",
+        "security in-process host gate/path baseline: samples={} checks_per_sample=2 p50_ns={} p99_ns={}",
         samples.len(),
         samples[4999],
         samples[9899]
@@ -330,10 +335,7 @@ fn shared_redaction_corpus_records_existing_catches_and_gaps() {
                 "approval",
                 approval["payload"].as_str().unwrap().to_string(),
             ),
-            (
-                "pii",
-                openhuman_core::security::pii::redact_identifiers(input),
-            ),
+            ("pii", tinymemory_api::safety::redact_identifiers(input)),
         ];
         for (name, output) in outputs {
             let removed = case["removed_by"]

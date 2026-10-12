@@ -100,53 +100,7 @@
     }
   ],
   "pendingContracts": [],
-  "exceptions": [
-    {
-      "scope": "hosts",
-      "package": "tinymcp",
-      "reason": "Protocol servers and supervisor operations still call the implementation."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinychannels",
-      "reason": "Providers, relay, pairing and delivery lifecycles still call the implementation."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinychannels-runtime",
-      "reason": "Providers, relay, pairing and delivery lifecycles still call the implementation."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinybox-core",
-      "reason": "Sandbox execution, shell analysis and pre-core gateways need a bus contract."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinybox-jail",
-      "reason": "Sandbox execution, shell analysis and pre-core gateways need a bus contract."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinybox-docker",
-      "reason": "Sandbox execution, shell analysis and pre-core gateways need a bus contract."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinywallet-crypto",
-      "reason": "Validation, transaction construction, web3 and x402 need module operations."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinywallet-web3",
-      "reason": "Validation, transaction construction, web3 and x402 need module operations."
-    },
-    {
-      "scope": "hosts",
-      "package": "tinywallet-x402",
-      "reason": "Validation, transaction construction, web3 and x402 need module operations."
-    }
-  ],
+  "exceptions": [],
   "excludedSubsystems": [
     {
       "owner": "tinyruntime",

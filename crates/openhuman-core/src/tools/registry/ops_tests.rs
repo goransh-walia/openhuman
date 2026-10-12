@@ -58,9 +58,9 @@ fn registry_entries_are_unique_and_sorted_by_tool_id() {
     assert_eq!(ids, sorted);
 }
 
-#[test]
-fn diagnostics_reports_inventory_and_policy_surfaces() {
-    let outcome = diagnostics_for_config(&Config::default());
+#[tokio::test]
+async fn diagnostics_reports_inventory_and_policy_surfaces() {
+    let outcome = diagnostics_for_config(&Config::default()).await;
 
     assert!(outcome.value.total_tools > 0);
     assert_eq!(outcome.value.total_tools, outcome.value.enabled_tools);
@@ -119,8 +119,8 @@ enabled = true
         .is_empty());
 }
 
-#[test]
-fn diagnostics_for_config_reports_capability_provider_summary() {
+#[tokio::test]
+async fn diagnostics_for_config_reports_capability_provider_summary() {
     let config = Config {
         capability_providers: vec![
             capability_provider(
@@ -142,7 +142,7 @@ fn diagnostics_for_config_reports_capability_provider_summary() {
         ..Config::default()
     };
 
-    let outcome = diagnostics_for_config(&config);
+    let outcome = diagnostics_for_config(&config).await;
 
     assert_eq!(outcome.value.capability_providers.total_providers, 3);
     assert_eq!(outcome.value.capability_providers.enabled_providers, 2);
@@ -158,8 +158,8 @@ fn diagnostics_for_config_reports_capability_provider_summary() {
         .is_empty());
 }
 
-#[test]
-fn diagnostics_for_config_reports_capability_provider_errors() {
+#[tokio::test]
+async fn diagnostics_for_config_reports_capability_provider_errors() {
     let config = Config {
         capability_providers: vec![
             capability_provider("Acme Tools", CapabilityProviderTrustState::Trusted, true),
@@ -168,7 +168,7 @@ fn diagnostics_for_config_reports_capability_provider_errors() {
         ..Config::default()
     };
 
-    let outcome = diagnostics_for_config(&config);
+    let outcome = diagnostics_for_config(&config).await;
 
     assert_eq!(outcome.value.capability_providers.total_providers, 2);
     assert_eq!(outcome.value.capability_providers.enabled_providers, 0);
@@ -352,8 +352,8 @@ fn capability_provider(
 /// alone would not have caught that (zero is what a quiet install reports
 /// too), so this writes a row first and requires the probe to see it.
 #[cfg(feature = "mcp")]
-#[test]
-fn the_write_audit_probe_reads_the_store_the_writer_wrote_to() {
+#[tokio::test]
+async fn the_write_audit_probe_reads_the_store_the_writer_wrote_to() {
     let workspace = tempfile::tempdir().expect("tempdir");
     let config = Config {
         workspace_dir: workspace.path().to_path_buf(),
@@ -361,6 +361,7 @@ fn the_write_audit_probe_reads_the_store_the_writer_wrote_to() {
     };
 
     let before = diagnostics_for_config(&config)
+        .await
         .value
         .mcp_write_audit
         .recent_rows;
@@ -378,9 +379,10 @@ fn the_write_audit_probe_reads_the_store_the_writer_wrote_to() {
             error_message: None,
         },
     )
+    .await
     .expect("record a write");
 
-    let after = diagnostics_for_config(&config).value.mcp_write_audit;
+    let after = diagnostics_for_config(&config).await.value.mcp_write_audit;
     assert_eq!(
         after.recent_rows,
         Some(1),

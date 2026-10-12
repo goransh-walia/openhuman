@@ -44,7 +44,7 @@ pub async fn call_tool(
         .ok_or_else(|| ToolCallError::InvalidParams(format!("unknown MCP tool `{name}`")))?;
 
     let audit_arguments = arguments.clone();
-    let params = match build_rpc_params(spec.name, arguments) {
+    let params = match build_rpc_params(spec.name, arguments).await {
         Ok(params) => params,
         Err(err) => {
             if write_dispatch::is_write_tool(spec.name) {
@@ -317,10 +317,9 @@ async fn list_subagents() -> Result<Value, ToolCallError> {
 
 async fn run_subagent_tool(params: &Map<String, Value>) -> Result<Value, ToolCallError> {
     use super::super::subagent_depth;
-    use tinymcp::server::args::required_non_empty_string;
 
-    let agent_id = required_non_empty_string(params, "agent_id")?;
-    let prompt = required_non_empty_string(params, "prompt")?;
+    let agent_id = validated_param(params, "agent_id")?;
+    let prompt = validated_param(params, "prompt")?;
     // Bound nested recursion per delegation chain (CC → run_subagent → CC → …).
     // `current_depth()` is the depth of THIS chain (carried across the loopback
     // MCP hop via the depth header); the subagent we're about to spawn sits one
@@ -330,17 +329,16 @@ async fn run_subagent_tool(params: &Map<String, Value>) -> Result<Value, ToolCal
     // Guard BEFORE incrementing so a forged/clamped depth at the cap cannot
     // overflow `chain_depth + 1` (panic in debug, wrap-to-0 in release).
     let chain_depth = subagent_depth::current_depth();
-    if chain_depth >= subagent_depth::MAX_SUBAGENT_DEPTH {
-        return Err(ToolCallError::Internal(format!(
-            "agent.run_subagent delegation depth limit reached (chain depth {chain_depth} ≥ {}); refusing to spawn another nested subagent",
-            subagent_depth::MAX_SUBAGENT_DEPTH
-        )));
-    }
-    let child_depth = chain_depth + 1;
+    let child_depth = tinyagents_harness::context::RunConfig::checked_child_depth(
+        chain_depth, subagent_depth::MAX_SUBAGENT_DEPTH,
+    ).map_err(|_| ToolCallError::Internal(format!(
+        "agent.run_subagent delegation depth limit reached (chain depth {chain_depth} ≥ {}); refusing to spawn another nested subagent",
+        subagent_depth::MAX_SUBAGENT_DEPTH
+    )))?;
 
     let config = load_config_and_init_registry().await?;
     let mut agent =
-        OpenHumanSessionHost::from_config_for_agent(&config, &agent_id).map_err(|err| {
+        OpenHumanSessionHost::from_config_for_agent(&config, agent_id).map_err(|err| {
             ToolCallError::InvalidParams(format!("failed to build agent `{agent_id}`: {err}"))
         })?;
     agent.set_event_context(
@@ -362,7 +360,7 @@ async fn run_subagent_tool(params: &Map<String, Value>) -> Result<Value, ToolCal
         // Leave sender unset; the gate's per-channel TTL-deny still
         // gates any external_effect tool the agent tries to run.
         sender: None,
-        reply_target: agent_id.clone(),
+        reply_target: agent_id.to_string(),
         message_id: uuid::Uuid::new_v4().to_string(),
         history_key: None,
     };
@@ -372,7 +370,7 @@ async fn run_subagent_tool(params: &Map<String, Value>) -> Result<Value, ToolCal
     // `handle_json_value` dispatch above it) keeps a small stack frame.
     let response = Box::pin(subagent_depth::scope(
         child_depth,
-        crate::agent::turn_origin::with_origin(origin, agent.run_single(&prompt)),
+        crate::agent::turn_origin::with_origin(origin, agent.run_single(prompt)),
     ))
     .await
     .map_err(|err| ToolCallError::Internal(format!("subagent `{agent_id}` failed: {err}")))?;
@@ -387,6 +385,16 @@ async fn run_subagent_tool(params: &Map<String, Value>) -> Result<Value, ToolCal
             "response": response,
         }
     }))
+}
+
+fn validated_param<'a>(
+    params: &'a Map<String, Value>,
+    key: &str,
+) -> Result<&'a str, ToolCallError> {
+    params
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ToolCallError::Internal("MCP module returned invalid arguments".into()))
 }
 
 pub fn tool_success(value: Value) -> Value {

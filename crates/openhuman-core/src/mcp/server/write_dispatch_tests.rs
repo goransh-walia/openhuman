@@ -76,6 +76,7 @@ async fn audit_write_rejection_records_failure_row() {
             &config,
             &crate::mcp::audit::McpWriteListQuery::default(),
         )
+        .await
         .expect("list writes");
         if rows.len() == 1 {
             break;
@@ -186,6 +187,7 @@ async fn test_dispatch_write_tool_rpc_error_records_audit_and_returns_tool_error
             &config,
             &crate::mcp::audit::McpWriteListQuery::default(),
         )
+        .await
         .expect("list writes");
         if rows.len() == 1 {
             break;
@@ -224,6 +226,7 @@ async fn test_audit_write_success_path() {
             &config,
             &crate::mcp::audit::McpWriteListQuery::default(),
         )
+        .await
         .expect("list writes");
         if rows.len() == 1 {
             break;

@@ -156,10 +156,9 @@ The invariants that hold with the policy enabled:
   (`DEFAULT_APPROVAL_TTL` in [`approval/gate.rs`](./approval/gate.rs); the Flow Canvas copilot path
   uses a three-minute window).
 
-The shell-string scanning itself (segment splitting, quoting, heredoc
-stripping, segment classification, hidden-execution detection) is
-`tinybox_core::shell`, in `vendor/tinybox/crates/tinybox-core`.
-[`policy/command_checks.rs`](./policy/command_checks.rs) composes it with the tier.
+The TinyBox module owns shell-string scanning and returns `CommandAnalysis`
+facts over the `tinybox-bus` contract. [`policy/command_checks.rs`](./policy/command_checks.rs)
+applies the host's autonomy tier and protected-path policy to those facts.
 
 ### Hot-swapping the policy
 
@@ -197,7 +196,7 @@ decision. See [approval/README.md](approval/README.md).
 | [`encryption/`](encryption/README.md) | AES-256-GCM at-rest encryption for memory storage and the encrypt/decrypt RPCs. |
 | [`keyring/`](keyring/README.md) | OS keychain backend with an encrypted-file fallback, and the `SecretStore` config-field codec. |
 | [`keyring_consent/`](keyring_consent/README.md) | Consent gate for falling back from the OS keychain to local encrypted storage. |
-| [`pii/`](pii/README.md) | Fully local PII and identification-risk scanner. |
+| [`tinymemory_api::safety`](https://github.com/tinyhumansai/tinymemory/blob/d1b06334faf7f8abb62bd1bd4ec4c4d4862f53a4/crates/tinymemory-api/src/safety/README.md) (upstream contract) | Fully local PII and identification-risk detection. `scan` and `redact_identifiers` require the API's opt-in `local-safety` feature; detection results and policy decisions remain separate. |
 | [`prompt_injection/`](prompt_injection/README.md) | Deterministic prompt-injection screening (`Allow`, `Review`, `Block`). |
 | [`live_policy.rs`](./live_policy.rs) | Process-global, hot-swappable current `SecurityPolicy` and privacy mode. |
 | [`scrub.rs`](./scrub.rs) | Secret and PII scrubbing with the host's policy (`Policy::corroborated`) over TinyMemory's scrubbers. |
@@ -238,9 +237,11 @@ decision. See [approval/README.md](approval/README.md).
   helpers are re-exported from `tinychannels_bus::security`.
 - `SecretStore` (re-exported from [`keyring/`](./keyring/)): encrypted-on-disk secrets whose
   master key lives in keychain-backed storage.
-- The [`egress`](./egress) and [`pii`](./pii) re-exports at the crate root: `enforce_egress`,
+- The [`egress`](./egress) re-exports at the crate root: `enforce_egress`,
   `emit_external_transfer`, `local_only_blocks`, `local_only_tool_block`,
-  `EgressDescriptor`, and `scan_pii` with its result types.
+  `EgressDescriptor`. OpenHuman's agent stop-summary code directly consumes
+  `tinymemory_api::safety::redact_identifiers`; this security module does not
+  re-export the safety API.
 
 ## RPC surface
 
@@ -262,10 +263,11 @@ The subfolders register their own namespaces: `approval.*` ([`approval/`](./appr
 ## Boundaries
 
 - Sandbox backends do not live here. `crates/openhuman-core/src/sandbox/`
-  picks a backend per session and delegates local confinement to
-  `tinybox-jail` (`vendor/tinybox`).
-- Shell parsing and command classification primitives are owned by
-  `tinybox` (`tinybox_core::shell`). Policy over them stays here.
+  picks a backend per session and delegates native confinement and process
+  ownership to the loaded TinyBox module (`vendor/tinybox`).
+- Shell parsing and command classification run inside the loaded TinyBox module;
+  its `CommandAnalysis` response is the bus boundary. Policy over those facts
+  stays here.
 - Secret and PII scrubbers are TinyMemory's
   (`tinymemory_integrations::safety`, `vendor/tinymemory`); this folder only
   pins the policy.

@@ -504,7 +504,7 @@ pub(crate) enum NotConnected {
 /// string and false of the server, so read it against the installs.
 pub(crate) fn explain_not_connected(
     requested: &str,
-    installs: &[tinymcp::ConnStatus],
+    installs: &[tinymcp_bus::ConnStatus],
     caller: Caller,
 ) -> NotConnected {
     if let Some(install) = installs.iter().find(|s| s.server_id == requested) {
@@ -530,7 +530,7 @@ pub(crate) fn explain_not_connected(
 }
 
 /// An installed server with no live connection: say where it stands and how to connect it.
-fn not_connected_message(install: &tinymcp::ConnStatus, caller: Caller) -> String {
+fn not_connected_message(install: &tinymcp_bus::ConnStatus, caller: Caller) -> String {
     let remedy = caller.connect().map_or_else(
         || "it has to be connected before its tools can be listed".to_string(),
         |connect| format!("connect it first via {connect}"),

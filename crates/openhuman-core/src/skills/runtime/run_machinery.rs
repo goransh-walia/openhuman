@@ -212,7 +212,7 @@ pub async fn spawn_workflow_run_background(
             agent.set_event_context(run_id.clone(), "skill");
             agent.set_agent_definition_name(format!(
                 "orchestrator-skill-{}",
-                &run_id.get(..8).unwrap_or(&run_id)
+                run_id.get(..8).unwrap_or(&run_id)
             ));
             let (tx, rx) = tokio::sync::mpsc::channel(256);
             agent.set_on_progress(Some(tx));
@@ -335,7 +335,3 @@ pub async fn await_run_outcome(
         tokio::time::sleep(POLL_INTERVAL.min(remaining)).await;
     }
 }
-
-#[cfg(test)]
-#[path = "run_machinery_tests.rs"]
-mod tests;

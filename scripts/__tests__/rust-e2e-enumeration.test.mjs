@@ -78,7 +78,7 @@ exec "$@"
  * @param {number} opts.listStatus what it exits with
  * @param {string} [opts.failTest] a case whose run should fail
  */
-function runSuite({ listStdout, listStatus, failTest = "" }) {
+function runSuite({ listStdout, listStatus, failTest = "", includeExtraArgs = true }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rust-e2e-enumeration-"));
   const runLog = path.join(dir, "runs.log");
   fs.writeFileSync(path.join(dir, "cargo"), CARGO_STUB, { mode: 0o755 });
@@ -98,7 +98,8 @@ function runSuite({ listStdout, listStatus, failTest = "" }) {
     // bash before 4.4 (macOS /bin/bash is 3.2) treats an empty "${a[@]}" as
     // unbound under `set -u`, which would fail these tests locally for a
     // reason unrelated to enumeration.
-    "EXTRA_ARGS=(--nocapture)",
+    `EXTRA_ARGS=(${includeExtraArgs ? "--nocapture" : ""})`,
+    `HAS_EXTRA_ARGS=${includeExtraArgs ? 1 : 0}`,
     extractFunction("run_json_rpc_e2e_suite"),
     // A plain statement, exactly as the runner's suite loop calls it. Inside an
     // `if` condition bash suspends errexit for the whole function body, which
@@ -144,8 +145,8 @@ function runSuite({ listStdout, listStatus, failTest = "" }) {
   return { ...result, runs };
 }
 
-const runOf = (name) =>
-  `test --manifest-path Cargo.toml --features voice --test json_rpc_e2e ${name} -- --exact --test-threads=1 --nocapture`;
+const runOf = (name, includeExtraArgs = true) =>
+  `test --manifest-path Cargo.toml --features voice --test json_rpc_e2e ${name} -- --exact --test-threads=1${includeExtraArgs ? " --nocapture" : ""}`;
 
 test("a listing that fails before printing any name fails the suite", () => {
   // The case from #6236: the target does not compile, so there is nothing to
@@ -204,6 +205,17 @@ test("a successful listing runs each case once, in its own process, with EXTRA_A
   assert.deepEqual(res.runs, [runOf("scenario_a"), runOf("scenario_b")]);
 });
 
+test("an empty EXTRA_ARGS array is safe under Bash nounset", () => {
+  const res = runSuite({
+    listStdout: "scenario_a: test\n",
+    listStatus: 0,
+    includeExtraArgs: false,
+  });
+
+  assert.equal(res.status, 0, res.output);
+  assert.deepEqual(res.runs, [runOf("scenario_a", false)]);
+});
+
 test("a failing case still fails the suite, and nothing after it runs", () => {
   // Pins behaviour the fix must not lose. The loop now reads a here-string
   // instead of a process substitution; a failing case must still stop it.
@@ -216,4 +228,85 @@ test("a failing case still fails the suite, and nothing after it runs", () => {
   assert.notEqual(res.status, 0, res.output);
   assert.doesNotMatch(res.output, /SUITE-REPORTED-SUCCESS/);
   assert.deepEqual(res.runs, [runOf("scenario_a")]);
+});
+
+test("mcp_registry_e2e runs serially because its module state is process-global", () => {
+  const source = fs.readFileSync(runner, "utf8");
+  const start = source.indexOf('if [ "$suite" = "mcp_registry_e2e" ]');
+  assert.ok(start >= 0, "MCP registry target has an explicit runner branch");
+  const end = source.indexOf('  if [ "$HAS_EXTRA_ARGS" -eq 1 ]', start);
+  assert.ok(end > start, "MCP registry branch ends before the generic suite runner");
+  assert.match(
+    source.slice(start, end),
+    /--test-threads=1/,
+    "per-config module clients must not race through process-global state",
+  );
+});
+
+test("the E2E runner builds and exports its pinned search module fixture", () => {
+  const source = fs.readFileSync(runner, "utf8");
+  const start = source.indexOf("# Module-backed Composio coverage");
+  const end = source.indexOf('echo "[rust-e2e] Running', start);
+  assert.ok(start >= 0 && end > start, "module preparation block exists");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rust-e2e-modules-"));
+  const connectorDir = path.join(
+    dir,
+    "target/native-test-modules/tinyconnectors/release",
+  );
+  fs.mkdirSync(connectorDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(connectorDir, "libtinyconnectors.so"),
+    "pinned connector fixture",
+  );
+  const runLog = path.join(dir, "runs.log");
+  const cargo = path.join(dir, "cargo");
+  fs.writeFileSync(
+    cargo,
+    '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$STUB_RUN_LOG"\n',
+    { mode: 0o755 },
+  );
+  try {
+    const output = execFileSync(
+      "bash",
+      [
+        "-c",
+        [
+          "set -euo pipefail",
+          'REPO_ROOT="$STUB_DIR"',
+          'CARGO_BIN="$STUB_DIR/cargo"',
+          "module_ext=so",
+          "unset TINYCONNECTORS_TEST_MODULE TINYSEARCH_TEST_MODULE",
+          source.slice(start, end),
+          "printf 'search=%s\\n' \"${TINYSEARCH_TEST_MODULE:-}\"",
+        ].join("\n"),
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, STUB_DIR: dir, STUB_RUN_LOG: runLog },
+      },
+    );
+    assert.ok(
+      output.includes(
+        `search=${dir}/target/native-test-modules/tinysearch/release/libtinysearch.so`,
+      ),
+      output,
+    );
+    assert.match(
+      fs.readFileSync(
+        path.join(dir, "target/test-modules/tinyconnectors/modules.toml"),
+        "utf8",
+      ),
+      /"libtinyconnectors\.so" = "[a-f0-9]{64}"/,
+    );
+    assert.ok(
+      fs
+        .readFileSync(runLog, "utf8")
+        .includes(
+          "build --release --manifest-path vendor/tinysearch/crates/tinysearch/Cargo.toml --target-dir " +
+            path.join(dir, "target/native-test-modules/tinysearch"),
+        ),
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

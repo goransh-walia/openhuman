@@ -326,9 +326,8 @@ pub enum ExpectedErrorKind {
     /// lost-registration defect still reaches Sentry.
     ApprovalNoPendingRace,
     /// A remote MCP server answered the connect handshake with HTTP 401 — it
-    /// needs OAuth sign-in, not a code fix. `McpHttpClient::read_response`
-    /// (`crates/openhuman-core/src/mcp/http_client/client.rs`) raises the typed
-    /// `tinymcp::Error::Unauthorized`, and
+    /// needs OAuth sign-in, not a code fix. TinyMCP returns the typed
+    /// unauthorized outcome over `tinymcp-bus`, and
     /// `mcp::registry::connections::connect` already classifies it and stores a
     /// `needs_auth` flag so the UI prompts the user to authenticate (the
     /// `needs_auth` UX shipped in #3733 / #3719). But `mcp_clients_connect`
@@ -1014,15 +1013,15 @@ pub fn is_session_expired_message(msg: &str) -> bool {
 
 /// Detect a remote MCP server's connect-time 401 — the user must sign in to
 /// that server (OAuth), not a code defect. Anchored on the canonical
-/// `tinymcp::Error::Unauthorized` `Display`
-/// body, which renders as `"MCP unauthorized for \`<endpoint>\` (HTTP 401…)"`.
+/// TinyMCP unauthorized error text, which renders as
+/// `"mcp unauthorized for \`<endpoint>\` (HTTP 401…)"`.
 ///
 /// Conjunctive match — both anchors must hit (input already lower-cased):
 ///
-/// 1. `"mcp unauthorized for "` — the typed-error prefix. Scopes the match to
+/// 1. `"mcp unauthorized for "` — the stable module error prefix. Scopes the match to
 ///    the MCP transport's own 401 so an unrelated "unauthorized" / "401" from
 ///    another domain cannot borrow this demotion.
-/// 2. `"(http 401"` — the parenthesised status the `Display` impl always emits
+/// 2. `"(http 401"` — the parenthesised status the module message always emits
 ///    (with or without the trailing `resource metadata:` discovery hint).
 ///
 /// `connections::connect` already classifies this and stores a `needs_auth`

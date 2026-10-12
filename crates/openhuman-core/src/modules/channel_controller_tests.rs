@@ -173,3 +173,24 @@ fn discord_channel_projection_preserves_type_position_and_category() {
     .unwrap();
     assert_eq!(serde_json::to_value(channels).unwrap(), wire);
 }
+
+#[tokio::test]
+async fn hosted_identity_requires_the_module_and_never_uses_a_local_key_fallback() {
+    let mut config = crate::config::Config::default();
+    config.modules.enabled = false;
+    let result = prepare_identity(
+        &ModuleClient::new(config),
+        tinychannels_bus::module_inbound::PrepareChannelIdentityRequest {
+            channel: "discord:fixture".into(),
+            sender: Some("fixture-private-sender".into()),
+            reply_target: Some("fixture-private-chat".into()),
+            thread_ts: None,
+        },
+    )
+    .await;
+    let error = result
+        .err()
+        .expect("module-disabled identity preparation must fail");
+    assert_eq!(error, ModuleCallError::Unavailable);
+    assert!(!error.to_string().contains("fixture-private"));
+}

@@ -44,6 +44,7 @@ async fn handle_list_returns_persisted_audit_records() {
             error_message: None,
         },
     )
+    .await
     .expect("record write");
 
     let value = handle_list(Map::new()).await.expect("handle list");

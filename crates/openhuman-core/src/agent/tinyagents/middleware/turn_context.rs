@@ -18,8 +18,8 @@ use tinytools::{ToolPolicy as TaToolPolicy, ToolResult as TaToolResult};
 
 use crate::agent::tinyagents::payload_summarizer::PayloadSummarizer;
 use crate::agent::tinyagents::turn_outcome::ToolCallOutcome;
-use crate::inference::tokenjuice::AgentTokenjuiceCompression;
 use tinyagents_harness::artifacts::tool_results::ToolResultArtifactStore;
+use tinyjuice_bus::types::AgentTokenjuiceCompression;
 
 use super::tool_output::ToolOutputMiddleware;
 
@@ -249,7 +249,7 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
         Ok(())
     }
 
-    async fn before_model(
+    async fn before_model_dispatch(
         &self,
         _ctx: &mut RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
         _state: &(),
@@ -395,10 +395,11 @@ impl TurnContextMiddleware {
         summary_focus_tools: std::collections::HashSet<String>,
     ) {
         harness.push_middleware(Arc::new(AttachmentRequestScopeMiddleware));
-        // Transcript snapshot (#4466) runs first among before_model hooks so it
-        // mirrors the *incoming* request transcript (every prior completed round)
-        // before microcompact/summarization rewrite it — the caller's error path
-        // persists exactly what the model was about to see.
+        // Dispatch observers run before model-control/rewrite hooks. Snapshot
+        // before the ephemeral-instruction injector so corrections reach the
+        // provider without entering the durable failure transcript (#6725).
+        // This also mirrors the incoming transcript before compaction/trim, so
+        // the caller's error path persists the completed rounds faithfully.
         if let Some(sink) = self.transcript_snapshot {
             harness.push_middleware(Arc::new(TranscriptSnapshotMiddleware {
                 sink,

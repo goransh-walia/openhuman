@@ -88,10 +88,12 @@ async fn engine_run_drives_trigger_to_http_request_through_the_real_seam() {
 // ── Code adapter ──────────────────────────────────────────────────────────
 
 /// Requires `node` on `PATH` (the code node runs the host's Node under the
-/// sandbox). Runs by default; on a host without Node it prints a `SKIPPED`
-/// line instead of failing.
+/// sandbox). TinyBox's native backend only provides the required isolation on
+/// Linux; macOS Seatbelt and other fallback backends deliberately do not meet
+/// the untrusted-code floor.
+#[cfg(target_os = "linux")]
 #[tokio::test]
-async fn code_adapter_javascript_passthrough_round_trips_json() {
+async fn code_adapter_javascript_runs_when_isolated_and_refuses_when_isolation_is_unavailable() {
     if std::process::Command::new("node")
         .arg("--version")
         .output()
@@ -110,11 +112,18 @@ async fn code_adapter_javascript_passthrough_round_trips_json() {
     let runner = OpenHumanCode { config, security };
 
     let input = json!([{ "json": { "n": 7 } }]);
-    let result = runner
+    match runner
         .run(CodeLanguage::JavaScript, "return input;", input.clone())
         .await
-        .expect("javascript passthrough should succeed when node is present");
-    assert_eq!(result, input);
+    {
+        Ok(result) => assert_eq!(result, input),
+        Err(error) => assert!(
+            error
+                .to_string()
+                .contains("TinyBox native jail cannot meet the required isolation floor"),
+            "unexpected JavaScript code-runner failure: {error}"
+        ),
+    }
 }
 
 #[tokio::test]

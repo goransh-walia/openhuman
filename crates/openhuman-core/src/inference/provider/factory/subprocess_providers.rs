@@ -53,10 +53,9 @@ pub(super) fn claude_agent_sdk_model_from_string(
     let provider = provider.trim();
     let model = if provider == CLAUDE_AGENT_SDK_PROVIDER {
         config.claude_agent_sdk.default_model.clone()
-    } else if let Some(model) = provider.strip_prefix(CLAUDE_AGENT_SDK_PREFIX) {
-        model.trim().to_string()
     } else {
-        return None;
+        let model = provider.strip_prefix(CLAUDE_AGENT_SDK_PREFIX)?;
+        model.trim().to_string()
     };
     Some(model)
 }

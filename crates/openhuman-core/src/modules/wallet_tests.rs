@@ -129,6 +129,19 @@ async fn a_disabled_host_reports_unavailable_without_starting_a_broker() {
         super::ensure_ready(&config).await,
         Err(WalletCallError::Unavailable(_))
     ));
+    assert!(matches!(
+        super::generate_mnemonic(&config, 12).await,
+        Err(WalletCallError::Unavailable(_))
+    ));
+    assert!(matches!(
+        super::derive_mnemonic_seed(
+            &config,
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+                .to_string(),
+        )
+        .await,
+        Err(WalletCallError::Unavailable(_))
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +153,7 @@ async fn a_disabled_host_reports_unavailable_without_starting_a_broker() {
 /// handed over. The rest of the guard — that an attestation exists at all — is
 /// enforced by tinybus and covered by its own tests against a real `dlopen`.
 mod attestation_guard {
-    use super::super::digest_is_pinned;
+    use super::super::{digest_is_pinned, PINNED_WALLET_LIBRARIES};
     use crate::modules::registry;
 
     fn record() -> &'static crate::modules::ModuleRecord {
@@ -161,17 +174,52 @@ mod attestation_guard {
     }
 
     #[test]
-    fn the_attested_linux_release_library_is_accepted() {
+    fn the_current_attested_linux_release_library_is_accepted() {
         assert!(digest_is_pinned(
             record(),
-            "d2e663e465c6c245cbf9b37c037ae655db7df0f93a0df9b7fa17a28027ebaa9d"
+            "5d0a3ae5881f91966249858cd155e5b9c244bd419d06698d808f972a8d23afc9"
         ));
-        // The v0.5.1 library this constant used to name is no longer the
-        // pinned release, so it must not be sent a key.
+    }
+
+    #[test]
+    fn libraries_from_retired_releases_are_refused() {
+        for digest in [
+            "d2e663e465c6c245cbf9b37c037ae655db7df0f93a0df9b7fa17a28027ebaa9d",
+            "2bd70433707c44dbfe6b3cc3b4cc835299fe951fcb375b49c940d8d3fc1d4061",
+        ] {
+            assert!(!digest_is_pinned(record(), digest));
+        }
+    }
+
+    #[test]
+    fn a_release_library_requires_its_archive_to_remain_pinned() {
+        let unpinned_record = crate::modules::ModuleRecord {
+            assets: &[],
+            ..*record()
+        };
         assert!(!digest_is_pinned(
-            record(),
-            "2bd70433707c44dbfe6b3cc3b4cc835299fe951fcb375b49c940d8d3fc1d4061"
+            &unpinned_record,
+            "5d0a3ae5881f91966249858cd155e5b9c244bd419d06698d808f972a8d23afc9"
         ));
+    }
+
+    #[test]
+    fn every_pinned_platform_archive_has_one_verified_library() {
+        for asset in record().assets {
+            let libraries: Vec<_> = PINNED_WALLET_LIBRARIES
+                .iter()
+                .filter(|(archive, _)| archive.eq_ignore_ascii_case(asset.sha256))
+                .collect();
+            assert_eq!(
+                libraries.len(),
+                1,
+                "refresh the verified library checksum for {}",
+                asset.archive
+            );
+            let (_, library) = libraries[0];
+            assert!(digest_is_pinned(record(), library));
+            assert!(digest_is_pinned(record(), &library.to_ascii_uppercase()));
+        }
     }
 
     #[test]

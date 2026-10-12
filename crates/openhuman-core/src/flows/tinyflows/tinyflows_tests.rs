@@ -23,14 +23,18 @@ use std::sync::Arc;
 
 use serde_json::json;
 use tempfile::TempDir;
-use tinyflows::caps::{CodeLanguage, CodeRunner, HttpClient, ToolInvoker};
+#[cfg(target_os = "linux")]
+use tinyflows::caps::{CodeLanguage, CodeRunner};
+use tinyflows::caps::{HttpClient, ToolInvoker};
 use tinyflows::model::{Edge, Node, NodeKind, WorkflowGraph};
 
 use crate::config::Config;
 use crate::security::SecurityPolicy;
 
 use super::build_capabilities;
-use super::caps::{OpenHumanCode, OpenHumanHttp, OpenHumanTools};
+#[cfg(target_os = "linux")]
+use super::caps::OpenHumanCode;
+use super::caps::{OpenHumanHttp, OpenHumanTools};
 
 fn test_config(tmp: &TempDir) -> Arc<Config> {
     let config = Config {

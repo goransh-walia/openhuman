@@ -11,7 +11,10 @@ use crate::modules::client::ModuleCallError;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
-use tinymcp_bus::{OpenConfiguredResponse, TransitionStatus};
+use tinymcp_bus::{
+    OpenConfiguredResponse, ServerArgumentsValidation, TransitionStatus,
+    ValidateServerArgumentsRequest,
+};
 
 #[test]
 fn a_blank_identifier_is_refused_with_the_field_name() {
@@ -120,6 +123,20 @@ impl McpModulePort for RegistryPort {
             _ => Err(ModuleCallError::IncompatibleContract),
         }
     }
+
+    async fn prepare_agent_tools(
+        &self,
+        _: tinymcp_bus::PrepareAgentToolsRequest,
+    ) -> Result<Vec<tinymcp_bus::McpToolPresentation>, ModuleCallError> {
+        Ok(Vec::new())
+    }
+
+    async fn validate_server_arguments(
+        &self,
+        _: ValidateServerArgumentsRequest,
+    ) -> Result<ServerArgumentsValidation, ModuleCallError> {
+        std::future::ready(Err(ModuleCallError::IncompatibleContract)).await
+    }
 }
 
 fn status(server_id: &str, qualified_name: &str) -> tinymcp_bus::ConnStatus {
@@ -168,11 +185,11 @@ async fn agent_refusal_names_no_rpc_method() {
 /// belt. The read-only planner has no `mcp_registry_connect`.
 #[test]
 fn refusals_name_only_tools_on_every_listing_belt() {
-    let install = tinymcp::ConnStatus {
+    let install = tinymcp_bus::ConnStatus {
         server_id: "srv-1".into(),
         qualified_name: QUALIFIED.into(),
         display_name: "uuid".into(),
-        status: tinymcp::ServerStatus::Disconnected,
+        status: tinymcp_bus::ServerStatus::Disconnected,
         tool_count: 0,
         last_error: None,
         auth_hint: None,
@@ -295,11 +312,11 @@ async fn a_qualified_name_lists_the_tools_of_its_connected_install() {
 
 #[test]
 fn a_registry_name_installed_twice_is_refused_with_both_ids() {
-    let install = |server_id: &str| tinymcp::ConnStatus {
+    let install = |server_id: &str| tinymcp_bus::ConnStatus {
         server_id: server_id.into(),
         qualified_name: QUALIFIED.into(),
         display_name: "uuid".into(),
-        status: tinymcp::ServerStatus::Disconnected,
+        status: tinymcp_bus::ServerStatus::Disconnected,
         tool_count: 0,
         last_error: None,
         auth_hint: None,

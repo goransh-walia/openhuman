@@ -215,13 +215,24 @@ fn registry_tools_present_the_exact_identity_they_always_had() {
 
 #[tokio::test]
 async fn tool_call_refuses_arguments_that_are_not_an_object() {
-    let err = McpRegistryToolCallTool::new(cfg())
+    let dir = tempfile::tempdir().expect("temp workspace");
+    let config = workspace_config(dir.path());
+    crate::mcp::module_client::McpConfiguredClient::install_test_port(
+        &config,
+        Box::new(ToolCallPort::default()),
+    )
+    .expect("test module port");
+    let err = McpRegistryToolCallTool::new(config)
         .execute(json!({ "server_id": "srv", "tool_name": "t", "arguments": 5 }))
         .await
         .expect_err("a number is not arguments");
     let message = err.to_string();
     assert!(message.contains("mcp_registry_tool_call"), "{message}");
-    assert!(message.contains("a number"), "{message}");
+    assert!(message.contains("invalid tool arguments"), "{message}");
+    assert!(
+        !message.contains('5'),
+        "module failure must not echo arguments: {message}"
+    );
 }
 
 /// A workspace of its own, so the host this opens is not shared.
@@ -237,6 +248,7 @@ fn workspace_config(dir: &std::path::Path) -> Arc<Config> {
 #[derive(Clone, Default)]
 struct ToolCallPort {
     arguments: SharedArc<Mutex<Vec<Value>>>,
+    normalized_arguments: SharedArc<Mutex<Vec<Option<Value>>>>,
     connected: bool,
 }
 
@@ -326,6 +338,41 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
             _ => Err(crate::modules::client::ModuleCallError::IncompatibleContract),
         }
     }
+
+    async fn validate_server_arguments(
+        &self,
+        _request: tinymcp_bus::ValidateServerArgumentsRequest,
+    ) -> Result<tinymcp_bus::ServerArgumentsValidation, crate::modules::client::ModuleCallError>
+    {
+        Err(crate::modules::client::ModuleCallError::IncompatibleContract)
+    }
+
+    async fn normalize_tool_arguments(
+        &self,
+        arguments: Option<Value>,
+    ) -> Result<serde_json::Map<String, Value>, crate::modules::client::ModuleCallError> {
+        self.normalized_arguments
+            .lock()
+            .unwrap()
+            .push(arguments.clone());
+        match arguments.unwrap_or(Value::Null) {
+            Value::Null => Ok(serde_json::Map::new()),
+            Value::Object(arguments) => Ok(arguments),
+            Value::String(encoded) => serde_json::from_str::<Value>(&encoded)
+                .ok()
+                .and_then(|value| value.as_object().cloned())
+                .ok_or(crate::modules::client::ModuleCallError::ModuleFault),
+            _ => Err(crate::modules::client::ModuleCallError::ModuleFault),
+        }
+    }
+
+    async fn prepare_agent_tools(
+        &self,
+        _request: tinymcp_bus::PrepareAgentToolsRequest,
+    ) -> Result<Vec<tinymcp_bus::McpToolPresentation>, crate::modules::client::ModuleCallError>
+    {
+        Ok(Vec::new())
+    }
 }
 
 #[tokio::test]
@@ -355,5 +402,39 @@ async fn tool_call_with_string_arguments_reaches_the_module_as_an_object() {
     assert_eq!(
         arguments.lock().unwrap().as_slice(),
         &[json!({ "city": "Paris" })]
+    );
+}
+
+#[tokio::test]
+async fn tool_call_preserves_missing_arguments_as_distinct_from_json_null() {
+    let dir = tempfile::tempdir().expect("temp workspace");
+    let config = workspace_config(dir.path());
+    let port = ToolCallPort {
+        connected: true,
+        ..ToolCallPort::default()
+    };
+    let arguments = SharedArc::clone(&port.arguments);
+    let normalized_arguments = SharedArc::clone(&port.normalized_arguments);
+    crate::mcp::module_client::McpConfiguredClient::install_test_port(&config, Box::new(port))
+        .expect("test module port");
+    let tool = McpRegistryToolCallTool::new(Arc::clone(&config));
+
+    for args in [
+        json!({"server_id":"srv-1", "tool_name":"forecast"}),
+        json!({"server_id":"srv-1", "tool_name":"forecast", "arguments":null}),
+    ] {
+        tool.execute(args)
+            .await
+            .expect("missing and null arguments normalize successfully");
+    }
+
+    assert_eq!(
+        normalized_arguments.lock().unwrap().as_slice(),
+        &[None, Some(Value::Null)],
+        "the host must preserve the bus distinction between omitted arguments and JSON null"
+    );
+    assert_eq!(
+        arguments.lock().unwrap().as_slice(),
+        &[json!({}), json!({})]
     );
 }

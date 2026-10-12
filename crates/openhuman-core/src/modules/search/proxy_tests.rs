@@ -148,55 +148,58 @@ fn the_execute_tool_deadline_follows_a_raised_tool_budget() {
     assert_eq!(execute_tool_timeout_for(10), EXECUTE_TOOL_TIMEOUT);
 }
 
+fn file_backed_config(dir: &std::path::Path) -> Config {
+    let mut config = Config::default();
+    config.config_path = dir.join("config.toml");
+    config.workspace_dir = dir.join("workspace");
+    config.secrets.encrypt = false;
+    config
+}
+
 #[tokio::test]
-#[ignore = "requires TINYSEARCH_TEST_MODULE pointing to the byte-verified release artifact"]
-async fn released_search_artifact_serves_host_contract_and_rejects_disabled_execution() {
-    use tinybus::{broker::Broker, module::ModuleHost, transport::memory::MemoryBus};
-    let file = std::env::var_os("TINYSEARCH_TEST_MODULE").expect("released artifact path");
-    let bus = MemoryBus::new();
-    let broker = Broker::new();
-    let broker_task = broker.spawn(bus.clone());
-    let host = ModuleHost::new(broker);
-    let config = tinysearch_bus::SearchConfig {
-        enabled: false,
-        ..Default::default()
-    };
-    let info = host
-        .load_file_with_config(
-            std::path::PathBuf::from(file),
-            serde_json::to_value(config).unwrap(),
+async fn a_host_pinned_config_is_used_as_given_without_reading_config_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = file_backed_config(dir.path());
+    config
+        .search
+        .pin_host_credential(
+            "tavily",
+            crate::config::SearchHostCredential::new("agent-key"),
         )
-        .expect("published artifact is admitted by the host loader");
-    assert_eq!(info.name, "tinysearch");
-    assert_eq!(info.version, "0.4.1");
-    let client = tinybus::Connection::connect(bus.connect().await.unwrap())
-        .await
         .unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while !client
-            .list_names()
-            .await
-            .unwrap()
-            .iter()
-            .any(|name| name.as_str() == names::INTERFACE)
-        {
-            tokio::task::yield_now().await;
-        }
+    // No config.toml exists; a reload would come back without the pin.
+    let current = current_config(&config).await.unwrap();
+    assert_eq!(current.search.direct_key("tavily"), Some("agent-key"));
+    assert!(current.search.is_host_pinned());
+    assert!(!config.config_path.exists(), "nothing was written");
+}
+
+#[tokio::test]
+async fn an_unpinned_config_is_reloaded_from_config_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut on_disk = file_backed_config(dir.path());
+    on_disk.search.tavily.api_key = Some("file-key".into());
+    std::fs::create_dir_all(&on_disk.workspace_dir).unwrap();
+    std::fs::write(&on_disk.config_path, toml::to_string(&on_disk).unwrap()).unwrap();
+    // The caller's snapshot is stale: the file has since gained a key.
+    let stale = file_backed_config(dir.path());
+    let current = current_config(&stale).await.unwrap();
+    assert_eq!(current.search.direct_key("tavily"), Some("file-key"));
+}
+
+#[tokio::test]
+async fn a_recorded_load_configuration_is_what_the_module_holds() {
+    // Under the call lock: the record is process-wide state calls rely on.
+    with_module_lock(|| async {
+        let before = held_fingerprint();
+        let configuration = serde_json::json!({ "enabled": true, "providers": {} });
+        record_load_configuration(&configuration);
+        assert_eq!(held_fingerprint(), Some(fingerprint(&configuration)));
+        set_held(None);
+        assert_eq!(held_fingerprint(), None);
+        set_held(before);
+        Ok::<_, String>(())
     })
     .await
-    .expect("module claims its contract interface");
-    let proxy = client
-        .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
-        .unwrap();
-    let tools: ListToolsResponse = proxy.call(names::methods::LIST_TOOLS, ()).await.unwrap();
-    assert!(tools.tools.is_empty());
-    let failure = call_execute_tool::<ExecuteToolResponse>(proxy, web_answer_request())
-        .await
-        .expect_err("disabled module refuses execution without contacting providers");
-    assert!(
-        failure.to_string().contains("search is disabled"),
-        "{failure}"
-    );
-    host.shutdown(std::time::Duration::from_secs(5)).await;
-    broker_task.abort();
+    .unwrap();
 }

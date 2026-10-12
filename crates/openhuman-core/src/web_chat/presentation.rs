@@ -1,14 +1,10 @@
 //! Presentation layer for web-channel chat responses: store a finished reply,
-//! then announce it to the client as `chat_done` (or, for channel-specific
-//! callers, as human-feeling `chat_segment` bubbles).
+//! then announce it to the client as one unmodified `chat_done` message.
 
 use crate::agent::tinyagents::host::LastTurnUsage;
 use crate::web_chat::{SubagentUsagePayload, TurnUsagePayload, WebChannelEvent};
 
 use super::publish_web_channel_event;
-use tinychannels_runtime::delivery::segment_delay;
-#[cfg(test)]
-use tinychannels_runtime::delivery::segment_for_delivery;
 
 /// Convert a turn's [`LastTurnUsage`] into the wire payload carried on
 /// `chat_done`. Returns `None` for a turn that recorded no spend at all (e.g. a
@@ -62,152 +58,25 @@ pub(crate) async fn deliver_response(
     timing: Option<super::turn_timing::TurnTimingSnapshot>,
     suggest_follow_ups: bool,
 ) {
-    // Keep the response byte-for-byte in one assistant message. The legacy
-    // segmentation helpers remain available to channel-specific callers/tests,
-    // but the interactive web surface must not cut or reformat model output.
-    let segments = [full_response.to_string()];
-
-    if segments.len() <= 1 {
-        // Store the answer before announcing it. Ordering is the whole point:
-        // once the row is on disk, a `chat_done` that is never delivered, never
-        // painted, or never persisted by the client costs the user a repaint,
-        // not the reply (#6034). Only this single-bubble branch persists — the
-        // segmented branch below hands the client one row per segment to write,
-        // and a full-text row beside those would read as a duplicate answer.
-        persist_reply(
-            thread_id,
-            request_id,
-            full_response,
-            citations,
-            workspace_dir,
-        )
-        .await;
-        announce_reply(
-            client_id,
-            thread_id,
-            request_id,
-            full_response,
-            user_message,
-            citations,
-            usage,
-            timing,
-            suggest_follow_ups,
-        );
-        return;
-    }
-
-    let usage_payload = usage_payload(usage);
-    let timing_payload =
-        timing.map(|snapshot| snapshot.into_payload(usage.map(|u| u.output_tokens)));
-
-    let total = segments.len() as u32;
-
-    // Emit each segment as a separate bubble with a human-feeling delay.
-    for (i, segment) in segments.iter().enumerate() {
-        if i > 0 {
-            let delay_ms = segment_delay(&segments[i - 1]);
-            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-        }
-
-        publish_web_channel_event(WebChannelEvent {
-            event: "chat_segment".to_string(),
-            client_id: client_id.to_string(),
-            thread_id: thread_id.to_string(),
-            request_id: request_id.to_string(),
-            full_response: Some(segment.clone()),
-            message: None,
-            error_type: None,
-            error_source: None,
-            error_retryable: None,
-            error_retry_after_ms: None,
-            error_provider: None,
-            error_fallback_available: None,
-            copy_key: None,
-            copy_params: None,
-            tool_name: None,
-            skill_id: None,
-            args: None,
-            output: None,
-            success: None,
-            round: None,
-            segment_index: Some(i as u32),
-            segment_total: Some(total),
-            delta: None,
-            delta_kind: None,
-            tool_call_id: None,
-            failure: None,
-            subagent: None,
-            tool_display_label: None,
-            tool_display_detail: None,
-            elapsed_ms: None,
-            structured: None,
-            citations: if i == 0 && !citations.is_empty() {
-                Some(serde_json::json!(citations))
-            } else {
-                None
-            },
-            // Usage is attached only to the terminal `chat_done`, never segments.
-            usage: None,
-            seq: None,
-            ..Default::default()
-        });
-    }
-
-    // Final chat_done with full text (for deduplication / state sync).
-    publish_web_channel_event(WebChannelEvent {
-        event: "chat_done".to_string(),
-        client_id: client_id.to_string(),
-        thread_id: thread_id.to_string(),
-        request_id: request_id.to_string(),
-        full_response: Some(full_response.to_string()),
-        message: None,
-        error_type: None,
-        error_source: None,
-        error_retryable: None,
-        error_retry_after_ms: None,
-        error_provider: None,
-        error_fallback_available: None,
-        copy_key: None,
-        copy_params: None,
-        tool_name: None,
-        skill_id: None,
-        args: None,
-        output: None,
-        success: None,
-        round: None,
-        segment_index: None,
-        segment_total: Some(total),
-        delta: None,
-        delta_kind: None,
-        tool_call_id: None,
-        failure: None,
-        subagent: None,
-        tool_display_label: None,
-        tool_display_detail: None,
-        elapsed_ms: None,
-        structured: None,
-        citations: if citations.is_empty() {
-            None
-        } else {
-            Some(serde_json::json!(citations))
-        },
-        usage: usage_payload,
-        timing: timing_payload,
-        // Terminal delivery events are emitted outside the seq-stamping
-        // progress bridge; leave `seq` unset (older clients ignore it).
-        seq: None,
-        ..Default::default()
-    });
-
-    if suggest_follow_ups {
-        super::suggestions::spawn_follow_up_suggestions(
-            client_id.to_string(),
-            thread_id.to_string(),
-            request_id.to_string(),
-            user_message.to_string(),
-            full_response.to_string(),
-        );
-    }
+    persist_reply(
+        thread_id,
+        request_id,
+        full_response,
+        citations,
+        workspace_dir,
+    )
+    .await;
+    announce_reply(
+        client_id,
+        thread_id,
+        request_id,
+        full_response,
+        user_message,
+        citations,
+        usage,
+        timing,
+        suggest_follow_ups,
+    );
 }
 
 /// Stores a single-bubble reply in the thread log before it is announced

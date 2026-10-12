@@ -84,6 +84,7 @@ fi
 # Everything after `--` is forwarded to cargo test as test-binary args.
 SUITES=()
 EXTRA_ARGS=()
+HAS_EXTRA_ARGS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --suite)
@@ -100,10 +101,14 @@ while [ $# -gt 0 ]; do
     --)
       shift
       EXTRA_ARGS+=("$@")
+      if [ "$#" -gt 0 ]; then
+        HAS_EXTRA_ARGS=1
+      fi
       break
       ;;
     *)
       EXTRA_ARGS+=("$1")
+      HAS_EXTRA_ARGS=1
       shift
       ;;
   esac
@@ -168,16 +173,72 @@ fi
 # execute. Keep this list in the same canonical source as `pnpm test:rust`.
 PRODUCT_FEATURES="$(bash "$REPO_ROOT/scripts/ci/product-features.sh")"
 
+# Shell command analysis and the storage URL E2E suites load TinyBox through
+# the native module path. Download the registry-pinned release and verify its
+# digest before the subprocesses start.
+module_target="$(bash "$SCRIPT_DIR/ci/native-test-module-platform.sh")"
+IFS=$'\t' read -r module_ext module_platform <<< "$module_target"
+tinybox_asset="$(node scripts/ci/self-hosted/test-module-assets.mjs "$module_platform" tinybox)"
+IFS=$'\t' read -r _tinybox_id tinybox_url tinybox_filename tinybox_sha256 <<< "$tinybox_asset"
+tinybox_dir="$REPO_ROOT/target/test-modules/tinybox/$tinybox_sha256"
+tinybox_archive="$tinybox_dir/$tinybox_filename"
+if [ ! -f "$tinybox_dir/libtinybox.$module_ext" ]; then
+  echo "[rust-e2e] Downloading the checksum-pinned TinyBox test module ..."
+  mkdir -p "$tinybox_dir"
+  curl --fail --location --silent --show-error "$tinybox_url" --output "$tinybox_archive"
+  if command -v shasum >/dev/null 2>&1; then
+    echo "${tinybox_sha256}  $tinybox_archive" | shasum -a 256 -c
+  else
+    echo "${tinybox_sha256}  $tinybox_archive" | sha256sum --check
+  fi
+  tar --no-same-owner -xzf "$tinybox_archive" -C "$tinybox_dir"
+fi
+export OPENHUMAN_MODULE_PATH="$tinybox_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
+
+# Run the ignored MCP registry cases with the registry-pinned native artifact.
+tinymcp_asset="$(node scripts/ci/self-hosted/test-module-assets.mjs "$module_platform" tinymcp)"
+IFS=$'\t' read -r _tinymcp_id tinymcp_url tinymcp_filename tinymcp_sha256 <<< "$tinymcp_asset"
+tinymcp_dir="$REPO_ROOT/target/test-modules/tinymcp/$tinymcp_sha256"
+tinymcp_archive="$tinymcp_dir/$tinymcp_filename"
+if [ ! -f "$tinymcp_dir/libtinymcp_module.$module_ext" ]; then
+  echo "Downloading the checksum-pinned TinyMCP test module ..."
+  mkdir -p "$tinymcp_dir"
+  curl --fail --location --silent --show-error "$tinymcp_url" --output "$tinymcp_archive"
+  if command -v shasum >/dev/null 2>&1; then
+    echo "${tinymcp_sha256}  $tinymcp_archive" | shasum -a 256 -c
+  else
+    echo "${tinymcp_sha256}  $tinymcp_archive" | sha256sum --check
+  fi
+  tar --no-same-owner -xzf "$tinymcp_archive" -C "$tinymcp_dir"
+fi
+export OPENHUMAN_MODULE_PATH="$tinymcp_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
+export OPENHUMAN_TINYMCP_TEST_MODULE="$tinymcp_dir/libtinymcp_module.$module_ext"
+
 # Module-backed Composio coverage must use the pinned local artifact as well.
 # Without this override the core resolves TinyConnectors through release
 # metadata, turning an otherwise hermetic mock-backend suite into a network
 # dependency and permanently faulting that process when the lookup fails.
 if [ -z "${TINYCONNECTORS_TEST_MODULE:-}" ]; then
   connectors_manifest="vendor/tinyconnectors/crates/tinyconnectors/Cargo.toml"
-  connectors_module="vendor/tinyconnectors/target/release/libtinyconnectors.so"
+  connectors_target_dir="$REPO_ROOT/target/native-test-modules/tinyconnectors"
+  connectors_module="$connectors_target_dir/release/libtinyconnectors.$module_ext"
   echo "[rust-e2e] Building pinned TinyConnectors test module ..."
-  "$CARGO_BIN" build --release --manifest-path "$connectors_manifest"
-  export TINYCONNECTORS_TEST_MODULE="$REPO_ROOT/$connectors_module"
+  "$CARGO_BIN" build --release --manifest-path "$connectors_manifest" --target-dir "$connectors_target_dir"
+  connectors_module="$(node scripts/ci/stage-connector-test-module.mjs \
+    "$connectors_module" "$REPO_ROOT/target/test-modules/tinyconnectors")"
+  export TINYCONNECTORS_TEST_MODULE="$connectors_module"
+fi
+
+# The isolated module-admission suite requires a real native search module.
+# Build the pinned source, as the product unit runner does, before discovering
+# and executing the E2E targets; never fall back to release downloads in a test.
+if [ -z "${TINYSEARCH_TEST_MODULE:-}" ]; then
+  search_manifest="vendor/tinysearch/crates/tinysearch/Cargo.toml"
+  search_target_dir="$REPO_ROOT/target/native-test-modules/tinysearch"
+  search_module="$search_target_dir/release/libtinysearch.$module_ext"
+  echo "[rust-e2e] Building pinned TinySearch test module ..."
+  "$CARGO_BIN" build --release --manifest-path "$search_manifest" --target-dir "$search_target_dir"
+  export TINYSEARCH_TEST_MODULE="$search_module"
 fi
 
 echo "[rust-e2e] Running ${#SUITES[@]} suite(s) serially."
@@ -212,7 +273,7 @@ run_json_rpc_e2e_suite() {
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
       --test json_rpc_e2e "$test_name" -- \
-      --exact --test-threads=1 "${EXTRA_ARGS[@]}"
+      --exact --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
   done <<<"$test_names"
 }
 
@@ -243,8 +304,17 @@ for suite in "${SUITES[@]}"; do
     run_in_process_modules
     continue
   fi
+  if [ "$suite" = "mcp_registry_e2e" ]; then
+    # The registry tests open several process-global module clients across
+    # workspaces. Parallel libtest threads can race their module lifecycle.
+    echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (serial)"
+    bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
+      --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+    continue
+  fi
 
-  if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then
+  if [ "$HAS_EXTRA_ARGS" -eq 1 ]; then
     echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite -- ${EXTRA_ARGS[*]}"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \

@@ -75,54 +75,19 @@ fi
 # Source of truth: scripts/ci/product-features.txt.
 PRODUCT_FEATURES="$(bash "$REPO_ROOT/scripts/ci/product-features.sh")"
 
-# Local module artifacts use the host's native library extension. The wallet
-# fixture is a published, checksum-pinned archive for that same host.
-case "$(uname -s):$(uname -m)" in
-  Darwin:arm64)
-    module_ext=dylib
-    if [ "$(sw_vers -productVersion | cut -d. -f1)" -ge 26 ]; then
-      wallet_platform=macos-26-arm64
-      wallet_sha256=6409e1bfcd542f4fba5d867bd6b06b094a24d8e9bd994aae46894dcd979d3291
-    else
-      wallet_platform=macos-15-arm64
-      wallet_sha256=06d66492a7ba9b3793810ff9e644231deacf6fbdf9e32008fcef866f8228cbd2
-    fi
-    ;;
-  Darwin:x86_64)
-    module_ext=dylib
-    if [ "$(sw_vers -productVersion | cut -d. -f1)" -ge 26 ]; then
-      wallet_platform=macos-26-x86_64
-      wallet_sha256=3ad698d3f6ee549ee4c724717e78a2b16b5504ea4bea89af3ccf06cf3e7c88dc
-    else
-      wallet_platform=macos-15-x86_64
-      wallet_sha256=db4e6b2dae244059ef9bf3401faadb6d58bd6f70bb6279135944a41bb5e3b4f5
-    fi
-    ;;
-  Linux:x86_64)
-    module_ext=so
-    wallet_platform=ubuntu-22.04-x86_64
-    wallet_sha256=4410a0d88d49f3553c01ef6f0ced3a2997388d698d57d08bc129b82807e57016
-    ;;
-  Linux:aarch64|Linux:arm64)
-    module_ext=so
-    wallet_platform=ubuntu-22.04-arm64
-    wallet_sha256=90e391b78ebb25650d7d9cff6440869e045298d1b4976e7d61b6b20b9ca8a3d4
-    ;;
-  *)
-    echo "Unsupported native-module test host: $(uname -s) $(uname -m)" >&2
-    exit 1
-    ;;
-esac
+native_module_target="$(bash "$SCRIPT_DIR/ci/native-test-module-platform.sh")"
+IFS=$'\t' read -r module_ext wallet_platform <<< "$native_module_target"
 
 # Tokenjuice JSON-RPC coverage loads the production native module. Keep the
 # test run hermetic by building the pinned submodule instead of falling back
 # to GitHub release metadata.
 if [ -z "${TINYJUICE_TEST_MODULE:-}" ]; then
   juice_manifest="vendor/tinyjuice/crates/tinyjuice-module/Cargo.toml"
-  juice_module="vendor/tinyjuice/target/release/libtinyjuice_module.$module_ext"
+  juice_target_dir="$REPO_ROOT/target/native-test-modules/tinyjuice"
+  juice_module="$juice_target_dir/release/libtinyjuice_module.$module_ext"
   echo "Building TinyJuice test module from the pinned submodule ..."
-  cargo build --release --manifest-path "$juice_manifest"
-  export TINYJUICE_TEST_MODULE="$REPO_ROOT/$juice_module"
+  cargo build --release --manifest-path "$juice_manifest" --target-dir "$juice_target_dir"
+  export TINYJUICE_TEST_MODULE="$juice_module"
 fi
 
 # Search JSON-RPC/agent coverage calls the TinySearch module against the mock
@@ -130,42 +95,121 @@ fi
 # never depends on a published release.
 if [ -z "${TINYSEARCH_TEST_MODULE:-}" ]; then
   search_manifest="vendor/tinysearch/crates/tinysearch/Cargo.toml"
-  search_module="vendor/tinysearch/target/release/libtinysearch.$module_ext"
+  search_target_dir="$REPO_ROOT/target/native-test-modules/tinysearch"
+  search_module="$search_target_dir/release/libtinysearch.$module_ext"
   echo "Building TinySearch test module from the pinned submodule ..."
-  cargo build --release --manifest-path "$search_manifest"
-  export TINYSEARCH_TEST_MODULE="$REPO_ROOT/$search_module"
+  cargo build --release --manifest-path "$search_manifest" --target-dir "$search_target_dir"
+  export TINYSEARCH_TEST_MODULE="$search_module"
 fi
 
 # Wallet JSON-RPC E2E sends a recovery phrase only to an attested module. Build
 # artifacts are deliberately not treated as release-pinned recipients, so use
 # the checksum-pinned release archive and its accompanying `modules.toml`.
-# Keyed by version: the presence check below would otherwise keep serving a
+# Keyed by digest: the presence check below would otherwise keep serving a
 # library from an earlier release after the pin moves, and the wallet only
 # attests the pinned release's library.
-wallet_version="0.5.3"
-wallet_dir="$REPO_ROOT/target/test-modules/tinywallet/$wallet_version"
-wallet_archive="$wallet_dir/tinywallet-module-$wallet_version-$wallet_platform.tar.gz"
+wallet_asset="$(node scripts/ci/self-hosted/test-module-assets.mjs "$wallet_platform" tinywallet)"
+IFS=$'\t' read -r _wallet_id wallet_url wallet_filename wallet_sha256 <<< "$wallet_asset"
+wallet_dir="$REPO_ROOT/target/test-modules/tinywallet/$wallet_sha256"
+wallet_archive="$wallet_dir/$wallet_filename"
 if [ ! -f "$wallet_dir/libtinywallet_module.$module_ext" ]; then
-  echo "Downloading the pinned TinyWallet test module ..."
+  echo "Downloading the checksum-pinned TinyWallet test module ..."
   mkdir -p "$wallet_dir"
-  curl --fail --location --silent --show-error \
-    "https://github.com/tinyhumansai/tinywallet/releases/download/v${wallet_version}/$(basename "$wallet_archive")" \
-    --output "$wallet_archive"
-  # macOS ships a `sha256sum` that does not accept GNU's stdin check mode.
+  curl --fail --location --silent --show-error "$wallet_url" --output "$wallet_archive"
   if command -v shasum >/dev/null 2>&1; then
     echo "${wallet_sha256}  $wallet_archive" | shasum -a 256 -c
   else
     echo "${wallet_sha256}  $wallet_archive" | sha256sum --check
   fi
-  tar -xzf "$wallet_archive" -C "$wallet_dir"
+  tar --no-same-owner -xzf "$wallet_archive" -C "$wallet_dir"
 fi
 export OPENHUMAN_MODULE_PATH="$wallet_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
 
+docs_asset="$(node scripts/ci/self-hosted/test-module-assets.mjs "$wallet_platform" tinydocs)"
+IFS=$'\t' read -r _docs_id docs_url docs_filename docs_sha256 <<< "$docs_asset"
+docs_dir="$REPO_ROOT/target/test-modules/tinydocs/$docs_sha256"
+docs_archive="$docs_dir/$docs_filename"
+if [ ! -f "$docs_dir/libtinydocs_module.$module_ext" ]; then
+  mkdir -p "$docs_dir"
+  curl --fail --location --silent --show-error "$docs_url" --output "$docs_archive"
+  if command -v shasum >/dev/null 2>&1; then
+    echo "${docs_sha256}  $docs_archive" | shasum -a 256 -c
+  else
+    echo "${docs_sha256}  $docs_archive" | sha256sum --check
+  fi
+  tar --no-same-owner -xzf "$docs_archive" -C "$docs_dir"
+fi
+export OPENHUMAN_MODULE_PATH="$docs_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
+
+# The released TinyHosts contract test runs in its own process, outside the
+# generic unit suite. Keep the recipient pinned to the registry digest just
+# like the other native module fixtures.
+hosts_asset="$(node scripts/ci/self-hosted/test-module-assets.mjs "$wallet_platform" tinyhosts)"
+IFS=$'\t' read -r _hosts_id hosts_url hosts_filename hosts_sha256 <<< "$hosts_asset"
+hosts_dir="$REPO_ROOT/target/test-modules/tinyhosts/$hosts_sha256"
+hosts_archive="$hosts_dir/$hosts_filename"
+if [ ! -f "$hosts_dir/libtinyhosts.$module_ext" ]; then
+  echo "Downloading the checksum-pinned TinyHosts test module ..."
+  mkdir -p "$hosts_dir"
+  curl --fail --location --silent --show-error "$hosts_url" --output "$hosts_archive"
+  if command -v shasum >/dev/null 2>&1; then
+    echo "${hosts_sha256}  $hosts_archive" | shasum -a 256 -c
+  else
+    echo "${hosts_sha256}  $hosts_archive" | sha256sum --check
+  fi
+  tar --no-same-owner -xzf "$hosts_archive" -C "$hosts_dir"
+fi
+export OPENHUMAN_TINYHOSTS_TEST_MODULE="$hosts_dir/libtinyhosts.$module_ext"
+
+# TinyBox command analysis is required by shell-backed storage and capability
+# tests. Load the published, checksum-pinned module rather than relying on the
+# host's installed registry cache.
+tinybox_asset="$(node scripts/ci/self-hosted/test-module-assets.mjs "$wallet_platform" tinybox)"
+IFS=$'\t' read -r _tinybox_id tinybox_url tinybox_filename tinybox_sha256 <<< "$tinybox_asset"
+tinybox_dir="$REPO_ROOT/target/test-modules/tinybox/$tinybox_sha256"
+tinybox_archive="$tinybox_dir/$tinybox_filename"
+if [ ! -f "$tinybox_dir/libtinybox.$module_ext" ]; then
+  echo "Downloading the checksum-pinned TinyBox test module ..."
+  mkdir -p "$tinybox_dir"
+  curl --fail --location --silent --show-error "$tinybox_url" --output "$tinybox_archive"
+  if command -v shasum >/dev/null 2>&1; then
+    echo "${tinybox_sha256}  $tinybox_archive" | shasum -a 256 -c
+  else
+    echo "${tinybox_sha256}  $tinybox_archive" | sha256sum --check
+  fi
+  tar --no-same-owner -xzf "$tinybox_archive" -C "$tinybox_dir"
+fi
+export OPENHUMAN_MODULE_PATH="$tinybox_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
+
+# The MCP registry E2E targets exercise real TinyMCP lifecycle calls through
+# the host's module adapter. Load the released, checksum-pinned module just as
+# the self-hosted CI installer does.
+tinymcp_asset="$(node scripts/ci/self-hosted/test-module-assets.mjs "$wallet_platform" tinymcp)"
+IFS=$'\t' read -r _tinymcp_id tinymcp_url tinymcp_filename tinymcp_sha256 <<< "$tinymcp_asset"
+tinymcp_dir="$REPO_ROOT/target/test-modules/tinymcp/$tinymcp_sha256"
+tinymcp_archive="$tinymcp_dir/$tinymcp_filename"
+if [ ! -f "$tinymcp_dir/libtinymcp_module.$module_ext" ]; then
+  echo "Downloading the checksum-pinned TinyMCP test module ..."
+  mkdir -p "$tinymcp_dir"
+  curl --fail --location --silent --show-error "$tinymcp_url" --output "$tinymcp_archive"
+  if command -v shasum >/dev/null 2>&1; then
+    echo "${tinymcp_sha256}  $tinymcp_archive" | shasum -a 256 -c
+  else
+    echo "${tinymcp_sha256}  $tinymcp_archive" | sha256sum --check
+  fi
+  tar --no-same-owner -xzf "$tinymcp_archive" -C "$tinymcp_dir"
+fi
+export OPENHUMAN_MODULE_PATH="$tinymcp_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
+export OPENHUMAN_TINYMCP_TEST_MODULE="$tinymcp_dir/libtinymcp_module.$module_ext"
+
 if [ -z "${TINYCONNECTORS_TEST_MODULE:-}" ]; then
   connectors_manifest="vendor/tinyconnectors/crates/tinyconnectors/Cargo.toml"
-  connectors_module="$REPO_ROOT/vendor/tinyconnectors/target/release/libtinyconnectors.$module_ext"
+  connectors_target_dir="${TINYCONNECTORS_TARGET_DIR:-$REPO_ROOT/target/native-test-modules/tinyconnectors}"
+  connectors_module="$connectors_target_dir/release/libtinyconnectors.$module_ext"
   echo "Building TinyConnectors test module from the pinned submodule ..."
-  cargo build --release --manifest-path "$connectors_manifest"
+  cargo build --release --manifest-path "$connectors_manifest" --target-dir "$connectors_target_dir"
+  connectors_module="$(node scripts/ci/stage-connector-test-module.mjs \
+    "$connectors_module" "$REPO_ROOT/target/test-modules/tinyconnectors")"
 fi
 
 cargo_test() {
@@ -226,11 +270,20 @@ run_json_rpc_e2e() {
   # The JSON-RPC E2E binary intentionally changes process-global environment
   # and runtime configuration. Run each case in a fresh test process so a
   # provider route persisted by one scenario cannot affect another one.
+  local listing test_names test_name
+  if ! listing="$(cargo_test --test json_rpc_e2e -- --list)"; then
+    echo "[test-rust-with-mock] ERROR: could not enumerate json_rpc_e2e tests; refusing an empty or partial list." >&2
+    return 1
+  fi
+  test_names="$(printf '%s\n' "$listing" | sed -n 's/: test$//p')"
+  if [ -z "$test_names" ]; then
+    echo "[test-rust-with-mock] ERROR: json_rpc_e2e enumeration returned no tests." >&2
+    return 1
+  fi
   while IFS= read -r test_name; do
-    [ -n "$test_name" ] || continue
     echo "[test-rust-with-mock] JSON-RPC E2E test: ${test_name}"
-    cargo_test --test json_rpc_e2e "$test_name" -- --test-threads=1 "$@"
-  done < <(cargo_test --test json_rpc_e2e -- --list | sed -n 's/: test$//p')
+    cargo_test --test json_rpc_e2e "$test_name" -- --exact --test-threads=1 "$@"
+  done <<<"$test_names"
 }
 
 run_build_only_reaper_test() {
@@ -238,7 +291,7 @@ run_build_only_reaper_test() {
   # Keep this real build-path regression in a fresh process so it cannot narrow
   # the DomainSet observed by later registry and domain tests.
   cargo_test --lib \
-    "openhuman::agent::tinyagents::reaper::tests::a_build_only_runtime_is_swept_before_it_can_be_invoked" \
+    "agent::tinyagents::reaper::tests::a_build_only_runtime_is_swept_before_it_can_be_invoked" \
     -- --exact --test-threads=1 "$@"
 }
 
@@ -266,11 +319,23 @@ run_full_suite() {
       run_in_process_modules "$@"
     elif [ "$target" = "json_rpc_e2e" ]; then
       run_json_rpc_e2e "$@"
+    elif [ "$target" = "mcp_registry_e2e" ]; then
+      # The TinyMCP module owns process-level directory transitions; this
+      # binary exercises several workspaces against that shared module object.
+      TINYCONNECTORS_TEST_MODULE="${TINYCONNECTORS_TEST_MODULE:-$connectors_module}" \
+        cargo_test --test "$target" -- --ignored --test-threads=1 "$@"
     else
       TINYCONNECTORS_TEST_MODULE="${TINYCONNECTORS_TEST_MODULE:-$connectors_module}" \
         cargo_test --test "$target" -- "$@"
     fi
   done < <(integration_test_targets)
+
+  # Loading a native module mutates process-global module state, so exercise
+  # the published contract in a fresh libtest process with its pinned artifact.
+  TINYCONNECTORS_TEST_MODULE="${TINYCONNECTORS_TEST_MODULE:-$connectors_module}" \
+    cargo_test --lib \
+      hosting::test::released_artifact_serves_providers_and_confidential_local_preparation \
+      -- --exact --ignored --test-threads=1
 }
 
 if [ "$#" -eq 0 ]; then
@@ -296,6 +361,13 @@ elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "json_rpc_e2e" ]; then
     shift
   fi
   run_json_rpc_e2e "$@"
+elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "mcp_registry_e2e" ]; then
+  shift 2
+  if [ "${1:-}" = "--" ]; then
+    shift
+  fi
+  TINYCONNECTORS_TEST_MODULE="${TINYCONNECTORS_TEST_MODULE:-$connectors_module}" \
+    cargo_test --test mcp_registry_e2e -- --ignored --test-threads=1 "$@"
 else
   cargo_test "$@"
 fi

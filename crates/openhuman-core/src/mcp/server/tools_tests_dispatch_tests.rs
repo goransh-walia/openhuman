@@ -26,6 +26,7 @@ async fn call_tool_records_write_argument_rejection() {
             &config,
             &crate::mcp::audit::McpWriteListQuery::default(),
         )
+        .await
         .expect("list writes");
         if rows.len() == 1 {
             break;

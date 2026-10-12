@@ -11,5 +11,26 @@
     "Delete an entry the moment the pins are reconciled. An exemption that has",
     "stopped being true fails the gate too \u2014 `expect` must still match."
   ],
-  "exemptions": []
+  "exemptions": [
+    {
+      "id": "tinydocs",
+      "expect": "v0.1.17-159-gf95c461e",
+      "reason": "The pinned TinyDocs workspace package is 0.2.0, matching the registry artifact; the repository tag still reflects its older 0.1.17 release."
+    },
+    {
+      "id": "tinycomputer",
+      "expect": "v0.7.0-2172-g8f50df63",
+      "reason": "The pinned TinyComputer workspace package is 0.11.0, matching the registry artifact; the repository tag still reflects its older 0.7.0 release."
+    },
+    {
+      "id": "tinyconnectors",
+      "expect": "v0.10.3-419-g8b35ca5e",
+      "reason": "The pinned TinyConnectors workspace package is 0.14.0, matching the registry artifact; the repository tag still reflects its older 0.10.3 release."
+    },
+    {
+      "id": "tinyhosts",
+      "expect": "v0.1.9-46-g6ad6e8b2",
+      "reason": "The pinned TinyHosts package is 0.3.0, matching the registry artifact; the repository tag still reflects its older 0.1.9 release."
+    }
+  ]
 }

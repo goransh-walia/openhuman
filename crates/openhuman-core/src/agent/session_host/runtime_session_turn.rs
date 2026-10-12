@@ -25,7 +25,7 @@ impl OpenHumanSessionHost {
         context.turn_deadline = crate::agent::turn_deadline::current();
         let cancellation = context.cancellation.clone();
         let root_config = context.root_run_config("openhuman-session");
-        let options = TurnOptions {
+        let mut options = TurnOptions {
             request_id: origin.and_then(|origin| match origin {
                 crate::agent::turn_origin::AgentTurnOrigin::WebChat { request_id, .. } => {
                     request_id.clone()
@@ -39,13 +39,16 @@ impl OpenHumanSessionHost {
             cancellation,
             run_context: context.into_tinyagents(root_config),
         };
-        // Load a bound, otherwise empty session before its normal lifecycle so
-        // the host prelude can rebuild its recorded integration executors.
-        if matches!(options.resume, ResumeMode::Session)
-            && self
-                .runtime_session
-                .as_ref()
-                .is_some_and(|session| session.history().is_empty())
+        // Load persisted state before the normal turn lifecycle so the host
+        // can read native recorded declarations for both bound sessions and
+        // cold, unthreaded latest-agent resumes.
+        if matches!(
+            options.resume,
+            ResumeMode::Session | ResumeMode::LatestForAgent
+        ) && self
+            .runtime_session
+            .as_ref()
+            .is_some_and(|session| session.history().is_empty())
         {
             let runtime = self
                 .runtime_session
@@ -68,6 +71,21 @@ impl OpenHumanSessionHost {
                 }
             }
         }
+        // Persisted declarations are historical facts, while the hook still
+        // supplies the only executable sources and current policy.
+        options.run_context.data.recorded_tool_names = std::sync::Arc::new(
+            self.runtime_session
+                .as_ref()
+                .and_then(|runtime| runtime.recorded_tools())
+                .map(|snapshot| {
+                    snapshot
+                        .specs()
+                        .iter()
+                        .map(|spec| spec.name.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        );
         let agent_id = self.agent_definition_id.clone();
         let turn = self
             .runtime_session

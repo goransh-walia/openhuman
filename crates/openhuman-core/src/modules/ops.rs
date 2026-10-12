@@ -434,8 +434,7 @@ fn module_config(config: &Config, id: &str) -> serde_json::Value {
             .expect("TinySecurity config serializes");
     }
     if id == super::search::MODULE_ID {
-        return serde_json::to_value(super::search::module_config(config))
-            .expect("TinySearch config serializes");
+        return super::search::load_configuration(config);
     }
     if id == super::desktop::MODULE_ID {
         return super::desktop::module_config(config);
@@ -475,6 +474,14 @@ fn local_override(config: &Config, id: &str) -> Option<PathBuf> {
         .or_else(|| {
             (id == super::search::MODULE_ID)
                 .then(|| std::env::var_os("TINYSEARCH_TEST_MODULE"))
+                .flatten()
+                .map(PathBuf::from)
+        })
+        .or_else(|| {
+            // Integration tests compile the core as a dependency, without
+            // cfg(test), so fixture routing belongs in this shared loader.
+            (id == "tinyjuice")
+                .then(|| std::env::var_os("TINYJUICE_TEST_MODULE"))
                 .flatten()
                 .map(PathBuf::from)
         })

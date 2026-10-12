@@ -47,11 +47,10 @@ const SECRET_WORD = 'XYZZY';
 const FIRST_PROMPT = `Remember: the secret word is ${SECRET_WORD}`;
 const SECOND_PROMPT = 'What was the secret word?';
 const CANARY_SECOND = `canary-memory-m1n2o3-${SECRET_WORD}`;
+const FIRST_RESPONSE = `Got it! I will remember that the secret word is ${SECRET_WORD}.`;
 
 // Two forced responses for the two turns.
-const FORCED_RESPONSES_TURN1 = [
-  { content: `Got it! I will remember that the secret word is ${SECRET_WORD}.` },
-];
+const FORCED_RESPONSES_TURN1 = [{ content: FIRST_RESPONSE }];
 const FORCED_RESPONSES_TURN2 = [
   {
     content: `The secret word you told me was ${SECRET_WORD}. Here is the confirmation: ${CANARY_SECOND}`,
@@ -193,46 +192,45 @@ describe('Chat conversation history', () => {
       { timeout: 15_000, timeoutMsg: 'IN_FLIGHT never cleared after turn 2' }
     );
 
-    // Inspect the request log for the second LLM call.
+    // Background work may issue other completions while this turn settles.
+    // Select the request that contains the user's second message.
     const log = getRequestLog() as Array<{ method: string; url: string; body?: string }>;
     const llmHits = log.filter(
       r => r.method === 'POST' && r.url.includes('/openai/v1/chat/completions')
     );
     console.log(`${LOG_PREFIX} H1.2: found ${llmHits.length} LLM request(s) in turn 2 log`);
-    expect(llmHits.length).toBeGreaterThanOrEqual(1);
+    const secondTurnHits = llmHits.filter(r => {
+      try {
+        const parsed = JSON.parse(r.body ?? '{}');
+        return (
+          Array.isArray(parsed.messages) &&
+          parsed.messages.some(
+            (message: { content?: unknown }) =>
+              typeof message.content === 'string' && message.content.includes(SECOND_PROMPT)
+          ) &&
+          parsed.messages.some(
+            (message: { content?: unknown }) =>
+              typeof message.content === 'string' && message.content.includes(FIRST_PROMPT)
+          )
+        );
+      } catch {
+        return false;
+      }
+    });
+    expect(secondTurnHits.length).toBeGreaterThan(0);
 
-    // Parse the request body to verify message history is included.
-    const secondLlmCall = llmHits[llmHits.length - 1];
-    expect(secondLlmCall).toBeDefined();
-
-    let messages: Array<{ role: string; content: string }> = [];
-    try {
-      const parsedBody =
-        typeof secondLlmCall.body === 'string'
-          ? JSON.parse(secondLlmCall.body)
-          : secondLlmCall.body;
-      messages = Array.isArray(parsedBody?.messages) ? parsedBody.messages : [];
-    } catch (e) {
-      console.log(`${LOG_PREFIX} H1.2: failed to parse LLM request body: ${e}`);
-    }
+    const parsedBody = JSON.parse(secondTurnHits.slice(-1)[0]?.body ?? '{}');
+    const messages: Array<{ role: string; content: string }> = Array.isArray(parsedBody.messages)
+      ? parsedBody.messages
+      : [];
+    expect(messages.length).toBeGreaterThan(0);
 
     console.log(`${LOG_PREFIX} H1.2: second LLM call contains ${messages.length} messages`);
-
-    if (messages.length > 0) {
-      // Context should contain: system (maybe) + user turn 1 + assistant turn 1 + user turn 2 = ≥ 3
-      expect(messages.length).toBeGreaterThanOrEqual(3);
-
-      // At least one message should mention the secret word (from the first user turn).
-      const hasSecretWord = messages.some(
-        m => typeof m.content === 'string' && m.content.includes(SECRET_WORD)
-      );
-      expect(hasSecretWord).toBe(true);
-      console.log(`${LOG_PREFIX} H1.2: secret word found in context messages`);
-    } else {
-      // If no messages were returned, the history assertion is hollow. Fail so
-      // the issue is visible rather than silently passing.
-      expect(messages.length).toBeGreaterThan(0);
-    }
+    const modelContext = messages.map(message => message.content).join('\n');
+    expect(modelContext).toContain(FIRST_PROMPT);
+    expect(modelContext).toContain(FIRST_RESPONSE);
+    expect(modelContext).toContain(SECOND_PROMPT);
+    console.log(`${LOG_PREFIX} H1.2: both turns and the first response are in context`);
 
     console.log(`${LOG_PREFIX} H1.2: passed`);
   });

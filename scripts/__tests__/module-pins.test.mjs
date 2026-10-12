@@ -105,6 +105,46 @@ function submodulesPresent() {
   }
 }
 
+// This reads the release manifest directly, so a stale voice gitlink is caught
+// even in a shallow checkout without the tags used by the general pin gate.
+test("voice source release matches the artifact used for recording summaries", () => {
+  const record = [...parseRecords(readRegistry()).values()].find(
+    (record) => record.id === "tinyvoice",
+  );
+  assert.ok(record, "voice adapter requires a registered module");
+  const source = readFileSync(
+    join(REPO_ROOT, "vendor/tinyvoice/crates/tinyvoice-module/Cargo.toml"),
+    "utf8",
+  );
+  const version = source.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+  assert.ok(version, "voice module source must declare its release version");
+  assert.equal(
+    version,
+    record.version,
+    "the host must compile against the same voice release it loads",
+  );
+});
+
+test("search source release matches the loaded search artifact", () => {
+  const record = [...parseRecords(readRegistry()).values()].find(
+    (record) => record.id === "tinysearch",
+  );
+  assert.ok(record, "search adapter requires a registered module");
+  const source = readFileSync(join(REPO_ROOT, "vendor/tinysearch/Cargo.toml"), "utf8");
+  const version = source.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+  assert.equal(version, record.version, "search source must match its loaded artifact");
+});
+
+test("wallet source release matches the loaded wallet artifact", () => {
+  const record = [...parseRecords(readRegistry()).values()].find(
+    (record) => record.id === "tinywallet",
+  );
+  assert.ok(record, "wallet adapter requires a registered module");
+  const source = readFileSync(join(REPO_ROOT, "vendor/tinywallet/Cargo.toml"), "utf8");
+  const version = source.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+  assert.equal(version, record.version, "wallet source must match its loaded artifact");
+});
+
 // ── Registry parsing ──────────────────────────────────────────────────────────
 
 test("parses every record `ALL` lists out of the real registry", () => {
@@ -129,9 +169,7 @@ test("parses every record `ALL` lists out of the real registry", () => {
 
 test("parses per-platform assets, digests included", () => {
   const src = readRegistry();
-  const rec = [...parseRecords(src).values()].find(
-    (r) => r.id === "tinyjuice",
-  );
+  const rec = [...parseRecords(src).values()].find((r) => r.id === "tinyjuice");
   assert.ok(rec, "tinyjuice record not found");
   assert.ok(rec.assets.length > 0, "tinyjuice publishes no assets?");
   for (const a of rec.assets) {
@@ -396,8 +434,7 @@ test("an unparseable registry fails the gate instead of passing", () => {
 });
 
 test("a missing registry file fails the gate instead of passing", () => {
-  const root = fixtureRoot({
-  });
+  const root = fixtureRoot({});
   try {
     const r = run(PINS_CLI, [root]);
     assert.notEqual(r.status, 0, "a missing registry must FAIL");

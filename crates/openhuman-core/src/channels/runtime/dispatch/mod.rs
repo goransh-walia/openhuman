@@ -28,7 +28,9 @@ use processor::channel_has_approval_surface;
 // Re-export internal helpers accessed by test_support (cfg(any(test,
 // debug_assertions))) and the inline #[cfg(test)] modules via `super::*`.
 #[cfg(any(test, debug_assertions))]
-use helpers::{build_channel_context_block, select_acknowledgment_reaction};
+use helpers::build_channel_context_block;
+#[cfg(test)]
+use helpers::select_acknowledgment_reaction;
 
 #[cfg(test)]
 use routing::{build_visible_tool_set, AgentScoping};

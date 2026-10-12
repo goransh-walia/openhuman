@@ -85,6 +85,8 @@ impl SpawnSubagentTool {
         let agent_id = args
             .get("agent_id")
             .and_then(|v| v.as_str())
+            // keep until v0.66 (review after 2027-01-11): frozen session schemas
+            // and stored calls may still use archetype; see the parameter schema.
             .or_else(|| args.get("archetype").and_then(|v| v.as_str()))
             .unwrap_or("")
             .trim()
@@ -371,8 +373,8 @@ impl SpawnSubagentTool {
                         Ok(ToolResult::success(envelope))
                     }
                     SubagentRunStatus::Completed => {
-                        crate::agent::harness::artifact_offload::note_artifact_handoff(
-                            crate::agent::harness::artifact_offload::HANDOFF_STAGE_CONSUMED,
+                        tinyagents_harness::artifacts::note_artifact_handoff(
+                            tinyagents_harness::artifacts::HANDOFF_STAGE_CONSUMED,
                             &outcome.agent_id,
                             &outcome.task_id,
                             &outcome.artifact_paths,

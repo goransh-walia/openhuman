@@ -1032,7 +1032,7 @@ pub enum DomainEvent {
     // ── MCP reconnect supervisor (#5931) ───────────────────────────────
     //
     // Published by `mcp::registry::supervisor_events` from the report
-    // `tinymcp::Supervisor::tick` hands back each minute. They are what puts
+    // TinyMCP's module-owned supervisor reports each minute. They are what puts
     // a probe outcome on the developer Event Log, and what the notification
     // bridge reads to tell the user about a server that stays down. An
     // answered probe is deliberately not an event: one row per server per

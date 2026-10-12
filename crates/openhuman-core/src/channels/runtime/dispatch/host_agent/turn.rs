@@ -11,6 +11,8 @@ use tinyagents_session::transcript::TranscriptMessage;
 
 /// One channel message, as a host agent's turn needs it.
 pub(crate) struct HostChannelTurn {
+    /// Durable thread supplied explicitly by a hosted relay.
+    pub(crate) relay_thread: Option<String>,
     /// The channel the message came in on (`"telegram"`).
     pub(crate) channel: String,
     /// The chat's history key: the session the host belt is told about and
@@ -35,6 +37,7 @@ pub(crate) async fn run_host_agent_turn(
     turn: HostChannelTurn,
 ) -> anyhow::Result<AgentTurnResponse> {
     let HostChannelTurn {
+        relay_thread,
         channel,
         history_key,
         prior_turns,
@@ -43,7 +46,16 @@ pub(crate) async fn run_host_agent_turn(
         progress,
     } = turn;
     let mut config = host.config.clone();
-    if let Some(ceiling) = posture::tool_ceiling(&origin) {
+    let profile_ceiling = host
+        .context
+        .host_overrides()
+        .and_then(|host| host.profile_capabilities())
+        .map(|caps| caps.channel_permission(&channel));
+    if let Some(ceiling) =
+        profile_ceiling.filter(|level| *level > tinytools::PermissionLevel::ReadOnly)
+    {
+        posture::cap_channel(&mut config, &channel, ceiling);
+    } else if let Some(ceiling) = posture::tool_ceiling(&origin) {
         posture::cap_channel(&mut config, &channel, ceiling);
         host.host_tools = host
             .host_tools
@@ -59,7 +71,14 @@ pub(crate) async fn run_host_agent_turn(
         "[channels::dispatch::host_agent] running channel turn as host agent"
     );
 
-    let mut session = host.session_host(&config, Some(&history_key))?;
+    host.context = host
+        .context
+        .derive_channel_turn(relay_thread.clone(), Some(origin.clone()));
+    let mut session = host.session_host(
+        &config,
+        Some(relay_thread.as_deref().unwrap_or(&history_key)),
+    )?;
+    session.set_thread_id(relay_thread.as_deref());
     // The channel names the session, which also selects the channel's
     // permission ceiling in the session's tool policy.
     session.set_event_context(history_key, channel);

@@ -99,7 +99,7 @@ async fn approval_prompts_reach_every_chat_channel() {
         assert_eq!(sub.domains(), Some(&["channel", "approval"][..]));
         sub.handle(&received(channel, "chat-1", thread_ts, &ws))
             .await;
-        assert!(sub.surface().reply_context(key).is_some(), "{channel}");
+        assert!(sub.replies.lock().unwrap().contains_key(key), "{channel}");
         sub.handle(&approval(Some(key), Some(channel))).await;
         let sent = ch.sent.lock().unwrap().clone();
         assert_eq!(sent.len(), 1, "{channel}");

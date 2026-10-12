@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use tinymcp::{ProbeOutcome, ServerRef, SupervisorEvent, TickReport};
+use tinymcp_bus::{ProbeOutcome, ServerRef, SupervisorEvent, TickReport};
 
 use super::*;
 use crate::core::events::DomainEvent;
@@ -18,6 +18,11 @@ fn server() -> ServerRef {
         qualified_name: "ac.inference.sh/mcp".into(),
         display_name: "Inference".into(),
     }
+}
+
+#[test]
+fn an_unknown_supervisor_event_has_no_host_domain_event() {
+    assert!(domain_events_for(workspace(), &[SupervisorEvent::Unknown]).is_empty());
 }
 
 #[test]

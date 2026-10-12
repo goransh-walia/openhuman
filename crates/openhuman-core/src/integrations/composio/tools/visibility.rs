@@ -11,11 +11,11 @@ use serde_json::Value;
 
 use crate::config::Config;
 
-use super::super::ops::load_user_scope_pref;
-use super::super::providers::{
+use super::super::contract::{
     catalog_for_toolkit, classify_unknown, find_curated, toolkit_from_slug, ToolScope,
     UserScopePref,
 };
+use super::super::ops::load_user_scope_pref;
 
 /// Decision returned by [`evaluate_tool_visibility`].
 pub(super) enum ToolDecision {
@@ -180,7 +180,7 @@ pub(super) async fn filter_list_tools_response(
             ToolDecision::Allow | ToolDecision::PassthroughCheckScope { .. }
         ));
     }
-    let drained: Vec<_> = resp.tools.drain(..).collect();
+    let drained = std::mem::take(&mut resp.tools);
     resp.tools = drained
         .into_iter()
         .zip(keep)

@@ -210,6 +210,7 @@ fn a_writable_grant_subsumes_the_same_path_read_only() {
     assert!(!has(&g.read_only, &npm));
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn proc_is_off_by_default_and_only_the_toggle_grants_it() {
     let home = fake_home();

@@ -141,14 +141,20 @@ pub(super) async fn dispatch_write_tool(
 fn audit_write(config: &Config, record: NewMcpWriteRecord) {
     let config = config.clone();
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        std::mem::drop(handle.spawn_blocking(move || {
-            if let Err(err) = audit::record_write(&config, record) {
+        std::mem::drop(handle.spawn(async move {
+            if let Err(err) = audit::record_write(&config, record).await {
                 log::warn!("[mcp_server] mcp write audit insert failed: {err}");
             }
         }));
     } else {
         let _ = std::thread::spawn(move || {
-            if let Err(err) = audit::record_write(&config, record) {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build();
+            let result = runtime
+                .map_err(|error| anyhow::anyhow!("could not start audit runtime: {error}"))
+                .and_then(|runtime| runtime.block_on(audit::record_write(&config, record)));
+            if let Err(err) = result {
                 log::warn!("[mcp_server] mcp write audit insert failed: {err}");
             }
         });

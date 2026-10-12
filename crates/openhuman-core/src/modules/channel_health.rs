@@ -16,6 +16,6 @@ pub(crate) async fn check(
         .await
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "modules"))]
 #[path = "channel_health_tests.rs"]
 mod tests;

@@ -13,12 +13,15 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::voice::audio_capture::{self, RecordingHandle};
-use crate::voice::hotkey::{ActivationMode, HotkeyEvent};
+use tinyvoice_bus::hotkey::{ActivationMode, HotkeyEvent};
 
 use super::hotkey_listener::start_hotkey_listener;
 use super::pipeline::{capture_expected_app_name, process_recording_bg};
 use super::types::{ServerState, VoiceServerConfig, VoiceServerStatus};
 use super::LOG_PREFIX;
+
+type RecordingSetupReceiver =
+    tokio::sync::oneshot::Receiver<Result<(RecordingHandle, Option<String>), String>>;
 
 /// The voice server runtime.
 pub struct VoiceServer {
@@ -116,9 +119,7 @@ impl VoiceServer {
         // Pending recording setup: `start_recording()` runs on a blocking
         // thread so the event loop stays responsive to Release events that
         // macOS fires almost immediately for the Fn key.
-        let mut recording_pending_rx: Option<
-            tokio::sync::oneshot::Receiver<Result<(RecordingHandle, Option<String>), String>>,
-        > = None;
+        let mut recording_pending_rx: Option<RecordingSetupReceiver> = None;
         let mut pending_generation: Option<u64> = None;
         let mut recording_generation: Option<u64> = None;
         // Set when a stop-intent event (Release/Pressed toggle) arrives before
@@ -217,7 +218,7 @@ impl VoiceServer {
                                 // event loop remains responsive to Release.
                                 let (tx, rx) = tokio::sync::oneshot::channel();
                                 let capture_config = app_config.clone();
-                                tokio::spawn(async move {
+                                crate::core::runtime::spawn_scoped(async move {
                                     let expected_app = capture_expected_app_name(&capture_config).await;
                                     let result = audio_capture::start_recording(&capture_config).await
                                         .map(|handle| (handle, expected_app));
@@ -416,7 +417,7 @@ impl VoiceServer {
             "{LOG_PREFIX} [pipeline={pipeline_id}] spawning process_recording (generation={generation})"
         );
 
-        tokio::spawn(async move {
+        crate::core::runtime::spawn_scoped(async move {
             process_recording_bg(
                 &pipeline_id,
                 handle,

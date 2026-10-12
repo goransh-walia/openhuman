@@ -62,6 +62,31 @@ In SaaS mode a call with no profile is refused instead of falling into a bucket 
 
 A backend decides how it enforces the scope. SQLite and the file driver keep each scope's data apart, and `local` is the scope a single-user install uses. MongoDB injects a scope key into every filter and every index prefix.
 
+### Process state
+
+The [process-state inventory](process-state.md) classifies the named shared-core
+singleton candidates and records their tenant, durability and routing boundaries.
+It also identifies pending regressions and implementation work.
+
+### Process caches
+
+The connected-integration catalog belongs to the calling profile, or to the
+operator in single-user mode. Agents using that operator's same configuration
+and credentials share it. Its cache key
+also binds the configuration, backend endpoint and credential identity, using
+digests rather than storing those secrets in the key. Identical service
+credentials do not make two profiles share a snapshot.
+
+| Cache                | Isolation and lifetime                                                                                                                                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTEGRATIONS_CACHE` | Per-process snapshots keyed by profile/operator scope and credential identity. Invalidation and connection reconciliation affect only the calling scope. Entries are reconstructed from the backend; they are not durable records. |
+| `CACHE_GENERATIONS`  | Per-process epochs for the same profile/operator scopes. Invalidation fences that scope's in-flight fetches without rejecting another profile's completed fetch.                                                                   |
+| Storage `KEYS`       | The process master-key provider. Each secret operation derives its data key from the captured native storage scope; the cached value is not a tenant data key. Changing the master source requires a new process.                  |
+
+SaaS work without a profile cannot read, populate, reconcile or invalidate the
+integration cache. The Settings connection poll keeps its calling context when
+it starts a background refresh with `spawn_scoped`.
+
 ### Background work
 
 Background work runs under the process default context, which names no agent, and on its own would only see `local`. `storage::agents` closes the gap. Agents are known when they are live (`AgentContextRegistry`) or when an earlier process recorded their id in the `local` scope (`storage_agents`). `for_each_scope` runs a step once for `local` and once under each known agent. The cron scheduler's agent pass (`cron::scheduler::tick_live_agents`, driven in tests through the public `cron::scheduler::run_live_agent_pass`) runs each live agent's due jobs under that agent's own context, so their results are recorded in the agent's own scope. A recorded agent that is not live waits until it is live again, because its jobs need its host tools and prompt.

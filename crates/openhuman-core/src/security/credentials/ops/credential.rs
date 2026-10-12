@@ -212,6 +212,8 @@ pub async fn set_credential(
             spawn_integrations_cache_warm(config);
         }
         crate::cron::scheduler_gate::set_signed_out(false);
+        #[cfg(feature = "channels")]
+        crate::channels::session::resume_channel_service();
         tracing::info!(
             domain = "credentials",
             operation = "set_credential",
@@ -341,6 +343,8 @@ pub async fn set_credential(
     // Open the scheduler gate now that a live credential is in place; workers
     // sleeping in the paused poll loop resume at their next iteration.
     crate::cron::scheduler_gate::set_signed_out(false);
+    #[cfg(feature = "channels")]
+    crate::channels::session::resume_channel_service();
     // An API key wins over a session for every backend request. Keep the
     // process identity aligned with that effective credential.
     if api_key::has_api_key(&effective_config) {
@@ -504,6 +508,16 @@ pub async fn clear_credential(
 async fn clear_session_credential(config: &Config) -> Result<Outcome<bool>, String> {
     let mut logs = Vec::new();
     crate::cron::scheduler_gate::set_signed_out(true);
+    #[cfg(feature = "web3")]
+    if let Err(error) = crate::modules::web3_service::close_service(config).await {
+        tracing::warn!(%error, "{LOG_PREFIX} failed to close Web3 service during sign-out");
+        logs.push("Web3 service cleanup will retry on replacement or shutdown".into());
+    }
+    #[cfg(feature = "web3")]
+    if let Err(error) = crate::modules::x402_service::close_service(config).await {
+        tracing::warn!(%error, "{LOG_PREFIX} failed to close x402 service during sign-out");
+        logs.push("x402 service cleanup will retry on replacement or shutdown".into());
+    }
     #[cfg(feature = "web3")]
     if let Err(error) = crate::modules::wallet_service::close_native_wallet_service().await {
         tracing::warn!(%error, "{LOG_PREFIX} failed to close native wallet service during sign-out");

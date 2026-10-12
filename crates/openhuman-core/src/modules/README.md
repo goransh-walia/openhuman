@@ -211,13 +211,14 @@ download, its `dlopen`, or its resident memory.
 | Path | Module | What it does |
 | --- | --- | --- |
 | [`documents.rs`](documents.rs) | `tinydocs` | `generate_docx`, `generate_pptx`, `extract_text`, bounded `extract_document`, complete `convert_markdown`, `inspect_image`, and `render_pdf`. Inbound bytes ride a TinyBus stream; held results are pulled with `ReadOutput` and released. Feature `documents`. |
-| [`wallet.rs`](wallet.rs) | `tinywallet` | `derive_account`, `sign_transaction_in_module`, `sign_message`, `export_key`. Key material goes only to an attested module whose attested digest is one the registry pinned (`attested_proxy`). Feature `web3`. |
+| [`wallet.rs`](wallet.rs) | `tinywallet` | Typed wallet, Web3, ERC-20 encoding, and x402 calls. Key material goes only to confidential calls to an attested module whose digest is pinned by the registry (`attested_proxy`). Feature `web3`. |
 | [`voice.rs`](voice.rs) | `tinyvoice` | Intent routing, command extraction, wake-word and hallucination checks, capture preparation, WAV encoding, frame energies, and a `VadSession` driven from the always-on capture loop. Every call returns a `VoiceCallError` the caller falls back from. Feature `voice`. |
 | [`desktop.rs`](desktop.rs) | `tinycomputer` | The shared proxy for TinyComputer: loads it with an 8 second bound, reinitializes it when its configuration fingerprint changes, and exposes `call`, `permissions`, `state`, `jev_ready`. |
 | [`computer_config.rs`](computer_config.rs) | `tinycomputer` | The private configuration: `jev` (decision model), `planner` (planner, rescue and output models), `browser` (Chrome path), `trace_path`. Rebuilt from `[computer]` and stored credentials on every call; `OPENHUMAN_COMPUTER_TRACE` turns tracing on. |
 | [`computer.rs`](computer.rs) | `tinycomputer` | `status` for the Computer settings page: lifecycle state, configured routes, and optionally what the module reports through `Describe`. |
-| [`browser.rs`](browser.rs) | `tinycomputer` | `BrowserClient` for the `Browser*` members, over the desktop proxy, plus the shared website policy. |
-| [`browser_task.rs`](browser_task.rs) | `tinycomputer` | Browser tasks over `StartTask` / `AwaitTask` / `ContinueTask`: `start`, `wait`, `resume`, `cancel`, `report`. The host keeps the policy (surfaces, origins, action budget, approvals). |
+| [`browser.rs`](browser.rs) | `tinycomputer` | `BrowserClient` for the `Browser*` members, over the desktop proxy, plus the shared website policy: "Allow all" (the list's `*`) lets the browser open any public site, private and local addresses still refused. |
+| [`browser_task.rs`](browser_task.rs) | `tinycomputer` | Browser tasks over `StartTask` / `AwaitTask` / `ContinueTask`: `start`, `wait`, `resume`, `cancel`, `report`. The host keeps the policy (surfaces, origins, action budget, approvals) and sends Browser Control's Chrome path, and in persistent mode its profile folder, with every task, read from the settings each time. A refusal or failure that says Chrome is missing, or that its path names no Chrome, tells the agent where the user sets that path. |
+| [`browser_profile.rs`](browser_profile.rs) | `tinycomputer` | Whether a running Chrome holds the persistent profile folder, by the lock Chrome keeps there (`SingletonLock`, or `lockfile` on Windows). Chrome lets one browser at a time use a profile, so a task waits up to 5 s for one closing on it, then runs in a fresh profile. A browser of this process claims the folder before it starts, as Chrome locks it only once started, so two starting together never both take it. |
 | [`browser_task_report.rs`](browser_task_report.rs) | `tinycomputer` | What is kept when a task stops: a content-free log summary, and with tracing on the full report under `<workspace>/state/computer/tasks/`. |
 | [`browser_sites.rs`](browser_sites.rs), [`browser_sites/store.rs`](browser_sites/store.rs) | `tinycomputer` | Per-site memory of plans and elements learned by finished tasks, in `<workspace>/state/computer/sites/<site>.json`, with 30-day expiry. Fed back on `StartTask`; never reaches the agent's memory or prompts. |
 | [`connectors.rs`](connectors.rs) | `tinyconnectors` | `proxy`, `call`, `call_stateless`, `call_bare`, `reconcile_route_if_loaded`. Builds the route configuration (signed-in backend or the user's own Composio key) and reconciles it on every call so sign-out reaches the module. |
@@ -225,8 +226,7 @@ download, its `dlopen`, or its resident memory.
 | [`search/proxy.rs`](search/proxy.rs) | `tinysearch` | Lazy load, private reinitialization on configuration change, and serialized `list_tools` / `execute_tool`; `refresh_loaded` after settings saves and credential changes. |
 | [`tokenjuice_host.rs`](tokenjuice_host.rs) | `tinyjuice` | The reverse direction: an `MlHost` object the host serves at the contract's `ML_HOST_NAME` / `ML_HOST_PATH` for the module's tool-less summary model call. |
 
-`channel_email.rs` delivers podcast attachments through TinyChannels' bounded
-confidential upload members. `tinybox.rs` supplies the pre-core gateway client.
+`tinybox.rs` supplies the pre-core gateway client.
 `channel_controller.rs` invokes TinyChannels' confidential controller member for
 Discord guild/channel discovery and permission checks, preserving the complete
 legacy RPC result types from the bus contract. OpenHuman resolves credentials
@@ -323,7 +323,7 @@ loadable:
   | `tinydocs-bus` | `documents` |
   | `tinyvoice-bus` | `voice` |
   | `tinyjuice-bus` | inference kernel |
-  | `tinywallet-bus` | `web3` (the chain primitives are in `tinywallet-crypto`) |
+  | `tinywallet-bus` | `web3` (transport-neutral module contract vocabulary) |
   | `tinymcp-bus` | `mcp` |
   | `tinysearch-bus` | search provider declarations and bus payloads |
   | `tinycomputer-bus` | desktop, browser and task members |
@@ -344,8 +344,8 @@ loadable:
   budgets, and approval of irreversible steps.
 - Callers outside this folder: `runtime::client` re-exports `execute`,
   `resolve` and `RuntimeCallError` from `modules::runtime` so `runtime/`
-  compiles without the gate; `web3/seams.rs` and `web3/x402/seams.rs` use
-  `wallet.rs`; `tools/impl/document`, `tools/impl/presentation`,
+  compiles without the gate; wallet, Web3, and x402 adapters use `wallet.rs`;
+  `tools/impl/document`, `tools/impl/presentation`,
   `agent/multimodal.rs` and `agent/attachments/` use `documents.rs`;
   `voice/always_on` and `voice/streaming.rs` use `voice.rs`;
   `tools/impl/browser/` and `desktop/control/` use the TinyComputer files;

@@ -127,18 +127,51 @@ export const HOST_RPC_INTERNAL_PATTERNS = [
  * Blank out Rust comments and string literals (contents only), keeping line
  * structure, so a banned path quoted in a doc, log message or fixture is not
  * mistaken for code. Handles nested block comments, escapes and raw strings.
+ * Optional literal preservation and code-whitespace compaction support type
+ * signatures; default masking is unchanged. Compaction leaves literal contents intact.
+ * preserveTokenBoundaries retains separators that prevent lexical token merging.
  */
-export function stripRustComments(text) {
+export function stripRustComments(text, { preserveLiterals = false, compact = false, preserveTokenBoundaries = false } = {}) {
   let out = '';
   let i = 0;
-  const blank = chunk => chunk.replace(/[^\n]/g, ' ');
+  let pendingBoundary = false;
+  const word = char => /[\p{ID_Continue}]/u.test(char);
+  // Rust punctuation spacing can distinguish macro arms, including a third
+  // character completing an operator. Retain all separated punctuation pairs.
+  const punctuation = new Set("=<>!~+-*/%^&|@.,;:#$?'");
+  const append = chunk => {
+    if (!chunk) return;
+    if (compact && preserveTokenBoundaries && pendingBoundary && out) {
+      const tail = out.slice(-2);
+      const left = [...tail].at(-1);
+      const right = String.fromCodePoint(chunk.codePointAt(0));
+      if ((word(left) && word(right)) ||
+          (word(left) && ['"', "'", '#'].includes(right)) ||
+          (['"', "'", '#'].includes(left) && word(right)) ||
+          (left === '#' && right === '"') ||
+          (left === '.' && word(right)) ||
+          (/[0-9]/.test(left) && right === '.') ||
+          (/[eE]/.test(left) && ['+', '-'].includes(right)) ||
+          (['+', '-'].includes(left) && /[0-9]/.test(right)) ||
+          (punctuation.has(left) && punctuation.has(right))) out += ' ';
+    }
+    out += chunk;
+    pendingBoundary = false;
+  };
+  const blank = chunk => {
+    if (compact) {
+      pendingBoundary = true;
+      return '';
+    }
+    return chunk.replace(/[^\n]/g, ' ');
+  };
   while (i < text.length) {
     const rest = text.slice(i);
     let m;
     if (rest.startsWith('//')) {
       const end = text.indexOf('\n', i);
       const stop = end === -1 ? text.length : end;
-      out += blank(text.slice(i, stop));
+      append(blank(text.slice(i, stop)));
       i = stop;
     } else if (rest.startsWith('/*')) {
       let depth = 0;
@@ -153,25 +186,27 @@ export function stripRustComments(text) {
           if (depth === 0) break;
         } else j++;
       }
-      out += blank(text.slice(i, j));
+      append(blank(text.slice(i, j)));
       i = j;
     } else if ((m = /^b?r(#*)"/.exec(rest))) {
       const close = '"' + m[1];
       const end = text.indexOf(close, i + m[0].length);
       const stop = end === -1 ? text.length : end + close.length;
-      out += blank(text.slice(i, stop));
+      append(preserveLiterals ? text.slice(i, stop) : blank(text.slice(i, stop)));
       i = stop;
     } else if ((m = /^b?'(?:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|.)|[^\\'])'/.exec(rest))) {
-      out += blank(m[0]);
+      append(preserveLiterals ? m[0] : blank(m[0]));
       i += m[0].length;
     } else if (rest.startsWith('"') || rest.startsWith('b"')) {
       let j = i + (rest.startsWith('b') ? 2 : 1);
       while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
-      out += blank(text.slice(i, j + 1));
+      append(preserveLiterals ? text.slice(i, j + 1) : blank(text.slice(i, j + 1)));
       i = j + 1;
     } else {
-      out += text[i];
-      i++;
+      const char = String.fromCodePoint(text.codePointAt(i));
+      if (compact && /\s/.test(char)) pendingBoundary = true;
+      else append(char);
+      i += char.length;
     }
   }
   return out;

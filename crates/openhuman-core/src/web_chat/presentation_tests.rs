@@ -3,16 +3,10 @@ use super::*;
 #[test]
 fn single_bubble_delivery_emits_one_unsegmented_chat_done() {
     let mut rx = crate::web_chat::subscribe_web_channel_events();
-    // Prose `deliver_response` WOULD split into several `chat_segment` bubbles
-    // (long, multi-paragraph, no fences) — the shape a background delivery turn
-    // produces. A core-persisted single row must be announced as one bubble.
+    // Multi-paragraph prose remains one byte-for-byte terminal reply.
     let text = "Same three meetings as before, and nothing on the calendar moved since the last check.\n\n\
         The product standup is still at noon and the design review still follows it at two.\n\n\
         Nothing needs input from you right now, so I have not rescheduled anything on your behalf.";
-    assert!(
-        segment_for_delivery(text).len() > 1,
-        "fixture must be one the conversational path would segment"
-    );
     let request_id = format!("single-bubble-{}", uuid::Uuid::new_v4());
 
     deliver_response_single_bubble("system", "thread-1", &request_id, text, None);

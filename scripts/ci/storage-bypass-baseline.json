@@ -380,8 +380,8 @@
   {
     "rule": "json-write",
     "path": "crates/openhuman-core/src/security/secret_storage/file_store.rs",
-    "line": 79,
-    "text": "let file = OpenOptions::new()",
+    "line": 80,
+    "text": "let mut options = OpenOptions::new();",
     "occurrence": 1
   },
   {
@@ -466,20 +466,6 @@
     "path": "crates/openhuman-core/src/tools/impl/presentation/mod.rs",
     "line": 328,
     "text": "if let Err(err) = tokio::fs::write(&output_path, &bytes).await {",
-    "occurrence": 1
-  },
-  {
-    "rule": "json-write",
-    "path": "crates/openhuman-core/src/voice/audio_toolkit/ops.rs",
-    "line": 62,
-    "text": "tokio::fs::write(&resolved, &bytes)",
-    "occurrence": 1
-  },
-  {
-    "rule": "json-write",
-    "path": "crates/openhuman-core/src/voice/audio_toolkit/ops.rs",
-    "line": 408,
-    "text": "tokio::fs::write(&resolved_path, email.formatted())",
     "occurrence": 1
   },
   {

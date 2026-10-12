@@ -19,7 +19,6 @@
 #![cfg(feature = "mcp")]
 
 use openhuman_core::config::Config;
-use openhuman_core::mcp::registry::ops;
 use tinymcp_bus::{CommandKind, InstalledServer, Transport};
 
 /// The service over `config`'s workspace.
@@ -396,13 +395,15 @@ async fn disabled_server_contributes_no_tools_to_agent_surface() {
         .await
         .expect("connect live server");
 
-    // Attempting to connect the disabled server via ops must fail with
-    // a clear "disabled" message (matches mcp_registry_e2e::connect_refuses_disabled_server).
-    let disabled_err = ops::mcp_clients_connect(&cfg, quiet.server_id.clone())
+    // The direct host API gives the typed disabled-server error. The bus
+    // adapter intentionally maps module errors to a content-free terminal.
+    let disabled_err = h
+        .dynamic()
+        .connect(&quiet.server_id)
         .await
         .expect_err("connect must reject a disabled server");
     assert!(
-        disabled_err.to_lowercase().contains("disabled"),
+        disabled_err.to_string().to_lowercase().contains("disabled"),
         "error must mention 'disabled', got: {disabled_err}"
     );
 

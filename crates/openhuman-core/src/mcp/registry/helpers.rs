@@ -7,9 +7,6 @@
 
 use serde_json::{json, Value};
 
-use crate::config::Config;
-use crate::mcp::host;
-
 /// Renders a value into the `Outcome` payload the frontend expects.
 pub(crate) fn encode<T: serde::Serialize>(value: &T) -> Result<Value, String> {
     serde_json::to_value(value).map_err(|error| format!("serialization error: {error}"))
@@ -22,15 +19,6 @@ pub(crate) fn require(value: &str, field: &str) -> Result<String, String> {
         return Err(format!("{field} must not be empty"));
     }
     Ok(trimmed.to_string())
-}
-
-/// The service for `config`'s workspace, as a string error.
-///
-/// Every handler here is addressed by configuration, so every handler resolves
-/// through this rather than through a process-wide default: two workspaces get
-/// two stores, and a handler must act on the one its caller named.
-pub(crate) fn resolve(config: &Config) -> Result<std::sync::Arc<host::McpHost>, String> {
-    host::for_config(config).map_err(|error| error.to_string())
 }
 
 /// Appends the credential names an install would need to a server's detail

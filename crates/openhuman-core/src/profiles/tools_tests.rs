@@ -184,3 +184,43 @@ fn a_missing_sandbox_is_refused() {
     let action = root().join("users").join(AGENT).join("sandbox");
     assert!(sandbox_policy_with(&root(), &SaasSandboxConfig::default(), &action, &action).is_err());
 }
+
+#[test]
+fn only_the_scheduler_and_clock_tools_are_operator_admittable() {
+    assert_eq!(
+        OPERATOR_ADMITTABLE,
+        ["cron", "current_time", "resolve_time"]
+    );
+    for tool in OPERATOR_ADMITTABLE {
+        assert!(!is_hard_denied(tool), "{tool}");
+        assert!(
+            !admits_with(tool, false, &[]),
+            "{tool} stays off without a scope"
+        );
+    }
+}
+
+#[test]
+fn only_an_admittable_tool_the_agent_names_passes_by_name() {
+    let named: std::collections::HashSet<String> = ["cron", "current_time", "shell", "memory"]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    assert!(admitted_by_name("cron", Some(&named)));
+    assert!(admitted_by_name("current_time", Some(&named)));
+    assert!(
+        !admitted_by_name("resolve_time", Some(&named)),
+        "admittable but not named"
+    );
+    assert!(
+        !admitted_by_name("shell", Some(&named)),
+        "named but not admittable"
+    );
+    assert!(!admitted_by_name("cron", None), "no named scope at all");
+}
+
+#[test]
+fn outside_saas_without_a_context_only_the_domain_filter_applies() {
+    assert!(admits("shell", true));
+    assert!(!admits("cron", false));
+}

@@ -22,7 +22,8 @@ use openhuman_core::config::schema::cloud_providers::{
 };
 use openhuman_core::config::Config;
 use openhuman_core::core::types::AppState;
-use openhuman_core::inference::host_runtime::{local_ai_status, LocalAiService};
+use openhuman_core::inference::host_runtime::local_ai_status;
+use tinyinference_local::service::LocalAiService;
 use openhuman_core::inference::http;
 use openhuman_core::security::credentials::{
     AuthService, APP_SESSION_PROVIDER, DEFAULT_AUTH_PROFILE_NAME,
@@ -75,7 +76,6 @@ async fn http_models_and_chat_use_mocked_ollama_without_real_runtime() {
         label: "Round 23".to_string(),
         endpoint: format!("{base}/cloud"),
         auth_style: CloudAuthStyle::None,
-        legacy_type: None,
         default_model: Some("cloud-default@0.5".to_string()),
     }];
     config.save().await.expect("save config");

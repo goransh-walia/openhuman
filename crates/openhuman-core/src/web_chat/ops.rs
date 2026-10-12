@@ -19,7 +19,7 @@ pub(super) use budget_correlation::{
 };
 
 pub use channel_ops::{
-    cancel_all_turns, cancel_chat, cancel_chat_scoped, channel_web_cancel, channel_web_chat,
+    cancel_all_turns, cancel_chat_scoped, channel_web_cancel, channel_web_chat,
     channel_web_queue_clear, channel_web_queue_remove, channel_web_queue_status,
 };
 
@@ -30,6 +30,9 @@ pub use system_turn::{run_system_turn_on_thread, SESSION_CHECKOUT_FAILURE, SYSTE
 pub use state::drain_queued_turns_for_test;
 #[cfg(test)]
 pub(crate) use state::in_flight;
+pub(crate) use state::invalidate_thread_sessions_for_tenant;
+#[cfg(test)]
+pub(crate) use state::lock_thread_sessions_for_test;
 #[cfg(any(test, debug_assertions))]
 pub use state::parallel_in_flight_entries_for_test;
 #[cfg(test)]

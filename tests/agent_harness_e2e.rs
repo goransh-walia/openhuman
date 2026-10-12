@@ -75,6 +75,7 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
 
 static SCRIPTED_COMPLETIONS: OnceLock<Mutex<std::collections::VecDeque<Value>>> = OnceLock::new();
 static CAPTURED_COMPLETION_REQUESTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
+const SCRIPT_DISCOVERED_MCP_TOOL: &str = "__script_discovered_mcp_tool__";
 
 fn with_scripted<T>(f: impl FnOnce(&mut std::collections::VecDeque<Value>) -> T) -> T {
     let m = SCRIPTED_COMPLETIONS.get_or_init(|| Mutex::new(Default::default()));
@@ -326,7 +327,7 @@ async fn scripted_chat_completions(
     }
 
     let next = with_scripted(|q| q.pop_front());
-    let Some(entry) = next else {
+    let Some(mut entry) = next else {
         let message = json!({ "role": "assistant", "content": "default scripted completion" });
         return completion_response(streaming, message);
     };
@@ -343,6 +344,19 @@ async fn scripted_chat_completions(
             Json(json!({ "error": { "message": message, "type": "server_error" } })),
         )
             .into_response();
+    }
+
+    if let Some(tool_calls) = entry.get_mut("toolCalls").and_then(Value::as_array_mut) {
+        for call in tool_calls {
+            if call.get("name").and_then(Value::as_str) != Some(SCRIPT_DISCOVERED_MCP_TOOL) {
+                continue;
+            }
+            let name = scripted_discovered_mcp_tool_name(&body).unwrap_or_else(|| {
+                panic!("the next model request did not advertise the searched MCP action")
+            });
+            call["name"] = json!(name);
+            call["id"] = json!(format!("call_{name}"));
+        }
     }
 
     let content = entry.get("content").and_then(Value::as_str).unwrap_or("");
@@ -4129,19 +4143,17 @@ async fn orchestrator_calls_a_connected_mcp_tool_directly_inner() {
     reset_script(Vec::new());
     let stack = boot_stack().await;
     // Connecting also writes the tool cache the orchestrator's surface reads.
-    let server_id = declare_and_connect_registry_echo_server(&stack.rpc_base, 940).await;
-    let action = openhuman_core::mcp::registry::action_tool::searchable_name(
-        &server_id,
-        REGISTRY_MCP_SERVER,
-        "echo",
-    );
+    declare_and_connect_registry_echo_server(&stack.rpc_base, 940).await;
 
     reset_script(vec![
         tool_call_completion(
             "tool_search",
             json!({ "query": "echo message on my connected MCP server" }),
         ),
-        tool_call_completion(&action, json!({ "message": MCP_ECHO_CANARY })),
+        tool_call_completion(
+            SCRIPT_DISCOVERED_MCP_TOOL,
+            json!({ "message": MCP_ECHO_CANARY }),
+        ),
         text_completion("The MCP tool answered."),
     ]);
     let mut events = spawn_sse_collector(format!(
@@ -4191,6 +4203,8 @@ async fn orchestrator_calls_a_connected_mcp_tool_directly_inner() {
         Some("chat_done"),
         "the direct MCP turn must finish: {done}"
     );
+    let action = scripted_discovered_mcp_tool_name_from_requests(&requests)
+        .expect("the searched MCP action was advertised to the model");
     let search = tool_result_text(&requests, "tool_search").expect("search result");
     assert!(
         search.contains(&action),
@@ -4220,6 +4234,39 @@ async fn orchestrator_calls_a_connected_mcp_tool_directly_inner() {
 
     registry_join.abort();
     stack.shutdown();
+}
+
+#[cfg(feature = "mcp")]
+fn scripted_discovered_mcp_tool_name(body: &Value) -> Option<String> {
+    let native = body
+        .pointer("/tools")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find_map(|tool| {
+            let function = tool.get("function")?;
+            let description = function.get("description")?.as_str()?;
+            let properties = function.pointer("/parameters/properties")?.as_object()?;
+            if description.starts_with("MCP server ") && properties.contains_key("message") {
+                function.get("name")?.as_str().map(str::to_owned)
+            } else {
+                None
+            }
+        });
+    native.or_else(|| {
+        advertised_tool_names(&json!({ "body": body }))
+            .into_iter()
+            .find(|name| name.starts_with("mcp_") && !name.starts_with("mcp_registry_"))
+    })
+}
+
+#[cfg(feature = "mcp")]
+fn scripted_discovered_mcp_tool_name_from_requests(requests: &[Value]) -> Option<String> {
+    requests
+        .iter()
+        .rev()
+        .find_map(|request| request.get("body"))
+        .and_then(scripted_discovered_mcp_tool_name)
 }
 
 // ── #5821: the tool-policy boundary is APPENDED, not prepended ──────────────

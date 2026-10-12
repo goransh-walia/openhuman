@@ -9,6 +9,16 @@ use tinyagents_runtime::ToolSnapshot;
 
 use super::OpenHumanTurnPrelude;
 
+/// Module-projected catalogs and the names frozen in the resumed transcript.
+#[cfg(feature = "mcp")]
+#[derive(Default)]
+pub(super) struct McpToolCatalog {
+    pub(super) connected: Vec<tinymcp_bus::McpToolPresentation>,
+    pub(super) configured: Vec<tinymcp_bus::McpToolPresentation>,
+    pub(super) recorded_names: std::collections::HashSet<String>,
+    pub(super) recorded_specs: Vec<tinytools::ToolSpec>,
+}
+
 impl OpenHumanTurnPrelude {
     /// The session's own definition, else the catalogue's entry for its id.
     pub(super) fn session_definition(
@@ -67,12 +77,17 @@ impl OpenHumanTurnPrelude {
         // knew under the pre-readable hashed name keeps resolving.
         #[cfg(feature = "mcp")]
         {
-            mutable.recorded_mcp_tool_names = recorded
+            let recorded_mcp_specs: Vec<tinytools::ToolSpec> = recorded
                 .specs()
                 .iter()
                 .filter(|spec| spec.name.starts_with("mcp_"))
+                .cloned()
+                .collect();
+            mutable.mcp_tools.recorded_names = recorded_mcp_specs
+                .iter()
                 .map(|spec| spec.name.clone())
                 .collect();
+            mutable.mcp_tools.recorded_specs = recorded_mcp_specs;
         }
     }
 
@@ -168,6 +183,8 @@ impl OpenHumanTurnPrelude {
         self.refresh_cold_integrations().await;
         #[cfg(feature = "mcp")]
         self.refresh_connected_mcp_tools().await;
+        #[cfg(feature = "mcp")]
+        self.refresh_configured_mcp_tools().await;
         if !cold {
             self.refresh_dynamic_announcements().await;
         }
@@ -185,26 +202,92 @@ impl OpenHumanTurnPrelude {
     /// not connected.
     #[cfg(feature = "mcp")]
     async fn refresh_connected_mcp_tools(&self) {
-        let servers = match self.runtime_config.as_deref() {
-            Some(config) => {
-                crate::mcp::registry::connections::cached_overview_for_config(config).await
+        let config = match self.runtime_config.as_deref() {
+            Some(config) => config,
+            None => {
+                self.mutable
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .mcp_tools
+                    .connected
+                    .clear();
+                return;
             }
-            None => Vec::new(),
         };
-        let count = servers
-            .iter()
-            .map(|server| server.tools.len())
-            .sum::<usize>();
+        let servers = crate::mcp::registry::connections::cached_overview_for_config(config).await;
+        let sources = servers
+            .into_iter()
+            .map(|server| tinymcp_bus::McpToolSourceSpec {
+                server_id: server.server_id.clone(),
+                label: server.qualified_name.clone(),
+                family: server.qualified_name,
+                display_name: server.display_name,
+                tools: crate::mcp::registry::tools_safe_for_agent(&server.server_id, server.tools),
+                default_exposure: tinymcp_bus::McpToolExposure::Deferred,
+                direct_tools: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        let prepared = match crate::mcp::module_client::McpConfiguredClient::for_config(config) {
+            Ok(client) => client
+                .call(
+                    &crate::mcp::host::client_config(config),
+                    tinymcp_bus::names::methods::PREPARE_AGENT_TOOLS,
+                    (tinymcp_bus::PrepareAgentToolsRequest { sources },),
+                )
+                .await
+                .unwrap_or_else(|error| {
+                    tracing::debug!(?error, "[mcp] module tool presentation unavailable");
+                    Vec::new()
+                }),
+            Err(error) => {
+                tracing::debug!(?error, "[mcp] no module for tool presentation");
+                Vec::new()
+            }
+        };
+        let count = prepared.len();
         tracing::debug!(
             agent = %self.agent_definition_id,
-            servers = servers.len(),
             tools = count,
             "[mcp] refreshed deferred tool catalogue"
         );
         self.mutable
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .connected_mcp_tools = servers;
+            .mcp_tools
+            .connected = prepared;
+    }
+
+    /// Refreshes configured static-server declarations from TinyMCP's
+    /// persistent owner cache, listing only when a server has no cached
+    /// catalog yet.
+    #[cfg(feature = "mcp")]
+    async fn refresh_configured_mcp_tools(&self) {
+        let Some(config) = self.runtime_config.as_deref() else {
+            self.mutable
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .mcp_tools
+                .configured
+                .clear();
+            return;
+        };
+        let presentations =
+            match crate::mcp::module_client::McpConfiguredClient::configured_tool_presentations(
+                config,
+            )
+            .await
+            {
+                Ok(presentations) => presentations,
+                Err(error) => {
+                    tracing::debug!(?error, "[mcp] configured tool catalog is unavailable");
+                    Vec::new()
+                }
+            };
+        self.mutable
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .mcp_tools
+            .configured = presentations;
     }
 
     /// Construct searchable MCP actions from the workspace's current snapshot.
@@ -231,14 +314,39 @@ impl OpenHumanTurnPrelude {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             (
-                mutable.connected_mcp_tools.clone(),
-                mutable.recorded_mcp_tool_names.clone(),
+                mutable.mcp_tools.connected.clone(),
+                mutable.mcp_tools.recorded_names.clone(),
             )
         };
         crate::mcp::registry::action_tool::deferred_connected_tools_with_legacy(
             Arc::clone(config),
             &servers,
             &recorded,
+        )
+    }
+
+    /// Builds configured static MCP executors from the module-prepared cache.
+    #[cfg(feature = "mcp")]
+    pub(super) fn collect_configured_mcp_tools(&self) -> Vec<Box<dyn tinytools::Tool>> {
+        let Some(config) = self.runtime_config.as_deref() else {
+            return Vec::new();
+        };
+        let presentations = self
+            .mutable
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .mcp_tools
+            .configured
+            .clone();
+        let security = Arc::new(crate::security::SecurityPolicy::from_config(
+            &config.autonomy,
+            &config.workspace_dir,
+            &config.action_dir,
+        ));
+        crate::tools::implementations::network::configured_server_tools_from_presentations(
+            config,
+            presentations,
+            &security,
         )
     }
 
@@ -347,7 +455,7 @@ impl OpenHumanTurnPrelude {
         // Event-driven metadata refresh keeps the steady-state hot path free
         // of the old per-turn filesystem scan.
         let latest = crate::skills::load_workflow_metadata(&self.workspace_dir);
-        let id = |workflow: &crate::skills::Workflow| {
+        let id = |workflow: &tinyskills::Skill| {
             if workflow.dir_name.is_empty() {
                 workflow.name.clone()
             } else {
@@ -386,8 +494,7 @@ async fn load_connected_integrations(
     match crate::integrations::composio::fetch_connected_integrations_status(config).await {
         FetchConnectedIntegrationsStatus::Authoritative(connected) => Some((connected, true)),
         FetchConnectedIntegrationsStatus::Unavailable => {
-            let stale =
-                crate::integrations::composio::cached_active_integrations_including_expired(config);
+            let stale = crate::integrations::composio::cached_active_integrations(config);
             log::warn!(
                 "[session] integrations fetch unavailable; using stale snapshot={}",
                 stale.as_ref().map_or(0, Vec::len)

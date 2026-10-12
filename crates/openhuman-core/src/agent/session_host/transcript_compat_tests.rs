@@ -594,3 +594,156 @@ fn regenerate_session_compat() {
     }
     run_async(capture_all());
 }
+
+/// Archived declarations survive replay, but retired executors never return.
+#[cfg(feature = "voice")]
+#[test]
+fn resumed_thread_with_retired_podcast_tool_remains_usable() {
+    assert_retired_tool_replay(true);
+}
+
+#[cfg(feature = "voice")]
+#[test]
+fn latest_agent_session_with_retired_podcast_tool_remains_usable() {
+    assert_retired_tool_replay(false);
+}
+
+#[cfg(feature = "voice")]
+fn assert_retired_tool_replay(identity_bound: bool) {
+    run_async(async move {
+        const RETIRED: &str = "audio_generate_podcast";
+        struct ArchivedAudioTool;
+        #[async_trait::async_trait]
+        impl tinytools::Tool for ArchivedAudioTool {
+            fn name(&self) -> &str {
+                RETIRED
+            }
+            fn description(&self) -> &str {
+                "Archived audio generation"
+            }
+            fn parameters_schema(&self) -> Value {
+                json!({"type": "object"})
+            }
+            async fn execute(&self, _: Value) -> anyhow::Result<tinytools::ToolResult> {
+                Ok(tinytools::ToolResult::success("historical audio artifact"))
+            }
+        }
+        let root = tempfile::tempdir().expect("tempdir");
+        let workspace = root.path().join("workspace");
+        let first_model = model(
+            vec![
+                response(Vec::new(), vec![call("old-call", RETIRED, json!({}))]),
+                ModelResponse::assistant("saved audio reply"),
+            ],
+            true,
+        );
+        let chat_model: Arc<dyn ChatModel<()>> = first_model;
+        let mut first = crate::agent::SessionHostBuilder::new()
+            .chat_model(chat_model)
+            .tools(vec![Box::new(ArchivedAudioTool)])
+            .permanent_tool_names(std::collections::HashSet::from([RETIRED.to_string()]))
+            .workspace_dir(workspace.clone())
+            .action_dir(root.path().to_path_buf())
+            .tool_dispatcher(Box::new(tinytools_agent::dialect::NativeDialect))
+            .build()
+            .expect("archive host");
+        first.set_thread_id(Some("retired-audio-thread"));
+        first
+            .turn("save this old conversation")
+            .await
+            .expect("archive turn");
+        let transcript_path = stem_path(root.path(), &first.session_id().expect("session id"));
+        let archived = read_transcript(&transcript_path).expect("saved transcript");
+        assert!(archived
+            .tools
+            .as_ref()
+            .expect("recorded declarations")
+            .as_array()
+            .expect("declarations array")
+            .iter()
+            .any(|spec| spec["name"] == RETIRED));
+        let archived_bytes = std::fs::read(&transcript_path).expect("archived bytes");
+        drop(first);
+
+        let next = model(
+            vec![
+                response(Vec::new(), vec![call("retired-call", RETIRED, json!({}))]),
+                ModelResponse::assistant("continued without the retired tool"),
+            ],
+            true,
+        );
+        let mut resumed = if identity_bound {
+            build_host(root.path(), next.clone(), true, "retired-audio-thread")
+        } else {
+            let chat_model: Arc<dyn ChatModel<()>> = next.clone();
+            crate::agent::SessionHostBuilder::new()
+                .chat_model(chat_model)
+                .tools(tools())
+                .workspace_dir(workspace.clone())
+                .action_dir(root.path().to_path_buf())
+                .tool_dispatcher(Box::new(tinytools_agent::dialect::NativeDialect))
+                .build()
+                .expect("unthreaded session build")
+        };
+        if identity_bound {
+            assert!(resumed
+                .resume_bound_session()
+                .await
+                .expect("resume archive"));
+        } else {
+            resumed
+                .ensure_runtime_session()
+                .expect("cold runtime session");
+            assert!(matches!(
+                resumed.turn_resume_mode(),
+                tinyagents_runtime::ResumeMode::LatestForAgent
+            ));
+        }
+        // An explicit host tool belt is authoritative, while archived declarations
+        // remain intact in the durable transcript.
+        assert_eq!(
+            std::fs::read(&transcript_path).expect("resumed bytes"),
+            archived_bytes
+        );
+        let output = resumed
+            .turn("continue this conversation")
+            .await
+            .expect("usable resumed turn");
+        assert_eq!(output, "continued without the retired tool");
+        let requests = serde_json::to_string(&next.requests()).expect("requests");
+        assert!(
+            requests.contains("historical audio artifact"),
+            "historical tool results replay"
+        );
+        assert!(
+            requests.contains("retired-call"),
+            "missing tool call is returned to the model"
+        );
+        assert!(
+            requests.contains("unknown tool"),
+            "missing executor is a recoverable tool error"
+        );
+
+        let config = crate::config::Config {
+            workspace_dir: workspace,
+            action_dir: root.path().to_path_buf(),
+            config_path: root.path().join("config.toml"),
+            ..Default::default()
+        };
+        let security = Arc::new(crate::security::SecurityPolicy::default());
+        let live = crate::tools::ops::all_tools(
+            Arc::new(config.clone()),
+            &security,
+            crate::security::AuditLogger::disabled(),
+            &config.browser,
+            &config.http_request,
+            root.path(),
+            &std::collections::HashMap::new(),
+            &config,
+        );
+        assert!(
+            !live.iter().any(|tool| tool.name() == RETIRED),
+            "retired tool must not be restored to the live registry"
+        );
+    });
+}

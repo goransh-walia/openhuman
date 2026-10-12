@@ -59,6 +59,48 @@ pub(crate) async fn prepare_connection(
     }
 }
 
+/// Normalize rich outbound content and derive its idempotency key inside the module.
+pub(crate) async fn prepare_message(
+    client: &ModuleClient,
+    channel: &str,
+    message: serde_json::Value,
+) -> Result<tinychannels_bus::module_runtime::PreparedChannelIntent, ModuleCallError> {
+    client
+        .call_confidential(
+            "tinychannels",
+            methods::PREPARE_OUTBOUND_INTENT,
+            (
+                channel,
+                tinychannels_bus::module_runtime::ChannelMessagePreparation::Legacy(message),
+            ),
+        )
+        .await
+}
+
+/// Derive persisted hosted-ingress identifiers inside the channel module.
+pub(crate) async fn prepare_identity(
+    client: &ModuleClient,
+    request: tinychannels_bus::module_inbound::PrepareChannelIdentityRequest,
+) -> Result<tinychannels_bus::module_inbound::PreparedChannelIdentity, ModuleCallError> {
+    client
+        .call_confidential(
+            "tinychannels",
+            methods::PREPARE_CHANNEL_IDENTITY,
+            (request,),
+        )
+        .await
+}
+
+/// Prepare provider projections and persisted keys without a linked implementation.
+pub(crate) async fn prepare_inbound(
+    client: &ModuleClient,
+    request: tinychannels_bus::module_inbound::PrepareChannelInboundRequest,
+) -> Result<tinychannels_bus::module_inbound::PreparedChannelInbound, ModuleCallError> {
+    client
+        .call_confidential("tinychannels", methods::PREPARE_CHANNEL_INBOUND, (request,))
+        .await
+}
+
 /// Resolve OpenHuman's proxy scope before transmitting provider configuration.
 pub(crate) fn discord_proxy(config: &crate::config::Config) -> HttpProxyPolicy {
     let proxy = &config.proxy;

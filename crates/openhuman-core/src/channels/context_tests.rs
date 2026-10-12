@@ -30,6 +30,7 @@ fn runtime_context() -> ChannelRuntimeContext {
             "ok",
         ]));
     ChannelRuntimeContext {
+        relay_thread: None,
         channels_by_name: Arc::new(HashMap::new()),
         turn_model_source: Some(crate::agent::tinyagents::TurnModelSource::from_model(model)),
         default_provider: Arc::new("default".into()),
@@ -117,12 +118,18 @@ fn clear_and_compact_sender_history_update_cached_messages() {
         .contains_key(sender));
 }
 
-#[test]
-fn overflow_detection_covers_edge_cases() {
-    assert!(is_context_window_overflow_error(&anyhow::anyhow!(
-        "Maximum context length exceeded"
-    )));
-    assert!(!is_context_window_overflow_error(&anyhow::anyhow!(
-        "network timeout"
-    )));
+#[tokio::test]
+async fn overflow_detection_covers_edge_cases() {
+    let ctx = runtime_context();
+    assert!(is_context_window_overflow_error(
+        &ctx,
+        &anyhow::anyhow!("Maximum context length exceeded")
+    )
+    .await
+    .unwrap());
+    assert!(
+        !is_context_window_overflow_error(&ctx, &anyhow::anyhow!("network timeout"))
+            .await
+            .unwrap()
+    );
 }

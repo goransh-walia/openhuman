@@ -253,7 +253,7 @@ impl Tool for GooglePlacesDetailsTool {
             Ok(resp) => {
                 let p = &resp.place;
                 let mut lines = vec![
-                    format!("{}", p.name),
+                    p.name.to_string(),
                     format!("Address: {}", p.formatted_address),
                 ];
 

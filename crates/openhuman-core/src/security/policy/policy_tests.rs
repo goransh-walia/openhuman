@@ -77,6 +77,8 @@ fn turn_workspace_policy() -> (tempfile::TempDir, PathBuf, SecurityPolicy) {
 mod action_dir_tests;
 #[path = "policy_allowlist_tests.rs"]
 mod allowlist_tests;
+#[path = "policy_config_and_action_tests.rs"]
+mod config_and_action_tests;
 #[path = "policy_injection_tests.rs"]
 mod injection_tests;
 #[path = "policy_paths_and_risk_tests.rs"]

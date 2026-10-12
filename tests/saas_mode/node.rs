@@ -128,6 +128,8 @@ pub fn start_node_logging(
             for var in SCRUBBED_ENV {
                 cmd.env_remove(var);
             }
+            cmd.env("OPENHUMAN_KEYRING_BACKEND", "file")
+                .env("OPENHUMAN_KEYRING_MASTER_KEY", TEST_MASTER_KEY);
             match backend {
                 Some(port) => cmd.env("BACKEND_URL", format!("http://127.0.0.1:{port}")),
                 None => cmd.env("BACKEND_URL", "http://127.0.0.1:9"),

@@ -93,7 +93,7 @@ async fn composio_connected_integrations_public_helpers_handle_empty_auth_and_id
 }
 
 #[tokio::test]
-async fn composio_ops_mode_is_local_and_trigger_history_reflects_module_archive_availability() {
+async fn composio_ops_mode_is_local_and_trigger_history_reads_the_module_archive() {
     let _module = crate::CONNECTOR_MODULE_LOCK.lock().await;
     crate::tinyhumans_boot::boot();
     let dir = tempdir().expect("tempdir");
@@ -103,6 +103,10 @@ async fn composio_ops_mode_is_local_and_trigger_history_reflects_module_archive_
         ..Config::default()
     };
     config.composio.mode = "direct".into();
+    openhuman_core::integrations::composio::init_composio_trigger_history(
+        config.workspace_dir.clone(),
+    )
+    .expect("initialize the runtime-owned trigger archive lease");
 
     let mode = openhuman_core::integrations::composio::ops::composio_get_mode(&config)
         .await
@@ -112,32 +116,20 @@ async fn composio_ops_mode_is_local_and_trigger_history_reflects_module_archive_
     assert_eq!(mode.pointer("/result/mode"), Some(&json!("direct")));
     assert!(mode.pointer("/result/api_key_set").is_some());
 
-    match openhuman_core::integrations::composio::ops::composio_list_trigger_history(
+    let history = openhuman_core::integrations::composio::ops::composio_list_trigger_history(
         &config,
         Some(0),
     )
     .await
-    {
-        // The module is process-global. If an earlier Composio operation
-        // loaded it with a state directory, history remains available through
-        // that module-owned archive even when this call's route is absent.
-        Ok(history) => {
-            let history = history
-                .into_cli_compatible_json()
-                .expect("history outcome serializes");
-            assert!(history
-                .pointer("/result/archive_dir")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .contains("triggers"));
-        }
-        // A deliberately route-less module has no load-time archive. It must
-        // say that explicitly rather than report an empty history.
-        Err(error) => {
-            assert!(error.contains("trigger history is unavailable"), "{error}");
-            assert!(error.contains("state_dir"), "{error}");
-        }
-    }
+    .expect("the runtime-owned archive lease is available");
+    let history = history
+        .into_cli_compatible_json()
+        .expect("history outcome serializes");
+    assert!(history
+        .pointer("/result/archive_dir")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .contains("triggers"));
 }
 
 #[tokio::test]
@@ -157,7 +149,7 @@ async fn composio_action_tool_execute_reports_missing_route_without_network() {
     );
 
     let result = tool
-        .execute(json!({ "subject": "missing recipient" }))
+        .execute(json!({ "to": "recipient@example.test", "subject": "no route" }))
         .await
         .expect("local validation returns a tool result");
     assert!(result.is_error);
