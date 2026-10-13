@@ -91,6 +91,13 @@ fn attested_digest_must_be_one_of_the_compiled_release_artifacts() {
             sha256: "abcdef",
         }],
         load: super::super::LoadPolicy::Eager,
+        source: super::super::SourceSpec {
+            submodule: "tinysecurity",
+            manifest: "crates/tinysecurity-module/Cargo.toml",
+            package: "tinysecurity-module",
+            lib_name: "tinysecurity_module",
+            features: &[],
+        },
     };
     assert!(pinned(&record, "ABCDEF"));
     assert!(!pinned(&record, "fedcba"));
@@ -121,6 +128,13 @@ async fn bus_name_ownership_without_artifact_attestation_is_refused() {
         release_url: "https://example.invalid",
         assets: &[],
         load: super::super::LoadPolicy::Eager,
+        source: super::super::SourceSpec {
+            submodule: "tinysecurity",
+            manifest: "crates/tinysecurity-module/Cargo.toml",
+            package: "tinysecurity-module",
+            lib_name: "tinysecurity_module",
+            features: &[],
+        },
     };
     assert!(proxy.is_available().await.unwrap());
     assert_eq!(
