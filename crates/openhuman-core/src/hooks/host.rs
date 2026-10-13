@@ -29,7 +29,7 @@ impl PromptEvaluator for HostPromptEvaluator {
 
 fn environment() -> HookEnvironment {
     HookEnvironment::new(PRODUCT_NAME, dirs::home_dir())
-        .with_shell(crate::agent::platform_shell::build_tokio_command)
+        .with_shell(super::shell::command)
         .with_prompt_evaluator(Arc::new(HostPromptEvaluator))
 }
 
@@ -50,6 +50,9 @@ pub async fn reload(
     project_dir: Option<std::path::PathBuf>,
     workspace_dir: Option<std::path::PathBuf>,
 ) -> Arc<HookConfig> {
+    // Hook commands run under the shell TinyBox selects; ask it here, where the
+    // caller is async, so the engine's synchronous shell factory can use it.
+    super::shell::resolve().await;
     let current = environment();
     let loaded = tokio::task::spawn_blocking(move || {
         config::load(&current, project_dir.as_deref(), workspace_dir.as_deref())

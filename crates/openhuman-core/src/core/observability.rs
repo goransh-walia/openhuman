@@ -29,21 +29,6 @@ pub use availability::{
 /// anything you'd want to facet on (`error_kind`, `tool_name`, `method`).
 pub type Tag<'a> = (&'a str, &'a str);
 
-/// HTTP status codes that the reliable-provider layer already handles via
-/// retry + fallback, so per-attempt Sentry reports add noise without signal:
-///
-/// - **408** Request Timeout
-/// - **429** Too Many Requests
-/// - **502** Bad Gateway
-/// - **503** Service Unavailable
-/// - **504** Gateway Timeout
-///
-/// Single source of truth for both the call-site classifier
-/// (`crate::inference::provider::ops::should_report_provider_http_failure`) and the
-/// `before_send` filter (`is_transient_provider_http_failure`). Update here
-/// and both sites pick it up — keeps the two layers from drifting.
-pub const TRANSIENT_PROVIDER_HTTP_STATUSES: &[u16] = &[408, 429, 502, 503, 504, 520];
-
 /// HTTP status codes that represent transient backend / integration transport
 /// failures rather than application bugs. Keep this as strings because Sentry
 /// tags are strings, and the before_send classifiers match tag values exactly.
@@ -541,7 +526,7 @@ pub fn expected_error_kind(message: &str) -> Option<ExpectedErrorKind> {
     // reliable-provider layer retries + falls back over, with no client lever.
     // Delegates to the single-source provider matcher so the phrasing can't
     // drift. Distinct anchor from the matchers above, so it shadows nothing.
-    if crate::inference::provider::is_ollama_cloud_internal_500_message(message) {
+    if tinyinference_llm::failure::is_ollama_cloud_internal_500_message(message) {
         return Some(ExpectedErrorKind::TransientUpstreamHttp);
     }
     if is_backend_user_error_message(&lower) {
@@ -1416,13 +1401,15 @@ fn is_channel_supervisor_restart_message(lower: &str) -> bool {
 /// status integer alone could collide with unrelated log lines containing
 /// `"HTTP error: 5023"` (port number, runbook ID).
 fn is_transient_upstream_http_message(lower: &str) -> bool {
-    TRANSIENT_PROVIDER_HTTP_STATUSES.iter().any(|code| {
-        lower.contains(&format!("api error ({code}"))
-            || lower.contains(&format!("api error {code} "))
-            || lower.contains(&format!("http error: {code} "))
-            || lower.contains(&format!("http error: {code}\n"))
-            || lower.contains(&format!("http error: {code}:"))
-    })
+    tinyinference_llm::failure::TRANSIENT_PROVIDER_HTTP_STATUSES
+        .iter()
+        .any(|code| {
+            lower.contains(&format!("api error ({code}"))
+                || lower.contains(&format!("api error {code} "))
+                || lower.contains(&format!("http error: {code} "))
+                || lower.contains(&format!("http error: {code}\n"))
+                || lower.contains(&format!("http error: {code}:"))
+        })
 }
 
 /// Detect a non-2xx **HTML 403/Forbidden gateway page** returned to a provider
@@ -2571,7 +2558,7 @@ pub fn is_transient_provider_http_failure(event: &sentry::protocol::Event<'_>) -
     let Some(status_u16) = tags.get("status").and_then(|s| s.parse::<u16>().ok()) else {
         return false;
     };
-    TRANSIENT_PROVIDER_HTTP_STATUSES.contains(&status_u16)
+    tinyinference_llm::failure::TRANSIENT_PROVIDER_HTTP_STATUSES.contains(&status_u16)
 }
 
 /// Defense-in-depth `before_send` filter for managed-backend `errorCode`
@@ -3103,12 +3090,10 @@ pub fn is_insufficient_credits_event(event: &sentry::protocol::Event<'_>) -> boo
 /// [`is_insufficient_credits_message`] it does NOT anchor on a 402 status,
 /// because the Kiro IDE proxy wraps its 402 inside a 500 envelope
 /// (TAURI-RUST-C9A). Delegates to the single-source quota-phrase set in
-/// [`crate::inference::provider::body_indicates_quota_exhausted`], so
+/// [`tinyinference_llm::failure::body_indicates_quota_exhausted`], so
 /// the emit-site guard and this `before_send` net can't drift. Shared with the
 /// event-level filter [`is_quota_exhausted_event`].
-pub fn is_quota_exhausted_message(text: &str) -> bool {
-    tinyinference_llm::failure::body_indicates_quota_exhausted(text)
-}
+pub use tinyinference_llm::failure::body_indicates_quota_exhausted as is_quota_exhausted_message;
 
 /// Defense-in-depth `before_send` filter for provider **monthly-quota
 /// exhausted** events (TAURI-RUST-C9A): the user's third-party plan has spent
@@ -3148,7 +3133,7 @@ pub fn is_quota_exhausted_event(event: &sentry::protocol::Event<'_>) -> bool {
 /// generic 500 from another provider, or a local Ollama daemon crash (which
 /// carries no `ref:` UUID), still reaches Sentry.
 pub fn is_ollama_cloud_internal_500_message_any(text: &str) -> bool {
-    if crate::inference::provider::is_ollama_cloud_internal_500_message(text) {
+    if tinyinference_llm::failure::is_ollama_cloud_internal_500_message(text) {
         return true;
     }
     let lower = text.to_ascii_lowercase();

@@ -11,7 +11,7 @@ use crate::core::Outcome;
 use super::super::contract::ProviderUserProfile;
 use super::super::module_client::{self as connectors};
 use super::super::types::{
-    reencode, ComposioRefreshIdentitiesResponse, ComposioUserProfile, ComposioUserProfileRequest,
+    ComposioRefreshIdentitiesResponse, ComposioUserProfile, ComposioUserProfileRequest,
 };
 use super::connections::resolve_toolkit_for_connection;
 use super::error_utils::{report_composio_op_error, OpResult};
@@ -29,7 +29,7 @@ pub struct RefreshIdentitiesReport {
 
 /// Persist one profile's identity fields and report how many it wrote.
 async fn persist_identity(config: &Config, profile: &ComposioUserProfile) -> OpResult<usize> {
-    let native: ProviderUserProfile = reencode(profile)?;
+    let native = ProviderUserProfile::from(profile.clone());
     super::super::identity_store::persist_provider_profile(config, &native).await
 }
 
@@ -64,7 +64,7 @@ pub async fn composio_get_user_profile(
     );
 
     Ok(Outcome::new(
-        reencode(&profile)?,
+        ProviderUserProfile::from(profile),
         vec![format!(
             "composio: fetched {toolkit} profile for connection {connection_id}"
         )],

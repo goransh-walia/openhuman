@@ -5,11 +5,11 @@ use crate::agent::bus::{AgentTurnRequest, AgentTurnResponse, AGENT_RUN_TURN_METH
 use crate::agent::progress::AgentProgress;
 use crate::agent::turn_origin::AgentTurnOrigin;
 use crate::channels::context::{ChannelRouteSelection, ChannelRuntimeContext};
-use crate::channels::traits;
 use crate::core::bus::BUS;
 use std::sync::Arc;
 use tinyagents_session::transcript::TranscriptMessage;
 use tinybus::NativeRequestError;
+use tinychannels_bus as traits;
 
 use super::super::routing::resolve_target_agent;
 

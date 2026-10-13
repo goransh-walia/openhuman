@@ -12,8 +12,8 @@ use crate::agent::progress::AgentProgress;
 use crate::agent::prompts::SystemPromptBuilder;
 use crate::agent::tinyagents::TurnModelSource;
 use crate::agent::tool_policy::ToolPolicy;
-use crate::tools::agent_policy::ToolPolicySession;
 use std::sync::Arc;
+use tinytools::ToolPolicySession;
 use tinytools::{Tool, ToolSpec};
 use tinytools_agent::dialect::ToolDialect;
 

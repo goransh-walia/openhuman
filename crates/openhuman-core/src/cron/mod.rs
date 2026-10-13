@@ -1,8 +1,8 @@
-//! Scheduled-job runtime: cron/human-delay parsing, the job + run store, the
-//! polling scheduler, and delivery of job output into the agent / channel
-//! pipelines. Shell jobs sandbox through `security::SecurityPolicy`; agent
-//! jobs build an `Agent` directly; flow jobs hand off to
-//! `flows::bus::FlowTriggerSubscriber` via `DomainEvent::FlowScheduleTick`.
+//! Scheduled-job host: the job + run store, the loop that drives the
+//! `tinyflows-schedule` runtime, and delivery of job output into the agent /
+//! channel pipelines. Shell jobs sandbox through `security::SecurityPolicy`;
+//! agent jobs build an `Agent` directly; flow jobs fire the flow's schedule
+//! trigger through the runtime's `TriggerSink`.
 //! See `README.md` for the full module map.
 
 // Host-condition policy (battery / AC / CPU) that throttles background LLM
@@ -18,8 +18,6 @@ pub mod job_builder;
 pub mod limits;
 pub mod ops;
 pub mod origin;
-/// Per-job run policy (retry budget, single-flight) kept beside the job store.
-pub mod policy;
 mod schemas;
 pub mod seed;
 pub(crate) mod store;
@@ -32,7 +30,7 @@ pub mod scheduler;
 pub use ops as rpc;
 #[cfg(test)]
 pub use ops::update_cron_job;
-pub use ops::{add_once, add_once_at, parse_human_delay, pause_job, resume_job};
+pub use ops::{add_once, add_once_at, pause_job, resume_job};
 // Pure scheduling logic (schedule model, next-run computation) lives in
 // `tinyflows-schedule`; the host keeps the scheduler runtime, store, config
 // and RPC, and re-exports the upstream names so `cron::Schedule` etc. hold.
@@ -60,4 +58,4 @@ pub use tinyflows_schedule::types::{
     ActiveHours, CronJob, CronJobPatch, CronRun, DeliveryConfig, DeliveryStatus, JobOrigin,
     JobType, Schedule, SessionTarget,
 };
-pub use tinyflows_sqlite::schedule::AgentJobSpec;
+pub use tinyflows_schedule::{AgentJobSpec, JobPolicy};

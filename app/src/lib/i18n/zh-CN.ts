@@ -4195,6 +4195,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': '就绪',
   'computer.status.state.failed': '失败',
   'computer.status.state.unsupported': '此设备不支持',
+  'computer.status.state.disabled': '已在配置中关闭',
   'desktop.permission.accessibility': '辅助功能',
   'desktop.permission.screen_recording': '屏幕录制',
   'channels.status.configuring': '配置中',

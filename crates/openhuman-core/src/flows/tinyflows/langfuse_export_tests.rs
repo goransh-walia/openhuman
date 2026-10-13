@@ -230,7 +230,9 @@ async fn export_skips_api_key_credentials() {
     );
 }
 
-/// The re-typing hop is a serde round-trip between two independently
+/// The re-typing mapper itself lives (and is tested) in
+/// `tinyflows::observe`; this pins it against `tinyagents`' exporter type,
+/// which only the host sees. The hop is a serde round-trip between two independently
 /// declared types, so nothing but a test notices when one of them grows,
 /// renames, or re-tags a field: `to_exporter_observations` would start
 /// silently dropping observations and the trace would quietly lose spans.
@@ -240,7 +242,7 @@ async fn export_skips_api_key_credentials() {
 fn re_typing_preserves_every_field() {
     let thread_id = "flow:flow-1:uuid-1";
     let engine = sample_observations(thread_id);
-    let converted = to_exporter_observations(&engine);
+    let converted: Vec<GraphObservation> = to_exporter_observations(&engine);
 
     assert_eq!(
         converted.len(),

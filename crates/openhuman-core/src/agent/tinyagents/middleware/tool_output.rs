@@ -208,7 +208,7 @@ pub(crate) struct ToolOutputMiddleware {
     /// Calls that only print files the agent can read again (`cat`, `sed -n`,
     /// `file_read`, ...), keyed by call id; the same `before_tool` →
     /// `after_tool` seam. Their results skip the LLM summary. See
-    /// [`super::tool_output_file_read`].
+    /// `tinytools_std::filesystem::is_read_only_call`.
     pub(crate) file_reads: Mutex<std::collections::HashSet<String>>,
 }
 
@@ -303,7 +303,7 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext> for Too
                 reads.insert(call.id.clone(), read);
             }
         }
-        if super::tool_output_file_read::is_file_read_call(&call.name, &call.arguments) {
+        if tinytools_std::filesystem::is_read_only_call(&call.name, &call.arguments) {
             tracing::debug!(
                 tool = %call.name,
                 call_id = %call.id,
@@ -494,7 +494,7 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext> for Too
         //      compaction. Past the budget it never gets an LLM summary (a
         //      paraphrase of code it is about to edit, which it would only
         //      fetch back): TinyJuice's deterministic handle and preview, then
-        //      step 3's bound, apply. See [`super::tool_output_file_read`].
+        //      step 3's bound, apply. See `tinytools_std::filesystem::is_read_only_call`.
         let verbatim_file_read = file_read && (budget_bytes == 0 || content.len() <= budget_bytes);
         if file_read {
             tracing::info!(

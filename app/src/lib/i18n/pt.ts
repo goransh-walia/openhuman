@@ -4528,6 +4528,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'Pronto',
   'computer.status.state.failed': 'Falhou',
   'computer.status.state.unsupported': 'Não compatível com este dispositivo',
+  'computer.status.state.disabled': 'Desativado na configuração',
   'desktop.permission.accessibility': 'Acessibilidade',
   'desktop.permission.screen_recording': 'Gravação de tela',
   'channels.status.configuring': 'Configurando',

@@ -43,7 +43,6 @@ mod stop_latch;
 mod tool_exposure;
 mod tool_outcome_capture;
 mod tool_output;
-mod tool_output_file_read;
 mod tool_policy;
 mod turn_context;
 mod unmet_deliverable;
@@ -62,6 +61,8 @@ pub(crate) use research_budget::ResearchBudgetMiddleware;
 pub(crate) use shell_turn_budget::install_time_notes;
 pub(crate) use tool_exposure::OpenHumanToolExposureShadowMiddleware;
 pub(crate) use tool_outcome_capture::ToolOutcomeCaptureMiddleware;
+#[cfg(test)]
+pub(crate) use tool_output::ToolOutputMiddleware;
 pub(crate) use tool_policy::ToolPolicyMiddleware;
 pub(crate) use turn_context::{
     render_unanswered_steps, TranscriptSnapshot, TranscriptSnapshotSink, TurnContextMiddleware,

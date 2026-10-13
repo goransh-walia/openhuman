@@ -43,7 +43,8 @@ async fn roster_status_labels_are_literal() {
             super::run_queue(),
             super::dummy_abort(),
             rx,
-        );
+        )
+        .expect("fixture registration admitted");
         senders.push((id, tx));
     }
     for (id, tx) in &senders {
@@ -171,12 +172,13 @@ async fn spawn_ledger_record_has_literal_persisted_shape() {
         super::run_queue(),
         super::dummy_abort(),
         rx,
-    );
-    let text = std::fs::read_to_string(ws.path().join(".openhuman/orchestration_tasks.jsonl"))
-        .expect("ledger file at the product path");
-    let first: serde_json::Value =
-        serde_json::from_str(text.lines().next().expect("a record line")).unwrap();
-    let rendered = first.to_string();
+    )
+    .expect("fixture registration admitted");
+    let record = super::task_ledger::list_task_records(ws.path())
+        .into_iter()
+        .next()
+        .expect("a ledger record in the storage backend");
+    let rendered = serde_json::to_value(&record).unwrap().to_string();
     for needle in [
         r#""parentSession":"wire-shape-parent""#,
         r#""rootSession":"rootrun""#,

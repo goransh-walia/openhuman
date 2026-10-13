@@ -49,7 +49,8 @@ use crate::memory::MemoryError;
 use crate::security::approval::{
     redact_args, summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome,
 };
-use crate::security::{CommandClass, SecurityPolicy};
+use crate::security::SecurityPolicy;
+use tinybox_bus::CommandClass;
 use tinymemory_api::wrap_untrusted_for_agent;
 use tinymemory_api::{Hit, LearningKind, MemoryMeta, MetaFilter, SourceKind};
 
@@ -355,7 +356,7 @@ impl MemoryProvider for OpenHumanMemory {
         // up front rather than spend that approval round-trip on a write
         // that was always going to be rejected (review fix — see #5227).
         let content = value_to_content(&value);
-        if tinymemory_integrations::safety::has_likely_secret(&content) {
+        if tinyredact::has_likely_secret(&content) {
             tracing::warn!(
                 target: "flows",
                 key_chars = key.chars().count(),

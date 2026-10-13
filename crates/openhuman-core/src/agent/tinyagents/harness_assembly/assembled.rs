@@ -20,7 +20,7 @@ pub(in crate::agent::tinyagents) struct AssembledTurnHarness {
     /// reads it when recording usage to preserve charged-USD precedence (#4467).
     pub(in crate::agent::tinyagents) provider_usage_carry: ProviderUsageCarry,
     /// Recovers the original (downcastable) provider error on run failure.
-    pub(in crate::agent::tinyagents) error_slot: crate::agent::tinyagents::model::ModelErrorSlot,
+    pub(in crate::agent::tinyagents) error_slot: tinyinference_llm::model::ModelErrorSlot,
     /// Root-cause summary recorded by the repeated-tool-failure breaker.
     pub(in crate::agent::tinyagents) halt_summary: HaltSummarySlot,
     /// Per-call tool success/content capture for honest `ToolCallRecord`s.

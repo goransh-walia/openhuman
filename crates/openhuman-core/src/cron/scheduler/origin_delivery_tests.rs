@@ -22,6 +22,8 @@ fn config(tmp: &tempfile::TempDir) -> Config {
 
 fn job(origin: Option<JobOrigin>) -> CronJob {
     CronJob {
+        claim_generation: 0,
+        policy: Default::default(),
         id: "job-1".into(),
         expression: "*/5 * * * *".into(),
         schedule: Schedule::Every { every_ms: 300_000 },

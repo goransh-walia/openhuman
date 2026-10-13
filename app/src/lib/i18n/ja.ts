@@ -4771,6 +4771,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': '準備完了',
   'computer.status.state.failed': '失敗',
   'computer.status.state.unsupported': 'このデバイスではサポートされていません',
+  'computer.status.state.disabled': '設定でオフになっています',
   'desktop.permission.accessibility': 'アクセシビリティ',
   'desktop.permission.screen_recording': '画面収録',
   'channels.status.configuring': '設定中',

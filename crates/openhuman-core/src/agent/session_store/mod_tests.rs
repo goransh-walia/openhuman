@@ -143,3 +143,90 @@ async fn two_profiles_default_agents_keep_separate_session_keys_and_stores() {
         )
     );
 }
+
+#[test]
+fn the_per_workspace_store_recovers_nothing_at_install_time() {
+    // A SaaS core installs it before any profile exists, so `recover` must not
+    // resolve (and so create) a workspace database.
+    assert!(WorkspaceSessionStores.recover().is_ok());
+}
+
+#[test]
+fn each_workspace_keeps_its_sessions_in_its_own_database() {
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let in_first = provider_for_workspace(first.path()).for_agent("agent");
+    let in_second = provider_for_workspace(second.path()).for_agent("agent");
+
+    in_first
+        .turn_states
+        .put(&tinyagents_session::turn_state::TurnState::started(
+            "thread",
+            "request",
+            4,
+            "2026-01-01T00:00:00Z",
+        ))
+        .unwrap();
+
+    assert!(in_first.turn_states.get("thread").unwrap().is_some());
+    assert!(
+        in_second.turn_states.get("thread").unwrap().is_none(),
+        "the other workspace never saw the turn"
+    );
+    assert!(first.path().join("storage").join("storage.db").is_file());
+}
+
+fn started(thread: &str, request: &str) -> tinyagents_session::turn_state::TurnState {
+    tinyagents_session::turn_state::TurnState::started(thread, request, 4, "2026-01-01T00:00:00Z")
+}
+
+#[tokio::test]
+async fn a_threads_turn_state_survives_a_restart_of_the_workspace_store() {
+    let dir = tempfile::tempdir().unwrap();
+    turn_states_for(dir.path())
+        .put(&started("thread-1", "req-1"))
+        .unwrap();
+
+    // A restart: every handle and cached default backend is dropped.
+    release_workspace_defaults();
+
+    let resumed = turn_states_for(dir.path())
+        .get("thread-1")
+        .unwrap()
+        .expect("the snapshot is read back from the backend");
+    assert_eq!(resumed.request_id, "req-1");
+    // The sweep a cold boot runs settles it as interrupted, and it persists.
+    let swept = default_turn_states_for(dir.path())
+        .mark_all_interrupted("2026-01-01T00:01:00Z")
+        .unwrap();
+    assert_eq!(swept, 1);
+    assert_eq!(
+        turn_states_for(dir.path())
+            .get("thread-1")
+            .unwrap()
+            .unwrap()
+            .lifecycle,
+        tinyagents_session::turn_state::TurnLifecycle::Interrupted
+    );
+}
+
+#[tokio::test]
+async fn a_stashed_attachment_survives_a_restart_of_the_workspace_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let data_uri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let stash = attachment_stash_for(dir.path()).expect("a stash for the default tenant");
+    stash.write("att-1", data_uri).await.unwrap();
+
+    release_workspace_defaults();
+
+    let resumed = attachment_stash_for(dir.path()).expect("a stash after the restart");
+    assert_eq!(
+        resumed.read_data_uri("att-1").await.unwrap().as_deref(),
+        Some(data_uri)
+    );
+    assert!(resumed
+        .read_data_uri("never-stashed")
+        .await
+        .unwrap()
+        .is_none());
+}

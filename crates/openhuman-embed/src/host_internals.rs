@@ -147,8 +147,8 @@ pub mod agent {
     pub mod tinyagents {
         pub mod discovery {
             pub use openhuman_core::agent::tinyagents::discovery::{
-                embedding_provider_is_usable, embedding_tool_ranker, install_tool_ranker,
-                installed_tool_ranker,
+                embedding_provider_is_usable, embedding_tool_ranker, embedding_tool_ranker_in,
+                install_tool_ranker, installed_tool_ranker,
             };
         }
         // rpc: Socket.IO run-mode toggles.
@@ -167,7 +167,8 @@ pub mod agent {
     }
     pub mod session_store {
         pub use openhuman_core::agent::session_store::{
-            context_workspace_dir, install, installed, restore,
+            context_workspace_dir, install, installed, restore, ReboundSessionStores,
+            WorkspaceSessionStores,
         };
     }
 }
@@ -292,8 +293,8 @@ pub mod platform {
 
 pub mod storage {
     pub use openhuman_core::storage::{
-        block_on, block_on_anyhow, clear, configured_url, driver_is_shared, install, installed,
-        open, url_from, StorageBackend, STORAGE_URL_VAR,
+        block_on, block_on_anyhow, clear, configured_url, driver_is_shared, install,
+        install_for_url, installed, open, url_from, StorageBackend, STORAGE_URL_VAR,
     };
 }
 

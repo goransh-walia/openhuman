@@ -1,115 +1,13 @@
-//! Persisting a finished run: delivery, run history, one-shot termination,
-//! rescheduling, and the high-frequency agent-job warning.
+//! The high-frequency agent-job warning. Persisting a finished run (history,
+//! one-shot termination, rescheduling) is the schedule runtime's
+//! (`tinyflows_schedule::runtime`).
 
-use super::delivery::deliver_run;
-use crate::config::Config;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use {
-    crate::cron::record_last_run, crate::cron::record_run_with_delivery, crate::cron::remove_job,
-    crate::cron::reschedule_after_run, crate::cron::update_job,
     tinyflows_schedule::schedule::runs_closer_than, tinyflows_schedule::schedule::TooFrequent,
     tinyflows_schedule::schedule::MIN_AGENT_JOB_INTERVAL, tinyflows_schedule::types::CronJob,
-    tinyflows_schedule::types::CronJobPatch, tinyflows_schedule::types::DeliveryStatus,
-    tinyflows_schedule::types::JobType, tinyflows_schedule::types::Schedule,
+    tinyflows_schedule::types::JobType,
 };
-
-/// [`persist_job_result_for_run`] under a fresh run id.
-#[cfg(test)]
-pub(super) async fn persist_job_result(
-    config: &Config,
-    job: &CronJob,
-    success: bool,
-    output: &str,
-    started_at: DateTime<Utc>,
-    finished_at: DateTime<Utc>,
-) -> bool {
-    let run_id = uuid::Uuid::new_v4().to_string();
-    persist_job_result_for_run(
-        config,
-        job,
-        &run_id,
-        success,
-        output,
-        started_at,
-        finished_at,
-    )
-    .await
-}
-
-pub(super) async fn persist_job_result_for_run(
-    config: &Config,
-    job: &CronJob,
-    run_id: &str,
-    mut success: bool,
-    output: &str,
-    started_at: DateTime<Utc>,
-    finished_at: DateTime<Utc>,
-) -> bool {
-    let duration_ms = (finished_at - started_at).num_milliseconds();
-
-    let delivery_status = match deliver_run(config, job, run_id, output, success).await {
-        Ok(status) => status,
-        Err(e) => {
-            if job.delivery.best_effort {
-                tracing::warn!("Cron delivery failed (best_effort): {e}");
-            } else {
-                success = false;
-                tracing::warn!("Cron delivery failed: {e}");
-            }
-            DeliveryStatus::Failed
-        }
-    };
-
-    let _ = record_run_with_delivery(
-        config,
-        &job.id,
-        started_at,
-        finished_at,
-        if success { "ok" } else { "error" },
-        Some(output),
-        duration_ms,
-        Some(delivery_status),
-    );
-
-    // A fixed-instant (`Schedule::At`) job is inherently one-shot: its `at` is in
-    // the past the moment it runs, so `reschedule_after_run` (which writes
-    // next_run = at for an `At` schedule) leaves next_run <= now and the job is
-    // re-selected by `due_jobs` on every poll, re-executing forever. Terminate
-    // every `At` job after a single run, regardless of `delete_after_run`. Only an
-    // auto-delete job that succeeded is removed; everything else is kept disabled
-    // so its run history stays inspectable. (Inside this `At` branch
-    // `is_one_shot_auto_delete` reduces to `job.delete_after_run`.)
-    if matches!(job.schedule, Schedule::At { .. }) {
-        if is_one_shot_auto_delete(job) && success {
-            if let Err(e) = remove_job(config, &job.id) {
-                tracing::warn!("Failed to remove one-shot cron job after success: {e}");
-            }
-        } else {
-            let _ = record_last_run(config, &job.id, finished_at, success, output);
-            if let Err(e) = update_job(
-                config,
-                &job.id,
-                CronJobPatch {
-                    enabled: Some(false),
-                    ..CronJobPatch::default()
-                },
-            ) {
-                tracing::warn!("Failed to disable one-shot cron job: {e}");
-            }
-        }
-        return success;
-    }
-
-    if let Err(e) = reschedule_after_run(config, job, success, output) {
-        tracing::warn!("Failed to persist scheduler run result: {e}");
-    }
-
-    success
-}
-
-pub(super) fn is_one_shot_auto_delete(job: &CronJob) -> bool {
-    job.delete_after_run && matches!(job.schedule, Schedule::At { .. })
-}
 
 /// Why an agent job counts as scheduled more often than every five minutes,
 /// if it does. `None` for shell and flow jobs, for one-shot `At` schedules,

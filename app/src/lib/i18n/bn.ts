@@ -4458,6 +4458,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'প্রস্তুত',
   'computer.status.state.failed': 'ব্যর্থ',
   'computer.status.state.unsupported': 'এই ডিভাইসে সমর্থিত নয়',
+  'computer.status.state.disabled': 'কনফিগারেশনে বন্ধ করা আছে',
   'desktop.permission.accessibility': 'অ্যাক্সেসিবিলিটি',
   'desktop.permission.screen_recording': 'স্ক্রিন রেকর্ডিং',
   'channels.status.configuring': 'কনফিগার হচ্ছে',

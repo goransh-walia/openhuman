@@ -36,7 +36,7 @@ use helpers::select_acknowledgment_reaction;
 use routing::{build_visible_tool_set, AgentScoping};
 
 #[cfg(any(test, debug_assertions))]
-use crate::channels::traits;
+use tinychannels_bus as traits;
 
 #[cfg(any(test, debug_assertions))]
 #[path = "mod_test_support_tests.rs"]

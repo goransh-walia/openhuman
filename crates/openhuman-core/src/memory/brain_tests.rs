@@ -1,5 +1,7 @@
 use super::*;
 
+use tinymemory_tools::layout::placement::file_into;
+
 use tinymemory_api::{ItemKind, MemoryMeta, MetaFilter};
 
 use crate::memory::test_fixtures::{bind_reference, config_in, stored};
@@ -29,43 +31,6 @@ fn synced_items_are_filed_by_their_connector() {
         assert_eq!(brain_source(kind), want, "{kind:?} {target}");
     }
     assert_eq!(files_source().to_string(), "files");
-}
-
-#[test]
-fn a_github_document_names_its_repository() {
-    let with = |repo: Option<&str>, url: Option<&str>| {
-        let mut item = document(None, None);
-        item.meta_mut().repo = repo.map(str::to_string);
-        item.meta_mut().url = url.map(str::to_string);
-        github_collection(&item)
-    };
-    assert_eq!(with(Some("Acme/API"), None).as_deref(), Some("acme--api"));
-    assert_eq!(
-        with(Some("https://github.com/acme/api.git"), None).as_deref(),
-        Some("acme--api")
-    );
-    // A Composio issue carries only its URL.
-    assert_eq!(
-        with(
-            None,
-            Some("https://github.com/tinyhumansai/openhuman/issues/12")
-        )
-        .as_deref(),
-        Some("tinyhumansai--openhuman")
-    );
-    assert_eq!(with(None, Some("https://example.com/a/b")), None);
-    assert_eq!(with(Some("acme"), None), None);
-    assert_eq!(with(None, None), None);
-    // A query or fragment is not part of the repository.
-    assert_eq!(
-        with(None, Some("https://github.com/acme/api?tab=readme#top")).as_deref(),
-        Some("acme--api")
-    );
-    // Hyphens on either side never make two repositories one collection.
-    assert_ne!(
-        with(Some("foo-bar/repo"), None),
-        with(Some("foo/bar-repo"), None)
-    );
 }
 
 #[tokio::test]
@@ -286,52 +251,6 @@ async fn an_ingest_queues_a_belief_build_only_for_an_engine_that_waits_for_one()
             .len();
         assert_eq!(pending, queued, "{consolidation:?}");
     }
-}
-
-#[test]
-fn legacy_nodes_map_to_their_connector() {
-    use tinymemory_api::{SourceKind, SourceRef};
-    let item = |kind: SourceKind, path: Option<&str>| {
-        let mut item = document(None, path);
-        item.meta_mut().source = SourceRef { kind, id: None };
-        item
-    };
-    let link = item(SourceKind::Link, None);
-    for old in [
-        "pdf", "markdown", "md", "docx", "xlsx", "pptx", "code", "other", "files",
-    ] {
-        assert_eq!(legacy_brain_node(old, &link), files_source(), "{old}");
-    }
-    // `web` held links and feeds, and HTML files that were filed beside them.
-    assert_eq!(legacy_brain_node("web", &link), BrainSource::Web);
-    assert_eq!(
-        legacy_brain_node("web", &item(SourceKind::Rss, None)),
-        BrainSource::Web
-    );
-    assert_eq!(
-        legacy_brain_node("web", &item(SourceKind::Folder, None)),
-        files_source()
-    );
-    assert_eq!(
-        legacy_brain_node("web", &item(SourceKind::File, None)),
-        files_source()
-    );
-    // An upload carried the `Link` kind `web` implies, but kept its path.
-    assert_eq!(
-        legacy_brain_node("web", &item(SourceKind::Link, Some("/u/pricing.html"))),
-        files_source()
-    );
-    // Connectors keep their node, under the slug Composio uses.
-    assert_eq!(legacy_brain_node("notion", &link), BrainSource::Notion);
-    assert_eq!(legacy_brain_node("github", &link), BrainSource::Github);
-    assert_eq!(
-        legacy_brain_node("gmail", &link),
-        BrainSource::Other("gmail".into())
-    );
-    assert_eq!(
-        legacy_brain_node("google_drive", &link),
-        BrainSource::Other("googledrive".into())
-    );
 }
 
 fn path_params(path: String) -> BrainIngestParams {

@@ -103,7 +103,8 @@ async fn tool_call_completed_forwards_real_output_on_tool_result() {
         config_path: tmp.path().join("config.toml"),
         ..Default::default()
     };
-    let store = TurnStateStore::new(tmp.path().join("turn_states"));
+    let store = std::sync::Arc::new(tinyagents_session::port::InMemoryTurnStates::default())
+        as std::sync::Arc<dyn tinyagents_session::port::TurnStates>;
     let (tx, rx) = tokio::sync::mpsc::channel(16);
     let mut bus = super::super::event_bus::subscribe_web_channel_events();
     spawn_progress_bridge(
@@ -213,7 +214,8 @@ fn spawn_test_bridge(
 ) -> tokio::sync::mpsc::Sender<AgentProgress> {
     let (tx, rx) = tokio::sync::mpsc::channel::<AgentProgress>(16);
     let dir = tempfile::tempdir().expect("tempdir");
-    let store = TurnStateStore::new(dir.path().to_path_buf());
+    let store = std::sync::Arc::new(tinyagents_session::port::InMemoryTurnStates::default())
+        as std::sync::Arc<dyn tinyagents_session::port::TurnStates>;
     // Keep the tempdir alive for the bridge task's lifetime by leaking it —
     // a test-only allocation; the OS reclaims it on process exit.
     std::mem::forget(dir);
@@ -408,7 +410,8 @@ fn drain_test_config(tmp: &tempfile::TempDir) -> Config {
 #[tokio::test]
 async fn wait_drained_returns_after_queued_events_are_forwarded() {
     let tmp = tempfile::TempDir::new().unwrap();
-    let store = TurnStateStore::new(tmp.path().join("turn_states"));
+    let store = std::sync::Arc::new(tinyagents_session::port::InMemoryTurnStates::default())
+        as std::sync::Arc<dyn tinyagents_session::port::TurnStates>;
     let (tx, rx) = tokio::sync::mpsc::channel(16);
     let mut bus = super::super::event_bus::subscribe_web_channel_events();
     let handle = spawn_progress_bridge(
@@ -465,7 +468,8 @@ async fn wait_drained_returns_after_queued_events_are_forwarded() {
 #[tokio::test]
 async fn wait_drained_is_bounded_when_the_turn_never_completes() {
     let tmp = tempfile::TempDir::new().unwrap();
-    let store = TurnStateStore::new(tmp.path().join("turn_states"));
+    let store = std::sync::Arc::new(tinyagents_session::port::InMemoryTurnStates::default())
+        as std::sync::Arc<dyn tinyagents_session::port::TurnStates>;
     let (tx, rx) = tokio::sync::mpsc::channel::<AgentProgress>(16);
     let handle = spawn_progress_bridge(
         rx,
@@ -488,7 +492,8 @@ async fn wait_drained_is_bounded_when_the_turn_never_completes() {
 #[tokio::test]
 async fn short_narration_is_flushed_on_the_rounds_first_tool_call() {
     let tmp = tempfile::TempDir::new().unwrap();
-    let store = TurnStateStore::new(tmp.path().join("turn_states"));
+    let store = std::sync::Arc::new(tinyagents_session::port::InMemoryTurnStates::default())
+        as std::sync::Arc<dyn tinyagents_session::port::TurnStates>;
     let (tx, rx) = tokio::sync::mpsc::channel(16);
     let mut bus = super::super::event_bus::subscribe_web_channel_events();
     let _handle = spawn_progress_bridge(
@@ -680,7 +685,8 @@ async fn hold_text_stream_suppresses_text_delta_but_keeps_interim() {
         config_path: tmp.path().join("config.toml"),
         ..Default::default()
     };
-    let store = TurnStateStore::new(tmp.path().join("turn_states"));
+    let store = std::sync::Arc::new(tinyagents_session::port::InMemoryTurnStates::default())
+        as std::sync::Arc<dyn tinyagents_session::port::TurnStates>;
     let (tx, rx) = tokio::sync::mpsc::channel(16);
     let mut bus = super::super::event_bus::subscribe_web_channel_events();
     spawn_progress_bridge(

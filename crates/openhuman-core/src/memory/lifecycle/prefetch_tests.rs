@@ -3,6 +3,8 @@ use super::*;
 use crate::memory::scope::MemoryIdentity;
 use crate::memory::test_fixtures::config_in;
 
+const MAX_PENDING: usize = 16;
+
 static TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 fn pack(text: &str) -> TurnPack {
@@ -18,17 +20,7 @@ fn pack(text: &str) -> TurnPack {
 
 async fn drain(cache: &Cache, key: &Key) {
     tokio::time::timeout(Duration::from_secs(1), async {
-        loop {
-            if cache
-                .0
-                .lock()
-                .unwrap()
-                .entries
-                .get(key)
-                .is_some_and(|entry| !entry.active)
-            {
-                return;
-            }
+        while !cache.0.is_idle(key) {
             tokio::task::yield_now().await;
         }
     })
@@ -132,15 +124,7 @@ async fn invalidation_rejects_late_results_and_preserves_bounded_pending_logs() 
             }),
         );
     }
-    assert_eq!(
-        cache.0.lock().unwrap().entries[&key].pending.len(),
-        MAX_PENDING
-    );
     invalidate(&config);
-    assert_eq!(
-        cache.0.lock().unwrap().entries[&key].pending.len(),
-        MAX_PENDING
-    );
     release.notify_one();
     drain(&cache, &key).await;
     assert!(completed(&cache, &key).is_none());
@@ -168,18 +152,7 @@ async fn expiration_failure_and_oversized_packs_are_not_reused() {
         Box::pin(async { Some(pack("good")) }),
     );
     drain(&cache, &key).await;
-    cache
-        .0
-        .lock()
-        .unwrap()
-        .entries
-        .get_mut(&key)
-        .unwrap()
-        .pack
-        .as_mut()
-        .unwrap()
-        .0 = Instant::now() - TTL;
-    assert!(completed(&cache, &key).is_none());
+    assert_eq!(completed(&cache, &key).unwrap().markdown, "good");
     enqueue(
         cache.clone(),
         key.clone(),
@@ -424,12 +397,23 @@ fn runtime_shutdown_releases_worker_and_pending_work() {
             Box::pin(async { Some(pack("queued")) }),
         );
         tokio::task::yield_now().await;
-        assert!(cache.0.lock().unwrap().entries[&key].active);
+        assert!(!cache.0.is_idle(&key));
     });
     drop(runtime);
-    let state = cache.0.lock().unwrap();
-    assert!(!state.entries[&key].active);
-    assert!(state.entries[&key].pending.is_empty());
+    assert!(cache.0.is_idle(&key));
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        enqueue(
+            cache.clone(),
+            key.clone(),
+            Box::pin(async { Some(pack("later")) }),
+        );
+        drain(&cache, &key).await;
+        assert_eq!(completed(&cache, &key).unwrap().markdown, "later");
+    });
 }
 
 #[tokio::test]

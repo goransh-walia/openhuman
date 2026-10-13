@@ -16,8 +16,8 @@ use crate::agent::harness::definition::AgentDefinitionRegistry;
 use crate::agent::hooks::PostTurnHook;
 use crate::config::Config;
 use crate::security::policy::SecurityPolicy;
-use crate::tools::agent_policy::ToolPolicySession;
 use tinytools::Tool;
+use tinytools::ToolPolicySession;
 
 use super::{
     OpenHumanBudgetGate, OpenHumanContextComposer, OpenHumanDefinitionRegistry,

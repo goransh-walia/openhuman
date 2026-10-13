@@ -1,7 +1,7 @@
 use super::*;
 use std::collections::HashMap;
 
-use crate::tools::agent_policy::ToolPolicyEngine;
+use tinytools::ToolPolicyEngine;
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
 /// `skill_registry_search` with a chosen permission level.

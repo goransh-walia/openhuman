@@ -195,13 +195,22 @@ async fn start_chat_inner(
             .map_err(|error| {
                 StartChatError::Other(format!("upload configuration unavailable: {error}"))
             })?;
+        // Stage where the turn will read: the thread's working folder when
+        // one is bound (`run_task` applies the same folder), else action_dir.
+        let workspace = crate::agent::attachments::thread_action_dir(
+            &config,
+            &config.workspace_dir,
+            Some(&thread_id),
+        )
+        .await
+        .map_err(|error| StartChatError::Other(format!("upload could not be saved: {error}")))?;
         crate::agent::attachments::stage(
             &message,
             &thread_id,
             &config,
             &crate::agent::attachments::AttachmentAccessScope {
                 external_channel: false,
-                workspace: Some(config.action_dir.clone()),
+                workspace: Some(workspace),
             },
         )
         .await

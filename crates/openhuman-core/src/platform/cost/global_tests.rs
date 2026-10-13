@@ -187,6 +187,7 @@ fn rebind_global_moves_recording_to_the_new_workspace() {
     cfg.enabled = true;
 
     rebind_global(cfg.clone(), before_login.path());
+    let first = try_global().expect("rebind installs a tracker");
     record_provider_usage(MODEL_A, &make_usage(10, 5, 0.1));
 
     rebind_global(cfg.clone(), after_login.path());
@@ -194,13 +195,9 @@ fn rebind_global_moves_recording_to_the_new_workspace() {
     assert_eq!(bound.workspace_dir(), after_login.path());
     record_provider_usage(MODEL_B, &make_usage(20, 10, 0.2));
 
-    let ledger = |dir: &TempDir| {
-        std::fs::read_to_string(dir.path().join("state").join("costs.jsonl")).unwrap_or_default()
-    };
-    assert!(ledger(&before_login).contains(MODEL_A));
-    assert!(!ledger(&before_login).contains(MODEL_B));
-    assert!(ledger(&after_login).contains(MODEL_B));
-    assert!(!ledger(&after_login).contains(MODEL_A));
+    // Each workspace keeps its own ledger.
+    assert_eq!(records_for_model(&first, MODEL_A).len(), 1);
+    assert!(records_for_model(&first, MODEL_B).is_empty());
     assert_eq!(records_for_model(&bound, MODEL_B).len(), 1);
     assert!(records_for_model(&bound, MODEL_A).is_empty());
 

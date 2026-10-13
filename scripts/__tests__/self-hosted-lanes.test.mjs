@@ -200,7 +200,7 @@ test("the complete suites run, not subsets", () => {
 
 test("the lane plan retains the shared CI checks", () => {
   const shared = [
-    "cargo fmt --all -- --check",
+    "cargo fmt --manifest-path Cargo.toml --package openhuman --package openhuman-cli --package openhuman-embed --package openhuman-modules-linked --package openhuman-rpc --package openhuman-tinyhumans --package openhuman-tui -- --check",
     "node scripts/ci/check-openhuman-rust-layout.mjs",
     "pnpm agent:runtime-boundary",
     "pnpm rust:ignored-tests",
@@ -244,6 +244,7 @@ test("untouched areas leave only the always-on gates", () => {
     "static:feature-forwarding",
     "static:crate-chain",
     "static:process-statics",
+    "static:module-source",
     "static:module-pins",
     "static:submodule-monotonic",
   ]);
@@ -281,6 +282,7 @@ test("the storage area arms only the storage-drivers lane, with the sqlite and f
         "static:feature-forwarding",
         "static:crate-chain",
         "static:process-statics",
+        "static:module-source",
         "static:module-pins",
         "static:submodule-monotonic",
       ],

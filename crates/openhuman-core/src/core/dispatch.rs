@@ -234,7 +234,12 @@ async fn try_registry_dispatch(
     method: &str,
     params: Value,
 ) -> Option<Result<serde_json::Value, String>> {
-    let schema = crate::core::all::schema_for_rpc_method(method)?;
+    let Some(schema) = crate::core::all::schema_for_rpc_method(method) else {
+        // Hidden because a `[components]` switch is off: say so, rather than
+        // reporting a method that exists as unknown.
+        return crate::core::all::disabled_component_for_method(method)
+            .map(|name| Err(crate::core::runtime::components::component_disabled(name).encode()));
+    };
     let params_obj = match params_to_object(params) {
         Ok(params_obj) => params_obj,
         Err(err) => return Some(Err(err)),

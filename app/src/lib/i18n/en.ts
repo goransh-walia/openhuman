@@ -4699,6 +4699,7 @@ const en: TranslationMap = {
   'computer.status.state.ready': 'Ready',
   'computer.status.state.failed': 'Failed',
   'computer.status.state.unsupported': 'Unsupported on this device',
+  'computer.status.state.disabled': 'Switched off in settings',
   'desktop.permission.accessibility': 'Accessibility',
   'desktop.permission.screen_recording': 'Screen Recording',
   'channels.status.configuring': 'Configuring',

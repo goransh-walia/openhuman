@@ -13,7 +13,8 @@
 //!
 //! # Where an artifact comes from, and where it stays
 //!
-//! Resolution order is cheapest-first: already loaded, a developer's override,
+//! Resolution order is cheapest-first: already loaded, the configured source
+//! (`[modules] source`, per-module overrides; see [`super::source`]),
 //! the module search path, then the release cache. The cache is a directory per
 //! module version under [`install_dir`], filled by the first load — downloaded,
 //! verified against the digest in [`registry`], extracted — and re-verified from
@@ -35,8 +36,8 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use super::types::{ModuleRecord, ModuleState, ModuleStatus};
-use super::{host, registry};
+use super::types::{ModuleRecord, ModuleSource, ModuleState, ModuleStatus};
+use super::{host, registry, source};
 use crate::config::Config;
 use tinybus::module::platform::host_candidates;
 use tinybus::module::resolution::{self, Claim, Resolution, ResolutionState, Waited};
@@ -105,6 +106,9 @@ pub enum LoadError {
     /// The module is still being downloaded, verified, or initialised, and the
     /// caller's bound passed first. Asking again later can succeed.
     StillLoading,
+    /// The module's `[components]` switch is off. Nothing was downloaded,
+    /// mapped or registered. Carries the component name.
+    Disabled(&'static str),
 }
 
 impl LoadError {
@@ -114,6 +118,9 @@ impl LoadError {
         match self {
             Self::Failed(message) => message,
             Self::StillLoading => "the module is still loading; try again shortly".to_string(),
+            Self::Disabled(component) => {
+                format!("COMPONENT_DISABLED:{component}")
+            }
         }
     }
 }
@@ -159,6 +166,10 @@ pub async fn ensure_loaded_within(
     }
     let record =
         registry::find(id).ok_or_else(|| LoadError::Failed(format!("unknown module '{id}'")))?;
+    if let Some(component) = disabled_component(config, id) {
+        log::debug!("[modules] '{id}' refused: component '{component}' is disabled");
+        return Err(LoadError::Disabled(component));
+    }
 
     let receiver = match resolution::global().claim(id) {
         Claim::Done(Resolution::Ready) => return Ok(()),
@@ -183,6 +194,28 @@ pub async fn ensure_loaded_within(
         }
         Waited::StillLoading => Err(LoadError::StillLoading),
     }
+}
+
+/// The disabled `[components]` switch that owns module `id`, if any.
+#[must_use]
+pub fn disabled_component(config: &Config, id: &str) -> Option<&'static str> {
+    let component = registry::component_for(id)?;
+    let set = crate::core::runtime::ComponentSet::from_config(&config.components);
+    (!set.enabled(component)).then_some(component)
+}
+
+/// Library file stems of every module whose component is off, for skipping
+/// their search-path artifacts. Both `name` and `libname` spellings.
+#[must_use]
+pub fn disabled_lib_stems(config: &Config) -> Vec<String> {
+    registry::ALL
+        .iter()
+        .filter(|record| disabled_component(config, record.id).is_some())
+        .flat_map(|record| {
+            let stem = record.source.lib_name.to_string();
+            [format!("lib{stem}"), stem]
+        })
+        .collect()
 }
 
 /// The state of `id` as the resolution table reports it, without touching it.
@@ -224,6 +257,13 @@ async fn start_resolution(
                 Resolution::Failed(reason)
             }
         };
+        // The connector module's curated catalogs are cached in the host; a
+        // module that has just been (re)resolved may serve other tables, so
+        // drop the snapshot before any waiting caller is released. The next
+        // connector call (or the boot warm-up) reads it again.
+        if id == super::connectors::MODULE_ID {
+            crate::integrations::composio::contract::curated::invalidate();
+        }
         resolution::global().complete(id, resolution, sender);
     };
     match host::runtime().await {
@@ -277,11 +317,45 @@ async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), S
         return Ok(());
     }
 
-    // An override points at a developer's own build. Checked before the pinned
-    // release so a module can be iterated on against a live core.
-    if let Some(path) = local_override(config, record.id) {
-        let module_config = module_config(config, record.id);
-        return blocking(move || load_local(runtime, &path, record.id, module_config)).await;
+    // The configured source decides first: a developer's own build is checked
+    // before the pinned release so a module can be iterated on against a live
+    // core. `release` (the default) falls straight through to the chain below.
+    let plan = source::plan(config, record.id);
+    if let Some(reason) = plan.fallback {
+        log::warn!(
+            "[modules] id={} requested={} served=release: {reason}",
+            record.id,
+            plan.requested.as_str()
+        );
+    }
+    log::debug!(
+        "[modules] id={} requested={} served={:?}",
+        record.id,
+        plan.requested.as_str(),
+        plan.served
+    );
+    // `resolve` runs once per id per process, so this is one line per id.
+    if let Some(line) = source::pin_ahead_warning(
+        record.id,
+        plan.served,
+        std::env::var(source::PIN_AHEAD_ENV).ok().as_deref(),
+        cfg!(debug_assertions),
+    ) {
+        log::warn!("{line}");
+    }
+    match plan.served {
+        ModuleSource::LocalFile | ModuleSource::Source => {
+            if let Some(path) = plan.artifact {
+                let module_config = module_config(config, record.id);
+                return blocking(move || load_local(runtime, &path, record.id, module_config))
+                    .await;
+            }
+        }
+        ModuleSource::Linked => {
+            let module_config = module_config(config, record.id);
+            return blocking(move || load_linked(runtime, record.id, module_config)).await;
+        }
+        ModuleSource::Release => {}
     }
 
     // The search path tinybus itself honours, including OPENHUMAN_MODULE_PATH.
@@ -289,10 +363,9 @@ async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), S
     // nothing, and tinybus reports each refusal with a sanitised reason — so the
     // errors are dropped here and only a match on the bus name counts.
     let bus_name = record.bus_name;
+    let skip = disabled_lib_stems(config);
     let found_on_search_path = tokio::task::spawn_blocking(move || {
-        runtime
-            .host()
-            .load_search_paths()
+        super::search_path::load_enabled(runtime.host(), &skip)
             .into_iter()
             .flatten()
             .any(|info| info.manifest.bus_name.as_str() == bus_name)
@@ -361,7 +434,7 @@ where
 
 /// Append the terminal-fault sentence to `error` unless it already has it.
 pub(super) fn mark_terminal(error: String) -> String {
-    let marker = crate::tools::status::MODULE_FAULT_MARKER;
+    let marker = tinytools::status::MODULE_FAULT_MARKER;
     if error.contains(marker) {
         return error;
     }
@@ -423,6 +496,39 @@ pub(super) fn load_local(
     }
 }
 
+/// Attach the module linked into this executable for `id`.
+///
+/// Runs the same descriptor, manifest, dependency and init checks as a
+/// released module, with the same private configuration; the executable's
+/// digest is the attestation. Errors carry static text only.
+pub(super) fn load_linked(
+    runtime: &host::ModuleRuntime,
+    id: &str,
+    module_config: serde_json::Value,
+) -> Result<(), String> {
+    let Some(factory) = super::linked::factory_for(id) else {
+        return Err(format!(
+            "module '{id}' is unavailable: no linked factory is registered in this binary"
+        ));
+    };
+    let module = factory().map_err(|err| {
+        log::warn!("[modules] linked factory for '{id}' failed: {err}");
+        format!("module '{id}' is unavailable: its linked factory could not be started")
+    })?;
+    match runtime
+        .host()
+        .attach_linked_with_config(module, module_config)
+    {
+        Ok(_) => {
+            log::info!("[modules] loaded '{id}' from the linked executable");
+            Ok(())
+        }
+        Err(err) => Err(format!(
+            "module '{id}' could not be attached from the linked executable: {err}"
+        )),
+    }
+}
+
 /// Configuration crossing into a first-party compiled module.
 ///
 /// Credentials are intentionally absent. TinyMemory calls back into the host
@@ -451,48 +557,16 @@ fn module_config(config: &Config, id: &str) -> serde_json::Value {
                 error = %error,
                 "[connectors] no route configured; loading with the capability surface only"
             );
-            serde_json::json!({})
+            serde_json::json!({ "offered_toolkits": super::connectors::offered_toolkits(config) })
         });
     }
     serde_json::json!({})
 }
 
-/// A configured local artifact for `id`, if one is set.
-///
-/// The test fixture uses the same explicit-override path as a developer build,
-/// so TinyMemory is initialized with the host's real module configuration.
-/// Loading it through `OPENHUMAN_MODULE_PATH` would initialize it during boot
-/// before that configuration and its host callbacks are installed.
-fn local_override(config: &Config, id: &str) -> Option<PathBuf> {
-    let configured = config
-        .modules
-        .overrides
-        .iter()
-        .find_map(|entry| (entry.id == id).then(|| PathBuf::from(entry.path.clone())));
-
-    configured
-        .or_else(|| {
-            (id == super::search::MODULE_ID)
-                .then(|| std::env::var_os("TINYSEARCH_TEST_MODULE"))
-                .flatten()
-                .map(PathBuf::from)
-        })
-        .or_else(|| {
-            // Integration tests compile the core as a dependency, without
-            // cfg(test), so fixture routing belongs in this shared loader.
-            (id == "tinyjuice")
-                .then(|| std::env::var_os("TINYJUICE_TEST_MODULE"))
-                .flatten()
-                .map(PathBuf::from)
-        })
-        .or_else(|| {
-            // TinyConnectors exposes its contract to the host, but has no
-            // host-side module namespace: it is resolved by its registry ID.
-            (id == "tinyconnectors")
-                .then(|| std::env::var_os("TINYCONNECTORS_TEST_MODULE"))
-                .flatten()
-                .map(PathBuf::from)
-        })
+/// [`module_config`] for a test in a sibling module.
+#[cfg(test)]
+pub(super) fn module_config_for_test(config: &Config, id: &str) -> serde_json::Value {
+    module_config(config, id)
 }
 
 /// Where downloaded artifacts are kept.
@@ -528,6 +602,14 @@ fn status_of(config: &Config, record: &ModuleRecord) -> ModuleStatus {
     // may remain loaded in this process after a prior request, but callers
     // whose configuration disables modules must still be told it is unusable.
     let (state, detail) = match () {
+        _ if disabled_component(config, record.id).is_some() => (
+            ModuleState::Disabled,
+            Some(format!(
+                "COMPONENT_DISABLED:{} (set [components] {} = true to enable)",
+                disabled_component(config, record.id).unwrap_or_default(),
+                disabled_component(config, record.id).unwrap_or_default()
+            )),
+        ),
         _ if !config.modules.enabled => (
             ModuleState::Unsupported,
             Some("modules are disabled in configuration".to_string()),
@@ -551,12 +633,17 @@ fn status_of(config: &Config, record: &ModuleRecord) -> ModuleStatus {
             }
         },
     };
+    let plan = source::plan(config, record.id);
+    let source =
+        (!matches!(state, ModuleState::Unsupported | ModuleState::Disabled)).then_some(plan.served);
+    let detail = detail.or_else(|| plan.fallback.map(str::to_string));
     ModuleStatus {
         id: record.id.to_string(),
         description: record.description.to_string(),
         version: record.version.to_string(),
         bus_name: record.bus_name.to_string(),
         state,
+        source,
         detail,
     }
 }
@@ -564,3 +651,7 @@ fn status_of(config: &Config, record: &ModuleRecord) -> ModuleStatus {
 #[cfg(test)]
 #[path = "ops_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ops_components_tests.rs"]
+mod components_tests;

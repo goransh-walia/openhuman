@@ -124,6 +124,19 @@ pub(super) fn rebind_after_credential_change(
     _reason: &str,
 ) -> Result<Vec<String>, String> {
     let mut logs = Vec::new();
+    // Storage first: the default backend belongs to the workspace, and every
+    // store below reaches it through the installed slot, so a different user's
+    // workspace must have its own backend installed before any of them runs.
+    // A failed reopen is an error, never a quiet continue on the previous
+    // user's backend.
+    if let Some(rebound) =
+        crate::storage::rebind::rebind(config).map_err(|error| format!("{error:#}"))?
+    {
+        logs.push(format!(
+            "storage moved from {} to {}",
+            rebound.from, rebound.to
+        ));
+    }
     crate::cron::seed::prune_retired_jobs(config).map_err(|error| error.to_string())?;
     crate::core::runtime::context::CoreContext::rebind_default_workspace(&config.workspace_dir)
         .map_err(|error| error.to_string())?;

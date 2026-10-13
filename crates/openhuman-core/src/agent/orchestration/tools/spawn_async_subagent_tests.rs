@@ -10,6 +10,109 @@ use tinytools::{ToolCallOptions, ToolRunContext};
 
 struct ThreadContext(&'static str);
 
+#[tokio::test]
+async fn late_registration_refusal_aborts_the_worker_and_settles_its_durable_session() {
+    let test = format!(
+        "{}::late_registration_refusal_aborts_the_worker_and_settles_its_durable_session",
+        module_path!().split_once("::").unwrap().1
+    );
+    const CHILD: &str = "OPENHUMAN_LATE_REGISTRATION_TEST_CHILD";
+    if std::env::var(CHILD).as_deref() != Ok(test.as_str()) {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test, "--nocapture", "--test-threads=1"])
+            .env(CHILD, &test)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+            "actual late-refusal control failed: {}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet, Mode};
+    crate::core::runtime::mode::lock_mode(Mode::Saas).unwrap();
+    assert!(crate::storage::installed().is_none());
+    let workspace = tempfile::tempdir().unwrap();
+    let config = crate::config::Config {
+        workspace_dir: workspace.path().to_path_buf(),
+        ..crate::config::Config::default()
+    };
+    let owner = CoreContext::for_test(DomainSet::saas(), None).derive_with(
+        ContextOverlay::new(
+            config,
+            DomainSet::saas(),
+            crate::tools::toolpacks::ToolGroups::none(),
+        )
+        .profile("late-registration-owner"),
+    );
+    let store = SubagentSessionStore::new(workspace.path().to_path_buf());
+    let session = CoreContext::sync_scope(owner.clone(), || {
+        subagent_sessions::upsert_running(
+            &store,
+            SubagentSessionUpsert {
+                selector: SubagentSessionSelector {
+                    parent_session: "late-parent".into(),
+                    parent_thread_id: Some("late-parent-thread".into()),
+                    agent_id: "task_manager_agent".into(),
+                    model: None,
+                    sandbox_mode: "None".into(),
+                    action_root: None,
+                    task_key: "late-registration".into(),
+                },
+                display_name: None,
+                task_title: "late refusal".into(),
+                worker_thread_id: None,
+                task_id: "late-refusal-task".into(),
+            },
+            None,
+        )
+        .unwrap()
+    });
+    assert_eq!(session.status, DurableSubagentStatus::Running);
+    // The original durable intent was admitted above. Now exercise the actual
+    // late registration guard after the task scope is absent, not an injected
+    // synthetic error or an accepted worker under another actor.
+    let join = tokio::spawn(std::future::pending::<()>());
+    let (_tx, rx) = running_subagents::status_channel();
+    let refused = running_subagents::register(
+        "late-refusal-task".into(),
+        "task_manager_agent".into(),
+        "late-parent".into(),
+        None,
+        Some(session.subagent_session_id.clone()),
+        workspace.path().to_path_buf(),
+        None,
+        Arc::new(RunQueue::new()),
+        join.abort_handle(),
+        rx,
+    );
+    assert!(matches!(
+        &refused,
+        Err(running_subagents::RegistrationError::Scope)
+    ));
+    assert!(join.await.unwrap_err().is_cancelled());
+    CoreContext::sync_scope(owner, || {
+        let error = finish_spawn_registration(
+            refused,
+            &store,
+            &session.subagent_session_id,
+            "late-refusal-task",
+        )
+        .unwrap_err();
+        assert!(error.contains("scope"));
+        let persisted = store.load().unwrap();
+        assert_eq!(persisted.len(), 1);
+        assert_eq!(persisted[0].status, DurableSubagentStatus::Failed);
+        assert_eq!(persisted[0].latest_error.as_deref(), Some(error.as_str()));
+        assert!(
+            running_subagents::task_records(Some("late-parent")).is_empty(),
+            "refused registration must not create a Running task ledger row"
+        );
+    });
+}
+
 impl ToolRunContext for ThreadContext {
     fn thread_id(&self) -> Option<&str> {
         Some(self.0)

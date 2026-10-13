@@ -22,7 +22,7 @@ use crate::agent::tinyagents::harness_tool_registration::register_turn_tools_and
 use crate::agent::tinyagents::host::steering;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::middleware::{self, TurnContextMiddleware};
-use crate::agent::tinyagents::model::{ErrorSlotModel, TurnChatModel};
+use crate::agent::tinyagents::model::TurnChatModel;
 use crate::agent::tinyagents::observability::{
     IterationCursor, ProviderUsageCarry, SubagentScope, ToolFailureMap, ToolNameMap,
 };
@@ -36,6 +36,7 @@ use crate::agent::tinyagents::turn_policy::{
 };
 use crate::agent::tinyagents::verify_before_finish;
 use tinyagents_harness::store::InMemoryStore as ToolResultArtifactIndexStore;
+use tinyinference_llm::model::ErrorSlotModel;
 
 use super::ToolPolicyEnforcement;
 mod assembled;

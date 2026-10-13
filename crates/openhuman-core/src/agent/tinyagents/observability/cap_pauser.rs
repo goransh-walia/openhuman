@@ -63,7 +63,7 @@ pub(crate) type ToolFailureMap = Arc<
             String,
             (
                 bool,
-                Option<crate::tools::status::ClassifiedFailure>,
+                Option<tinytools::status::ClassifiedFailure>,
                 u64,
                 usize,
                 Option<serde_json::Value>,

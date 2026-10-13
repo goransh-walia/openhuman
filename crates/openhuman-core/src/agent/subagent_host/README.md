@@ -45,5 +45,5 @@ survive that boundary on its own.
 ## Further reading
 
 - [Parent module README](../README.md)
-- [Agent harness architecture](../../../../../gitbooks/developing/architecture/agent-harness.md)
-- [The orchestrator](../../../../../gitbooks/features/orchestration.md)
+- [Agent harness architecture](../../../../../docs/gitbooks/en/developing/architecture/agent-harness.md)
+- [The orchestrator](../../../../../docs/gitbooks/en/features/orchestration.md)

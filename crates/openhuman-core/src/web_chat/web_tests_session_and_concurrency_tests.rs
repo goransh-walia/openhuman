@@ -580,7 +580,8 @@ async fn unscoped_cancel_stops_the_threads_detached_subagents() {
         std::sync::Arc::new(tinyagents_harness::run_queue::RunQueue::new()),
         child.abort_handle(),
         status_rx,
-    );
+    )
+    .expect("fixture registration admitted");
 
     // A scoped cancel for some other request is not a Stop: the child lives.
     let scoped = channel_web_cancel("stop-client", thread_id, Some("req-unrelated"))

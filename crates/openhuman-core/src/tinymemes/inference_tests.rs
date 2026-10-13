@@ -25,5 +25,4 @@ fn the_model_label_never_fails() {
     config.secrets.encrypt = false;
     // Either the resolved model id or an `unavailable (...)` label.
     assert!(!resolved_model(&config).trim().is_empty());
-    let _model = OpenHumanChatModel::new(config);
 }

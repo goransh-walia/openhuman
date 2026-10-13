@@ -200,7 +200,7 @@ pub async fn update_settings(
     rate_limit_per_min: Option<u32>,
 ) -> Result<Outcome<serde_json::Value>, String> {
     use crate::config::ops as config_rpc;
-    use crate::inference::embedding_host::format_embedding_signature;
+    use tinyinference_embeddings::format_embedding_signature;
 
     let mut config = config_rpc::load_config_with_timeout().await?;
 

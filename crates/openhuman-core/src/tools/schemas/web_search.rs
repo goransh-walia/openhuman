@@ -44,7 +44,7 @@ async fn run_role_tool_with(
     arguments: Value,
     method: &str,
 ) -> Result<Value, String> {
-    if !config.search.is_enabled() {
+    if !crate::search::is_active(config) {
         return Err("web search is disabled in settings".to_string());
     }
     // JSON-RPC, MCP, and agent callers share this dispatcher; enforce egress
@@ -61,7 +61,7 @@ async fn run_role_tool_with(
         .await
         .map_err(|error| crate::search::tools::user_facing_error(&error))?;
     let payload = json!({
-        "provider": crate::search::render::provider_label(&response.provider),
+        "provider": tinysearch_bus::labels::provider_label(&response.provider),
         "provider_id": response.provider,
         "role": response.role,
         "results": response.results,

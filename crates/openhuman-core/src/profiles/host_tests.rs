@@ -182,12 +182,12 @@ async fn a_clean_reopen_does_not_recover_but_a_takeover_does() {
             4,
             "2026-10-09T00:00:00Z",
         );
-        tinyagents_session::turn_state::TurnStateStore::new(workspace.clone())
+        crate::agent::session_store::default_turn_states_for(&workspace)
             .put(&state)
             .unwrap();
     };
     let lifecycle = |thread: &str| {
-        tinyagents_session::turn_state::TurnStateStore::new(workspace.clone())
+        crate::agent::session_store::default_turn_states_for(&workspace)
             .get(thread)
             .unwrap()
             .unwrap()

@@ -91,7 +91,7 @@ pub use openhuman_core::tools::toolpacks::{GroupMode, ToolGroups};
 // vendored tinytools. An embedder that took `tinytools` as its own dependency
 // would build tools of a different, incompatible type.
 pub use openhuman_core::agent::tinyagents::host::LastTurnUsage;
-pub use openhuman_core::agent::{HostTools, HostTurnTools, TurnContext};
+pub use openhuman_core::agent::{HostAttachment, HostTools, HostTurnTools, TurnContext};
 pub use openhuman_core::{
     CoreBuilder, CoreRuntime, DaemonConfig, DomainSet, HostKind, ServiceSet, TokenSource,
 };
@@ -249,7 +249,6 @@ pub mod session_store {
     pub use tinyagents_session::testkit::conformance::{
         session_store_conformance, session_store_isolation_conformance,
     };
-    pub use tinyagents_session::transcript::import::types::{JournalMessage, SessionDescriptor};
     /// The transcript seam a provider's [`AgentStores::transcripts`] implements.
     pub use tinyagents_session::transcript::{
         SessionRef, SessionTranscript, TranscriptHistory, TranscriptLocator, TranscriptMessage,

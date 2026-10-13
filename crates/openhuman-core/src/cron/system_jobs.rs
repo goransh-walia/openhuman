@@ -38,7 +38,13 @@ pub fn system_job_name(job: &CronJob) -> Option<&str> {
     if !matches!(job.job_type, JobType::Flow) {
         return None;
     }
-    job.command
+    system_command_name(&job.command)
+}
+
+/// The system job a `flow` row's command names, when it names one.
+#[must_use]
+pub fn system_command_name(command: &str) -> Option<&str> {
+    command
         .strip_prefix(SYSTEM_COMMAND_PREFIX)
         .filter(|name| !name.is_empty())
 }

@@ -78,6 +78,8 @@ async fn current_job_origin_reads_the_scoped_turn() {
 
 fn job_with_origin(origin: Option<JobOrigin>) -> CronJob {
     CronJob {
+        claim_generation: 0,
+        policy: Default::default(),
         id: "job-1".into(),
         expression: "* * * * *".into(),
         schedule: Schedule::Every { every_ms: 300_000 },

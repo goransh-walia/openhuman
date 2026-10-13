@@ -68,6 +68,7 @@ pub(crate) async fn validate_connection_refs(
                 // Identity isn't needed for this existence/toolkit-mismatch
                 // check — only `connection_ref` and `toolkit` are read.
                 &[],
+                &Default::default(),
             )),
             Err(e) => {
                 tracing::debug!(

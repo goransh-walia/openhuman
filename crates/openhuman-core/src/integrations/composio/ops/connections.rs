@@ -21,7 +21,7 @@ use super::error_utils::{
     backend_mode_without_session, direct_mode_without_key, report_composio_op_error, OpResult,
     COMPOSIO_NO_SESSION,
 };
-use crate::integrations::composio::contract::normalize_connection_identifier;
+use crate::integrations::composio::contract::normalize_connection_identifiers;
 
 pub async fn composio_list_connections(
     config: &Config,
@@ -308,17 +308,30 @@ pub(crate) async fn enrich_connections_with_identity(
         return resp;
     }
 
+    // One module call normalises every identity key and every connection key.
+    let mut raw: Vec<String> = identities
+        .iter()
+        .flat_map(|id| [id.source.clone(), id.identifier.clone()])
+        .collect();
+    for conn in &resp.connections {
+        raw.push(conn.toolkit.clone());
+        raw.push(conn.id.clone());
+    }
+    let normalized = match normalize_connection_identifiers(config, &raw).await {
+        Ok(normalized) if normalized.len() == raw.len() => normalized,
+        other => {
+            tracing::debug!(
+                error = ?other.err(),
+                "[composio] enrich_connections_with_identity: key normalisation unavailable"
+            );
+            return resp;
+        }
+    };
+    let (identity_keys, connection_keys) = normalized.split_at(identities.len() * 2);
     let lookup: HashMap<(String, String), _> = identities
         .iter()
-        .map(|id| {
-            (
-                (
-                    normalize_connection_identifier(&id.source),
-                    normalize_connection_identifier(&id.identifier),
-                ),
-                id,
-            )
-        })
+        .zip(identity_keys.chunks(2))
+        .map(|(id, keys)| ((keys[0].clone(), keys[1].clone()), id))
         .collect();
 
     tracing::debug!(
@@ -327,13 +340,11 @@ pub(crate) async fn enrich_connections_with_identity(
         "[composio] enrich_connections_with_identity: enriching connection labels"
     );
 
-    for conn in &mut resp.connections {
+    for (conn, keys) in resp.connections.iter_mut().zip(connection_keys.chunks(2)) {
         if conn.account_email.is_some() || conn.workspace.is_some() || conn.username.is_some() {
             continue;
         }
-        let toolkit_key = normalize_connection_identifier(&conn.toolkit);
-        let conn_id_key = normalize_connection_identifier(&conn.id);
-        if let Some(identity) = lookup.get(&(toolkit_key, conn_id_key)) {
+        if let Some(identity) = lookup.get(&(keys[0].clone(), keys[1].clone())) {
             conn.account_email = identity.email.clone();
             conn.workspace = identity.display_name.clone();
             conn.username = identity.handle.clone();

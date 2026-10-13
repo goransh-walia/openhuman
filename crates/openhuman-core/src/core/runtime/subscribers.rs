@@ -327,7 +327,7 @@ pub(super) fn register_domain_subscribers(
         "[event_bus] Channels subscribers (inbound + web-only proactive) SKIPPED — channels feature disabled at compile time"
     );
 
-    // Flows trigger dispatch (issue B2): maps FlowScheduleTick /
+    // Flows trigger dispatch (issue B2): maps
     // ComposioTriggerReceived / WebhookIncomingRequest onto enabled flows and
     // runs `flows::ops::flows_run`, so schedule/app-event workflows still
     // dispatch when no realtime channel is configured or

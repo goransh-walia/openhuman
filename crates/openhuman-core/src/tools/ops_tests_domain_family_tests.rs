@@ -85,7 +85,8 @@ async fn all_tools_executes_stock_family_against_fake_backend() {
 /// needed to reach the `can_act()` check in each tool.
 #[tokio::test]
 async fn readonly_acting_tools_carry_policy_blocked_marker() {
-    use crate::security::{AutonomyLevel, POLICY_BLOCKED_MARKER};
+    use crate::security::AutonomyLevel;
+    use tinytools::status::POLICY_BLOCKED_MARKER;
 
     let tmp = TempDir::new().unwrap();
     let sec = Arc::new(SecurityPolicy {

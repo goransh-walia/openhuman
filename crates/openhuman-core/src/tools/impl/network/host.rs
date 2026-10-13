@@ -149,6 +149,20 @@ mod x402 {
 
     use crate::modules::x402_service;
 
+    /// `Err("COMPONENT_DISABLED:wallet")` when `[components] wallet` is off:
+    /// the hook declines before any quote, signing or module load. The 402
+    /// response then surfaces to the caller unpaid.
+    pub(super) fn declined_when_wallet_off(config: &crate::config::Config) -> Result<(), String> {
+        if config.components.wallet {
+            return Ok(());
+        }
+        log::debug!("[tool.http_request] x402 payment declined: component 'wallet' disabled");
+        Err(format!(
+            "{}:wallet",
+            crate::core::runtime::components::COMPONENT_DISABLED
+        ))
+    }
+
     #[derive(Debug)]
     pub(super) struct X402PaymentHook;
 
@@ -169,6 +183,7 @@ mod x402 {
             let config = crate::config::rpc::load_config_with_timeout()
                 .await
                 .map_err(|error| format!("x402 payment failed: {error}"))?;
+            declined_when_wallet_off(&config)?;
             let owner = crate::security::approval::APPROVAL_CHAT_CONTEXT
                 .try_with(|context| tinywallet_bus::wire::QuoteOwner {
                     thread_id: context.thread_id.clone(),

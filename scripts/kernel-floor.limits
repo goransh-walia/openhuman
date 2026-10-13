@@ -696,4 +696,11 @@
 #                      packages / 298 names / 2 native builds on Linux. Record
 #                      the existing reduction so it cannot silently grow back;
 #                      this ratchet change adds no dependency or size claim.
-flows:323:298:2
+# 326/302/2 2026-10-13 tinyflows v0.8.14 drops its own SQLite store and brings
+#                      `tinyflows-import` (the one-time legacy importer, behind
+#                      `flows`) in its place: dep-sim --cut tinyflows-import
+#                      removes exactly one name, and `tinyflows-sqlite` is gone,
+#                      so the importer is net zero. Re-measured on this branch
+#                      with dep-sim --cut-nothing: 326 packages / 302 names / 2
+#                      native builds on Linux. No size claim.
+flows:326:302:2

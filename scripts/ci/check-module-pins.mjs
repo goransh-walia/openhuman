@@ -90,6 +90,7 @@ const PIN_MAP = {
   tinybox: { submodule: "vendor/tinybox" },
   tinychannels: { submodule: "vendor/tinychannels" },
   tinyhosts: { submodule: "vendor/tinyhosts" },
+  tinymemes: { submodule: "vendor/tinymemes" },
 };
 
 const failures = [];
@@ -309,7 +310,9 @@ if (failures.length > 0) {
     "Why this gate exists: a module is pinned twice — as a submodule (the contract this\n" +
       "build compiles against) and as a version+digest in modules/registry.rs (the artifact\n" +
       "loaded at runtime). When they disagree the build is green and the failure lands on a\n" +
-      "user's machine. openhuman#5727.\n",
+      "user's machine. openhuman#5727.\n" +
+      "To fix a drift: node scripts/modules/release-and-repin.mjs <id> (see also\n" +
+      "scripts/modules/pin-status.mjs for the local view).\n",
   );
   process.exit(1);
 }

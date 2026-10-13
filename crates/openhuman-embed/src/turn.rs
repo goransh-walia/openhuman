@@ -74,6 +74,7 @@ pub struct Turn {
     origin: Option<AgentTurnOrigin>,
     progress: Option<tokio::sync::mpsc::Sender<AgentProgress>>,
     seed: Option<Vec<(String, String)>>,
+    attachments: Vec<openhuman_core::agent::HostAttachment>,
     meter: Option<Box<dyn FnOnce(Option<LastTurnUsage>) + Send>>,
     response_format: Option<crate::complete::ResponseFormat>,
     structured_retries: u8,
@@ -90,7 +91,7 @@ pub struct Turn {
     trace_content: crate::observe::TraceContent,
     hooks: openhuman_core::agent::hooks::HookScope,
     tools: Option<openhuman_core::agent::HostTools>,
-    tool_env: Option<openhuman_core::tools::timeout::CommandEnvironment>,
+    tool_env: Option<tinytools_std::timeout::CommandEnvironment>,
 }
 
 impl Turn {
@@ -103,6 +104,7 @@ impl Turn {
             origin: None,
             progress: None,
             seed: None,
+            attachments: Vec::new(),
             meter: None,
             response_format: None,
             structured_retries: 0,
@@ -161,7 +163,7 @@ impl Turn {
     /// Interpreter pools are bypassed so a pooled process cannot carry another
     /// turn's environment. Independently spawned host tasks must carry the scope.
     pub fn tool_env(mut self, env: impl IntoIterator<Item = (String, String)>) -> Self {
-        self.tool_env = Some(openhuman_core::tools::timeout::CommandEnvironment::new(env));
+        self.tool_env = Some(tinytools_std::timeout::CommandEnvironment::new(env));
         self
     }
 
@@ -254,6 +256,46 @@ impl Turn {
     /// ```
     pub fn seed(mut self, history: Vec<(String, String)>) -> Self {
         self.seed = Some(history);
+        self
+    }
+
+    /// Attach a file to this turn's message, after any already attached.
+    ///
+    /// The host hands over the bytes; the file is staged into the agent's
+    /// acting workspace and reaches the model ahead of the message, as an
+    /// image block (`image/*`) or a document block (anything else). A model
+    /// that cannot take the file natively gets the core's fallback instead:
+    /// extracted text for documents, a vision readout for images. The
+    /// configured multimodal count and size limits apply, and a turn over
+    /// them fails before it runs. No local path is read, so attachments are
+    /// accepted whatever the turn's [`origin`](Self::origin).
+    ///
+    /// Only a runtime-owned [`Agent`](crate::Agent) can honour this; a turn on
+    /// a caller-built runtime's orchestrator is refused rather than run
+    /// without its files.
+    ///
+    /// ```no_run
+    /// # use openhuman_embed::{Agent, HostAttachment};
+    /// # async fn go(agent: &Agent, photo: Vec<u8>) -> anyhow::Result<()> {
+    /// agent.turn("what is in this picture?")
+    ///     .attach(HostAttachment::new(photo, "image/jpeg").named("photo.jpg"))
+    ///     .send()
+    ///     .await?;
+    /// # Ok(()) }
+    /// ```
+    #[must_use]
+    pub fn attach(mut self, attachment: openhuman_core::agent::HostAttachment) -> Self {
+        self.attachments.push(attachment);
+        self
+    }
+
+    /// Attach every file in `attachments`, in order; see [`attach`](Self::attach).
+    #[must_use]
+    pub fn attachments(
+        mut self,
+        attachments: impl IntoIterator<Item = openhuman_core::agent::HostAttachment>,
+    ) -> Self {
+        self.attachments.extend(attachments);
         self
     }
 
@@ -456,6 +498,7 @@ struct AgentTurnOptions {
     tools: Option<openhuman_core::agent::HostTools>,
     shape: std::sync::Arc<ResponseShapeScope>,
     untrusted_input: bool,
+    attachments: Vec<openhuman_core::agent::HostAttachment>,
 }
 
 async fn dispatch(
@@ -484,6 +527,20 @@ async fn dispatch(
                               orchestrator; run the turn on a runtime-owned Agent"
                         .to_owned(),
                     kind: Some("seed_unsupported".to_owned()),
+                    data: None,
+                    expected_user_state: true,
+                });
+            }
+            // Refused for the same reason: `AGENT_CHAT` carries a string, and
+            // a turn that silently ran without its files would answer about
+            // something it never saw.
+            if !options.attachments.is_empty() {
+                return Err(CoreError::Domain {
+                    method: AGENT_CHAT,
+                    message: "attachments are not supported on a caller-built runtime's \
+                              orchestrator; run the turn on a runtime-owned Agent"
+                        .to_owned(),
+                    kind: Some("attachments_unsupported".to_owned()),
                     data: None,
                     expected_user_state: true,
                 });
@@ -523,6 +580,7 @@ async fn dispatch(
                         host_only: inner.host_only,
                         untrusted_input: options.untrusted_input,
                         shape: Some(&options.shape),
+                        attachments: &options.attachments,
                     };
                     let outcome = agent_chat_for(
                         &mut config,

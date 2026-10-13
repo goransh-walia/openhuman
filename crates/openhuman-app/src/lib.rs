@@ -22,7 +22,7 @@
 //! This crate is excluded from the root Cargo workspace — build it with
 //! `cargo check --manifest-path crates/openhuman-app/Cargo.toml`. See
 //! `README.md` in this crate and
-//! [`gitbooks/developing/architecture/tauri-shell.md`](../../../gitbooks/developing/architecture/tauri-shell.md)
+//! [`docs/gitbooks/en/developing/architecture/tauri-shell.md`](../../../docs/gitbooks/en/developing/architecture/tauri-shell.md)
 //! for the full IPC surface and lifecycle model.
 
 // Desktop targets: Windows, macOS, Linux. iOS + Android live in
@@ -2885,7 +2885,7 @@ pub fn run() {
         // Auto-updater for the Tauri shell. Endpoint and minisign pubkey live
         // in `tauri.conf.json` under `plugins.updater`. Releases are signed at
         // build time with `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`); see
-        // gitbooks/overview/auto-update.md for the full pipeline.
+        // docs/gitbooks/en/overview/auto-update.md for the full pipeline.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(dictation_hotkeys::DictationHotkeyState(
             std::sync::Mutex::new(Vec::new()),
@@ -2938,7 +2938,7 @@ pub fn run() {
                         "[deep-link] openhuman:// scheme registration unhealthy — \
                          OAuth callbacks may never reach the app. \
                          register_all_error={register_err:?}, hkcu_status={status_log}. \
-                         See gitbooks/overview/troubleshooting-sign-in.md \
+                         See docs/gitbooks/en/overview/troubleshooting-sign-in.md \
                          (\"Windows: openhuman:// handler not registered\") for the manual repair."
                     );
                 }

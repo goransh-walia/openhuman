@@ -2,6 +2,7 @@ use super::*;
 use crate::memory::scope::MemoryIdentity;
 use crate::memory::test_fixtures::{bind_reference, config_in, stored, RefusingEngine};
 use serde_json::json;
+use tinymemory_api::Reach;
 use tinymemory_api::{MetaFilter, Namespace};
 
 fn facts(config: &Config) -> CallFacts {
@@ -262,7 +263,7 @@ async fn a_different_owner_cannot_replay_the_original_owners_queue() {
     {
         let _guard = LOCK.lock().unwrap();
         let mut entries = read(&config.workspace_dir).unwrap();
-        entries[0].root = Some("org:another-user".into());
+        entries[0].binding = binding_of(Some("org:another-user".into()), false);
         write(&config.workspace_dir, &entries).unwrap();
     }
     let engine = bind_reference(&config);
@@ -428,7 +429,7 @@ async fn an_erase_fence_waits_for_only_the_current_write_and_preserves_later_enq
     let fence_config = config.clone();
     let fencing = tokio::spawn(async move { fence_and_clear(&fence_config).await });
     let state = owner_state(&config);
-    while state.fences.load(Ordering::SeqCst) == 0 {
+    while !state.gate.is_fenced() {
         tokio::task::yield_now().await;
     }
     assert!(
@@ -538,7 +539,7 @@ async fn erasing_one_owner_fences_pending_writes_from_every_team_root() {
 }
 
 #[tokio::test]
-async fn a_later_erase_clears_pending_writes_when_the_owner_state_was_released() {
+async fn a_later_erase_clears_pending_writes_admitted_during_the_first_erase() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
     let first = fence_and_clear(&config).await.unwrap();
@@ -548,15 +549,34 @@ async fn a_later_erase_clears_pending_writes_when_the_owner_state_was_released()
         &facts(&config),
     )
     .unwrap();
-    let previous_owner = Arc::downgrade(&first.state);
     drop(first);
-    // The default current-thread test runtime has not polled the scheduled
-    // retry yet; the weak map no longer owns the previous fence generation.
-    assert!(previous_owner.upgrade().is_none());
     let second = fence_and_clear(&config).await.unwrap();
     assert!(
         read(&config.workspace_dir).unwrap().is_empty(),
         "the second erase must discard a learning admitted before it started"
     );
     drop(second);
+}
+
+#[test]
+fn an_outbox_written_before_the_binding_field_is_still_read() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = config_in(&tmp);
+    let file = path(&config.workspace_dir);
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let legacy = serde_json::json!([{
+        "ticket": "t-1",
+        "root": null,
+        "layout_v3": false,
+        "scope_root": "",
+        "epoch": ["old-process", 3],
+        "operation": {"action": "forget", "ids": ["a"], "reach": serde_json::to_value(Reach::subtree(Namespace::ROOT)).unwrap()},
+        "status": "TIMEOUT"
+    }]);
+    std::fs::write(&file, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    let entries = read(&config.workspace_dir).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].binding, binding_of(None, false));
+    assert_eq!(entries[0].status.as_deref(), Some("TIMEOUT"));
+    assert_eq!(entries[0].epoch.as_ref().unwrap().generation, 3);
 }

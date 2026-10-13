@@ -265,3 +265,37 @@ async fn poster_only_user_metadata_is_rejected_before_persistence() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn raw_append_stages_in_the_bound_thread_folder() {
+    let (temp, config) = setup().await;
+    let folder = temp.path().join("project");
+    std::fs::create_dir_all(&folder).unwrap();
+    let folder = folder.canonicalize().unwrap();
+    conversations::blocking::ensure_thread(
+        config.workspace_dir.clone(),
+        conversations::CreateConversationThread {
+            id: "bound".into(),
+            title: "Bound".into(),
+            created_at: "2026-10-04T00:00:00Z".into(),
+            parent_thread_id: None,
+            labels: None,
+            personality_id: None,
+            working_dir: Some(folder.to_string_lossy().into_owned()),
+        },
+    )
+    .await
+    .unwrap();
+    let mut raw = request("raw", "[IMAGE:data:image/png;base64,iVBORw0KGgo=]", "user");
+    raw.thread_id = "bound".into();
+    let staged = append_with_test_config(raw, &config, None)
+        .await
+        .unwrap()
+        .value
+        .data
+        .unwrap();
+    let (_, files) = crate::agent::attachments::parse(&staged.content);
+    assert_eq!(files.len(), 1);
+    assert!(folder.join(&files[0].path).is_file());
+    assert!(!config.action_dir.join("uploads").exists());
+}

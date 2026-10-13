@@ -10,7 +10,6 @@ use crate::channels::context::{
 use crate::channels::routes::{
     get_or_create_turn_model_source, get_route_selection, handle_runtime_command_if_needed,
 };
-use crate::channels::traits;
 use crate::channels::{ChannelSendExt, SendMessage};
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
@@ -18,6 +17,8 @@ use crate::util::truncate_with_ellipsis;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tinyagents_session::transcript::TranscriptMessage;
+use tinychannels_bus as traits;
+use tinychannels_bus::context::ChatMessage;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -252,12 +253,22 @@ pub(crate) async fn process_channel_runtime_message(
     let started_at = Instant::now();
 
     // Build history from per-sender conversation cache
-    let mut prior_turns = ctx
+    let mut prior_turns: Vec<TranscriptMessage> = ctx
         .conversation_histories
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(&history_key)
-        .cloned()
+        .map(|turns| {
+            // The cache holds the bus's plain `ChatMessage`; convert at the
+            // harness boundary.
+            turns
+                .iter()
+                .map(|turn| match turn.role.as_str() {
+                    "assistant" => TranscriptMessage::assistant(&turn.content),
+                    _ => TranscriptMessage::user(&turn.content),
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     // Re-rendered by `ChannelSystemPrompt` only when the active profile or an
@@ -482,8 +493,8 @@ pub(crate) async fn process_channel_runtime_message(
                     .lock()
                     .unwrap_or_else(|e| e.into_inner());
                 let turns = histories.entry(history_key).or_default();
-                turns.push(TranscriptMessage::user(&enriched_message));
-                turns.push(TranscriptMessage::assistant(&response_text));
+                turns.push(ChatMessage::user(&enriched_message));
+                turns.push(ChatMessage::assistant(&response_text));
                 // Trim to MAX_CHANNEL_HISTORY (keep recent turns)
                 while turns.len() > crate::channels::context::MAX_CHANNEL_HISTORY {
                     turns.remove(0);
@@ -530,7 +541,7 @@ pub(crate) async fn process_channel_runtime_message(
                 .await
                 .unwrap_or(false)
             {
-                let compacted = compact_sender_history(ctx.as_ref(), &history_key);
+                let compacted = compact_sender_history(&ctx.conversation_histories, &history_key);
                 let error_text = if compacted {
                     "⚠️ Context window exceeded for this conversation. I compacted recent history and kept the latest context. Please resend your last message."
                 } else {

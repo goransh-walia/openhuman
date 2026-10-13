@@ -56,6 +56,10 @@ on:
       - "crates/openhuman-rpc/src/session_store/**"
       - "tests/storage_*.rs"
       - "tests/cli_storage_url_e2e.rs"
+      - "tests/storage_desktop_upgrade_e2e.rs"
+      - "tests/tinymcp_storage_smoke_e2e.rs"
+      - "scripts/e2e-core.sh"
+      - "scripts/test-rust-e2e.sh"
       - "tests/support/storage_drivers.rs"
       - ".gitmodules"
       - "vendor/**"
@@ -158,7 +162,11 @@ jobs:
                 --test storage_scope_e2e \
                 --test storage_agent_scopes_e2e \
                 --test storage_delegation_e2e \
+                --test storage_desktop_upgrade_e2e \
                 --test cli_storage_url_e2e
+              # Headless core e2e with OPENHUMAN_STORAGE_URL on the replica set
+              # (#7755); the mock backend needs node, which the CI image has.
+              bash scripts/e2e-core.sh mongodb
               cargo test --no-fail-fast -p openhuman-rpc --features session-store,storage-mongodb --lib -- session_store::
             '
 

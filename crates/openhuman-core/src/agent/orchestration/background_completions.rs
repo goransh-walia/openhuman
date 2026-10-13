@@ -5,11 +5,11 @@
 //! deduplicates by task id, holds tombstones (collected inline, stopped,
 //! cancelled parent), counts delivery attempts, hands back the records that
 //! gave up, and persists every transition to a per-workspace
-//! `JsonlCompletionStore`, so a completion that was never delivered is
+//! `DriverCompletionStore` (documents in the storage backend), so a completion that was never delivered is
 //! delivered after a restart. This module is the thin host seam over it:
 //!
-//! * one router per workspace, opened lazily next to the task ledger
-//!   (`<workspace>/.openhuman/background_completions.jsonl`);
+//! * one router per workspace, opened lazily beside the task ledger
+//!   (the `orchestration_completions` collection of the storage backend);
 //! * the router's parent key is the **chat thread id** — delivery is
 //!   thread-addressed, and a thread-scoped cancel (Stop, delete, purge) is then
 //!   the router's own `cancel_parent` / `resume_parent`;
@@ -30,7 +30,7 @@ use std::time::Duration;
 
 use tinyagents_tasks::{
     CompletionRecord, CompletionResult, CompletionRouter, CompletionState, CompletionStatus,
-    CompletionStore, InMemoryCompletionStore, JsonlCompletionStore, NotifyMode, RecordOutcome,
+    CompletionStore, DriverCompletionStore, InMemoryCompletionStore, NotifyMode, RecordOutcome,
     TombstoneOutcome, DEFAULT_MAX_ATTEMPTS,
 };
 
@@ -96,11 +96,14 @@ pub(super) fn state() -> std::sync::MutexGuard<'static, HostState> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// Where a workspace's completion log lives, beside the detached-task ledger.
-fn completion_store_path(workspace_dir: &Path) -> PathBuf {
-    workspace_dir
-        .join(".openhuman")
-        .join("background_completions.jsonl")
+/// The durable completion queue of `workspace_dir` in the storage backend,
+/// under the calling tenant's scope.
+fn open_driver_store(workspace_dir: &Path) -> anyhow::Result<Arc<dyn CompletionStore>> {
+    let opened = crate::storage::local::open("background_completions", workspace_dir)?;
+    let scoped = opened.scoped()?;
+    let store = DriverCompletionStore::new(Arc::clone(scoped.documents()))
+        .map_err(|error| anyhow::anyhow!("start the completion store bridge: {error}"))?;
+    Ok(Arc::new(store))
 }
 
 fn entry_for(workspace_dir: &Path) -> Arc<Entry> {
@@ -114,16 +117,15 @@ fn entry_for(workspace_dir: &Path) -> Arc<Entry> {
     if let Some(entry) = state().routers.get(workspace_dir) {
         return entry.clone();
     }
-    let path = completion_store_path(workspace_dir);
-    let store: Arc<dyn CompletionStore> = match JsonlCompletionStore::open(&path) {
-        Ok(store) => Arc::new(store),
+    let store: Arc<dyn CompletionStore> = match open_driver_store(workspace_dir) {
+        Ok(store) => store,
         Err(error) => {
-            // A workspace that cannot be written degrades to an in-memory
+            // A backend that cannot be reached degrades to an in-memory
             // queue rather than taking background delivery down.
             log::error!(
-                "[background_completions] could not open {}; using an in-memory queue \
-                 (completions will not survive a restart): {error}",
-                path.display()
+                "[background_completions] could not open the completion store for {}; using an \
+                 in-memory queue (completions will not survive a restart): {error:#}",
+                workspace_dir.display()
             );
             Arc::new(InMemoryCompletionStore::new())
         }

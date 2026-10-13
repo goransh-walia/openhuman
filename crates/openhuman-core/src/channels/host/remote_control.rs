@@ -57,7 +57,7 @@ pub(crate) async fn dispatch_callback(
             if cancellation.is_cancelled() {
                 return Err(tinybus::Error::failed("channel session ended"));
             }
-            clear_sender_history(ctx, &sender_key);
+            clear_sender_history(&ctx.conversation_histories, &sender_key);
             Ok(Response::Completed)
         }
         Request::InvalidateThread { thread_id } => {

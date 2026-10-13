@@ -10,7 +10,8 @@ use tinytools_std::network::NetGate;
 use crate::security::egress::{
     emit_external_transfer, local_only_tool_block, DataKind, EgressDescriptor,
 };
-use crate::security::{CommandClass, GateDecision, SecurityPolicy};
+use crate::security::{GateDecision, SecurityPolicy};
+use tinybox_bus::CommandClass;
 
 /// Build the egress descriptor for an outbound HTTP request (privacy epic S2,
 /// #4436). The host is the destination; a request body carries tool arguments

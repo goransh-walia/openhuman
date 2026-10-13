@@ -1,49 +1,13 @@
 //! Per-sender routing and runtime command handling.
 
 use super::context::{clear_sender_history, ChannelRouteSelection, ChannelRuntimeContext};
-use super::traits;
 use super::{Channel, ChannelSendExt, SendMessage};
 use crate::inference::provider;
 use std::sync::Arc;
-#[cfg(test)]
-use tinychannels::remote::{parse_remote_command, RemoteCommand};
-#[cfg(test)]
-use tinychannels::routes::{
-    parse_runtime_command as parse_portable_runtime_command,
-    resolve_provider_alias as resolve_portable_provider_alias,
-    ChannelRuntimeCommand as PortableCommand,
-};
+use tinychannels_bus as traits;
 use tinychannels_bus::module_control::{
     ChannelControlRequest, ChannelControlResult, ProviderDescriptor,
 };
-
-#[cfg(test)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum ChannelRuntimeCommand {
-    Portable(PortableCommand),
-    Remote(RemoteCommand),
-}
-
-#[cfg(test)]
-fn parse_runtime_command(channel_name: &str, content: &str) -> Option<ChannelRuntimeCommand> {
-    let trimmed = content.trim();
-    if !trimmed.starts_with('/') {
-        return None;
-    }
-
-    if tinychannels::capabilities_for(channel_name).remote_control {
-        if let Some(remote) = parse_remote_command(content) {
-            return Some(ChannelRuntimeCommand::Remote(remote));
-        }
-    }
-
-    parse_portable_runtime_command(channel_name, trimmed).map(ChannelRuntimeCommand::Portable)
-}
-
-#[cfg(test)]
-fn resolve_provider_alias(name: &str) -> Option<String> {
-    resolve_portable_provider_alias(name, &provider_descriptors())
-}
 
 fn provider_descriptors() -> Vec<ProviderDescriptor> {
     provider::list_providers()
@@ -251,7 +215,7 @@ pub(crate) async fn handle_runtime_command_if_needed(
         );
     }
     if clear_history {
-        clear_sender_history(ctx, sender_key);
+        clear_sender_history(&ctx.conversation_histories, sender_key);
     }
     let Some(reply) = reply else {
         return false;

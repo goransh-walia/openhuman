@@ -373,12 +373,12 @@ async fn clear_dropped_turn_states(
     thread_id: &str,
     cut_request_id: &str,
 ) {
-    let dir = workspace_dir.to_path_buf();
+    // Resolved here, not in the blocking task: the tenant is task-local.
+    let store = crate::agent::session_store::turn_states_for(workspace_dir);
     let thread_id_owned = thread_id.to_string();
     let cut_request_id_owned = cut_request_id.to_string();
     let result = tokio::task::spawn_blocking(move || {
-        let turns =
-            tinyagents_session::turn_state::store::list_thread(dir.clone(), &thread_id_owned)?;
+        let turns = store.list_thread(&thread_id_owned)?;
         let Some(cut_started_at) = turns
             .iter()
             .find(|t| t.request_id == cut_request_id_owned)
@@ -386,20 +386,13 @@ async fn clear_dropped_turn_states(
         else {
             // Never got a snapshot (e.g. a turn that errored before its
             // first progress event) — nothing to drop but itself.
-            return tinyagents_session::turn_state::store::delete_turn(
-                dir,
-                &thread_id_owned,
-                &cut_request_id_owned,
-            );
+            return store.delete_turn(&thread_id_owned, &cut_request_id_owned);
         };
         let mut removed_any = false;
         for turn in turns.into_iter().filter(|t| t.started_at >= cut_started_at) {
-            if tinyagents_session::turn_state::store::delete_turn(
-                dir.clone(),
-                &thread_id_owned,
-                &turn.request_id,
-            )
-            .unwrap_or(false)
+            if store
+                .delete_turn(&thread_id_owned, &turn.request_id)
+                .unwrap_or(false)
             {
                 removed_any = true;
             }

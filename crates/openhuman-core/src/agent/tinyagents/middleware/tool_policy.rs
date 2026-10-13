@@ -33,7 +33,7 @@ pub(crate) struct ToolPolicyMiddleware {
     gate: ToolPolicyGate<OpenHumanRunContext>,
     /// The session's channel-permission snapshot — enforces the per-channel deny
     /// + per-call permission-level ceiling the engine ran in `agent_tool_exec`.
-    session: crate::tools::agent_policy::ToolPolicySession,
+    session: tinytools::ToolPolicySession,
     /// Shared tool sets (same `Arc`s the runner registers) so a call's OpenHuman
     /// `Tool` can be resolved for its generated-tool runtime context and its
     /// per-call permission level.
@@ -77,7 +77,7 @@ impl ToolCallPolicy<OpenHumanRunContext> for SessionToolPolicy {
 impl ToolPolicyMiddleware {
     pub(crate) fn new(
         policy: Arc<dyn crate::agent::tool_policy::ToolPolicy>,
-        session: crate::tools::agent_policy::ToolPolicySession,
+        session: tinytools::ToolPolicySession,
         tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
         session_id: String,
         channel: String,
@@ -172,7 +172,7 @@ impl ToolPolicyMiddleware {
             })
             .collect();
         tinyagents_harness::tool::packs::NoSuchPackTool {
-            not_found_marker: crate::tools::status::NOT_FOUND_MARKER,
+            not_found_marker: tinytools::status::NOT_FOUND_MARKER,
             skill: pack.id,
             tool,
             callable,
@@ -242,7 +242,7 @@ impl ToolPolicyMiddleware {
         let approval_only = desktop_approval_disabled
             && matches!(
                 decision.action,
-                crate::tools::agent_policy::ToolPolicyAction::RequireApproval
+                tinytools::ToolPolicyAction::RequireApproval
             );
         if decision.is_denied() && !approval_only {
             return Some(
@@ -379,7 +379,7 @@ impl ToolMiddleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
                 ToolPolicyDecision::Deny { .. } => "denied",
                 ToolPolicyDecision::Allow => "allowed",
             };
-            crate::tools::registry::denials::record(
+            tinytools::registry::denials::record(
                 call.name.as_str(),
                 policy_name,
                 blocked_action,

@@ -59,8 +59,8 @@ use std::future::Future;
 use std::time::SystemTime;
 
 use openhuman_core::config::Config;
-use openhuman_core::cron::policy::{self, JobPolicy};
 use openhuman_core::cron::system_jobs::SYSTEM_COMMAND_PREFIX;
+use openhuman_core::cron::JobPolicy;
 use {
     openhuman_core::cron::CronJob, openhuman_core::cron::CronJobPatch,
     openhuman_core::cron::JobType, openhuman_core::cron::Schedule,
@@ -411,7 +411,14 @@ impl<'a> Cron<'a> {
                 create(config, &spec.name, target, schedule, spec.enabled)?
             }
         };
-        policy::set_policy(config, &job.id, spec.policy())?;
+        let job = openhuman_core::cron::update_job(
+            config,
+            &job.id,
+            CronJobPatch {
+                policy: Some(spec.policy()),
+                ..CronJobPatch::default()
+            },
+        )?;
         self.describe(job)?.ok_or_else(|| {
             CronError::Invalid(format!("job {:?} is not an agent or system job", spec.name))
         })
@@ -486,7 +493,7 @@ impl<'a> Cron<'a> {
         let Some(target) = JobTarget::from_job(&job) else {
             return Ok(None);
         };
-        let policy = policy::get_policy(self.config, &job.id)?;
+        let policy = job.policy;
         Ok(Some(ScheduledJob {
             name: job.name.clone().unwrap_or_default(),
             schedule: JobSchedule::from_core(&job.schedule),

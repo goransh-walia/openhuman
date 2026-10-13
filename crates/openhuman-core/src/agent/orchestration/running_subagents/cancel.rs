@@ -9,7 +9,7 @@ use tinyagents_harness::ids::TaskId;
 
 use tinyagents_orchestration::subagent::FinishedOutcome;
 
-use super::registry::registry;
+use super::registry::{control_admits, registry};
 use super::resolve::task_id_for_session_in_workspace;
 use super::task_ledger::record_cancelled;
 
@@ -34,11 +34,15 @@ pub(crate) struct CancelledSubagent {
 /// caller can deliver a "cancelled" notice into the parent chat. Returns `None`
 /// if no such sub-agent is registered (already finished, or unknown id).
 ///
-/// Unlike the parent-session-owned steering and close paths, this is keyed by
-/// `task_id` alone with no ownership check — it backs the user-facing "Cancel"
-/// affordance, and the desktop user owns every sub-agent in their own core.
+/// User controls check the captured profile in SaaS. The desktop user retains
+/// authority over every sub-agent in their own core.
 pub(crate) fn cancel_by_task(task_id: &str) -> Option<CancelledSubagent> {
-    let cancelled = registry().cancel_trusted(&TaskId::new(task_id)).ok()?;
+    let id = TaskId::new(task_id);
+    let snapshot = registry().snapshot_trusted(&id).ok()?;
+    if !control_admits(&snapshot.metadata) {
+        return None;
+    }
+    let cancelled = registry().cancel(&id, &snapshot.owner_id).ok()?;
     // `AwaitingUser` is paused, not finished: cancelling it is a real cancel.
     let already_finished = cancelled.status.finished_outcome();
     let metadata = cancelled.metadata;
@@ -56,7 +60,7 @@ pub(crate) fn cancel_by_task(task_id: &str) -> Option<CancelledSubagent> {
     );
     Some(CancelledSubagent {
         agent_id: metadata.agent_id,
-        parent_session: cancelled.owner_id,
+        parent_session: metadata.parent_session,
         subagent_session_id: metadata.subagent_session_id,
         workspace_dir: metadata.workspace_dir,
         parent_thread_id: metadata.parent_thread_id,
@@ -200,7 +204,7 @@ impl CallerWorkspace {
     pub(crate) fn admits(&self, metadata: &super::registry::RunningSubagentMetadata) -> bool {
         match self {
             Self::All => true,
-            Self::Only(dir) => metadata.workspace_dir == *dir,
+            Self::Only(dir) => metadata.workspace_dir == *dir && control_admits(metadata),
             Self::Nothing => false,
         }
     }

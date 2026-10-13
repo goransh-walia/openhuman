@@ -308,7 +308,7 @@ async fn pinned_loader_serves_the_published_tinybox_release() {
 
     crate::modules::ops::ensure_loaded(&config, MODULE_ID)
         .await
-        .expect("the OpenHuman release registry and TinyBus loader admit v0.1.24");
+        .expect("the OpenHuman release registry and TinyBus loader admit v0.1.28");
     let capabilities = super::capabilities(&config)
         .await
         .expect("the loaded release serves TinyBus capabilities");
@@ -343,20 +343,20 @@ async fn pinned_loader_serves_the_published_tinybox_release() {
 }
 
 #[tokio::test]
-#[ignore = "requires the downloaded, checksum-verified TinyBox v0.1.24 archive"]
+#[ignore = "requires the downloaded, checksum-verified TinyBox v0.1.28 archive"]
 async fn pinned_loader_serves_resolve_local_grants_from_tinybox_v0124() {
     let _environment_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let archive = std::env::var_os("TINYBOX_RELEASE_ARTIFACT")
         .map(std::path::PathBuf::from)
-        .expect("set TINYBOX_RELEASE_ARTIFACT to the verified v0.1.24 archive");
+        .expect("set TINYBOX_RELEASE_ARTIFACT to the verified v0.1.28 archive");
     assert!(
         archive.is_file(),
         "missing verified release archive: {archive:?}"
     );
 
     let record = crate::modules::registry::find(MODULE_ID).expect("TinyBox registry record");
-    assert_eq!(record.version, "0.1.24");
-    assert_eq!(contract::CONTRACT_VERSION, (1, 14));
+    assert_eq!(record.version, "0.1.28");
+    assert_eq!(contract::CONTRACT_VERSION, (1, 18));
     let asset = tinybus::module::platform::host_candidates()
         .iter()
         .find_map(|host_key| record.asset_for(host_key))
@@ -413,7 +413,7 @@ async fn pinned_loader_serves_resolve_local_grants_from_tinybox_v0124() {
     config.modules.install_dir = Some(install.path().display().to_string());
     crate::modules::ops::ensure_loaded(&config, MODULE_ID)
         .await
-        .expect("the TinyBus loader admits the published v0.1.24 artifact");
+        .expect("the TinyBus loader admits the published v0.1.28 artifact");
 
     let home = tempfile::tempdir().expect("temporary operator home");
     let allowed = home.path().join("workspace");
@@ -428,7 +428,7 @@ async fn pinned_loader_serves_resolve_local_grants_from_tinybox_v0124() {
         protected: contract::ProtectedPaths::default(),
     };
     let grants: contract::LocalGrants = super::module_client(&config)
-        .call(MODULE_ID, contract::METHODS[31], (request,))
+        .call(MODULE_ID, RESOLVE_LOCAL_GRANTS, (request,))
         .await
         .expect("the published artifact serves ResolveLocalGrants");
     assert_eq!(
@@ -474,6 +474,104 @@ fn every_host_operation_is_a_member_of_the_canonical_contract() {
         RUN_DOCKER_WITHOUT_WORKSPACE,
     ];
     assert_eq!(methods, contract::METHODS[..methods.len()]);
+    assert!(contract::METHODS.contains(&SELECT_SHELL));
+    assert!(contract::METHODS.contains(&START_NATIVE_SHELL_EXEC));
+}
+
+#[test]
+fn every_member_the_host_calls_is_named_in_the_pinned_contract() {
+    let called = [
+        DESCRIBE,
+        CREATE,
+        EXEC,
+        INSPECT,
+        CLOSE,
+        SPAWN,
+        IS_RUNNING,
+        CANCEL,
+        ANALYZE_SHELL,
+        RESERVE,
+        CAPABILITIES,
+        SHUTDOWN,
+        FORWARD,
+        CLOSE_FORWARD,
+        JAIL_STATUS,
+        ANALYZE_COMMAND,
+        BEGIN_FILE_READ,
+        READ_FILE_CHUNK,
+        FINISH_FILE_READ,
+        BEGIN_FILE_WRITE,
+        WRITE_FILE_CHUNK,
+        FINISH_FILE_WRITE,
+        ABORT_FILE_WRITE,
+        START_EXEC,
+        READ_OUTPUT,
+        RELEASE_OUTPUT,
+        START_JAILED_EXEC,
+        RUN_DOCKER,
+        DOCKER_STATUS,
+        CLEANUP_DOCKER,
+        RUN_DOCKER_WITHOUT_WORKSPACE,
+        SELECT_SHELL,
+        RESOLVE_LOCAL_GRANTS,
+        START_NATIVE_SHELL_EXEC,
+        VALIDATE_DOCKER_POLICY,
+    ];
+    for member in called {
+        assert!(
+            contract::METHODS.contains(&member),
+            "{member} is not a member of the pinned tinybox contract"
+        );
+    }
+    let mut unique = called.to_vec();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(
+        unique.len(),
+        called.len(),
+        "host member names must be distinct"
+    );
+}
+
+#[tokio::test]
+async fn shell_selection_and_start_use_contract_members_with_typed_requests() {
+    let (_service, client, calls) = mock_client().await;
+    let request = contract::SelectShellRequest {
+        command: "echo hi".to_owned(),
+        preserve_pipeline_status: false,
+        runtime_path: Some("/opt/bin".to_owned()),
+        python_utf8: true,
+    };
+    let _: () = call_with_client(&client, SELECT_SHELL, (request.clone(),), false)
+        .await
+        .expect("select shell call");
+    let log = calls.lock().expect("call log lock");
+    assert_eq!(log[1].0, "SelectShell");
+    assert_eq!(log[1].1, json!([request]));
+}
+
+/// The fixture bus cannot attest, so these run unconfidentially.
+#[tokio::test]
+async fn native_shell_and_policy_validation_use_their_contract_members() {
+    let (_service, client, calls) = mock_client().await;
+    let policy = contract::DockerPolicyRequest {
+        network: Some("host".to_owned()),
+        ..Default::default()
+    };
+    let shell = json!({"process": "p", "resource": "r", "state_dir": "/s"});
+    let _: () = call_with_client(&client, START_NATIVE_SHELL_EXEC, (shell.clone(),), false)
+        .await
+        .expect("native shell start call");
+    let _: () = call_with_client(&client, VALIDATE_DOCKER_POLICY, (policy.clone(),), false)
+        .await
+        .expect("policy validation call");
+    let log = calls.lock().expect("call log lock");
+    let called: Vec<_> = log.iter().filter(|(n, _)| n != CAPABILITIES).collect();
+    let expected = [
+        ("StartNativeShellExec".to_owned(), json!([shell])),
+        ("ValidateDockerPolicy".to_owned(), json!([policy])),
+    ];
+    assert_eq!(called, expected.iter().collect::<Vec<_>>());
 }
 
 #[tokio::test]
@@ -643,4 +741,10 @@ async fn docker_status_transport_uses_its_bounded_deadline() {
     .await
     .expect_err("cleanup transport must also stop at its bounded deadline plus grace");
     assert!(error.contains("MODULE_CALL_REPORTED"), "{error}");
+}
+
+#[test]
+fn resolve_local_grants_is_a_member_of_the_canonical_contract() {
+    assert_eq!(RESOLVE_LOCAL_GRANTS, "ResolveLocalGrants");
+    assert!(contract::METHODS.contains(&RESOLVE_LOCAL_GRANTS));
 }

@@ -10,7 +10,7 @@ use crate::mcp::audit::McpWriteListQuery;
 use crate::mcp::server::McpToolSpec;
 
 use super::providers::capability_provider_diagnostics;
-use super::types::{
+use tinytools::{
     McpAllowlistDiagnostics, McpServerAllowlistSummary, McpWriteAuditHealth, ToolPolicyDiagnostics,
     ToolPolicyPosture, ToolRegistryEntry, ToolRegistryHealth, ToolRegistryList,
     ToolRegistryTransport,
@@ -71,7 +71,7 @@ pub async fn diagnostics_for_config(config: &Config) -> Outcome<ToolPolicyDiagno
     let posture = posture_from_config(config);
     let mcp_allowlists = mcp_allowlists_from_config(config);
     let mcp_write_audit = mcp_write_audit_health(config).await;
-    let recent_denials = super::denials::list(25);
+    let recent_denials = tinytools::registry::denials::list(25);
     let capability_providers = capability_provider_diagnostics(config);
 
     log::trace!(

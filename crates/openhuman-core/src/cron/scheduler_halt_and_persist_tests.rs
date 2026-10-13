@@ -2,7 +2,6 @@ use super::*;
 
 use tinyflows_schedule::types::JobType;
 use tinyflows_schedule::types::Schedule;
-use tinyflows_schedule::types::SessionTarget;
 // TAURI-RUST-514 — a BYO provider insufficient-credits 402 ("requires more
 // credits") leaks from a cron-fired agent job through `last_agent_error`.
 // `is_insufficient_credits_failure` must consult the message classifier so the
@@ -351,21 +350,45 @@ async fn cron_agent_job_uses_agent_definition_tool_scope() {
     );
 }
 
-#[tokio::test]
-async fn persist_job_result_records_run_and_reschedules_shell_job() {
-    let tmp = TempDir::new().unwrap();
-    let config = test_config(&tmp).await;
-    let job = cron::add_job(&config, "*/5 * * * *", "echo ok").unwrap();
-    let started = Utc::now();
-    let finished = started + ChronoDuration::milliseconds(10);
+/// Runs `job_id` once through the schedule runtime (claim, execute, deliver,
+/// record, complete) the way a poll would find it: due now, never retried.
+async fn run_through_scheduler(config: &Config, job_id: &str) {
+    crate::cron::store::force_next_run_for_test(
+        config,
+        job_id,
+        Utc::now() - ChronoDuration::seconds(1),
+    )
+    .unwrap();
+    let job = cron::get_job(config, job_id).unwrap();
+    let security = Arc::new(SecurityPolicy::from_config(
+        &config.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    ));
+    let mut dispatcher = JobDispatcher::new(config, &security);
+    dispatcher.dispatch(vec![job]).await.unwrap();
+    dispatcher.drain().await;
+}
 
-    let success = persist_job_result(&config, &job, true, "ok", started, finished).await;
-    assert!(success);
+async fn no_retry_config(tmp: &TempDir) -> Config {
+    let mut config = test_config(tmp).await;
+    config.reliability.scheduler_retries = 0;
+    config
+}
+
+#[tokio::test]
+async fn a_scheduled_shell_run_records_history_and_reschedules() {
+    let tmp = TempDir::new().unwrap();
+    let config = no_retry_config(&tmp).await;
+    let job = cron::add_job(&config, "*/5 * * * *", "echo ok").unwrap();
+
+    run_through_scheduler(&config, &job.id).await;
 
     let runs = cron::list_runs(&config, &job.id, 10).unwrap();
     assert_eq!(runs.len(), 1);
     let updated = cron::get_job(&config, &job.id).unwrap();
     assert_eq!(updated.last_status.as_deref(), Some("ok"));
+    assert!(updated.next_run > Utc::now(), "the recurrence moved on");
 }
 
 #[tokio::test]
@@ -378,7 +401,7 @@ async fn scheduler_flow_runs_active_hours_job_and_reschedules_inside_window() {
         start: active_hm.clone(),
         end: active_hm.clone(),
     };
-    let mut job = cron::add_shell_job(
+    let job = cron::add_shell_job(
         &config,
         Some("active-hours-e2e".into()),
         Schedule::Cron {
@@ -389,17 +412,21 @@ async fn scheduler_flow_runs_active_hours_job_and_reschedules_inside_window() {
         "echo active-hours-fired",
     )
     .unwrap();
-    job.next_run = Utc::now() - ChronoDuration::seconds(1);
+    crate::cron::store::force_next_run_for_test(
+        &config,
+        &job.id,
+        Utc::now() - ChronoDuration::seconds(1),
+    )
+    .unwrap();
+    let job = cron::get_job(&config, &job.id).unwrap();
 
     let security = Arc::new(SecurityPolicy::from_config(
         &config.autonomy,
         &config.workspace_dir,
         &config.workspace_dir,
     ));
-    let mut dispatcher = JobDispatcher::new(1);
-    dispatcher
-        .dispatch(&config, &security, vec![job.clone()])
-        .await;
+    let mut dispatcher = JobDispatcher::new(&config, &security);
+    dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     dispatcher.drain().await;
 
     let stored = cron::get_job(&config, &job.id).unwrap();
@@ -429,83 +456,71 @@ async fn scheduler_flow_runs_active_hours_job_and_reschedules_inside_window() {
     assert_eq!(runs[0].status, "ok");
 }
 
-#[tokio::test]
-async fn persist_job_result_success_deletes_one_shot() {
-    let tmp = TempDir::new().unwrap();
-    let config = test_config(&tmp).await;
-    let at = Utc::now() + ChronoDuration::minutes(10);
-    let job = cron::add_agent_job(
-        &config,
+fn one_shot(config: &Config, command: &str, delete_after_run: bool) -> CronJob {
+    let job = cron::add_shell_job(
+        config,
         Some("one-shot".into()),
-        tinyflows_schedule::types::Schedule::At { at },
-        "Hello",
-        SessionTarget::Isolated,
-        None,
-        None,
-        true,
+        Schedule::At {
+            at: Utc::now() + ChronoDuration::minutes(10),
+        },
+        command,
     )
     .unwrap();
-    let started = Utc::now();
-    let finished = started + ChronoDuration::milliseconds(10);
-
-    let success = persist_job_result(&config, &job, true, "ok", started, finished).await;
-    assert!(success);
-    let lookup = cron::get_job(&config, &job.id);
-    assert!(lookup.is_err());
+    if delete_after_run {
+        cron::update_job(
+            config,
+            &job.id,
+            tinyflows_schedule::types::CronJobPatch {
+                delete_after_run: Some(true),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    } else {
+        job
+    }
 }
 
 #[tokio::test]
-async fn persist_job_result_failure_disables_one_shot() {
+async fn a_successful_auto_delete_one_shot_is_removed() {
     let tmp = TempDir::new().unwrap();
-    let config = test_config(&tmp).await;
-    let at = Utc::now() + ChronoDuration::minutes(10);
-    let job = cron::add_agent_job(
-        &config,
-        Some("one-shot".into()),
-        tinyflows_schedule::types::Schedule::At { at },
-        "Hello",
-        SessionTarget::Isolated,
-        None,
-        None,
-        true,
-    )
-    .unwrap();
-    let started = Utc::now();
-    let finished = started + ChronoDuration::milliseconds(10);
+    let config = no_retry_config(&tmp).await;
+    let job = one_shot(&config, "echo ok", true);
 
-    let success = persist_job_result(&config, &job, false, "boom", started, finished).await;
-    assert!(!success);
+    run_through_scheduler(&config, &job.id).await;
+
+    assert!(cron::get_job(&config, &job.id).is_err());
+}
+
+#[tokio::test]
+async fn a_failed_one_shot_is_kept_disabled_with_its_error() {
+    let tmp = TempDir::new().unwrap();
+    let config = no_retry_config(&tmp).await;
+    let job = one_shot(&config, "echo boom; exit 1", true);
+
+    run_through_scheduler(&config, &job.id).await;
+
     let updated = cron::get_job(&config, &job.id).unwrap();
     assert!(!updated.enabled);
     assert_eq!(updated.last_status.as_deref(), Some("error"));
 }
 
 #[tokio::test]
-async fn persist_job_result_disables_at_job_without_delete_flag() {
+async fn an_at_job_without_the_delete_flag_runs_once_and_is_never_due_again() {
     // Regression: an `At` job created without delete_after_run (the RPC default,
     // and every shell `At` job) must not be rescheduled after it runs. Its `at`
-    // is a fixed instant, so reschedule_after_run would write next_run = at
-    // (now in the past) and due_jobs would re-select it on every poll, re-firing
-    // the job forever.
+    // is a fixed instant, so rescheduling would write next_run = at (now in the
+    // past) and due_jobs would re-select it on every poll, re-firing the job
+    // forever.
     let tmp = TempDir::new().unwrap();
-    let config = test_config(&tmp).await;
-    let at = Utc::now() + ChronoDuration::minutes(10);
-    let job = cron::add_agent_job(
-        &config,
-        Some("at-no-delete".into()),
-        tinyflows_schedule::types::Schedule::At { at },
-        "Hello",
-        SessionTarget::Isolated,
-        None,
-        None,
-        false, // delete_after_run = false — the previously-buggy case
-    )
-    .unwrap();
-    let started = Utc::now();
-    let finished = started + ChronoDuration::milliseconds(10);
+    let config = no_retry_config(&tmp).await;
+    let job = one_shot(&config, "echo ok", false);
+    let at = match job.schedule {
+        Schedule::At { at } => at,
+        _ => unreachable!(),
+    };
 
-    let success = persist_job_result(&config, &job, true, "ok", started, finished).await;
-    assert!(success);
+    run_through_scheduler(&config, &job.id).await;
 
     // The row is kept (not auto-deleted) but disabled, and its run is recorded.
     let updated = cron::get_job(&config, &job.id).unwrap();
@@ -589,34 +604,6 @@ async fn deliver_if_configured_publishes_event_for_announce_mode() {
     assert!(deliver_if_configured(&config, &job, "hello", true)
         .await
         .is_ok());
-}
-
-#[test]
-fn is_one_shot_auto_delete_true_for_at_schedule_with_flag() {
-    let mut job = test_job("echo hi");
-    job.delete_after_run = true;
-    job.schedule = Schedule::At { at: Utc::now() };
-    assert!(is_one_shot_auto_delete(&job));
-}
-
-#[test]
-fn is_one_shot_auto_delete_false_for_cron_schedule() {
-    let mut job = test_job("echo hi");
-    job.delete_after_run = true;
-    job.schedule = Schedule::Cron {
-        expr: "0 * * * *".into(),
-        tz: None,
-        active_hours: None,
-    };
-    assert!(!is_one_shot_auto_delete(&job));
-}
-
-#[test]
-fn is_one_shot_auto_delete_false_when_flag_not_set() {
-    let mut job = test_job("echo hi");
-    job.delete_after_run = false;
-    job.schedule = Schedule::At { at: Utc::now() };
-    assert!(!is_one_shot_auto_delete(&job));
 }
 
 #[test]

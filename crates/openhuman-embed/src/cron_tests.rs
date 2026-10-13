@@ -23,6 +23,8 @@ fn core_job(job_type: JobType, command: &str) -> CronJob {
         last_status: Some("ok".into()),
         last_output: None,
         origin: None,
+        claim_generation: 0,
+        policy: Default::default(),
     }
 }
 

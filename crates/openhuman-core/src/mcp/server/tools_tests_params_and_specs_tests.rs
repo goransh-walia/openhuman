@@ -465,3 +465,17 @@ fn memory_forget_maps_ids_and_bounds_them() {
         build_rpc_params_for_test("memory.forget", json!({ "ids": too_many })).expect_err("cap");
     assert!(err.message().contains("at most"));
 }
+
+#[test]
+fn components_search_off_hides_every_search_mcp_tool() {
+    use super::specs::tool_specs_for_config;
+    let mut config = crate::config::Config::default();
+    config.components.search = false;
+    let names: Vec<_> = tool_specs_for_config(&config, true)
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+    assert!(!names.contains(&"web_search"), "{names:?}");
+    assert!(!names.contains(&"web_answer"), "{names:?}");
+    assert!(!names.contains(&"searxng_search"), "{names:?}");
+}

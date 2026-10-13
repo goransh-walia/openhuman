@@ -317,7 +317,7 @@ async fn scenario() {
                 "chat",
                 "sender",
                 "message",
-                &format!("{}: call tenant_probe", handle.id()),
+                format!("{}: call tenant_probe", handle.id()),
             ))
             .await
             .unwrap();

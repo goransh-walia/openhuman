@@ -26,6 +26,9 @@ mod steering_tests;
 #[path = "running_subagents_wire_tests.rs"]
 mod wire_tests;
 
+#[path = "running_subagents_tenant_tests.rs"]
+mod tenant_tests;
+
 /// Serializes every test that touches the global [`REGISTRY`]. We reuse the
 /// crate-wide `TEST_ENV_LOCK` (rather than a module-local mutex) because the
 /// destructive `cancel_all` path is also reachable from the `threads::ops`
@@ -96,7 +99,8 @@ fn register_test_with_thread(
         rq,
         dummy_abort(),
         rx,
-    );
+    )
+    .expect("fixture registration admitted");
     tx
 }
 
@@ -168,7 +172,8 @@ async fn task_id_for_session_enforces_parent_ownership() {
         rq,
         dummy_abort(),
         rx,
-    );
+    )
+    .expect("fixture registration admitted");
 
     assert_eq!(
         task_id_for_session("subsess-1", "session-owner").unwrap(),
@@ -200,7 +205,8 @@ async fn snapshot_and_block_scope_to_parent_and_reflect_live_status() {
         run_queue(),
         dummy_abort(),
         rx_a,
-    );
+    )
+    .expect("fixture registration admitted");
     let (tx_b, rx_b) = status_channel();
     register(
         "task-fleet-b".into(),
@@ -213,7 +219,8 @@ async fn snapshot_and_block_scope_to_parent_and_reflect_live_status() {
         run_queue(),
         dummy_abort(),
         rx_b,
-    );
+    )
+    .expect("fixture registration admitted");
     // A worker owned by a different parent must not leak into the snapshot.
     let (tx_other, rx_other) = status_channel();
     register(
@@ -227,7 +234,8 @@ async fn snapshot_and_block_scope_to_parent_and_reflect_live_status() {
         run_queue(),
         dummy_abort(),
         rx_other,
-    );
+    )
+    .expect("fixture registration admitted");
 
     // `b` pauses awaiting the user; `a` stays running.
     tx_b.send(DetachedSubagentStatus::AwaitingUser {
@@ -369,7 +377,8 @@ async fn resume_ref_for_task_includes_resume_fields_and_enforces_ownership() {
         run_queue(),
         dummy_abort(),
         rx,
-    );
+    )
+    .expect("fixture registration admitted");
 
     let reference = resume_ref_for_task("task-resume", "session-owner").expect("resume reference");
     assert_eq!(reference.task_id, "task-resume");
@@ -405,7 +414,8 @@ async fn task_id_for_session_prefers_live_task_over_terminal_task() {
         run_queue(),
         dummy_abort(),
         old_rx,
-    );
+    )
+    .expect("fixture registration admitted");
     let _ = old_tx.send(DetachedSubagentStatus::Completed {
         output: "old".into(),
         iterations: 1,
@@ -422,7 +432,8 @@ async fn task_id_for_session_prefers_live_task_over_terminal_task() {
         run_queue(),
         dummy_abort(),
         new_rx,
-    );
+    )
+    .expect("fixture registration admitted");
 
     assert_eq!(
         task_id_for_session("subsess-live", "session-owner").unwrap(),
@@ -651,7 +662,8 @@ async fn stop_for_thread_aborts_the_threads_running_children() {
         rq.clone(),
         child.abort_handle(),
         rx,
-    );
+    )
+    .expect("fixture registration admitted");
     // Another thread's child must survive the stop.
     let _other =
         register_test_with_thread("task-stop-other", "session-stop", Some("thread-keep"), rq);

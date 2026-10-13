@@ -38,12 +38,18 @@ const installer = fileURLToPath(
 const localRustRunner = fileURLToPath(
   new URL("../test-rust-with-mock.sh", import.meta.url),
 );
+const rustE2eRunner = fileURLToPath(
+  new URL("../test-rust-e2e.sh", import.meta.url),
+);
 
-test("locally built native Rust test modules use the checkout target tree", () => {
+test("locally built native Rust test modules come from build.mjs, not ad hoc cargo builds", () => {
   const source = readFileSync(localRustRunner, "utf8");
-  assert.match(source, /target\/native-test-modules\/tinyjuice/);
-  assert.match(source, /target\/native-test-modules\/tinysearch/);
-  assert.match(source, /target\/native-test-modules\/tinyconnectors/);
+  assert.match(source, /modules\/stage-local-modules\.sh/);
+  assert.match(source, /stage_source_modules "\$\{local_source_ids\[@\]\}"/);
+  assert.match(source, /target\/module-sources\/tinyconnectors/);
+  assert.match(source, /stage_release_module tinyconnectors/);
+  assert.doesNotMatch(source, /cargo build/, "no hand-rolled module build");
+  assert.doesNotMatch(source, /--target-dir|native-test-modules/);
   assert.doesNotMatch(
     source,
     /vendor\/tiny(?:juice|search|connectors)\/target/,
@@ -52,9 +58,37 @@ test("locally built native Rust test modules use the checkout target tree", () =
 
 test("local MCP registry E2E tests load the pinned TinyMCP module", () => {
   const source = readFileSync(localRustRunner, "utf8");
-  assert.match(source, /test-module-assets\.mjs .*tinymcp/);
-  assert.match(source, /target\/test-modules\/tinymcp/);
+  assert.match(source, /stage_release_module tinymcp/);
   assert.match(source, /OPENHUMAN_MODULE_PATH="\$tinymcp_dir/);
+});
+
+test("linked TinyDocs E2E enables its required local feature", () => {
+  const localSource = readFileSync(localRustRunner, "utf8");
+  const localBranch = localSource.indexOf('if [ "$target" = "tinydocs_linked_e2e" ]');
+  assert.ok(localBranch >= 0, "the Rust gate gives linked TinyDocs an explicit branch");
+  const localEnd = localSource.indexOf("\n    elif ", localBranch);
+  assert.ok(localEnd > localBranch, "the linked target branch has a bounded body");
+  assert.match(localSource.slice(localBranch, localEnd), /--features linked-modules/);
+
+  const e2eSource = readFileSync(rustE2eRunner, "utf8");
+  const e2eBranch = e2eSource.indexOf('if [ "$suite" = "tinydocs_linked_e2e" ]');
+  assert.ok(e2eBranch >= 0, "the Rust E2E runner gives linked TinyDocs an explicit branch");
+  const e2eEnd = e2eSource.indexOf("\n  fi\n", e2eBranch);
+  assert.ok(e2eEnd > e2eBranch, "the E2E linked target branch has a bounded body");
+  assert.match(
+    e2eSource.slice(e2eBranch, e2eEnd),
+    /--features "\$PRODUCT_FEATURES,linked-modules"/,
+    "the E2E target runs with linked-modules in addition to product features",
+  );
+});
+
+test("CI exports the staged TinyMCP library for the multi-server suite", () => {
+  const source = readFileSync(installer, "utf8");
+  assert.match(
+    source,
+    /echo "OPENHUMAN_TINYMCP_TEST_MODULE=\$\{tinymcp_artifact\}"/,
+    "mcp_registry_multi_server loads TinyMCP by file, so the CI env file names it",
+  );
 });
 
 test("MCP registry Rust integration tests run serially", () => {
@@ -63,6 +97,43 @@ test("MCP registry Rust integration tests run serially", () => {
     source,
     /mcp_registry_e2e[\s\S]*?--test-threads=1/,
     "the TinyMCP process state is shared across test cases",
+  );
+});
+
+test("multi-server MCP tests run serially through the module-backed host", () => {
+  const source = readFileSync(localRustRunner, "utf8");
+  const fullSuiteStart = source.indexOf(
+    'elif [ "$target" = "mcp_registry_multi_server" ]',
+  );
+  assert.ok(fullSuiteStart >= 0, "full Rust gate gives the suite an isolated process");
+  const fullSuiteEnd = source.indexOf("\n    else\n", fullSuiteStart);
+  assert.ok(fullSuiteEnd > fullSuiteStart, "full-suite branch has a bounded body");
+  assert.match(
+    source.slice(fullSuiteStart, fullSuiteEnd),
+    /--test-threads=1/,
+    "parallel tests race through TinyMCP's process-wide module client",
+  );
+  assert.match(
+    source.slice(fullSuiteStart, fullSuiteEnd),
+    /OPENHUMAN_TINYMCP_TEST_MODULE="\$tinymcp_artifact"/,
+    "the tests receive the staged TinyMCP library path",
+  );
+
+  const directStart = source.indexOf(
+    'elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "mcp_registry_multi_server" ]',
+  );
+  assert.ok(directStart >= 0, "the focused runner gives the suite the same isolation");
+  const directEnd = source.indexOf("\nelse\n", directStart);
+  assert.ok(directEnd > directStart, "focused branch has a bounded body");
+  assert.match(
+    source.slice(directStart, directEnd),
+    /--test-threads=1/,
+    "focused and full-suite runs must use the same serialization",
+  );
+  assert.match(
+    source.slice(directStart, directEnd),
+    /OPENHUMAN_TINYMCP_TEST_MODULE="\$tinymcp_artifact"/,
+    "focused runs use the same staged TinyMCP artifact",
   );
 });
 
@@ -139,8 +210,7 @@ for (const id of [
 }
 
 for (const [runner, archiveVariable, directoryVariable] of [
-  ["test-rust-e2e.sh", "tinybox_archive", "tinybox_dir"],
-  ["test-rust-with-mock.sh", "hosts_archive", "hosts_dir"],
+  ["modules/stage-local-modules.sh", "archive", "dir"],
   ["test-rust-with-mock.sh", "tinybox_archive", "tinybox_dir"],
 ]) {
   test(`${runner} extracts ${archiveVariable} with the current user's ownership`, () => {
@@ -221,20 +291,30 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
       new URL(`../${runner}`, import.meta.url),
       "utf8",
     );
-    const setupStart = source.indexOf('tinymcp_asset="');
+    const setupStart = source.indexOf(
+      runner === "test-rust-with-mock.sh"
+        ? "# The MCP registry E2E targets"
+        : "e2e_source_ids=(",
+    );
     assert.ok(setupStart >= 0, "runner prepares the pinned TinyMCP fixture");
-    const setupEnd = source.indexOf("\n\n", setupStart);
+    const setupEnd = source.indexOf("\nfi\n", setupStart) + 4;
     const setup = source.slice(setupStart, setupEnd);
+    const stageLib = fileURLToPath(
+      new URL("../modules/stage-local-modules.sh", import.meta.url),
+    );
     const root = mkdtempSync(join(tmpdir(), "mcp-runner-"));
     try {
       const moduleDir = join(root, "target/test-modules/tinymcp/test-digest");
       mkdirSync(moduleDir, { recursive: true });
       writeFileSync(join(moduleDir, "libtinymcp_module.so"), "fixture");
+      const boxDir = join(root, "target/test-modules/tinybox/test-digest");
+      mkdirSync(boxDir, { recursive: true });
+      writeFileSync(join(boxDir, "libtinybox.so"), "fixture");
       // Evaluate the real runner branches with only external commands stubbed.
       // A cached fixture avoids downloads while exercising the path export.
       const cargoStub = `cargo_test() {
         if [[ " $* " == *" --test mcp_registry_e2e "* ]]; then
-          printf 'ARTIFACT=%s\\n' "\${OPENHUMAN_TINYMCP_TEST_MODULE:-missing}"
+          printf 'ARTIFACT=%s\\n' "\${OPENHUMAN_MODULE_PATH:-missing}"
           printf 'ARG=%s\\n' "$@"
         fi
       }`;
@@ -281,9 +361,12 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
             "module_platform=ubuntu-22.04-x86_64",
             "module_ext=so",
             "PRODUCT_FEATURES=mcp",
-            "connectors_module=unused",
-            "node() { printf 'tinymcp\\tunused\\tmodule.tar.gz\\ttest-digest\\n'; }",
+            `source ${JSON.stringify(stageLib)}`,
+            "node() { printf '%s\\tunused\\tmodule.tar.gz\\ttest-digest\\n' \"${@: -1}\"; }",
+            "unset OPENHUMAN_MODULE_PATH",
             setup,
+            'connectors_module_path="/connectors:${OPENHUMAN_MODULE_PATH:-}"',
+            'hosts_dir=/hosts',
             cargoStub,
             invocation,
           ].join("\n"),
@@ -293,7 +376,7 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
           env: {
             ...process.env,
             TEST_ROOT: root,
-            OPENHUMAN_TINYMCP_TEST_MODULE: "",
+            OPENHUMAN_MODULE_SOURCE: "",
           },
         },
       );
@@ -301,9 +384,9 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
       const runs = result.stdout.split("ARTIFACT=").slice(1);
       assert.equal(runs.length, runner === "test-rust-with-mock.sh" ? 2 : 1);
       for (const run of runs) {
-        assert.equal(
-          run.split("\n")[0],
-          join(moduleDir, "libtinymcp_module.so"),
+        assert.ok(
+          run.split("\n")[0].split(":").includes(moduleDir),
+          "the pinned TinyMCP release directory is on the module search path",
         );
         assert.match(
           run,
@@ -322,3 +405,17 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
     }
   });
 }
+
+test("the CI installer builds nothing: every module, tinyconnectors included, is a registry release", () => {
+  const source = readFileSync(installer, "utf8");
+  assert.doesNotMatch(source, /cargo build|cargo-cancel|--target-dir/);
+  assert.doesNotMatch(source, /stage-connector-test-module|modules\.toml/);
+  const assets = resolveTestModuleAssets(
+    readRegistrySource(),
+    "ubuntu-22.04-x86_64",
+  );
+  const connectors = assets.find((asset) => asset.id === "tinyconnectors");
+  assert.ok(connectors, "the installer resolves tinyconnectors from the registry");
+  assert.match(connectors.sha256, /^[a-f0-9]{64}$/);
+  assert.match(connectors.url, /\/releases\/download\/v\d+\.\d+\.\d+\//);
+});

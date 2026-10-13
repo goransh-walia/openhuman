@@ -19,8 +19,55 @@ async fn desktop_controllers_expose_expected_rpc_contracts_and_dispatch_pending(
     }
     assert_eq!(controller("set_enabled").schema.inputs.len(), 1);
     assert_eq!(controller("confirm").schema.inputs.len(), 2);
-    let value = (controller("pending").handler)(Map::new()).await.unwrap();
-    assert!(value.is_array());
+}
+
+fn scoped_context(computer: bool) -> (tempfile::TempDir, std::sync::Arc<CoreContext>) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = crate::config::Config::default();
+    config.workspace_dir = dir.path().to_path_buf();
+    config.components.computer = computer;
+    (
+        dir,
+        CoreContext::for_test_with_config(DomainSet::full(), config),
+    )
+}
+
+#[tokio::test]
+async fn pending_lists_actions_while_the_computer_component_is_on() {
+    let (_dir, context) = scoped_context(true);
+    CoreContext::scope(context, async {
+        let value = (controller("pending").handler)(Map::new()).await.unwrap();
+        assert!(value.is_array());
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn every_desktop_controller_answers_component_disabled_when_computer_is_off() {
+    let (_dir, context) = scoped_context(false);
+    CoreContext::scope(context, async {
+        for function in ["status", "probe", "pending"] {
+            let error = (controller(function).handler)(Map::new())
+                .await
+                .unwrap_err();
+            assert!(
+                error.contains("COMPONENT_DISABLED:computer"),
+                "{function}: {error}"
+            );
+        }
+        let mut params = Map::new();
+        params.insert("enabled".to_owned(), Value::Bool(true));
+        let error = (controller("set_enabled").handler)(params)
+            .await
+            .unwrap_err();
+        assert!(error.contains("COMPONENT_DISABLED:computer"), "{error}");
+        let mut params = Map::new();
+        params.insert("confirmation_id".to_owned(), Value::String("id".to_owned()));
+        params.insert("approve".to_owned(), Value::Bool(true));
+        let error = (controller("confirm").handler)(params).await.unwrap_err();
+        assert!(error.contains("COMPONENT_DISABLED:computer"), "{error}");
+    })
+    .await;
 }
 
 #[tokio::test]

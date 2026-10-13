@@ -5,7 +5,6 @@
 //! reachable without touching the network, which is what keeps them in the unit
 //! suite instead of behind an ignore.
 
-use super::*;
 use crate::config::Config;
 use crate::modules::ops::{self, install_dir, list};
 use crate::modules::registry;
@@ -34,6 +33,13 @@ fn test_bundled_record() -> &'static crate::modules::types::ModuleRecord {
         release_url: "https://github.com/tinyhumansai/tinydocs/releases/tag/v0.1.16",
         assets,
         load: LoadPolicy::Lazy,
+        source: crate::modules::types::SourceSpec {
+            submodule: "tinydocs",
+            manifest: "Cargo.toml",
+            package: "test-bundled-module",
+            lib_name: "test_bundled_module",
+            features: &[],
+        },
     }))
 }
 
@@ -109,7 +115,7 @@ fn the_default_config_enables_modules_and_downloads() {
 fn list_reports_every_registry_entry() {
     let statuses = list(&offline_config());
     assert_eq!(statuses.len(), registry::ALL.len());
-    assert!(statuses.iter().any(|status| status.id == "tinydocs"));
+    assert!(statuses.iter().any(|status| status.id == "tinymcp"));
     for status in &statuses {
         assert!(!status.version.is_empty());
         assert!(!status.bus_name.is_empty());
@@ -223,6 +229,7 @@ fn errors_never_leak_a_path_or_a_url() {
     }
 }
 
+#[cfg(feature = "documents")]
 #[tokio::test]
 async fn a_bounded_wait_with_nothing_cached_and_downloads_off_fails_rather_than_loading() {
     // An isolated install directory: this machine's real cache may hold the
@@ -398,7 +405,7 @@ async fn a_loader_error_carries_the_terminal_marker_exactly_once() {
     // `blocking` marks a loader error terminal, but tinybus' release-cache path
     // and `load_local` already say so; appending again doubled the sentence.
     // The failure policy keys on both phrases, so each must stay, once.
-    let marker = crate::tools::status::MODULE_FAULT_MARKER;
+    let marker = tinytools::status::MODULE_FAULT_MARKER;
     for loader_error in [
         "module 'tinydocs' could not be loaded: digest mismatch. This is terminal for the \
          running process; restart the app to try again",
@@ -551,23 +558,123 @@ async fn disabled_modules_are_reported_then_demoted_at_product_boundaries() {
 }
 
 #[test]
-fn native_juice_fixture_is_resolved_without_a_unit_test_adapter() {
-    let fixture = std::path::PathBuf::from("fixture/libtinyjuice_module.so");
-    let _env = crate::config::test_env::EnvVarGuard::locked_set("TINYJUICE_TEST_MODULE", &fixture);
-    assert_eq!(
-        local_override(&Config::default(), "tinyjuice"),
-        Some(fixture)
-    );
-    let mut configured = Config::default();
-    configured
+fn status_reports_the_source_that_serves_a_module() {
+    use crate::config::schema::ModuleSourceMode;
+    use crate::modules::types::ModuleSource;
+
+    let mut config = Config::default();
+    let status = |config: &Config| {
+        list(config)
+            .into_iter()
+            .find(|m| m.id == "tinyjuice")
+            .expect("tinyjuice is registered")
+    };
+    if let Some(source) = status(&config).source {
+        assert_eq!(source, ModuleSource::Release);
+    }
+    assert_eq!(status(&config).detail, None);
+
+    // A linked request in a binary with no linked factory is served by the
+    // release, and the status says why without naming a path.
+    config.modules.source = ModuleSourceMode::Linked;
+    let fallback = status(&config);
+    assert_ne!(fallback.source, Some(ModuleSource::Linked));
+    let detail = fallback.detail.expect("fallback is visible in detail");
+    assert!(detail.contains("release"), "{detail}");
+    assert!(!detail.contains('/'), "{detail}");
+
+    // A path override is reported as a local file.
+    let mut config = Config::default();
+    config
         .modules
         .overrides
-        .push(crate::config::schema::ModuleOverride {
-            id: "tinyjuice".into(),
-            path: "explicit/libtinyjuice_module.so".into(),
-        });
-    assert_eq!(
-        local_override(&configured, "tinyjuice"),
-        Some("explicit/libtinyjuice_module.so".into())
+        .push(crate::config::schema::ModuleOverride::with_path(
+            "tinyjuice",
+            "/dev/libtinyjuice_module.so",
+        ));
+    let local = status(&config);
+    assert_ne!(local.source, Some(ModuleSource::Release));
+    if let Some(source) = local.source {
+        assert_eq!(source, ModuleSource::LocalFile);
+    }
+}
+
+#[tokio::test]
+#[ignore = "blocked on tinybus 0.1.4 (tinybus epic): tinychannels-module cannot be a dev-dependency"]
+async fn a_registered_linked_factory_serves_the_module_and_status_says_so() {
+    use crate::config::schema::ModuleSourceMode;
+    use crate::modules::types::ModuleSource;
+
+    // Restore `register_linked("tinychannels", tinychannels_module::linked_module);`
+    // once the tinybus epic lets tinychannels-module be a dev-dependency again.
+    let mut config = Config::default();
+    config.modules.source = ModuleSourceMode::Linked;
+    ops::ensure_loaded(&config, "tinychannels")
+        .await
+        .expect("the linked module is admitted through the seam");
+
+    let status = list(&config)
+        .into_iter()
+        .find(|m| m.id == "tinychannels")
+        .expect("tinychannels is registered");
+    assert_eq!(status.state, ModuleState::Ready);
+    assert_eq!(status.source, Some(ModuleSource::Linked));
+    assert_eq!(status.detail, None);
+}
+
+#[tokio::test]
+async fn attaching_a_linked_module_without_a_factory_fails_with_a_static_reason() {
+    let runtime = crate::modules::host::runtime().await.expect("module host");
+    let error = ops::load_linked(runtime, "tinyhosts-no-factory", serde_json::json!({}))
+        .expect_err("no factory is registered for this id");
+    assert!(error.contains("no linked factory"), "{error}");
+    assert!(!error.contains('/'), "{error}");
+}
+
+#[tokio::test]
+async fn a_failing_linked_factory_is_reported_without_its_error_detail() {
+    fn failing() -> tinybus::Result<tinybus::module::LinkedModule> {
+        Err(tinybus::Error::failed("secret-token /home/user/path"))
+    }
+    crate::modules::linked::register_linked("linked-failing-test", failing);
+    let runtime = crate::modules::host::runtime().await.expect("module host");
+    let error = ops::load_linked(runtime, "linked-failing-test", serde_json::json!({}))
+        .expect_err("the factory fails");
+    assert!(
+        error.contains("linked factory could not be started"),
+        "{error}"
     );
+    assert!(!error.contains("secret-token"), "{error}");
+    assert!(!error.contains("/home"), "{error}");
+}
+
+#[test]
+fn a_debug_build_warns_when_a_local_build_is_served_ahead_of_its_pin() {
+    use crate::modules::source::pin_ahead_warning;
+    use crate::modules::types::ModuleSource;
+
+    for served in [ModuleSource::Linked, ModuleSource::Source] {
+        let line = pin_ahead_warning("tinydocs", served, Some("tinysearch, tinydocs"), true)
+            .expect("an ahead id served locally warns");
+        assert!(line.contains("id=tinydocs"));
+        assert!(line.contains("gitlink ahead of released pin"));
+        assert!(line.contains("release-and-repin"));
+    }
+}
+
+#[test]
+fn the_ahead_warning_is_silent_for_released_modules_other_ids_and_release_builds() {
+    use crate::modules::source::pin_ahead_warning;
+    use crate::modules::types::ModuleSource;
+
+    // Released and explicit-file modules are not a locally compiled pin.
+    for served in [ModuleSource::Release, ModuleSource::LocalFile] {
+        assert!(pin_ahead_warning("tinydocs", served, Some("tinydocs"), true).is_none());
+    }
+    // Not in the list, an id that merely contains the name, no list at all.
+    assert!(pin_ahead_warning("tinydocs", ModuleSource::Source, Some("tinydocs2"), true).is_none());
+    assert!(pin_ahead_warning("tinydocs", ModuleSource::Source, Some(""), true).is_none());
+    assert!(pin_ahead_warning("tinydocs", ModuleSource::Source, None, true).is_none());
+    // A release build never warns.
+    assert!(pin_ahead_warning("tinydocs", ModuleSource::Source, Some("tinydocs"), false).is_none());
 }

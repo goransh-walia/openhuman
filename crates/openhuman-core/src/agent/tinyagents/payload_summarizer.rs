@@ -136,7 +136,7 @@ impl PayloadSummarizer for SubagentPayloadSummarizer {
 
                 let mut harness: AgentHarness<(), OpenHumanRunContext> = AgentHarness::new();
                 harness.with_policy(policy);
-                let provider_model = super::model::MaxTokensModel::new(
+                let provider_model = tinyinference_llm::model::MaxTokensModel::new(
                     source.build_summarizer(
                         &model,
                         definition.temperature,

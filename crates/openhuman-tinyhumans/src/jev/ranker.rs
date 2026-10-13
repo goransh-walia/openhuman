@@ -10,7 +10,7 @@ use std::{
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use openhuman_embed::__host::agent::tinyagents::discovery::{
-    embedding_provider_is_usable, embedding_tool_ranker,
+    embedding_provider_is_usable, embedding_tool_ranker_in,
 };
 use openhuman_embed::__host::config::Config;
 use tinyjevclient::Client;
@@ -204,14 +204,10 @@ fn retriever_for(config: &Config) -> Result<Arc<dyn ToolRanker>, RankError> {
         provider.name(),
         provider.model_id()
     );
-    Ok(Arc::new(
-        embedding_tool_ranker(provider).with_disk_cache(
-            config
-                .workspace_dir
-                .join("cache")
-                .join("tool_search_embeddings.json"),
-        ),
-    ))
+    Ok(Arc::new(embedding_tool_ranker_in(
+        provider,
+        &config.workspace_dir,
+    )))
 }
 
 fn fingerprint(secret: &str, base_url: &str) -> u64 {

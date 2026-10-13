@@ -5,8 +5,8 @@
 //! mirrors the harness [`EventSink`] onto openhuman's in-process `AgentProgress`
 //! stream — transient state that is lost the moment the UI detaches. This module
 //! makes that history **durable**: it attaches, *in addition to* the untouched
-//! bridge, a crate [`StoreEventJournal`] (over the same 04-sessions
-//! [`JsonlAppendStore`] under `{workspace}/tinyagents_store/journal`) plus a
+//! bridge, a crate [`StoreEventJournal`] (over the
+//! agent's storage-backed journal stream) plus a
 //! [`HarnessStatusStore`] writer, so a run can be reconstructed after the fact —
 //! even for an unobserved (`on_progress = None`) turn.
 //!
@@ -39,7 +39,7 @@
 //!
 //! - Full sub-agent / graph run lineage (`parent_run_id` / `root_run_id`
 //!   threading) — wired in 05.2/05.3. This slice threads `thread_id` (from the
-//!   sub-agent task scope) so `FileStatusStore::list_by_thread` answers.
+//!   sub-agent task scope) so `DriverStatusStore::list_by_thread` answers.
 //!
 //! [`EventSink::with_stream_id`]: tinyagents_harness::events::EventSink::with_stream_id
 
@@ -50,12 +50,11 @@ use std::sync::{Arc, Mutex};
 use tinyagents_harness::events::{EventSink, HarnessRunStatus};
 use tinyagents_harness::ids::{ComponentId, HarnessPhase, RunId, ThreadId};
 use tinyagents_harness::observability::{
-    process_env_secrets, AgentObservation, FanOutSink, FileStatusStore, HarnessEventJournal,
+    process_env_secrets, AgentObservation, DriverStatusStore, FanOutSink, HarnessEventJournal,
     HarnessStatusStore, JournalSink, RedactingSink, StoreEventJournal,
 };
 
-use tinyagents_harness::store::{AppendStore, Store};
-use tinyagents_session::transcript::import::ops::open_session_stores;
+use tinyagents_harness::store::AppendStore;
 
 /// Best-effort live request → durable tinyagents journal stream map. The web
 /// progress bridge uses this at turn end to shadow-project spans from the
@@ -92,8 +91,8 @@ pub(crate) fn take_request_journal_run(request_id: &str) -> Option<String> {
         .and_then(|mut runs| runs.remove(request_id))
 }
 
-/// Resolve the internal workspace directory (`{workspace}`) whose
-/// `tinyagents_store/` subtree holds the journal + kv stores. Async because the
+/// Resolve the workspace directory the tenant's journal and run-status stores
+/// belong to (the storage backend is resolved from it). Async because the
 /// config load is async; errors are surfaced so callers can log-and-skip.
 async fn resolve_workspace() -> anyhow::Result<PathBuf> {
     let config = crate::config::ops::load_current_or_init()
@@ -102,18 +101,13 @@ async fn resolve_workspace() -> anyhow::Result<PathBuf> {
     Ok(config.workspace_dir)
 }
 
-/// The journal and key-value stores a turn's events and status go to: the
-/// current agent's host session store when one is installed
-/// ([`crate::agent::session_store::current`]), else the workspace's
-/// `tinyagents_store/`.
-async fn journal_stores() -> anyhow::Result<(Arc<dyn AppendStore>, Arc<dyn Store>)> {
-    if let Some(stores) = crate::agent::session_store::current() {
-        log::debug!("[journal] using the host session store");
-        return Ok((stores.journal, stores.kv));
-    }
+/// The journal and run-status stores a turn's events and status go to: the
+/// calling tenant's, in the storage backend.
+async fn journal_stores() -> anyhow::Result<(Arc<dyn AppendStore>, DriverStatusStore)> {
     let workspace = resolve_workspace().await?;
-    let stores = open_session_stores(&workspace);
-    Ok((Arc::new(stores.journal), Arc::new(stores.kv)))
+    let stores = crate::agent::session_store::stores_or_ephemeral(&workspace);
+    let status = crate::agent::session_store::status_store_for(&workspace);
+    Ok((stores.journal, status))
 }
 
 /// A live handle to a turn's durable journal + status snapshot.
@@ -125,7 +119,7 @@ async fn journal_stores() -> anyhow::Result<(Arc<dyn AppendStore>, Arc<dyn Store
 /// non-fatal.
 pub(crate) struct TurnJournal {
     run_id: RunId,
-    status_store: Arc<FileStatusStore>,
+    status_store: Arc<DriverStatusStore>,
     event_sink: Arc<JournalSink>,
     /// The in-flight status snapshot, mutated in place to `completed`/`failed`.
     status: Mutex<HarnessRunStatus>,
@@ -179,7 +173,7 @@ impl TurnJournal {
 /// `tinyagents_harness::observability::mint_run_id`). That shared id is what makes the persisted `event_id`s the
 /// restart-stable `{run_id}-evt-{offset}` a late-attach replay reconstructs the
 /// timeline from. `thread_id` (when known — e.g. the sub-agent task scope)
-/// records the run under a thread so `FileStatusStore::list_by_thread` answers.
+/// records the run under a thread so `DriverStatusStore::list_by_thread` answers.
 ///
 /// Returns a [`TurnJournal`] handle the caller uses to stamp the terminal
 /// status after the run, or `None` when the store could not be opened (the run
@@ -194,7 +188,7 @@ pub(crate) async fn attach_turn_journal(
     run_id: RunId,
     thread_id: Option<ThreadId>,
 ) -> Option<TurnJournal> {
-    let (journal_store, kv) = match journal_stores().await {
+    let (journal_store, status_store) = match journal_stores().await {
         Ok(stores) => stores,
         Err(err) => {
             log::debug!("[journal] skipping journal attach; {err}");
@@ -219,7 +213,7 @@ pub(crate) async fn attach_turn_journal(
 
     // Status store: durable, Store-backed. Seed an initial `running` snapshot,
     // recording the thread (when known) so list_by_thread answers at run start.
-    let status_store = Arc::new(FileStatusStore::over(kv));
+    let status_store = Arc::new(status_store);
     let mut status = HarnessRunStatus::new(run_id.clone(), ComponentId::new(model.to_string()));
     if let Some(thread_id) = thread_id {
         status = status.with_thread(thread_id);

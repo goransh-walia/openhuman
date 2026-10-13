@@ -107,6 +107,10 @@ pub fn publish_transcription(text: String) -> usize {
 /// (main-thread-safe) and emits `dictation://toggle` to the frontend, making
 /// the core-side rdev listener redundant on macOS. (#2677)
 pub async fn start_if_enabled(config: &Config) {
+    if !config.components.voice {
+        log::info!("{LOG_PREFIX} [components].voice is off, skipping hotkey listener");
+        return;
+    }
     if !config.dictation.enabled {
         log::info!("{LOG_PREFIX} dictation disabled in config, skipping hotkey listener");
         return;

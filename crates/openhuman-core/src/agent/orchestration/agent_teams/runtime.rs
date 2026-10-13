@@ -35,7 +35,8 @@ use serde_json::json;
 use crate::agent::orchestration::parent_context::with_root_parent;
 use crate::config::Config;
 use tinyagents_session::run_ledger::{
-    self, AgentTeamMemberStatus, AgentTeamTask, ClaimOutcome, RunEventAppend,
+    AgentTeamMember, AgentTeamMemberStatus, AgentTeamTask, ClaimOutcome, CompletionOutcome,
+    RunEventAppend,
 };
 use {
     crate::agent::orchestration::AgentOrchestrationSession,
@@ -104,7 +105,8 @@ pub async fn start_member_run(
         "[agent_team_runtime] start.entry team={team_id} member={member_id} task={task_id:?}"
     );
 
-    let member = run_ledger::get_agent_team_member(&config.workspace_dir, member_id)?
+    let member = run_ledger::get_agent_team_member(&config.workspace_dir, member_id)
+        .await?
         .filter(|m| m.team_id == team_id)
         .ok_or_else(|| {
             anyhow!(TeamError::UnknownMember {
@@ -128,7 +130,7 @@ pub async fn start_member_run(
 
     // Resolve the target task: an explicit id, or the member's next claimable
     // ready task (unowned or owned-by-this-member, dependencies all done).
-    let tasks = run_ledger::list_agent_team_tasks(&config.workspace_dir, team_id)?;
+    let tasks = run_ledger::list_agent_team_tasks(&config.workspace_dir, team_id).await?;
     let target = match task_id {
         Some(tid) => match tasks.iter().find(|t| t.id == tid) {
             Some(t) => t.clone(),
@@ -149,7 +151,9 @@ pub async fn start_member_run(
         &target.id,
         member_id,
         &run_id,
-    )? {
+    )
+    .await?
+    {
         ClaimOutcome::Claimed(task) => *task,
         ClaimOutcome::AlreadyClaimed => return Ok(StartMemberOutcome::AlreadyClaimed),
         ClaimOutcome::Blocked { unmet } => return Ok(StartMemberOutcome::Blocked { unmet }),
@@ -165,7 +169,8 @@ pub async fn start_member_run(
         &claimed.id,
         &run_id,
         &run_id,
-    )?;
+    )
+    .await?;
 
     let agent_id = member
         .agent_id
@@ -248,9 +253,10 @@ async fn run_member_loop(
             "[agent_team_runtime] loop.failed team={team_id} member={member_id} task={} err={err}",
             task.id
         );
-        let _ = run_ledger::release_agent_team_task(&config.workspace_dir, team_id, &task.id);
-        let _ = run_ledger::mark_agent_team_member_idle(&config.workspace_dir, team_id, member_id);
-        record_failure_event(config, team_id, member_id, &task.id, &err.to_string());
+        let _ = run_ledger::release_agent_team_task(&config.workspace_dir, team_id, &task.id).await;
+        let _ = run_ledger::mark_agent_team_member_idle(&config.workspace_dir, team_id, member_id)
+            .await;
+        record_failure_event(config, team_id, member_id, &task.id, &err.to_string()).await;
     }
 }
 
@@ -268,7 +274,10 @@ async fn drive_member(
     run_id: &str,
     model_override: Option<String>,
 ) -> Result<()> {
-    let ledger = SessionTeamLedger::new(config.workspace_dir.clone());
+    let ledger = SessionTeamLedger::new(
+        crate::agent::session_store::require_ledger(&config.workspace_dir)
+            .map_err(|e| anyhow!("{e}"))?,
+    )?;
     let delivered = deliver_pending_messages(&ledger, team_id, member_id)?;
     let prompt = build_member_prompt(task, &delivered.messages);
 
@@ -380,7 +389,8 @@ async fn drive_member(
                     &member_id,
                     &evidence,
                     false,
-                )?;
+                )
+                .await?;
                 log::debug!(
                     target: LOG_TARGET,
                     "[agent_team_runtime] drive.completed team={team_id} member={member_id} task={task_id} outcome={outcome:?}"
@@ -389,7 +399,8 @@ async fn drive_member(
                     &config.workspace_dir,
                     &team_id,
                     &member_id,
-                )?;
+                )
+                .await?;
                 Ok(())
             }
         }
@@ -413,13 +424,15 @@ async fn drive_member(
                     target: LOG_TARGET,
                     "[agent_team_runtime] drive.worker_failed team={team_id} member={member_id} task={task_id} reason={reason}"
                 );
-                run_ledger::release_agent_team_task(&config.workspace_dir, &team_id, &task_id)?;
+                run_ledger::release_agent_team_task(&config.workspace_dir, &team_id, &task_id)
+                    .await?;
                 run_ledger::mark_agent_team_member_idle(
                     &config.workspace_dir,
                     &team_id,
                     &member_id,
-                )?;
-                record_failure_event(&config, &team_id, &member_id, &task_id, &reason);
+                )
+                .await?;
+                record_failure_event(&config, &team_id, &member_id, &task_id, &reason).await;
                 Ok(())
             }
         }
@@ -436,7 +449,7 @@ async fn drive_member(
     .await
 }
 
-fn record_failure_event(
+async fn record_failure_event(
     config: &Config,
     team_id: &str,
     member_id: &str,
@@ -454,7 +467,119 @@ fn record_failure_event(
                 "reason": truncate_chars(reason, EVIDENCE_MAX_CHARS),
             }),
         },
-    );
+    )
+    .await;
+}
+
+/// The team ledger operations this runtime performs, on the calling tenant's
+/// run ledger in the storage backend. Each opens the ledger for
+/// `workspace_dir` and awaits one port call.
+mod run_ledger {
+    use std::path::Path;
+
+    use anyhow::{anyhow, Result};
+
+    use super::{AgentTeamMember, AgentTeamTask, ClaimOutcome, CompletionOutcome, RunEventAppend};
+
+    fn ledger(
+        workspace_dir: &Path,
+    ) -> Result<std::sync::Arc<dyn tinyagents_session::run_ledger::RunLedgerStore>> {
+        crate::agent::session_store::require_ledger(workspace_dir).map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn get_agent_team_member(
+        workspace_dir: &Path,
+        member_id: &str,
+    ) -> Result<Option<AgentTeamMember>> {
+        ledger(workspace_dir)?
+            .get_agent_team_member(member_id)
+            .await
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn list_agent_team_tasks(
+        workspace_dir: &Path,
+        team_id: &str,
+    ) -> Result<Vec<AgentTeamTask>> {
+        ledger(workspace_dir)?
+            .list_agent_team_tasks(team_id)
+            .await
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn claim_agent_team_task(
+        workspace_dir: &Path,
+        team_id: &str,
+        task_id: &str,
+        member_id: &str,
+        claim_token: &str,
+    ) -> Result<ClaimOutcome> {
+        ledger(workspace_dir)?
+            .claim_agent_team_task(team_id, task_id, member_id, claim_token)
+            .await
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn mark_agent_team_member_running(
+        workspace_dir: &Path,
+        team_id: &str,
+        member_id: &str,
+        task_id: &str,
+        worker_thread_id: &str,
+        run_id: &str,
+    ) -> Result<Option<AgentTeamMember>> {
+        ledger(workspace_dir)?
+            .mark_agent_team_member_running(team_id, member_id, task_id, worker_thread_id, run_id)
+            .await
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn mark_agent_team_member_idle(
+        workspace_dir: &Path,
+        team_id: &str,
+        member_id: &str,
+    ) -> Result<Option<AgentTeamMember>> {
+        ledger(workspace_dir)?
+            .mark_agent_team_member_idle(team_id, member_id)
+            .await
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn release_agent_team_task(
+        workspace_dir: &Path,
+        team_id: &str,
+        task_id: &str,
+    ) -> Result<bool> {
+        ledger(workspace_dir)?
+            .release_agent_team_task(team_id, task_id)
+            .await
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn complete_agent_team_task(
+        workspace_dir: &Path,
+        team_id: &str,
+        task_id: &str,
+        member_id: &str,
+        evidence: &[String],
+        require_evidence: bool,
+    ) -> Result<CompletionOutcome> {
+        ledger(workspace_dir)?
+            .complete_agent_team_task(team_id, task_id, member_id, evidence, require_evidence)
+            .await
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub(super) async fn append_run_event(
+        workspace_dir: &Path,
+        event: RunEventAppend,
+    ) -> Result<()> {
+        ledger(workspace_dir)?
+            .append_run_event(event)
+            .await
+            .map(|_| ())
+            .map_err(|e| anyhow!("{e}"))
+    }
 }
 
 #[cfg(test)]

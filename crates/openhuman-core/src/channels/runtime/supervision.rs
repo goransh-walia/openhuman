@@ -1,11 +1,11 @@
 //! OpenHuman observer adapter for TinyChannels listener supervision.
 
-use super::super::traits;
 use super::super::Channel;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
 use std::sync::Arc;
 use tinychannels::runtime::ListenerObserver;
+use tinychannels_bus as traits;
 
 /// Publishes reusable listener lifecycle facts onto OpenHuman's domain bus.
 struct OpenHumanListenerObserver;

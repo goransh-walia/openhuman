@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde_json::Value;
+use tinysearch_bus::errors::Category;
 use tinysearch_bus::{errors, ExecuteToolRequest, ToolSpec};
 use tinytools::{Tool, ToolCallOptions, ToolCategory, ToolExposure, ToolResult};
 
@@ -106,7 +107,7 @@ impl TinySearchTool {
             provider.usable.hash(&mut hasher);
             provider.key_configured.hash(&mut hasher);
             provider.managed_available.hash(&mut hasher);
-            matches!(provider.route, crate::config::SearchRoute::Managed).hash(&mut hasher);
+            matches!(provider.route, crate::config::ProviderRoute::Backend).hash(&mut hasher);
         }
         hasher.finish()
     }
@@ -129,33 +130,36 @@ impl TinySearchTool {
 /// classified failures with `tinysearch.<code>:`; the detail after the prefix
 /// may echo the query, so it is not logged.
 pub fn user_facing_error(error: &str) -> String {
-    match error_code(error) {
-        Some(code) if code == errors::INSUFFICIENT_BALANCE => {
+    let code = errors::code_of(error);
+    match errors::classify(error) {
+        Category::InsufficientBalance => {
             "Web search is unavailable: the TinyHumans balance is too low for managed search. \
              Top up the balance, or add your own provider key under Connections → Search."
                 .to_string()
         }
-        Some(code) if code == errors::RATE_LIMITED => {
+        Category::RateLimited => {
             "Web search is rate limited right now. Wait a moment and try again.".to_string()
         }
-        Some(code) if code == errors::UNAVAILABLE => SEARCH_EXHAUSTED_MESSAGE.to_string(),
-        Some(code) if code == errors::PROVIDER_UNAUTHORIZED => {
+        Category::Exhausted => SEARCH_EXHAUSTED_MESSAGE.to_string(),
+        Category::Unauthorized if code == Some(errors::BACKEND_UNAUTHORIZED) => {
+            backend_unauthorized_message(false)
+        }
+        Category::Unauthorized => {
             // The detail names the provider and its HTTP status; the module
             // never puts the key or the query in it.
             format!(
                 "Web search is unavailable: {}. Update the key under Connections → Search, or \
                  remove it to use managed search.",
-                code_detail(error, code)
+                code_detail(error, code.unwrap_or_default())
             )
         }
-        Some(code) if code == errors::BACKEND_UNAUTHORIZED => backend_unauthorized_message(false),
-        Some(code) if code == errors::INVALID_ARGUMENTS => {
+        Category::InvalidArguments => {
             format!(
                 "The search request was rejected: {}",
-                code_detail(error, code)
+                code_detail(error, code.unwrap_or_default())
             )
         }
-        _ => format!("Web search failed: {error}"),
+        Category::Unclassified => format!("Web search failed: {error}"),
     }
 }
 
@@ -198,21 +202,6 @@ fn on_backend_unauthorized(tool: &str, api_key: bool) {
         source: format!("search.{tool}"),
         reason: "managed search backend rejected the session (401)".to_string(),
     });
-}
-
-/// The classified error code in a module error message, if any.
-pub fn error_code(error: &str) -> Option<&'static str> {
-    errors::code_of(error)
-}
-
-/// Whether this failure means no provider can answer for the rest of the
-/// session, rather than something a later call could get past.
-///
-/// Only the "every provider is unavailable" verdict qualifies. A rate limit
-/// clears on its own, and a low balance or a rejected argument has its own
-/// message telling the caller what to change, so neither latches.
-pub(crate) fn exhausts_providers(error: &str) -> bool {
-    error_code(error) == Some(errors::UNAVAILABLE)
 }
 
 #[async_trait]
@@ -304,10 +293,10 @@ impl Tool for TinySearchTool {
                 ))
             }
             Err(error) => {
-                if exhausts_providers(&error) {
+                if errors::exhausts_providers(&error) {
                     self.mark_exhausted_for(signature);
                 }
-                if error_code(&error) == Some(errors::BACKEND_UNAUTHORIZED) {
+                if errors::code_of(&error) == Some(errors::BACKEND_UNAUTHORIZED) {
                     let api_key = crate::security::credentials::api_key::has_api_key(&config);
                     on_backend_unauthorized(&self.spec.name, api_key);
                     tracing::warn!(
@@ -319,11 +308,11 @@ impl Tool for TinySearchTool {
                 }
                 tracing::warn!(
                     tool = %self.spec.name,
-                    code = error_code(&error).unwrap_or("unclassified"),
+                    code = errors::code_of(&error).unwrap_or("unclassified"),
                     exhausted = self.is_exhausted_for(signature),
                     "[search][tool] failed"
                 );
-                Ok(if exhausts_providers(&error) {
+                Ok(if errors::exhausts_providers(&error) {
                     ToolResult::failed(user_facing_error(&error))
                 } else {
                     ToolResult::error(user_facing_error(&error))

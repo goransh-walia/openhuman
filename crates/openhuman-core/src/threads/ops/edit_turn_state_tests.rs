@@ -8,9 +8,14 @@
 use super::*;
 use crate::threads::store::{self as conversations, run_reply_message_id, ConversationMessage};
 use serde_json::json;
+use std::sync::Arc;
 use tempfile::TempDir;
-use tinyagents_session::turn_state::store as turn_state_store;
+use tinyagents_session::port::TurnStates;
 use tinyagents_session::turn_state::types::TurnState;
+
+fn store(dir: &std::path::Path) -> Arc<dyn TurnStates> {
+    crate::agent::session_store::turn_states_for(dir)
+}
 
 fn turn_state(thread_id: &str, request_id: &str, started_at: &str) -> TurnState {
     TurnState::started(thread_id.to_string(), request_id, 25, started_at)
@@ -21,26 +26,21 @@ async fn clear_dropped_turn_states_drops_cut_turn_and_every_later_turn() {
     let dir = TempDir::new().expect("tempdir");
     let thread_id = "thread-turn-states";
 
-    turn_state_store::put(
-        dir.path().to_path_buf(),
-        &turn_state(thread_id, "req-1", "2026-09-24T00:00:00Z"),
-    )
-    .expect("put turn 1");
-    turn_state_store::put(
-        dir.path().to_path_buf(),
-        &turn_state(thread_id, "req-2", "2026-09-24T00:01:00Z"),
-    )
-    .expect("put turn 2");
-    turn_state_store::put(
-        dir.path().to_path_buf(),
-        &turn_state(thread_id, "req-3", "2026-09-24T00:02:00Z"),
-    )
-    .expect("put turn 3");
+    store(dir.path())
+        .put(&turn_state(thread_id, "req-1", "2026-09-24T00:00:00Z"))
+        .expect("put turn 1");
+    store(dir.path())
+        .put(&turn_state(thread_id, "req-2", "2026-09-24T00:01:00Z"))
+        .expect("put turn 2");
+    store(dir.path())
+        .put(&turn_state(thread_id, "req-3", "2026-09-24T00:02:00Z"))
+        .expect("put turn 3");
 
     clear_dropped_turn_states(dir.path(), thread_id, "req-2").await;
 
-    let remaining =
-        turn_state_store::list_thread(dir.path().to_path_buf(), thread_id).expect("list_thread");
+    let remaining = store(dir.path())
+        .list_thread(thread_id)
+        .expect("list_thread");
     let remaining_ids: Vec<&str> = remaining.iter().map(|t| t.request_id.as_str()).collect();
     assert_eq!(
         remaining_ids,
@@ -55,24 +55,21 @@ async fn clear_dropped_turn_states_is_best_effort_when_cut_turn_never_got_a_snap
     let dir = TempDir::new().expect("tempdir");
     let thread_id = "thread-turn-states-missing";
 
-    turn_state_store::put(
-        dir.path().to_path_buf(),
-        &turn_state(thread_id, "req-1", "2026-09-24T00:00:00Z"),
-    )
-    .expect("put turn 1");
-    turn_state_store::put(
-        dir.path().to_path_buf(),
-        &turn_state(thread_id, "req-3", "2026-09-24T00:02:00Z"),
-    )
-    .expect("put turn 3");
+    store(dir.path())
+        .put(&turn_state(thread_id, "req-1", "2026-09-24T00:00:00Z"))
+        .expect("put turn 1");
+    store(dir.path())
+        .put(&turn_state(thread_id, "req-3", "2026-09-24T00:02:00Z"))
+        .expect("put turn 3");
 
     // "req-2" never produced a snapshot (e.g. it errored before its first
     // progress event) — nothing to drop but itself, and unrelated turns must
     // be left alone.
     clear_dropped_turn_states(dir.path(), thread_id, "req-2").await;
 
-    let remaining =
-        turn_state_store::list_thread(dir.path().to_path_buf(), thread_id).expect("list_thread");
+    let remaining = store(dir.path())
+        .list_thread(thread_id)
+        .expect("list_thread");
     let mut remaining_ids: Vec<&str> = remaining.iter().map(|t| t.request_id.as_str()).collect();
     remaining_ids.sort();
     assert_eq!(

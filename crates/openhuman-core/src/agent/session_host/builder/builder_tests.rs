@@ -72,10 +72,10 @@ mod tool_spec_views_tests;
 
 // ── use_skill's advertised spec is scoped to the session ────────────────────
 
-use crate::tools::agent_policy::{
+use tinytools::PermissionLevel;
+use tinytools::{
     TaskProfile, TaskRiskLevel, ToolPolicyAction, ToolPolicyDecision, ToolPolicySession,
 };
-use tinytools::PermissionLevel;
 
 fn session_allowing(names: &[&str]) -> ToolPolicySession {
     ToolPolicySession {
@@ -190,8 +190,8 @@ fn visible_specs_drop_the_pack_tool_when_no_pack_is_reachable() {
 /// the only route to every withheld tool.
 #[test]
 fn a_realistic_withheld_session_keeps_its_packs_advertised() {
-    use crate::tools::agent_policy::ToolPolicyEngine;
     use crate::tools::toolpacks::{append_pack_tools, strip_packed_from_visible};
+    use tinytools::ToolPolicyEngine;
 
     struct Fake(&'static str);
     #[async_trait::async_trait]
@@ -357,7 +357,6 @@ async fn a_zero_tool_agent_does_not_gain_the_compaction_recovery_tool() {
     // quietly become "one tool" — and there is nothing for it to recover,
     // because an agent with no tools produces no tool output to truncate.
     use crate::agent::session_host::types::OpenHumanSessionHost;
-    use crate::inference::tokenjuice::RETRIEVE_TOOL_NAME;
 
     // Tolerant of an already-initialised singleton: this binary shares one
     // `OnceLock` across every test, so whether we are first is a property of
@@ -372,7 +371,7 @@ async fn a_zero_tool_agent_does_not_gain_the_compaction_recovery_tool() {
     assert!(
         !agent
             .visible_tool_names_for_test()
-            .contains(RETRIEVE_TOOL_NAME),
+            .contains(tinyjuice_bus::tools::RETRIEVE),
         "a deliberately tool-less agent must not be handed the recovery tool"
     );
 }
@@ -415,7 +414,6 @@ async fn a_summarized_agent_sees_the_recovery_tool_with_compaction_off() {
     // the compaction router off (the default). The orchestrator is the agent
     // that gets them, so it must see the tool whatever the router says.
     use crate::agent::session_host::types::OpenHumanSessionHost;
-    use crate::inference::tokenjuice::RETRIEVE_TOOL_NAME;
 
     let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
 
@@ -427,23 +425,22 @@ async fn a_summarized_agent_sees_the_recovery_tool_with_compaction_off() {
         .expect("orchestrator is a shipped agent definition");
     let visible = agent.visible_tool_names_for_test();
     assert!(
-        visible.is_empty() || visible.contains(RETRIEVE_TOOL_NAME),
+        visible.is_empty() || visible.contains(tinyjuice_bus::tools::RETRIEVE),
         "the orchestrator's summaries point at a tool it must be able to call"
     );
 }
 
 #[test]
 fn the_recovery_tool_joins_a_belt_only_when_something_can_point_at_it() {
-    use crate::inference::tokenjuice::RETRIEVE_TOOL_NAME;
     let belt = || std::collections::HashSet::from(["web_fetch".to_string()]);
 
     let mut unused = belt();
     super::ensure_recovery_tool_visible(&mut unused, false);
-    assert!(!unused.contains(RETRIEVE_TOOL_NAME));
+    assert!(!unused.contains(tinyjuice_bus::tools::RETRIEVE));
 
     let mut needed = belt();
     super::ensure_recovery_tool_visible(&mut needed, true);
-    assert!(needed.contains(RETRIEVE_TOOL_NAME));
+    assert!(needed.contains(tinyjuice_bus::tools::RETRIEVE));
 
     let tmp = tempfile::TempDir::new().unwrap();
     let mut config = test_config(&tmp);
@@ -455,16 +452,19 @@ fn the_recovery_tool_joins_a_belt_only_when_something_can_point_at_it() {
 #[test]
 fn the_repl_tools_join_a_belt_only_while_handle_mode_is_active() {
     use crate::agent::harness::definition::NO_TOOLS_SENTINEL;
-    use crate::inference::tokenjuice::REPL_TOOL_NAMES;
     let belt = || std::collections::HashSet::from(["web_fetch".to_string()]);
 
     let mut inactive = belt();
     super::ensure_repl_tools_visible(&mut inactive, false);
-    assert!(REPL_TOOL_NAMES.iter().all(|n| !inactive.contains(*n)));
+    assert!(tinyjuice_bus::tools::REPL_TOOLS
+        .iter()
+        .all(|n| !inactive.contains(*n)));
 
     let mut active = belt();
     super::ensure_repl_tools_visible(&mut active, true);
-    assert!(REPL_TOOL_NAMES.iter().all(|n| active.contains(*n)));
+    assert!(tinyjuice_bus::tools::REPL_TOOLS
+        .iter()
+        .all(|n| active.contains(*n)));
 
     // "No filter" and "deliberately no tools" both stay as they were.
     let mut unfiltered = std::collections::HashSet::new();
@@ -483,7 +483,6 @@ async fn a_curated_orchestrator_sees_and_holds_every_juice_tool_in_handle_mode()
     // (`ToolScope::Named`) belt that lacked them was told to call tools it
     // could not dispatch.
     use crate::agent::session_host::types::OpenHumanSessionHost;
-    use crate::inference::tokenjuice::{REPL_TOOL_NAMES, RETRIEVE_TOOL_NAME};
 
     let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
 
@@ -504,7 +503,11 @@ async fn a_curated_orchestrator_sees_and_holds_every_juice_tool_in_handle_mode()
     );
     let registered: std::collections::HashSet<&str> =
         agent.tools().iter().map(|t| t.name()).collect();
-    for name in REPL_TOOL_NAMES.iter().copied().chain([RETRIEVE_TOOL_NAME]) {
+    for name in tinyjuice_bus::tools::REPL_TOOLS
+        .iter()
+        .copied()
+        .chain([tinyjuice_bus::tools::RETRIEVE])
+    {
         assert!(
             visible.contains(name),
             "{name} must be visible to the orchestrator"

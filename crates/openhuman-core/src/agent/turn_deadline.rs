@@ -46,6 +46,10 @@ const WIND_DOWN_MARGIN: Duration = Duration::from_secs(120);
 /// Upper bound on the gap between the harness hard stop and the backstop.
 const HARD_STOP_MARGIN: Duration = Duration::from_secs(60);
 
+/// Time kept back from the post-loop grounded close so the turn can commit and
+/// emit its reply before the backstop drops it.
+const CLOSE_RESERVE: Duration = Duration::from_secs(10);
+
 /// Pure core of [`configured_backstop`]: an absent or unparseable value falls
 /// back to [`DEFAULT_TURN_BACKSTOP_SECS`]. `0` disables the backstop (`None`).
 pub fn parse_backstop(env_value: Option<&str>) -> Option<Duration> {
@@ -108,6 +112,14 @@ impl TurnDeadline {
     /// Whether the wind-down point has passed as of `now`.
     pub fn should_wind_down(&self, now: Instant) -> bool {
         self.elapsed_at(now) >= self.wind_down_after()
+    }
+
+    /// How long the post-loop grounded close may run as of `now`: the backstop
+    /// remainder minus [`CLOSE_RESERVE`], zero once that has passed (#7716).
+    pub fn close_budget(&self, now: Instant) -> Duration {
+        self.backstop
+            .saturating_sub(self.elapsed_at(now))
+            .saturating_sub(CLOSE_RESERVE)
     }
 
     /// Time left until the hard stop as of `now` (zero once it has passed).

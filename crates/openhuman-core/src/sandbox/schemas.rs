@@ -7,6 +7,15 @@ use crate::core::all::{ControllerFuture, RegisteredController};
 use crate::core::Outcome;
 use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
 
+/// Refuse with the typed `COMPONENT_DISABLED:sandbox` error while `[components]
+/// sandbox` is off. Read from the ambient core context; with none, it is on.
+fn gate() -> Result<(), String> {
+    if super::ops::sandbox_component_off() {
+        return Err(crate::core::runtime::components::component_disabled("sandbox").encode());
+    }
+    Ok(())
+}
+
 pub fn all_controller_schemas() -> Vec<ControllerSchema> {
     vec![
         schemas("status"),
@@ -160,6 +169,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
 /// backend instead was the conflation fixed in #6081.
 fn handle_status(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let backend_str = params
             .get("backend")
             .and_then(|v| v.as_str())
@@ -216,6 +226,7 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let mode_str = params
             .get("sandbox_mode")
             .and_then(|v| v.as_str())
@@ -274,6 +285,7 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_cleanup_orphans(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async {
+        gate()?;
         let config = match crate::config::ops::load_config_with_timeout().await {
             Ok(config) => config,
             Err(error) => return Err(error),
@@ -290,15 +302,18 @@ fn handle_cleanup_orphans(_params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_validate_policy(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let policy_val = params.get("policy").cloned().unwrap_or(Value::Null);
         let policy: super::types::SandboxPolicy = match serde_json::from_value(policy_val) {
             Ok(p) => p,
             Err(e) => return Err(format!("Invalid policy: {e}")),
         };
-        let result = match super::docker::validate_docker_policy(&policy) {
-            Ok(()) => serde_json::json!({ "valid": true, "issues": [] }),
-            Err(issues) => serde_json::json!({ "valid": false, "issues": issues }),
-        };
+        let config = crate::config::ops::load_config_with_timeout().await?;
+        // The module owns the verdict; a missing one is an error, never "valid".
+        let issues = super::docker::validate_docker_policy(&config, &policy)
+            .await
+            .map_err(|error| format!("Policy validation is unavailable: {error}"))?;
+        let result = serde_json::json!({ "valid": issues.is_empty(), "issues": issues });
         to_json(Outcome::new(result, vec![]))
     })
 }

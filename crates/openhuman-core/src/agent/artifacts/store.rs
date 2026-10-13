@@ -6,7 +6,6 @@ use super::types::{ArtifactMeta, ArtifactStatus};
 
 const ARTIFACTS_SUBDIR: &str = "artifacts";
 const META_FILENAME: &str = "meta.json";
-const META_TMP_FILENAME: &str = "meta.json.tmp";
 /// Sidecar file holding the verbatim producer-tool arguments that
 /// generated the artifact, persisted next to `meta.json` so a failed
 /// card's Retry button can re-dispatch the exact same generation
@@ -97,49 +96,9 @@ pub(crate) async fn save_artifact_meta(
 ) -> Result<(), String> {
     log::debug!("[artifacts] save_artifact_meta: id={}", meta.id);
     validate_artifact_id(&meta.id)?;
-    if let Some(docs) = documents(workspace_dir).await? {
-        let owned = meta.clone();
-        return on_docs(docs, move |docs| docs.put_meta(&owned)).await;
-    }
-    let root = artifacts_root(workspace_dir).await?;
-    let artifact_dir = root.join(&meta.id);
-    // Verify sandboxing before writing
-    assert_within_root(&root, &artifact_dir)?;
-    tokio::fs::create_dir_all(&artifact_dir)
-        .await
-        .map_err(|e| {
-            format!(
-                "[artifacts] failed to create artifact dir {:?}: {e}",
-                artifact_dir
-            )
-        })?;
-    let meta_path = artifact_dir.join(META_FILENAME);
-    let json = serde_json::to_string_pretty(meta).map_err(|e| {
-        format!(
-            "[artifacts] failed to serialize meta for id={}: {e}",
-            meta.id
-        )
-    })?;
-    // Write-then-rename so a crash mid-write never leaves a truncated
-    // meta.json: the migration relies on the record flipping atomically
-    // from the legacy path to the moved file.
-    let tmp_path = artifact_dir.join(META_TMP_FILENAME);
-    tokio::fs::write(&tmp_path, json).await.map_err(|e| {
-        format!(
-            "[artifacts] failed to write meta.json for id={}: {e}",
-            meta.id
-        )
-    })?;
-    tokio::fs::rename(&tmp_path, &meta_path)
-        .await
-        .map_err(|e| {
-            format!(
-                "[artifacts] failed to commit meta.json for id={}: {e}",
-                meta.id
-            )
-        })?;
-    log::debug!("[artifacts] saved meta.json for id={}", meta.id);
-    Ok(())
+    let docs = documents(workspace_dir).await?;
+    let owned = meta.clone();
+    on_docs(docs, move |docs| docs.put_meta(&owned)).await
 }
 
 /// List artifacts in the workspace, sorted by `created_at` descending.
@@ -165,71 +124,8 @@ pub(crate) async fn list_artifacts(
         thread_id,
         workspace_dir
     );
-    if let Some(docs) = documents(workspace_dir).await? {
-        let all = on_docs(docs, |docs| docs.list_meta()).await?;
-        return Ok(page_of(all, offset, limit, thread_id));
-    }
-    let root = artifacts_root(workspace_dir).await?;
-
-    let mut read_dir = match tokio::fs::read_dir(&root).await {
-        Ok(rd) => rd,
-        Err(e) => {
-            return Err(format!(
-                "[artifacts] failed to read artifacts dir {:?}: {e}",
-                root
-            ))
-        }
-    };
-
-    let mut all: Vec<ArtifactMeta> = Vec::new();
-
-    loop {
-        let entry = match read_dir.next_entry().await {
-            Ok(Some(e)) => e,
-            Ok(None) => break,
-            Err(e) => {
-                log::warn!("[artifacts] error reading directory entry: {e}");
-                continue;
-            }
-        };
-
-        let entry_path = entry.path();
-        // Only process directories
-        match entry.file_type().await {
-            Ok(ft) if ft.is_dir() => {}
-            Ok(_) => continue,
-            Err(e) => {
-                log::warn!(
-                    "[artifacts] failed to get file type for {:?}: {e}",
-                    entry_path
-                );
-                continue;
-            }
-        }
-
-        let meta_path = entry_path.join(META_FILENAME);
-        let contents = match tokio::fs::read_to_string(&meta_path).await {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!(
-                    "[artifacts] skipping {:?}: failed to read meta.json: {e}",
-                    entry_path
-                );
-                continue;
-            }
-        };
-
-        match serde_json::from_str::<ArtifactMeta>(&contents) {
-            Ok(meta) => all.push(meta),
-            Err(e) => {
-                log::warn!(
-                    "[artifacts] skipping {:?}: corrupt meta.json: {e}",
-                    entry_path
-                );
-            }
-        }
-    }
-
+    let docs = documents(workspace_dir).await?;
+    let all = on_docs(docs, |docs| docs.list_meta()).await?;
     Ok(page_of(all, offset, limit, thread_id))
 }
 
@@ -240,23 +136,11 @@ pub(crate) async fn get_artifact(
 ) -> Result<ArtifactMeta, String> {
     log::debug!("[artifacts] get_artifact: id={artifact_id}");
     validate_artifact_id(artifact_id)?;
-    if let Some(docs) = documents(workspace_dir).await? {
-        let id = artifact_id.to_string();
-        return on_docs(docs, move |docs| docs.get_meta(&id))
-            .await?
-            .ok_or_else(|| format!("[artifacts] artifact not found id={artifact_id}"));
-    }
-    let root = artifacts_root(workspace_dir).await?;
-    let artifact_dir = root.join(artifact_id);
-    assert_within_root(&root, &artifact_dir)?;
-    let meta_path = artifact_dir.join(META_FILENAME);
-    let contents = tokio::fs::read_to_string(&meta_path).await.map_err(|e| {
-        format!("[artifacts] artifact not found or unreadable id={artifact_id}: {e}")
-    })?;
-    let meta: ArtifactMeta = serde_json::from_str(&contents)
-        .map_err(|e| format!("[artifacts] corrupt meta.json for id={artifact_id}: {e}"))?;
-    log::debug!("[artifacts] get_artifact: found id={artifact_id}");
-    Ok(meta)
+    let docs = documents(workspace_dir).await?;
+    let id = artifact_id.to_string();
+    on_docs(docs, move |docs| docs.get_meta(&id))
+        .await?
+        .ok_or_else(|| format!("[artifacts] artifact not found id={artifact_id}"))
 }
 
 /// Persist the verbatim producer-tool arguments alongside an artifact's
@@ -276,29 +160,9 @@ pub(crate) async fn save_artifact_args(
 ) -> Result<(), String> {
     log::debug!("[artifacts] save_artifact_args: id={artifact_id}");
     validate_artifact_id(artifact_id)?;
-    if let Some(docs) = documents(workspace_dir).await? {
-        let (id, owned) = (artifact_id.to_string(), args.clone());
-        return on_docs(docs, move |docs| docs.put_args(&id, &owned)).await;
-    }
-    let root = artifacts_root(workspace_dir).await?;
-    let artifact_dir = root.join(artifact_id);
-    assert_within_root(&root, &artifact_dir)?;
-    tokio::fs::create_dir_all(&artifact_dir)
-        .await
-        .map_err(|e| {
-            format!(
-                "[artifacts] failed to create artifact dir {:?}: {e}",
-                artifact_dir
-            )
-        })?;
-    let args_path = artifact_dir.join(ARGS_FILENAME);
-    let json = serde_json::to_string_pretty(args)
-        .map_err(|e| format!("[artifacts] failed to serialize args for id={artifact_id}: {e}"))?;
-    tokio::fs::write(&args_path, json)
-        .await
-        .map_err(|e| format!("[artifacts] failed to write args.json for id={artifact_id}: {e}"))?;
-    log::debug!("[artifacts] saved args.json for id={artifact_id}");
-    Ok(())
+    let docs = documents(workspace_dir).await?;
+    let (id, owned) = (artifact_id.to_string(), args.clone());
+    on_docs(docs, move |docs| docs.put_args(&id, &owned)).await
 }
 
 /// Load the persisted producer-tool arguments for an artifact (#3162).
@@ -313,23 +177,13 @@ pub(crate) async fn read_artifact_args(
 ) -> Result<serde_json::Value, String> {
     log::debug!("[artifacts] read_artifact_args: id={artifact_id}");
     validate_artifact_id(artifact_id)?;
-    if let Some(docs) = documents(workspace_dir).await? {
-        let id = artifact_id.to_string();
-        return on_docs(docs, move |docs| docs.get_args(&id))
-            .await?
-            .ok_or_else(|| {
-                format!("[artifacts] no persisted args for id={artifact_id} (not regenerable)")
-            });
-    }
-    let root = artifacts_root(workspace_dir).await?;
-    let artifact_dir = root.join(artifact_id);
-    assert_within_root(&root, &artifact_dir)?;
-    let args_path = artifact_dir.join(ARGS_FILENAME);
-    let contents = tokio::fs::read_to_string(&args_path).await.map_err(|e| {
-        format!("[artifacts] no persisted args for id={artifact_id} (not regenerable): {e}")
-    })?;
-    serde_json::from_str(&contents)
-        .map_err(|e| format!("[artifacts] corrupt args.json for id={artifact_id}: {e}"))
+    let docs = documents(workspace_dir).await?;
+    let id = artifact_id.to_string();
+    on_docs(docs, move |docs| docs.get_args(&id))
+        .await?
+        .ok_or_else(|| {
+            format!("[artifacts] no persisted args for id={artifact_id} (not regenerable)")
+        })
 }
 
 /// Read the raw bytes of a finalized artifact's output file.
@@ -389,14 +243,8 @@ pub(crate) async fn delete_artifact(
             }
         }
     }
-    if let Some(docs) = documents(workspace_dir).await? {
-        return store_documents::delete_record(docs, &artifact_dir, artifact_id).await;
-    }
-    tokio::fs::remove_dir_all(&artifact_dir)
-        .await
-        .map_err(|e| format!("[artifacts] failed to delete artifact id={artifact_id}: {e}"))?;
-    log::debug!("[artifacts] delete_artifact: deleted id={artifact_id}");
-    Ok(())
+    let docs = documents(workspace_dir).await?;
+    store_documents::delete_record(docs, &artifact_dir, artifact_id).await
 }
 
 // Mark a status as unused — referenced only in tests via the store
@@ -524,21 +372,7 @@ pub async fn create_artifact_for_call(
     let root = artifacts_root(workspace_dir).await?;
     let artifact_dir = root.join(&id);
     assert_within_root(&root, &artifact_dir)?;
-    // With a storage backend the record is a document, so there is no
-    // per-artifact directory to make.
-    if store_documents::current()
-        .map_err(|e| format!("[artifacts] storage: {e:#}"))?
-        .is_none()
-    {
-        tokio::fs::create_dir_all(&artifact_dir)
-            .await
-            .map_err(|e| {
-                format!(
-                    "[artifacts] create_artifact: failed to mkdir {:?}: {e}",
-                    artifact_dir
-                )
-            })?;
-    }
+    // The record is a document, so there is no per-artifact directory to make.
 
     // Capture the originating chat thread (if any) at create-time so the
     // panel can repopulate from disk after a redux-persist purge — see

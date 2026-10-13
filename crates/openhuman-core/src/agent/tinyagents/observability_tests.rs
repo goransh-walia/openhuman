@@ -347,7 +347,7 @@ async fn unknown_tool_call_projects_exactly_one_failed_timeline_row() {
     let failure = failure.expect("the failed row carries a classified failure");
     assert_eq!(
         failure.class,
-        crate::tools::status::ToolFailureClass::NotFound,
+        tinytools::status::ToolFailureClass::NotFound,
         "an unavailable tool must be classified NotFound, not Unknown"
     );
     assert!(!failure.recoverable);
@@ -417,10 +417,7 @@ async fn unknown_tool_call_in_a_child_run_projects_one_subagent_row() {
         }
     }
     assert_eq!((started, completed), (1, 1));
-    assert_eq!(
-        class,
-        Some(crate::tools::status::ToolFailureClass::NotFound)
-    );
+    assert_eq!(class, Some(tinytools::status::ToolFailureClass::NotFound));
 }
 
 /// W2-budget-dedupe: two `UsageRecorded` events for the *same* model call

@@ -123,8 +123,8 @@ pub fn start_node_logging(
                 .env("HOME", d.tmp.path())
                 .env("USERPROFILE", d.tmp.path())
                 .env("RUST_LOG", rust_log)
-                .stdout(std::fs::File::create(&log).unwrap())
-                .stderr(Stdio::null());
+                .stdout(Stdio::null())
+                .stderr(std::fs::File::create(&log).unwrap());
             for var in SCRUBBED_ENV {
                 cmd.env_remove(var);
             }

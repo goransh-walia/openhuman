@@ -20,11 +20,11 @@ use std::sync::Arc;
 
 use crate::agent::host_agents::HostAgent;
 use crate::channels::context::ChannelRuntimeContext;
-use crate::channels::traits;
 use crate::channels::{ChannelSendExt, SendMessage};
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
+use tinychannels_bus as traits;
 
 pub(crate) mod posture;
 mod turn;

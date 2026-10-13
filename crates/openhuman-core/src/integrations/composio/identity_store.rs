@@ -10,7 +10,7 @@
 
 use crate::config::Config;
 use crate::integrations::composio::contract::{
-    canonicalize, normalize_connection_identifier, ConnectedIdentity, IdentityKind,
+    canonicalize_values, normalize_connection_identifiers, ConnectedIdentity, IdentityKind,
     ProviderUserProfile,
 };
 
@@ -29,23 +29,25 @@ pub async fn persist_provider_profile(
     config: &Config,
     profile: &ProviderUserProfile,
 ) -> Result<usize, String> {
-    let toolkit = normalize_connection_identifier(&profile.toolkit);
-    let identifier = profile
-        .connection_id
-        .as_deref()
-        .map(normalize_connection_identifier)
+    let mut keys = vec![profile.toolkit.clone()];
+    keys.extend(profile.connection_id.clone());
+    let mut keys = normalize_connection_identifiers(config, &keys)
+        .await?
+        .into_iter();
+    let toolkit = keys.next().unwrap_or_default();
+    let identifier = keys
+        .next()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| "default".to_string());
 
-    let rows = expand_identity_rows(&toolkit, profile);
+    let rows = expand_identity_rows(config, &toolkit, profile).await?;
     if rows.is_empty() {
         return Ok(0);
     }
 
-    let path = file_store::path(config, IDENTITIES_FILE);
     let written = rows.len();
     let (key_source, key_identifier) = (toolkit.clone(), identifier.clone());
-    file_store::update(&path, move |identities: &mut Vec<ConnectedIdentity>| {
+    file_store::update(config, IDENTITIES_FILE, move |identities: &mut Vec<ConnectedIdentity>| {
         let index = match identities
             .iter()
             .position(|id| id.source == key_source && id.identifier == key_identifier)
@@ -88,15 +90,17 @@ pub async fn persist_provider_profile(
 
 /// Expand a [`ProviderUserProfile`] (and provider-specific `extras`) into the
 /// canonical `(kind, value)` rows. **All per-toolkit quirks live here**; the
-/// matcher only sees normalized tuples.
-fn expand_identity_rows(
+/// matcher only sees normalized tuples. Canonicalisation itself runs in the
+/// connector module, in one call for the whole profile.
+async fn expand_identity_rows(
+    config: &Config,
     toolkit: &str,
     profile: &ProviderUserProfile,
-) -> Vec<(IdentityKind, String)> {
-    let mut rows: Vec<(IdentityKind, String)> = Vec::new();
+) -> Result<Vec<(IdentityKind, String)>, String> {
+    let mut candidates: Vec<(IdentityKind, String)> = Vec::new();
     let mut push = |kind: IdentityKind, raw: Option<&str>| {
-        if let Some(v) = raw.and_then(|s| canonicalize(kind, s)) {
-            rows.push((kind, v));
+        if let Some(s) = raw {
+            candidates.push((kind, s.to_string()));
         }
     };
 
@@ -127,7 +131,12 @@ fn expand_identity_rows(
         }
     }
 
-    rows
+    let canonical = canonicalize_values(config, &candidates).await?;
+    Ok(candidates
+        .into_iter()
+        .zip(canonical)
+        .filter_map(|((kind, _), value)| value.map(|v| (kind, v)))
+        .collect())
 }
 
 fn json_str<'a>(v: &'a serde_json::Value, key: &str) -> Option<&'a str> {
@@ -141,7 +150,7 @@ fn json_str<'a>(v: &'a serde_json::Value, key: &str) -> Option<&'a str> {
 ///
 /// The identities file exists but cannot be read or parsed.
 pub async fn load_connected_identities(config: &Config) -> Result<Vec<ConnectedIdentity>, String> {
-    file_store::load(&file_store::path(config, IDENTITIES_FILE)).await
+    file_store::load(config, IDENTITIES_FILE).await
 }
 
 /// Delete the stored identity for a `(source, connection_id)` pair — used on
@@ -155,11 +164,14 @@ pub async fn delete_connected_identity_facets(
     source: &str,
     identifier: &str,
 ) -> Result<usize, String> {
-    let source = normalize_connection_identifier(source);
-    let identifier = normalize_connection_identifier(identifier);
+    let mut keys =
+        normalize_connection_identifiers(config, &[source.to_string(), identifier.to_string()])
+            .await?
+            .into_iter();
+    let source = keys.next().unwrap_or_default();
+    let identifier = keys.next().unwrap_or_default();
 
-    let path = file_store::path(config, IDENTITIES_FILE);
-    file_store::update(&path, move |identities: &mut Vec<ConnectedIdentity>| {
+    file_store::update(config, IDENTITIES_FILE, move |identities: &mut Vec<ConnectedIdentity>| {
         let mut deleted = 0usize;
         identities.retain(|id| {
             if id.source == source && id.identifier == identifier {

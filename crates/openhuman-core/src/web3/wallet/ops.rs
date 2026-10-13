@@ -28,21 +28,19 @@ use state::{
     to_status, LOG_PREFIX, WALLET_STATE_FILE_LOCK,
 };
 
-const VALID_MNEMONIC_WORD_COUNTS: [u8; 5] = [12, 15, 18, 21, 24];
-
-fn is_valid_mnemonic_word_count(count: usize) -> bool {
-    VALID_MNEMONIC_WORD_COUNTS
+fn supported_word_counts() -> String {
+    tinywallet_bus::MNEMONIC_WORD_COUNTS
         .iter()
-        .any(|valid| usize::from(*valid) == count)
+        .map(u8::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Generate recovery material through the attested wallet module.
 pub async fn generate_recovery_phrase(
     word_count: u8,
 ) -> Result<Outcome<GeneratedRecoveryPhrase>, String> {
-    if !VALID_MNEMONIC_WORD_COUNTS.contains(&word_count) {
-        return Err(format!("unsupported mnemonic word count {word_count}"));
-    }
+    tinywallet_bus::validate_mnemonic_word_count(word_count).map_err(|error| error.to_string())?;
     let config = config_rpc::load_config_with_timeout().await?;
     let generated = crate::modules::wallet::generate_mnemonic(&config, word_count)
         .await
@@ -65,14 +63,10 @@ pub async fn derive_recovery_material(
     mnemonic: String,
 ) -> Result<Outcome<WalletRecoveryMaterial>, String> {
     let word_count = mnemonic.split_whitespace().count();
-    if !is_valid_mnemonic_word_count(word_count) {
+    if tinywallet_bus::validate_mnemonic_word_count_usize(word_count).is_err() {
         return Err(format!(
             "recovery phrase must contain one of {} words",
-            VALID_MNEMONIC_WORD_COUNTS
-                .iter()
-                .map(u8::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
+            supported_word_counts()
         ));
     }
 
@@ -148,15 +142,11 @@ fn validate_setup(params: &WalletSetupParams) -> Result<Vec<WalletAccount>, Stri
     if !params.consent_granted {
         return Err("wallet setup requires explicit consent".to_string());
     }
-    if !VALID_MNEMONIC_WORD_COUNTS.contains(&params.mnemonic_word_count) {
+    if tinywallet_bus::validate_mnemonic_word_count(params.mnemonic_word_count).is_err() {
         return Err(format!(
             "unsupported mnemonic word count {}; expected one of {}",
             params.mnemonic_word_count,
-            VALID_MNEMONIC_WORD_COUNTS
-                .iter()
-                .map(u8::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
+            supported_word_counts()
         ));
     }
     if params

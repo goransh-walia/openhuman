@@ -7,12 +7,13 @@ use crate::agent::bus::{mock_agent_run_turn, AgentTurnRequest, AgentTurnResponse
 use crate::agent::host_agents::{self, HostAgent, HostAgentResolver};
 use crate::channels::context::{ChannelRuntimeContext, CHANNEL_MESSAGE_TIMEOUT_SECS};
 use crate::channels::runtime::process_channel_message;
-use crate::channels::{traits, Channel, SendMessage};
+use crate::channels::{Channel, SendMessage};
 use crate::core::runtime::{CoreContext, DomainSet};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use tinychannels_bus as traits;
 use tinytools::{PermissionLevel, Tool, ToolResult};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};

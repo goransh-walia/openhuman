@@ -168,9 +168,7 @@ fn withholding_tool_search_disables_wildcard_discovery() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
     let host: crate::agent::HostTools = Arc::new(|_| crate::agent::HostTurnTools {
-        withheld: std::collections::HashSet::from([
-            crate::tools::implementations::meta::TOOL_SEARCH_NAME.to_string(),
-        ]),
+        withheld: std::collections::HashSet::from([tinytools::TOOL_SEARCH_NAME.to_string()]),
         ..Default::default()
     });
 

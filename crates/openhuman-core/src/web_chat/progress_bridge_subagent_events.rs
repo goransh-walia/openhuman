@@ -521,7 +521,7 @@ pub(super) fn on_subagent_tool_call_completed(
     arguments: Option<serde_json::Value>,
     elapsed_ms: u64,
     iteration: u32,
-    failure: Option<crate::tools::status::ClassifiedFailure>,
+    failure: Option<tinytools::status::ClassifiedFailure>,
     display_label: Option<String>,
     display_detail: Option<String>,
     structured: Option<serde_json::Value>,

@@ -26,6 +26,15 @@ impl Tool for RecordingTool {
         ToolPolicy::read_only().requiring_approval()
     }
 
+    /// Like `ShellTool`: unbounded unless the call passes `timeout_secs`.
+    fn timeout_policy(&self, args: &serde_json::Value) -> tinytools::ToolTimeout {
+        args["timeout_secs"]
+            .as_u64()
+            .map_or(tinytools::ToolTimeout::Unbounded, |secs| {
+                tinytools::ToolTimeout::Millis(secs * 1000)
+            })
+    }
+
     async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
         self.execute_with_context(args, ToolCallOptions::default(), None)
             .await
@@ -240,6 +249,10 @@ async fn canonical_adapter_fails_closed_when_the_registered_tool_is_gone() {
         .expect("reported failure");
     assert!(result.is_error);
     assert_eq!(result.output(), "unknown tool 'missing'");
+    assert_eq!(
+        adapter.timeout_policy(&serde_json::json!({"timeout_secs": 300})),
+        tinytools::ToolTimeout::Inherit
+    );
 }
 
 #[tokio::test]
@@ -341,4 +354,32 @@ fn session_deferred_adapter_reports_deferred_but_never_surfaces_a_hidden_tool() 
     assert_eq!(forced("direct"), tinytools::ToolExposure::Deferred);
     assert_eq!(forced("hidden"), tinytools::ToolExposure::Hidden);
     assert_eq!(forced("deferred"), tinytools::ToolExposure::Deferred);
+}
+
+/// The harness bounds a call by the *registered* tool's `timeout_policy`, and
+/// every OpenHuman tool is registered through this adapter (#7712).
+#[test]
+fn adapter_forwards_the_wrapped_tools_timeout_policy() {
+    use tinytools::ToolTimeout::{Inherit, Millis, Unbounded};
+    let set: Arc<Vec<Box<dyn Tool>>> = Arc::new(vec![
+        Box::new(RecordingTool {
+            saw_context: AtomicBool::new(false),
+        }),
+        Box::new(ExposedTool("plain", tinytools::ToolExposure::Direct)),
+    ]);
+    let policy = |name: &str, args: serde_json::Value| {
+        CanonicalSharedToolAdapter::for_name(vec![set.clone()], name)
+            .expect("registered")
+            .timeout_policy(&args)
+    };
+    assert_eq!(policy("recording", serde_json::json!({})), Unbounded);
+    assert_eq!(
+        policy("recording", serde_json::json!({"timeout_secs": 300})),
+        Millis(300_000)
+    );
+    // A tool without its own policy still inherits the configured timeout.
+    assert_eq!(
+        policy("plain", serde_json::json!({"timeout_secs": 300})),
+        Inherit
+    );
 }

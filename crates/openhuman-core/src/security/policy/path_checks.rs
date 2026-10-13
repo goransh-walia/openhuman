@@ -1,12 +1,43 @@
 use std::path::{Path, PathBuf};
 
-#[cfg(any(test, not(feature = "security-module")))]
-use super::types::POLICY_BLOCKED_MARKER;
 use super::types::{SecurityPolicy, TrustedAccess};
 use super::types::{
     ACCOUNT_CONFIG_FILE, ARTIFACTS_DIR, ARTIFACT_TOOL_RESULTS_DIR, WORKSPACE_INTERNAL_DIRS,
     WORKSPACE_INTERNAL_FILES, WORKSPACE_INTERNAL_PREFIXES,
 };
+#[cfg(any(test, not(feature = "security-module")))]
+use tinytools::status::POLICY_BLOCKED_MARKER;
+
+/// Credential-store path segments, matched case-insensitively at any depth.
+pub(crate) const SENSITIVE_COMPONENTS: &[&str] =
+    &[".ssh", ".gnupg", ".aws", ".azure", ".kube", "keychains"];
+/// Single-file credential stores have no protected parent directory.
+pub(crate) const SENSITIVE_FILES: &[&str] = &[".netrc", ".git-credentials", ".pgpass", ".npmrc"];
+/// Consecutive segment pairs that mark a credential store. Windows DPAPI
+/// stores live under `...\Microsoft\{Protect,Credentials,Crypto,Vault}`; the
+/// pair keeps the generic second name from matching an unrelated directory.
+pub(crate) const SENSITIVE_PAIRS: &[[&str; 2]] = &[
+    [".docker", "config.json"],
+    [".cargo", "credentials.toml"],
+    ["microsoft", "protect"],
+    ["microsoft", "credentials"],
+    ["microsoft", "crypto"],
+    ["microsoft", "vault"],
+];
+/// Core OS directories matched by absolute (lower-cased) prefix. `/private` is
+/// intentionally absent: macOS temp dirs canonicalize under `/private/var`.
+pub(crate) const ALWAYS_FORBIDDEN_PREFIXES: &[&str] = &[
+    "/etc",
+    "/root",
+    "/boot",
+    "/proc",
+    "/sys",
+    "/system",
+    "c:/windows",
+    "c:/program files",
+    "c:/program files (x86)",
+    "c:/programdata",
+];
 
 impl SecurityPolicy {
     /// Expand a leading `~/` to the user's home directory. Delegates to
@@ -483,53 +514,22 @@ impl SecurityPolicy {
 
         // (a) Credential stores — matched by path segment, location-independent
         // (catches e.g. `C:\Users\x\.ssh` and `~/Library/Keychains`).
-        const SENSITIVE_COMPONENTS: &[&str] =
-            &[".ssh", ".gnupg", ".aws", ".azure", ".kube", "keychains"];
         if segments.iter().any(|s| SENSITIVE_COMPONENTS.contains(s)) {
             return true;
         }
         // Single-file credential stores have no protected parent directory.
-        const SENSITIVE_FILES: &[&str] = &[".netrc", ".git-credentials", ".pgpass", ".npmrc"];
         if segments.iter().any(|s| SENSITIVE_FILES.contains(s)) {
-            return true;
-        }
-        if segments.windows(2).any(|w| w == [".docker", "config.json"]) {
             return true;
         }
         if segments
             .windows(2)
-            .any(|w| w == [".cargo", "credentials.toml"])
+            .any(|w| SENSITIVE_PAIRS.iter().any(|pair| w == *pair))
         {
             return true;
         }
-        // Windows DPAPI / credential stores live under `…\Microsoft\{Protect,
-        // Credentials,Crypto,Vault}` — match the pair so the generic second
-        // name can't false-positive an unrelated project directory.
-        if segments.windows(2).any(|w| {
-            w[0] == "microsoft" && matches!(w[1], "protect" | "credentials" | "crypto" | "vault")
-        }) {
-            return true;
-        }
-
         // (b) Core OS directories — matched by absolute prefix. Unconditional,
         // unlike the user-overridable `forbidden_paths`.
-        const SYSTEM_PREFIXES: &[&str] = &[
-            // POSIX
-            "/etc",
-            "/root",
-            "/boot",
-            "/proc",
-            "/sys",
-            // macOS (note: /private is intentionally NOT blocked — macOS temp
-            // dirs and /etc canonicalize under /private/var and /private/etc).
-            "/system",
-            // Windows
-            "c:/windows",
-            "c:/program files",
-            "c:/program files (x86)",
-            "c:/programdata",
-        ];
-        SYSTEM_PREFIXES
+        ALWAYS_FORBIDDEN_PREFIXES
             .iter()
             .any(|p| lc_path == *p || lc_path.starts_with(&format!("{p}/")))
     }

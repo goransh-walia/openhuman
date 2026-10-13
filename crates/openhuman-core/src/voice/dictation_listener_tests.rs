@@ -149,3 +149,16 @@ fn normalize_trims_whitespace_between_segments() {
     let result = normalize_hotkey("  cmd  + shift  +  d  ");
     assert_eq!(result, "cmd+shift+d");
 }
+
+#[tokio::test]
+async fn voice_component_off_overrides_dictation_enabled() {
+    let mut config = Config::default();
+    config.dictation.enabled = true;
+    config.dictation.hotkey = "ctrl+space".into();
+    config.components.voice = false;
+    start_if_enabled(&config).await;
+    assert!(
+        LISTENER_HANDLE.lock().expect("lock").is_none(),
+        "no hotkey listener while [components].voice is off"
+    );
+}

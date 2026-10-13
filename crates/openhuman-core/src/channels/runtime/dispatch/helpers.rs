@@ -1,7 +1,7 @@
 //! OpenHuman-specific dispatch prompt context plus TinyChannels helpers.
 
 use crate::channels::context::CHANNEL_TYPING_REFRESH_INTERVAL_SECS;
-use crate::channels::traits;
+use tinychannels_bus as traits;
 
 /// Maximum characters shown in the debug reply println.
 pub(super) const REPLY_LOG_TRUNCATE_CHARS: usize = 200;
@@ -11,7 +11,7 @@ pub(super) use tinychannels::runtime::select_acknowledgment_reaction;
 
 pub(super) fn log_worker_join_result(result: Result<(), tokio::task::JoinError>) {
     if let Err(error) = result {
-        tracing::warn!("channel worker failed: {error}");
+        tracing::warn!("{}", traits::context::worker_crash_message(&error));
     }
 }
 

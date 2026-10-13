@@ -7,9 +7,9 @@ use tinyinference_embeddings::factory::{
     create_configured_embedding_model, create_default_embedding_model, CredentialResolver,
     EmbeddingFactorySettings, ManagedModelFactory,
 };
+use tinyinference_embeddings::EmbeddingModel;
 
 use super::cloud::OpenHumanCloudEmbeddingModel;
-use super::provider_trait::{EmbeddingProvider, TinyInferenceEmbeddingProvider};
 
 fn settings(
     provider: &str,
@@ -46,7 +46,7 @@ pub fn create_embedding_provider_with_credentials(
     dimensions: usize,
     api_key: &str,
     custom_endpoint: Option<&str>,
-) -> anyhow::Result<Box<dyn EmbeddingProvider>> {
+) -> anyhow::Result<Box<dyn EmbeddingModel>> {
     let provider = custom_endpoint
         .filter(|_| provider == "custom")
         .map(|endpoint| format!("custom:{endpoint}"))
@@ -68,7 +68,7 @@ pub fn create_embedding_provider_with_credentials(
         &credentials,
         &managed,
     )?;
-    Ok(Box::new(TinyInferenceEmbeddingProvider::from_boxed(model)))
+    Ok(model)
 }
 
 /// Creates a provider using OpenHuman's credential and endpoint configuration.
@@ -79,7 +79,7 @@ pub fn create_embedding_provider_with_config(
     dimensions: usize,
     api_key: &str,
     custom_endpoint: Option<&str>,
-) -> anyhow::Result<Box<dyn EmbeddingProvider>> {
+) -> anyhow::Result<Box<dyn EmbeddingModel>> {
     let provider = custom_endpoint
         .filter(|_| provider == "custom")
         .map(|endpoint| format!("custom:{endpoint}"))
@@ -96,11 +96,11 @@ pub fn create_embedding_provider_with_config(
     let credentials: CredentialResolver = Arc::new(move |_| api_key.clone());
     let model =
         create_configured_embedding_model(&selected, &credentials, &managed_factory(config))?;
-    Ok(Box::new(TinyInferenceEmbeddingProvider::from_boxed(model)))
+    Ok(model)
 }
 
 /// Returns the configured provider, falling back to managed embeddings.
-pub fn default_embedding_provider_with_config(config: &Config) -> Arc<dyn EmbeddingProvider> {
+pub fn default_embedding_provider_with_config(config: &Config) -> Arc<dyn EmbeddingModel> {
     let selected = settings(
         &config.memory.embedding_provider,
         &config.memory.embedding_model,
@@ -118,7 +118,7 @@ pub fn default_embedding_provider_with_config(config: &Config) -> Arc<dyn Embedd
         log::warn!("[embeddings::factory] managed fallback failed to build: {error}");
         Box::new(tinyinference_embeddings::NoopEmbeddingModel)
     });
-    Arc::new(TinyInferenceEmbeddingProvider::from_boxed(model))
+    Arc::from(model)
 }
 
 #[cfg(test)]

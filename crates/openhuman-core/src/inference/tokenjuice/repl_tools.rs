@@ -6,19 +6,17 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::Value;
+use tinyjuice_bus::handle;
 use tinyjuice_bus::repl::{ReplLimits, ReplOp};
 use tinyjuice_bus::wire::{QueryError, QueryRequest, QueryResponse, QueryTarget};
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
 /// The query tools TinyJuice declares. The footer suggests a subset of these.
-pub const REPL_TOOL_NAMES: &[&str] = &["juice_find", "juice_extract", "juice_summarize"];
+use tinyjuice_bus::tools::REPL_TOOLS;
 
 pub fn is_repl_tool(name: &str) -> bool {
-    REPL_TOOL_NAMES.contains(&name)
+    REPL_TOOLS.contains(&name)
 }
-
-/// Longest handle accepted. Real handles are 32 hex characters.
-const MAX_HANDLE_LEN: usize = 64;
 
 /// Largest persisted tool-result artifact read through the handle slot: the
 /// same limit `file_read` applies, which is also the most the artifact store
@@ -78,10 +76,7 @@ pub fn repl_tools_for(config: &crate::config::Config) -> Vec<Box<dyn Tool>> {
     if !super::repl_handle_active(config) {
         return Vec::new();
     }
-    log::debug!(
-        "[tokenjuice][repl] registering {}",
-        REPL_TOOL_NAMES.join(", ")
-    );
+    log::debug!("[tokenjuice][repl] registering {}", REPL_TOOLS.join(", "));
     repl_tools_with_artifacts(
         Arc::new(ModuleSource {
             config: Some(Arc::new(config.clone())),
@@ -154,40 +149,6 @@ pub(crate) fn repl_tools_with_artifacts(
             }) as Box<dyn Tool>
         })
         .collect()
-}
-
-/// Accept a bare handle, or the `⟦tj:<handle>⟧` marker form.
-fn normalize_handle(raw: &str) -> Option<&str> {
-    let handle = raw
-        .trim()
-        .trim_start_matches("⟦tj:")
-        .trim_end_matches('⟧')
-        .trim();
-    let valid = !handle.is_empty()
-        && handle.len() <= MAX_HANDLE_LEN
-        && handle.chars().all(|c| c.is_ascii_alphanumeric());
-    valid.then_some(handle)
-}
-
-/// What the model passed in the `handle` slot.
-enum HandleArg {
-    /// A CCR handle (bare or marker form), normalized.
-    Handle(String),
-    /// Something path-shaped: possibly a persisted tool-result artifact.
-    Path(String),
-    /// Neither: a tool call id, prose, an over-long token.
-    Invalid,
-}
-
-fn classify_handle_arg(raw: &str) -> HandleArg {
-    let trimmed = raw.trim();
-    if trimmed.contains('/') || trimmed.contains('\\') || trimmed.ends_with(".txt") {
-        return HandleArg::Path(trimmed.to_string());
-    }
-    match normalize_handle(trimmed) {
-        Some(handle) => HandleArg::Handle(handle.to_string()),
-        None => HandleArg::Invalid,
-    }
 }
 
 fn not_a_handle_message() -> &'static str {
@@ -365,10 +326,10 @@ impl Tool for ModuleReplTool {
         let Some(raw) = args.get("handle").and_then(Value::as_str) else {
             return Ok(ToolResult::error("missing required argument: handle"));
         };
-        let handle = match classify_handle_arg(raw) {
-            HandleArg::Handle(handle) => handle,
-            HandleArg::Path(path) => return self.execute_on_artifact(path, args).await,
-            HandleArg::Invalid => {
+        let handle = match handle::classify(raw) {
+            handle::HandleArg::Handle(handle) => handle,
+            handle::HandleArg::Path(path) => return self.execute_on_artifact(path, args).await,
+            handle::HandleArg::Invalid => {
                 log::debug!("[tokenjuice][repl] {} rejected a non-handle", self.name);
                 return Ok(ToolResult::error(not_a_handle_message()));
             }

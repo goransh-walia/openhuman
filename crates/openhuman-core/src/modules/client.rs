@@ -65,7 +65,7 @@ impl ModuleClient {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "modules"))]
     pub(crate) fn fixture_proxy(&self) -> Option<tinybus::Proxy> {
         self.fixture.clone()
     }

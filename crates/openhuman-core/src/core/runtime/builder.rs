@@ -27,6 +27,7 @@ use crate::config::Config;
 use crate::core::runtime::context::CoreContext;
 use crate::core::types::HostKind;
 
+pub use super::components::ComponentSet;
 pub use super::domain_set::DomainSet;
 
 /// Selects which background services and transports a [`CoreRuntime`] runs.
@@ -352,6 +353,11 @@ impl CoreBuilder {
         )
         .await?;
 
+        let components = config
+            .as_ref()
+            .map(|c| ComponentSet::from_config(&c.components))
+            .unwrap_or_else(ComponentSet::all);
+
         // Retired scheduled jobs must be pruned before `build()` exposes
         // in-process RPC or agent turns. Running this from `serve()` is too
         // late for embedders that only build and invoke.
@@ -375,7 +381,7 @@ impl CoreBuilder {
         Ok(CoreRuntime {
             ctx,
             config,
-            services: self.services,
+            services: components.narrow_services(self.services),
             has_operator_token,
             host: self.host,
             port: self.port,

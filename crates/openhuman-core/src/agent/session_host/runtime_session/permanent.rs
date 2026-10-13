@@ -15,7 +15,7 @@ pub(super) fn refresh_visibility(
     // a `Deferred` synthesised tool leaves the wire and joins the
     // searchable set, on a belt that opted into discovery.
     if surface.discovery_enabled {
-        let deferred = crate::tools::implementations::meta::deferred_set(
+        let deferred = tinytools::deferred_set(
             surface.tools.as_slice(),
             synthesized,
             &surface.requested_deferred_tools,

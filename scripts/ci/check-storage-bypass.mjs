@@ -14,10 +14,11 @@
 //   json-write   fs::write / File::create / OpenOptions::new() / NamedTempFile - a raw file
 //                store; use the document, stream or secret port
 //
-// A file may keep a rule when it is the legacy fallback of a store that already
-// runs on the port (it serves the host that configured no backend), or when its
-// state is per-machine and must not be shared. Both are listed in ALLOW with the
-// reason; the reason is the review.
+// A file may keep a rule when it is a read-only legacy importer, or when its
+// state is per-machine, bootstrap or non-record bytes. Each is listed in ALLOW
+// with the reason; the reason is the review. A store's own file fallback is
+// never allowed: with no installed backend it uses the workspace default
+// (`storage::local`).
 //
 //   node scripts/ci/check-storage-bypass.mjs
 //   node scripts/ci/check-storage-bypass.mjs --write-baseline
@@ -54,8 +55,8 @@ export const RULES = [
 ];
 
 const SRC = "crates/openhuman-core/src/";
-const FALLBACK =
-  "legacy fallback of a store that already runs on the storage port";
+const LEGACY_READER =
+  "the storage importer's read-only reader of a legacy database, opened on a scratch copy of it (never the real file) to bring older installs' rows into the backend";
 
 /**
  * path -> { rule, site, reason }: the one site (its trimmed source line) a rule
@@ -66,64 +67,40 @@ const FALLBACK =
 export const ALLOW = new Map(
   [
     [
-      "modules/browser_profile.rs",
-      "json-write",
-      "lock.exists() && std::fs::OpenOptions::new().write(true).open(&lock).is_err()",
-      "probes Chrome's machine-local Windows profile lock for sharing violations; opens an existing file without creating, truncating or writing persisted state",
-    ],
-    [
-      "security/approval/store.rs",
+      "security/approval/store_import.rs",
       "sqlite-open",
       "let conn = Connection::open(&db_path).with_context(|| {",
-      FALLBACK,
+      LEGACY_READER,
     ],
     [
-      "security/devices/store.rs",
+      "security/devices/store_import.rs",
       "sqlite-open",
       "let conn = Connection::open(&db_path)",
-      FALLBACK,
+      LEGACY_READER,
     ],
     [
-      "desktop/notifications/store.rs",
+      "desktop/notifications/store_import.rs",
       "sqlite-open",
       "let conn = Connection::open(&db_path).with_context(|| {",
-      FALLBACK,
+      LEGACY_READER,
     ],
     [
-      "integrations/task_sources/store.rs",
+      "integrations/task_sources/store_import.rs",
       "sqlite-open",
       "let mut conn = Connection::open(&db_path)",
-      FALLBACK,
+      LEGACY_READER,
     ],
     [
-      "cron/policy.rs",
+      "modules/storage_import_tinymcp.rs",
       "sqlite-open",
-      "let conn = Connection::open(&path)",
-      FALLBACK,
+      "Connection::open_with_flags(&copy, OpenFlags::SQLITE_OPEN_READ_WRITE)",
+      LEGACY_READER,
     ],
     [
       "config/workspace/state.rs",
       "sqlite-open",
       "let conn = Connection::open(db_path)?;",
       "vault watcher state is absolute local paths and their mtimes: per-machine filesystem state that is meaningless on, and must not be shared through, another host's database",
-    ],
-    [
-      "platform/cost/tracker.rs",
-      "json-write",
-      "let mut file = OpenOptions::new()",
-      FALLBACK,
-    ],
-    [
-      "agent/orchestration/subagent_sessions/store.rs",
-      "json-write",
-      "fs::write(&tmp_path, raw)",
-      FALLBACK,
-    ],
-    [
-      "integrations/composio/file_store.rs",
-      "json-write",
-      "tokio::fs::write(&tmp, &bytes)",
-      FALLBACK,
     ],
     [
       "desktop/control/ops.rs",
@@ -148,18 +125,6 @@ export const ALLOW = new Map(
       "json-write",
       "if let Err(e) = std::fs::write(path, json) {",
       "one process-global savings counter snapshot, cheap to lose; not per-user data a scope would mean anything for",
-    ],
-    [
-      "agent/artifacts/store.rs",
-      "json-write",
-      "tokio::fs::write(&tmp_path, json).await.map_err(|e| {",
-      FALLBACK,
-    ],
-    [
-      "agent/artifacts/store.rs",
-      "json-write",
-      "tokio::fs::write(&args_path, json)",
-      FALLBACK,
     ],
     [
       "agent/artifacts/files.rs",

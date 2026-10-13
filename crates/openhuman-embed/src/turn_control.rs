@@ -353,6 +353,7 @@ impl Turn {
             ),
             untrusted_input: self.untrusted_input,
             tools: self.tools.take(),
+            attachments: std::mem::take(&mut self.attachments),
         };
         let budget = self.budget.take().map(|budget| crate::budget::ModelBudget {
             ledger: budget.ledger.child(crate::budget::SpendLimits::default()),

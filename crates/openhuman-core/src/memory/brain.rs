@@ -13,6 +13,7 @@
 use serde::{Deserialize, Serialize};
 use tinymemory_api::{ExploreRequest, Facet, Hit, Namespace, StoreItem, WriteOptions};
 use tinymemory_integrations::documents::RawDocument;
+use tinymemory_tools::layout::placement::{brain_node_with, files_source};
 use tinymemory_tools::{Brain, BrainSource, MemoryLayout};
 
 use crate::config::schema::MemorySourceKind;
@@ -26,14 +27,6 @@ use super::scope;
 /// Largest file `memory_brain_ingest` reads, in bytes.
 pub const MAX_INGEST_BYTES: u64 = 25 * 1024 * 1024;
 
-/// The brain source of local files and uploads, of every format.
-// TODO(tinymemory#214): `BrainSource::Files` once the pin carries it; the
-// node (`source:files`) is the same.
-#[must_use]
-pub fn files_source() -> BrainSource {
-    BrainSource::Other("files".to_string())
-}
-
 /// The brain source a synced item belongs to: the connector it came from,
 /// so removing it erases one source. GitHub to `github`, links and feeds to
 /// `web`, and local files, whatever their format, to `files`.
@@ -46,82 +39,6 @@ pub fn brain_source(kind: MemorySourceKind) -> BrainSource {
     }
 }
 
-/// Canonical form of a connector slug found on a legacy brain node
-/// (`google_drive` becomes `googledrive`), so documents filed by the removed
-/// Composio sync still migrate to the node they were filed under.
-fn legacy_connector_slug(slug: &str) -> String {
-    let key = slug.trim().to_ascii_lowercase();
-    match key.as_str() {
-        "feishu" | "lark" => "larksuite".to_string(),
-        "google_calendar" => "googlecalendar".to_string(),
-        "google_drive" => "googledrive".to_string(),
-        "google_sheets" => "googlesheets".to_string(),
-        _ => key,
-    }
-}
-
-/// The brain source a document filed under the old per-type layout belongs
-/// to now, for the migration that moves it: `old_source_id` is the id of
-/// the `source:<id>` node it sits at, `item` the document itself.
-///
-/// - Per-format nodes (`pdf`, `markdown`, `docx`, `xlsx`, `pptx`, `code`,
-///   `other`) held local files: `files`.
-/// - `web` held links and feeds, but also HTML files from a folder or an
-///   upload; a document with a file kind or a file path is a file.
-/// - Any other node was a connector: its canonical slug (`google_drive`
-///   becomes `googledrive`), so `notion`, `github` and `gmail` stay put.
-#[must_use]
-pub fn legacy_brain_node(old_source_id: &str, item: &StoreItem) -> BrainSource {
-    let id = legacy_connector_slug(old_source_id);
-    match id.as_str() {
-        "files" | "pdf" | "markdown" | "md" | "docx" | "xlsx" | "pptx" | "code" | "other" => {
-            files_source()
-        }
-        "web" => {
-            let meta = item.meta();
-            let file = matches!(
-                meta.source.kind,
-                tinymemory_api::SourceKind::File | tinymemory_api::SourceKind::Folder
-            ) || meta.file_path.is_some();
-            if file {
-                files_source()
-            } else {
-                BrainSource::Web
-            }
-        }
-        _ => id.parse().unwrap_or_else(|_| files_source()),
-    }
-}
-
-/// The repository a GitHub document belongs to, as the collection id
-/// `<owner>--<repo>` (lowercase, as GitHub's names are case-insensitive):
-/// from its `repo` (`owner/name` or a URL), else its URL. An owner name
-/// never holds `--` nor ends in `-`, so the first `--` always splits the
-/// two and no two repositories share an id (`foo-bar/repo` and
-/// `foo/bar-repo` stay apart).
-#[must_use]
-pub fn github_collection(item: &StoreItem) -> Option<String> {
-    let meta = item.meta();
-    [meta.repo.as_deref(), meta.url.as_deref()]
-        .into_iter()
-        .flatten()
-        .find_map(|raw| {
-            let path = raw
-                .trim()
-                .trim_start_matches("https://")
-                .trim_start_matches("http://")
-                .trim_start_matches("www.")
-                .trim_start_matches("github.com/");
-            // A URL's query or fragment is not part of the path.
-            let path = path.split(['?', '#']).next().unwrap_or_default();
-            let mut parts = path.split('/').filter(|part| !part.is_empty());
-            let (owner, repo) = (parts.next()?, parts.next()?);
-            let repo = repo.trim_end_matches(".git");
-            (!owner.contains('.') && !repo.is_empty())
-                .then(|| format!("{owner}--{repo}").to_ascii_lowercase())
-        })
-}
-
 /// The node `item` of `source` is filed at: the source's node, or, for
 /// GitHub with `[memory] split_github_by_repo` on, its repository's
 /// collection below it.
@@ -131,33 +48,12 @@ pub fn brain_node(
     source: &BrainSource,
     item: &StoreItem,
 ) -> MemoryResult<Namespace> {
-    brain_node_with(config.memory.split_github_by_repo, layout, source, item)
-}
-
-/// [`brain_node`] with `[memory] split_github_by_repo` given, for a caller
-/// that holds the setting rather than the config (the layout migration).
-pub fn brain_node_with(
-    split_github_by_repo: bool,
-    layout: &MemoryLayout,
-    source: &BrainSource,
-    item: &StoreItem,
-) -> MemoryResult<Namespace> {
-    if split_github_by_repo && *source == BrainSource::Github {
-        if let Some(repo) = github_collection(item) {
-            return Ok(layout.brain_collection(source, &repo)?);
-        }
-    }
-    Ok(layout.brain(source)?)
-}
-
-/// `item` placed in the brain at `node`, with no agent id (the brain
-/// belongs to every agent).
-#[must_use]
-pub fn file_into(node: Namespace, mut item: StoreItem) -> StoreItem {
-    let meta = item.meta_mut();
-    meta.namespace = node;
-    meta.agent_id = None;
-    item
+    Ok(brain_node_with(
+        config.memory.split_github_by_repo,
+        layout,
+        source,
+        item,
+    )?)
 }
 
 /// The layout the brain RPCs act on: the in-scope identity's.

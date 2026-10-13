@@ -27,6 +27,8 @@ async fn test_config(tmp: &TempDir) -> Config {
 
 fn test_job(command: &str) -> CronJob {
     CronJob {
+        claim_generation: 0,
+        policy: Default::default(),
         id: "test-job".into(),
         expression: "* * * * *".into(),
         schedule: tinyflows_schedule::types::Schedule::Cron {
@@ -169,10 +171,8 @@ async fn retryable_shell_failure_consumes_the_whole_retry_budget() {
 
     let counter = tmp.path().join("retryable-attempts.log");
     let job = test_job(&counting_failure_command(&counter));
-    let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
 
-    let (success, output) = execute_job_with_retry(&config, &security, &job).await;
+    let (success, output) = execute_job_now(&config, &job, "test-run").await;
 
     assert!(
         !success,
@@ -230,7 +230,7 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     );
 
     let started = std::time::Instant::now();
-    let (success, output) = execute_job_with_retry(&config, &security, &job).await;
+    let (success, output) = execute_job_now(&config, &job, "test-run").await;
     let elapsed = started.elapsed();
 
     assert!(!success, "a blocked job cannot succeed; got {output}");
@@ -257,12 +257,12 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
 /// The spawn used to name `sh` itself, and `CreateProcessW` cannot resolve that
 /// on Windows — so every scheduled shell job failed there with `spawn error:
 /// program not found` while the identical job ran on macOS and Linux. Routing it
-/// through `agent::platform_shell`, which every other shell spawn in the crate
-/// already used, is what makes this pass.
+/// through the module's native shell member, which selects the shell per
+/// platform, is what makes this pass.
 ///
 /// `echo` and the assertion on its output are deliberately shell-agnostic: the
 /// test names neither `sh` nor `cmd`, so it keeps holding if the platform matrix
-/// in `platform_shell` changes.
+/// in the module changes.
 #[tokio::test]
 async fn a_shell_job_runs_on_this_platform() {
     let tmp = TempDir::new().unwrap();
@@ -300,8 +300,8 @@ async fn scheduled_shell_authorization_fails_closed_when_tinybox_is_disabled() {
 
 /// A pipeline keeps the shell's own exit status, not `pipefail`'s.
 ///
-/// Regression guard for a behaviour change review caught on this branch. Routing
-/// this call site through `platform_shell::build_tokio_command` would have added
+/// Regression guard for a behaviour change review caught on this branch. Running
+/// this call site with the module's default shell semantics would have added
 /// `set -o pipefail`, and `false | true` — which a plain `-lc` reports as
 /// success, because only the last stage counts — would have started reporting
 /// failure. Any existing job ending in a tolerated pipe stage (a `… | grep -q`
@@ -332,20 +332,4 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
         "`false | true` is a success under a plain `-lc`; pipefail would make it \
          a failure and re-status every existing job with a pipeline in it: {output}"
     );
-}
-
-#[tokio::test]
-async fn without_a_backend_an_agent_needs_its_own_job_database() {
-    // The lib test binary installs no storage backend into the process slot.
-    if crate::storage::installed().is_some() {
-        return;
-    }
-    let tmp = TempDir::new().unwrap();
-    let config = test_config(&tmp).await;
-    let db = crate::cron::store::db_path(&config);
-    let _ = std::fs::remove_file(&db);
-    assert!(!agent_jobs_may_exist(&config));
-    std::fs::create_dir_all(db.parent().unwrap()).unwrap();
-    std::fs::write(&db, b"").unwrap();
-    assert!(agent_jobs_may_exist(&config));
 }

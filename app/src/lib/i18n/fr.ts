@@ -4580,6 +4580,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'Prêt',
   'computer.status.state.failed': 'Échec',
   'computer.status.state.unsupported': 'Non pris en charge sur cet appareil',
+  'computer.status.state.disabled': 'Désactivé dans la configuration',
   'desktop.permission.accessibility': 'Accessibilité',
   'desktop.permission.screen_recording': 'Enregistrement de l’écran',
   'channels.status.configuring': 'Configuration en cours',

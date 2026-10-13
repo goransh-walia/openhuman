@@ -14,7 +14,8 @@ use tinywallet_bus::wire::HostEndpointReference;
 use tinywallet_bus::wire::{
     AuthorizationResult, AuthorizeNativeWalletExecutionRequest, AuthorizeWeb3ExecutionRequest,
     AuthorizeX402PaymentRequest, ChainTransportRequest, ChainTransportResult, HostResponse,
-    WalletAccountInfo, WalletAccountsResponse, WalletBackendRequest, WalletBackendResponse,
+    RpcEndpointKey, WalletAccountInfo, WalletAccountsResponse, WalletBackendRequest,
+    WalletBackendResponse,
 };
 
 #[path = "wallet_host_transport.rs"]
@@ -51,8 +52,7 @@ static ENDPOINT_REFERENCES: OnceLock<Mutex<HashMap<String, EndpointReference>>> 
 #[derive(Debug, Clone)]
 struct EndpointReference {
     service: String,
-    key: tinywallet_bus::wire::RpcEndpointKey,
-    url: String,
+    key: RpcEndpointKey,
 }
 
 fn approvals() -> &'static Mutex<HashSet<ApprovalKey>> {
@@ -100,9 +100,11 @@ pub(crate) fn bind_endpoint_references(
 ) -> Result<(), String> {
     let mut resolved = HashMap::new();
     for endpoint in references {
-        let url = crate::web3::wallet::endpoints::override_for_endpoint(endpoint.key).ok_or_else(
-            || "wallet module referenced an endpoint without a host override".to_string(),
-        )?;
+        // Validate admission here, but resolve the URL again on each callback:
+        // the host may rotate an endpoint override without changing its opaque
+        // module reference.
+        configured_endpoint_url(endpoint.key)
+            .map_err(|_| "wallet module referenced an endpoint without a host override")?;
         if endpoint.reference.trim().is_empty()
             || resolved
                 .insert(
@@ -110,7 +112,6 @@ pub(crate) fn bind_endpoint_references(
                     EndpointReference {
                         service: service.to_owned(),
                         key: endpoint.key,
-                        url,
                     },
                 )
                 .is_some()
@@ -123,6 +124,12 @@ pub(crate) fn bind_endpoint_references(
         .map_err(|_| "wallet endpoint reference store is unavailable".to_string())?
         .extend(resolved);
     Ok(())
+}
+
+fn configured_endpoint_url(key: RpcEndpointKey) -> Result<String, String> {
+    let url = crate::web3::wallet::endpoints::override_for_endpoint(key)
+        .ok_or_else(|| "wallet endpoint override is no longer configured".to_string())?;
+    validate_module_endpoint_url(&url)
 }
 
 pub(crate) fn clear_endpoint_references(service: &str) {
@@ -544,7 +551,14 @@ impl WalletHost {
                         },
                     ));
                 }
-                endpoint.url
+                match configured_endpoint_url(endpoint.key) {
+                    Ok(url) => url,
+                    Err(message) => {
+                        return Ok(HostResponse::ChainTransport(
+                            ChainTransportResult::RpcError { message },
+                        ));
+                    }
+                }
             }
             (None, Some(url)) => match validate_module_endpoint_url(url) {
                 Ok(url) => url,

@@ -99,6 +99,36 @@ async fn create_sandbox_backend_none() {
     assert_eq!(handle.status, SandboxStatus::Ready);
 }
 
+/// A `None`-backend policy whose state dir is a throwaway directory.
+fn unsandboxed_policy(workspace: &Path, state: &Path) -> SandboxPolicy {
+    resolve_sandbox_policy(
+        SandboxMode::None,
+        workspace,
+        state,
+        &RuntimeConfig::default(),
+        false,
+    )
+}
+
+async fn run_unsandboxed(
+    command: &str,
+    workspace: &Path,
+    env: &HashMap<OsString, OsString>,
+    timeout: Duration,
+) -> anyhow::Result<SandboxExecResult> {
+    let state = tempfile::tempdir()?;
+    let policy = unsandboxed_policy(workspace, state.path());
+    execute_unsandboxed(
+        &crate::config::Config::default(),
+        &policy,
+        command,
+        workspace,
+        env,
+        timeout,
+    )
+    .await
+}
+
 // The `/tmp` path and Unix builtins (`false`) are Unix-only, so these
 // integration-style tests are gated to Unix. A cross-platform
 // `execute_unsandboxed_echo_runs_on_every_os` below exercises the same
@@ -107,7 +137,7 @@ async fn create_sandbox_backend_none() {
 #[cfg(unix)]
 #[tokio::test]
 async fn execute_unsandboxed_echo() {
-    let result = execute_unsandboxed(
+    let result = run_unsandboxed(
         "echo hello",
         Path::new("/tmp"),
         &HashMap::new(),
@@ -123,7 +153,7 @@ async fn execute_unsandboxed_echo() {
 #[cfg(unix)]
 #[tokio::test]
 async fn execute_unsandboxed_failure() {
-    let result = execute_unsandboxed(
+    let result = run_unsandboxed(
         "false",
         Path::new("/tmp"),
         &HashMap::new(),
@@ -142,7 +172,7 @@ async fn execute_unsandboxed_failure() {
 #[tokio::test]
 async fn execute_unsandboxed_echo_runs_on_every_os() {
     let tempdir = tempfile::tempdir().unwrap();
-    let result = execute_unsandboxed(
+    let result = run_unsandboxed(
         "echo hello",
         tempdir.path(),
         &HashMap::new(),
@@ -154,7 +184,7 @@ async fn execute_unsandboxed_echo_runs_on_every_os() {
     assert!(result.stdout.contains("hello"));
     assert!(!result.timed_out);
 
-    let failing = execute_unsandboxed(
+    let failing = run_unsandboxed(
         "exit 1",
         tempdir.path(),
         &HashMap::new(),
@@ -188,34 +218,52 @@ async fn execute_in_sandbox_none_backend() {
     assert!(result.stdout.contains("sandbox-test"));
 }
 
+/// Environment overrides cross the module bus as JSON strings, so a value that
+/// is not UTF-8 is refused outright rather than altered on the way.
 #[cfg(unix)]
 #[tokio::test]
-async fn execute_in_sandbox_preserves_non_utf8_environment_bytes() {
+async fn execute_unsandboxed_refuses_non_utf8_environment_instead_of_altering_it() {
     use std::os::unix::ffi::OsStringExt;
 
     let tempdir = tempfile::tempdir().unwrap();
-    let policy = resolve_sandbox_policy(
-        SandboxMode::None,
-        tempdir.path(),
-        Path::new("/tmp/state"),
-        &RuntimeConfig::default(),
-        false,
-    );
     let env = HashMap::from([(
         OsString::from("OPENHUMAN_RAW_ENV_TEST"),
         OsString::from_vec(b"before-\xff-after".to_vec()),
     )]);
-    let result = execute_in_sandbox(
-        &policy,
-        r#"[ "$OPENHUMAN_RAW_ENV_TEST" = "$(printf 'before-\377-after')" ]"#,
+    let marker = tempdir.path().join("must-not-run");
+    let result = run_unsandboxed(
+        &format!("touch '{}'", marker.display()),
         tempdir.path(),
-        env,
+        &env,
+        Duration::from_secs(10),
+    )
+    .await;
+
+    assert!(result.is_err());
+    assert!(
+        !marker.exists(),
+        "a refused environment must not run the command"
+    );
+}
+
+/// Caller-approved overrides reach the command on top of the safe snapshot.
+#[cfg(unix)]
+#[tokio::test]
+async fn execute_unsandboxed_applies_environment_overrides() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let env = HashMap::from([(
+        OsString::from("OPENHUMAN_OVERRIDE_TEST"),
+        OsString::from("applied"),
+    )]);
+    let result = run_unsandboxed(
+        "printf %s \"$OPENHUMAN_OVERRIDE_TEST\"",
+        tempdir.path(),
+        &env,
         Duration::from_secs(10),
     )
     .await
     .unwrap();
-
-    assert!(result.success(), "stderr: {}", result.stderr);
+    assert_eq!(result.stdout, "applied");
 }
 
 /// #4705 regression — `execute_in_sandbox` with the `None` backend
@@ -256,8 +304,8 @@ fn env_passthrough_includes_safe_vars() {
 
 // ── Windows child environment ────────────────────────────────────────────────
 //
-// `execute_unsandboxed` and the TinyBox native jail adapter both call `env_clear()` and
-// re-forward only `SANDBOX_ENV_PASSTHROUGH`. On Windows that list has to carry
+// `execute_unsandboxed` and the TinyBox native jail adapter both start from the module's safe
+// environment snapshot (`SANDBOX_ENV_PASSTHROUGH` plus the Windows bootstrap names). On Windows that list has to carry
 // the process-bootstrap variables or the child cannot initialise the OS crypto
 // provider — `node` dies with `Assertion failed: ncrypto::CSPRNG(nullptr, 0)`
 // (exit 134) and `powershell` with `8009001d`. Both read as opaque failures to
@@ -293,4 +341,44 @@ fn sandbox_off_value_keeps_sandbox_on_otherwise() {
     ] {
         assert!(!sandbox_off_value(v), "{v:?} must leave the sandbox on");
     }
+}
+
+// ── [components] sandbox = false ──────────────────────────────────────
+
+#[tokio::test]
+async fn sandbox_off_component_forces_the_unsandboxed_fallback_and_no_module_load() {
+    let mut set = crate::core::runtime::ComponentSet::all();
+    set.sandbox = false;
+    let ctx = crate::core::runtime::context::CoreContext::for_test_with_components(set);
+    crate::core::runtime::context::CoreContext::scope(ctx, async {
+        assert!(sandbox_component_off());
+        assert!(sandbox_disabled_by_host());
+        assert!(!command_requires_sandbox(Some(SandboxMode::Sandboxed))
+            .await
+            .unwrap());
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn sandbox_component_is_on_without_a_context_or_when_enabled() {
+    assert!(!sandbox_component_off());
+    let ctx = crate::core::runtime::context::CoreContext::for_test_with_components(
+        crate::core::runtime::ComponentSet::all(),
+    );
+    crate::core::runtime::context::CoreContext::scope(ctx, async {
+        assert!(!sandbox_component_off());
+    })
+    .await;
+}
+
+#[test]
+fn config_disables_sandbox_for_legacy_flag_or_component() {
+    let mut config = crate::config::Config::default();
+    assert!(!config_disables_sandbox(&config));
+    config.sandbox.enabled = Some(false);
+    assert!(config_disables_sandbox(&config));
+    config.sandbox.enabled = None;
+    config.components.sandbox = false;
+    assert!(config_disables_sandbox(&config));
 }

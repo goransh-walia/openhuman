@@ -133,7 +133,7 @@ struct OpenHumanTurnToolSurface {
     /// off so refresh cannot reopen withdrawn authority.
     auto_include_new_synthesized_tools: bool,
     synthesized_tool_names: std::collections::HashSet<String>,
-    tool_policy_session: crate::tools::agent_policy::ToolPolicySession,
+    tool_policy_session: tinytools::ToolPolicySession,
     event_session_id: String,
     event_channel: String,
     agent_definition_name: String,
@@ -187,7 +187,7 @@ impl OpenHumanTurnPrelude {
     ) -> (
         Arc<Vec<Box<dyn tinytools::Tool>>>,
         Arc<Vec<Box<dyn tinytools::Tool>>>,
-        crate::tools::agent_policy::ToolPolicySession,
+        tinytools::ToolPolicySession,
         String,
         String,
     ) {
@@ -580,50 +580,7 @@ impl OpenHumanTurnPrelude {
     }
 
     async fn finalize_after_durable_commit(&self, receipt: &CommitReceipt<OpenHumanRunContext>) {
-        self.mirror_transcript_after_commit(receipt);
         self.memory_post_turn(receipt);
-    }
-
-    fn mirror_transcript_after_commit(&self, receipt: &CommitReceipt<OpenHumanRunContext>) {
-        let Some(path) = receipt
-            .transcript
-            .as_ref()
-            .map(|commit| commit.path.clone())
-        else {
-            return;
-        };
-        if !crate::agent::session_import::live::dual_write_enabled(self.config.session_dual_write) {
-            return;
-        }
-        let Some(stem) = path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .map(str::to_owned)
-        else {
-            return;
-        };
-        let workspace = self.workspace_dir.clone();
-        tokio::spawn(async move {
-            let read_path = path.clone();
-            let transcript = tokio::task::spawn_blocking(move || {
-                tinyagents_session::transcript::read_transcript(&read_path)
-            })
-            .await;
-            let Ok(Ok(transcript)) = transcript else {
-                log::warn!("[session-store] dual-write transcript read-back failed");
-                return;
-            };
-            if let Err(error) = tinyagents_session::transcript::import::live::write_live_turn(
-                &workspace,
-                &stem,
-                &transcript,
-                crate::agent::session_import::projector::journal_message_from_transcript,
-            )
-            .await
-            {
-                log::warn!("[session-store] dual-write failed stem={stem}: {error:#}");
-            }
-        });
     }
 }
 
@@ -735,12 +692,15 @@ impl OpenHumanSessionHost {
             &self.event_session_id,
         );
 
+        // `[components] juice = false`: truncation only, no compaction/summary.
+        let juice_on =
+            (self.runtime_config.as_ref()).is_none_or(|c| crate::inference::tokenjuice::enabled(c));
         let context_mw = TurnContextMiddleware {
             tool_result_budget_bytes,
-            payload_summarizer: self.payload_summarizer.clone(),
+            payload_summarizer: self.payload_summarizer.clone().filter(|_| juice_on),
             // Rooted outside the project; see `artifact_wiring` (#6408, #6483).
             artifact_store: Some(artifact_store),
-            tokenjuice_compaction_enabled,
+            tokenjuice_compaction_enabled: tokenjuice_compaction_enabled && juice_on,
             tokenjuice_compression: self.tokenjuice_compression,
             runtime_config: self.runtime_config.clone(),
             microcompact_keep_recent,

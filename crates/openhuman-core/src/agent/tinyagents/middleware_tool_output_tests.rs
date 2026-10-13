@@ -129,7 +129,7 @@ async fn raw_security_policy_block_is_enriched_with_workaround_and_relay() {
         result_text(&result)
     );
     assert!(result_text(&result).contains("Relay this to the user"));
-    assert!(result_text(&result).contains(crate::security::POLICY_BLOCKED_MARKER));
+    assert!(result_text(&result).contains(tinytools::status::POLICY_BLOCKED_MARKER));
     assert!(result_text(&result).contains("read-only mode"));
 }
 

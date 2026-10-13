@@ -69,7 +69,7 @@ fn req(tool_name: &str, args: serde_json::Value) -> ToolCallRequest {
 #[cfg(feature = "modules")]
 fn shell_context(
     args: &serde_json::Value,
-    class: crate::modules::tinybox::contract::CommandClass,
+    class: tinybox_bus::CommandClass,
     hidden_execution: bool,
     literal_words: &[&str],
 ) -> serde_json::Value {
@@ -80,7 +80,7 @@ fn shell_context(
 fn shell_context_for_args(
     request_arguments: &serde_json::Value,
     effective_arguments: &serde_json::Value,
-    class: crate::modules::tinybox::contract::CommandClass,
+    class: tinybox_bus::CommandClass,
     hidden_execution: bool,
     literal_words: &[&str],
 ) -> serde_json::Value {
@@ -118,7 +118,7 @@ fn shell_context_for_args(
 
 #[cfg(feature = "modules")]
 fn shell_analysis(
-    class: crate::modules::tinybox::contract::CommandClass,
+    class: tinybox_bus::CommandClass,
     hidden_execution: bool,
     literal_words: &[&str],
 ) -> serde_json::Value {
@@ -188,7 +188,7 @@ async fn read_only_autonomy_denies_an_acting_tool() {
     assert!(!decision.is_allowed());
     let reason = decision.denial_reason().expect("a Deny carries a reason");
     assert!(
-        reason.contains(crate::security::POLICY_BLOCKED_MARKER),
+        reason.contains(tinytools::status::POLICY_BLOCKED_MARKER),
         "the machine-recognisable marker must survive rendering: {reason}"
     );
 }
@@ -227,7 +227,7 @@ async fn a_read_class_shell_command_runs_without_a_prompt() {
             &req(SHELL_TOOL, args.clone()),
             Some(&shell_context(
                 &args,
-                crate::modules::tinybox::contract::CommandClass::Read,
+                tinybox_bus::CommandClass::Read,
                 false,
                 &["ls", "-la"],
             )),
@@ -292,7 +292,7 @@ fn shell_policy_uses_the_effective_arguments_bound_by_the_harness() {
     let context = shell_context_for_args(
         &request_arguments,
         &effective_arguments,
-        crate::modules::tinybox::contract::CommandClass::Write,
+        tinybox_bus::CommandClass::Write,
         false,
         &["touch", "output"],
     );
@@ -320,7 +320,7 @@ async fn a_read_class_shell_command_still_runs_in_read_only_mode() {
             &req(SHELL_TOOL, args.clone()),
             Some(&shell_context(
                 &args,
-                crate::modules::tinybox::contract::CommandClass::Read,
+                tinybox_bus::CommandClass::Read,
                 false,
                 &["ls", "-la"],
             )),
@@ -339,7 +339,7 @@ async fn a_write_shell_command_is_blocked_outright_in_read_only() {
             &req(SHELL_TOOL, args.clone()),
             Some(&shell_context(
                 &args,
-                crate::modules::tinybox::contract::CommandClass::Write,
+                tinybox_bus::CommandClass::Write,
                 false,
                 &["rm", "-rf", "/tmp/x"],
             )),
@@ -350,7 +350,7 @@ async fn a_write_shell_command_is_blocked_outright_in_read_only() {
     assert!(decision
         .denial_reason()
         .expect("denial reason")
-        .contains(crate::security::POLICY_BLOCKED_MARKER));
+        .contains(tinytools::status::POLICY_BLOCKED_MARKER));
 }
 
 #[tokio::test]
@@ -364,7 +364,7 @@ async fn hidden_execution_is_blocked_below_the_full_tier() {
             &req(SHELL_TOOL, args.clone()),
             Some(&shell_context(
                 &args,
-                crate::modules::tinybox::contract::CommandClass::Write,
+                tinybox_bus::CommandClass::Write,
                 true,
                 &["echo"],
             )),
@@ -386,11 +386,7 @@ fn the_declared_category_can_only_raise_the_command_class() {
         OpenHumanSecurityGate::shell_decision(
             &full,
             &json!({ "command": "touch f" }),
-            &shell_analysis(
-                crate::modules::tinybox::contract::CommandClass::Write,
-                false,
-                &["touch", "f"],
-            ),
+            &shell_analysis(tinybox_bus::CommandClass::Write, false, &["touch", "f"],),
         ),
         Ok(PolicyGateDecision::Allow)
     );
@@ -399,11 +395,7 @@ fn the_declared_category_can_only_raise_the_command_class() {
         OpenHumanSecurityGate::shell_decision(
             &full,
             &json!({ "command": "touch f", "category": "destructive" }),
-            &shell_analysis(
-                crate::modules::tinybox::contract::CommandClass::Write,
-                false,
-                &["touch", "f"],
-            )
+            &shell_analysis(tinybox_bus::CommandClass::Write, false, &["touch", "f"],)
         ),
         Ok(PolicyGateDecision::Prompt)
     );
@@ -414,7 +406,7 @@ fn the_declared_category_can_only_raise_the_command_class() {
             &full,
             &json!({ "command": "curl https://example.invalid", "category": "read" }),
             &shell_analysis(
-                crate::modules::tinybox::contract::CommandClass::Network,
+                tinybox_bus::CommandClass::Network,
                 false,
                 &["curl", "https://example.invalid"],
             )
@@ -431,11 +423,7 @@ fn a_missing_command_argument_classifies_as_read_rather_than_panicking() {
         OpenHumanSecurityGate::shell_decision(
             &supervised,
             &json!({}),
-            &shell_analysis(
-                crate::modules::tinybox::contract::CommandClass::Read,
-                false,
-                &[],
-            ),
+            &shell_analysis(tinybox_bus::CommandClass::Read, false, &[],),
         ),
         Ok(PolicyGateDecision::Allow)
     );

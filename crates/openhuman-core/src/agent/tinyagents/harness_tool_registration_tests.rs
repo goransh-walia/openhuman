@@ -69,7 +69,7 @@ async fn registered_memory_dispatch_enforces_one_budget_across_distinct_calls() 
             .execute(
                 &(),
                 CallId::new(format!("call-{index}")),
-                serde_json::json!({"action":"learn","text":format!("fact {index}")}),
+                serde_json::json!({"action":"fetch","query":format!("fact {index}")}),
                 ToolCallOptions::default(),
                 &parent,
             )
@@ -77,5 +77,4 @@ async fn registered_memory_dispatch_enforces_one_budget_across_distinct_calls() 
             .unwrap();
         assert_eq!(result.is_error, index == 8, "call {index}");
     }
-    crate::memory::tool_writes::drain(&config).await;
 }

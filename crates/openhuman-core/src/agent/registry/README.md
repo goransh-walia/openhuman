@@ -127,7 +127,7 @@ lockstep with its `generate_presentation` tool.
 The orchestrator picks tools at request time through the shared tool-search
 ranker (Jev when a decision-model credential is installed, BM25 otherwise);
 see [`tinyagents/README.md`](../tinyagents/README.md) and
-[the Jev page](../../../../../gitbooks/developing/jev.md) for how that
+[the Jev page](../../../../../docs/gitbooks/en/developing/jev.md) for how that
 ranking works.
 
 ## Called by
@@ -158,5 +158,5 @@ and a `prompt_tests.rs` beside almost every archetype's `prompt.rs`.
 ## Further reading
 
 - [Parent module README](../README.md)
-- [Agent harness architecture](../../../../../gitbooks/developing/architecture/agent-harness.md)
-- [The orchestrator](../../../../../gitbooks/features/orchestration.md)
+- [Agent harness architecture](../../../../../docs/gitbooks/en/developing/architecture/agent-harness.md)
+- [The orchestrator](../../../../../docs/gitbooks/en/features/orchestration.md)

@@ -1,10 +1,9 @@
-//! OpenHuman's web search as tinymemes' research backend.
+//! OpenHuman's web search as the module's `Search` callback.
 //!
 //! Runs the same checks the `web_search` tool does before calling the search
 //! module: search enabled in settings, the LocalOnly egress block, and at
 //! least one provider able to serve the search role.
 
-use async_trait::async_trait;
 use serde_json::json;
 
 use crate::config::Config;
@@ -18,7 +17,7 @@ pub(crate) struct OpenHumanSearch {
 impl OpenHumanSearch {
     /// A search backend, or `None` when OpenHuman cannot search right now.
     pub(crate) fn available(config: &Config) -> Option<Self> {
-        if !config.search.is_enabled() {
+        if !crate::search::is_active(config) {
             return None;
         }
         if crate::search::tools::local_only_search_block(TOOL).is_some() {
@@ -35,13 +34,13 @@ impl OpenHumanSearch {
     }
 }
 
-#[async_trait]
-impl tinymemes::WebSearch for OpenHumanSearch {
-    async fn search(
+impl OpenHumanSearch {
+    /// Run one search through the search module.
+    pub(crate) async fn search(
         &self,
         query: &str,
         max_results: usize,
-    ) -> Result<Vec<tinymemes::SearchHit>, tinymemes::BoxError> {
+    ) -> Result<Vec<tinymemes_bus::SearchResult>, String> {
         let request = tinysearch_bus::ExecuteToolRequest {
             name: TOOL.to_string(),
             arguments: json!({ "query": query, "max_results": max_results.clamp(1, 20) }),
@@ -52,7 +51,7 @@ impl tinymemes::WebSearch for OpenHumanSearch {
         Ok(response
             .results
             .into_iter()
-            .map(|r| tinymemes::SearchHit {
+            .map(|r| tinymemes_bus::SearchResult {
                 title: r.title,
                 url: r.url,
                 snippet: r.snippet,

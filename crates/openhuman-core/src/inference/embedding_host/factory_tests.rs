@@ -112,7 +112,7 @@ fn config_aware_factory_builds_managed_provider() {
 /// construct successfully. This is the build-side smoke check; the *binding*
 /// proof (that `config.local_ai.base_url` is the URL actually used) is
 /// [`config_aware_factory_ollama_embeds_against_config_base_url`] below —
-/// `create_embedding_provider_with_config` returns `Box<dyn EmbeddingProvider>`,
+/// `create_embedding_provider_with_config` returns `Box<dyn EmbeddingModel>`,
 /// whose trait surface is `name`/`model_id`/`dimensions`/`embed`, so there is
 /// no `base_url()` accessor to assert against here.
 #[test]
@@ -188,7 +188,7 @@ async fn config_aware_factory_ollama_embeds_against_config_base_url() {
             .expect("ollama provider builds with a config base_url");
 
     let vectors = provider
-        .embed(&["binding probe"])
+        .embed(&["binding probe".to_string()])
         .await
         .expect("factory-built ollama embedder must reach the config base_url");
     assert_eq!(vectors.first().map(|v| v.len()).unwrap_or(0), 3);
@@ -282,7 +282,7 @@ async fn default_embedder_honors_configured_local_provider() {
     assert_eq!(provider.model_id(), "bge-m3");
     assert_eq!(provider.dimensions(), 3);
     let vectors = provider
-        .embed(&["default factory endpoint probe"])
+        .embed(&["default factory endpoint probe".to_string()])
         .await
         .expect("default factory must reach the configured Ollama endpoint");
     assert_eq!(vectors.first().map(|v| v.len()), Some(3));
@@ -359,7 +359,7 @@ async fn factory_managed_provider_authenticates_with_config_scoped_token() {
     // Embed: the lazy bearer resolver reads the config scope, finds the
     // token, and authenticates to the mock.
     let vectors = provider
-        .embed(&["binding probe"])
+        .embed(&["binding probe".to_string()])
         .await
         .expect("factory-built managed provider must resolve the config-scoped token and embed");
     assert_eq!(vectors.first().map(|v| v.len()).unwrap_or(0), 3);
@@ -438,7 +438,7 @@ async fn default_provider_with_config_authenticates_with_config_scoped_token() {
     let provider = default_embedding_provider_with_config(&config);
 
     let vectors = provider
-        .embed(&["binding probe"])
+        .embed(&["binding probe".to_string()])
         .await
         .expect("config-scoped default embedder must resolve the app-session token and embed");
     assert_eq!(

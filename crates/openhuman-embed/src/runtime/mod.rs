@@ -189,8 +189,9 @@ pub enum RuntimeError {
 pub(crate) struct CoreGuard {
     pub(crate) events: Arc<crate::events::EventHub>,
     core: Option<Core>,
-    /// Held for its `Drop`: an ephemeral workspace lives exactly as long as
-    /// the last owner of this guard.
+    /// Held for its `Drop`: an ephemeral workspace lives as long as the last
+    /// owner of this guard, or of a deferred cleanup's
+    /// [`workspace_keepalive`](Self::workspace_keepalive).
     workspace: ResolvedWorkspace,
     /// The provider this runtime installed, if any. It is removed only while
     /// it still owns the process slot.
@@ -205,6 +206,19 @@ pub(crate) struct CoreGuard {
     /// Process-global seams this runtime installed; dropping restores the
     /// restorable ones (see [`seams`]).
     seams: Mutex<Option<seams::InstalledSeams>>,
+}
+
+impl CoreGuard {
+    /// What a deferred agent cleanup holds to keep an ephemeral workspace's
+    /// files until the MCP module acknowledges its close. Never the guard
+    /// itself: a close that is never acknowledged (no shutdown hook runs in an
+    /// embedded host) would then hold the process slot forever and every later
+    /// `Runtime::builder().build()` would fail with `AlreadyRunning`.
+    pub(crate) fn workspace_keepalive(
+        &self,
+    ) -> Option<Arc<crate::harness::workspace::EphemeralRoot>> {
+        self.workspace._temp.clone()
+    }
 }
 
 impl Drop for CoreGuard {
@@ -232,30 +246,10 @@ impl Drop for CoreGuard {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take(),
         );
-        // For an ephemeral workspace, take ownership of the temp path and
-        // remove it with a short retry. The core's memory/session writers keep
-        // running a moment after a turn returns and can recreate workspace
-        // subdirectories while `TempDir`'s own drop-time removal is racing
-        // them, leaving an empty directory behind. A bounded retry lets those
-        // writes settle before giving up.
-        if let Some(temp) = self.workspace._temp.take() {
-            let root = temp.keep();
-            let mut quiet_passes = 0;
-            for _ in 0..20 {
-                match std::fs::remove_dir_all(&root) {
-                    Ok(()) => quiet_passes += 1,
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                        quiet_passes += 1;
-                    }
-                    Err(_) => quiet_passes = 0,
-                }
-                if quiet_passes >= 5 {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            let _ = std::fs::remove_dir_all(&root);
-        }
+        // An ephemeral workspace is removed here unless a deferred agent
+        // cleanup still holds it (see `EphemeralRoot`); either way the process
+        // slot below is released now.
+        drop(self.workspace._temp.take());
         RUNTIME_LIVE.store(false, std::sync::atomic::Ordering::Release);
         log::debug!("[embed][runtime] released");
     }

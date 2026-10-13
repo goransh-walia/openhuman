@@ -198,7 +198,7 @@ impl Tool for InstallToolTool {
         cmd.args(&prefix).arg(package);
         cmd.current_dir(&self.security.workspace_dir);
 
-        let output = match crate::tools::timeout::output_or_kill(
+        let output = match tinytools_std::timeout::output_or_kill(
             &mut cmd,
             Duration::from_secs(INSTALL_TIMEOUT_SECS),
         )

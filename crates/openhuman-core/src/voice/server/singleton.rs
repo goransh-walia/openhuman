@@ -33,6 +33,10 @@ pub fn try_global_server() -> Option<Arc<VoiceServer>> {
 /// and reuses the process-global singleton so RPC status/stop calls continue to
 /// operate on the same instance.
 pub async fn start_if_enabled(app_config: &Config) {
+    if !app_config.components.voice {
+        info!("{LOG_PREFIX} [components].voice is off, skipping embedded voice server");
+        return;
+    }
     if !app_config.voice_server.auto_start {
         info!("{LOG_PREFIX} auto-start disabled in config, skipping embedded voice server");
         return;

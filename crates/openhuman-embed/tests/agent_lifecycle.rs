@@ -1,5 +1,5 @@
 //! Removing an agent from a running runtime: its turns end, its parked
-//! approvals are denied, its context and MCP host are released, its id is
+//! approvals are denied, its context and MCP client cleanup complete, its id is
 //! free again, and the runtime's agent cap counts only live agents.
 
 mod common;
@@ -275,8 +275,8 @@ fn removing_an_agent_releases_everything_it_held() {
                 "the context left the registry, so its cron jobs stay dormant"
             );
             assert!(
-                openhuman_core::mcp::host::take_agent_host(&workspace_dir, "parker").is_none(),
-                "no MCP host is kept for a removed agent"
+                !openhuman_core::mcp::host::agent_close_pending(&workspace_dir, "parker"),
+                "the removed agent's MCP client cleanup is acknowledged"
             );
             removed(parker.turn("again").send().await, "parker");
             assert!(

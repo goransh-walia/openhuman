@@ -32,7 +32,7 @@ async fn ordinary_text_passes_screening_unchanged() {
 
 /// Builds a session whose channel policy yields `action` for `tool_name`.
 fn policy_session(tool_name: &str, action: ToolPolicyAction) -> Arc<ToolPolicySession> {
-    use crate::tools::agent_policy::{TaskProfile, TaskRiskLevel, ToolPolicyDecision};
+    use tinytools::{TaskProfile, TaskRiskLevel, ToolPolicyDecision};
     let profile = TaskProfile {
         agent_id: "lead".to_string(),
         channel: "telegram".to_string(),
@@ -231,8 +231,8 @@ fn a_refused_approval_is_a_deny_the_model_can_read() {
             .expect("a refused approval carries a reason for the model");
         // A policy-class failure pauses the turn before the model can reply.
         assert_eq!(
-            crate::tools::status::classify(reason, false).class,
-            crate::tools::status::ToolFailureClass::Unknown,
+            tinytools::status::classify(reason, false).class,
+            tinytools::status::ToolFailureClass::Unknown,
             "{reason}"
         );
         assert!(reason.contains("must not be performed"), "{reason}");
@@ -272,8 +272,8 @@ fn an_unanswered_approval_tells_the_model_it_was_not_answered() {
     assert!(reason.contains("ask again"), "{reason}");
     assert!(reason.contains("another way"), "{reason}");
     assert_eq!(
-        crate::tools::status::classify(reason, false).class,
-        crate::tools::status::ToolFailureClass::Unknown,
+        tinytools::status::classify(reason, false).class,
+        tinytools::status::ToolFailureClass::Unknown,
         "{reason}"
     );
     let lower = reason.to_lowercase();

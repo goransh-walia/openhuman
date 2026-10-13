@@ -62,6 +62,15 @@ async fn call_tool_rejects_v1_memory_tools_as_unknown() {
 
 #[tokio::test]
 async fn call_tool_validates_memory_arguments_before_dispatch() {
+    // A rejected write is audited against the ambient workspace. Without its
+    // own workspace under the env lock this test wrote its `memory.forget` row
+    // into whichever workspace a concurrent audit test had just pointed
+    // `OPENHUMAN_WORKSPACE` at, making their row counts flaky.
+    let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
+    let tmp = tempfile::tempdir().expect("tempdir");
+    unsafe {
+        std::env::set_var("OPENHUMAN_WORKSPACE", tmp.path());
+    }
     let err = call_tool("memory.forget", json!({ "ids": [] }), "mcp:test")
         .await
         .expect_err("empty ids rejected before any RPC");
@@ -74,4 +83,7 @@ async fn call_tool_validates_memory_arguments_before_dispatch() {
     .await
     .expect_err("unknown filter field");
     assert!(err.message().contains("unexpected filter field"));
+    unsafe {
+        std::env::remove_var("OPENHUMAN_WORKSPACE");
+    }
 }

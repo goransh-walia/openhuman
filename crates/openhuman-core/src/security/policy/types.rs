@@ -7,24 +7,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::OnceCell;
 
-/// Stable, machine-recognizable marker prefixing a **permanent** policy
-/// rejection: the identical `(tool, args)` call can never succeed in the
-/// current tier (read-only blocking a write, a forbidden/credential path, a
-/// disallowed high-risk or hidden-execution command, an off-allowlist command).
-/// The agent harness's repeated-failure middleware
-/// ([`crate::agent::tinyagents::middleware::RepeatedToolFailureMiddleware`])
-/// detects this and halts on the **first verbatim repeat** rather than
-/// reiterating a provably-futile call. Kept short and bracketed so it survives the
-/// `Error: …` wrapping the tool layer adds and is easy to grep in logs.
-pub const POLICY_BLOCKED_MARKER: &str = "[policy-blocked]";
-
-/// Stable marker prefixing a **this-turn denial** — the user answered "no" to
-/// an approval prompt, or the prompt timed out / its channel dropped. Unlike a
-/// block this isn't permanent across turns, but re-issuing the *same* call this
-/// turn just re-prompts the user, so the harness records it in the circuit
-/// breaker and stops the agent from re-asking the identical call.
-pub const POLICY_DENIED_MARKER: &str = "[policy-denied]";
-
 /// How much autonomy the agent has
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -69,17 +51,6 @@ pub enum CommandRiskLevel {
     Low,
     Medium,
     High,
-}
-
-/// Coarse permission bucket the harness approval gate keys on. TinyBox
-/// supplies parser facts; OpenHuman owns this authorization category.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum CommandClass {
-    Read,
-    Write,
-    Network,
-    Install,
-    Destructive,
 }
 
 /// What the harness should do with an acting tool call of a given

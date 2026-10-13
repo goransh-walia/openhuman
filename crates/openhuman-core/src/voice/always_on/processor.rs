@@ -72,6 +72,11 @@ const MAX_UTTERANCE_SAMPLES: usize = TARGET_SAMPLE_RATE as usize * 60;
 /// routes each finished utterance through STT and the dictation delivery bus (so
 /// it reaches the agent exactly like a hotkey dictation, and lights up the notch).
 pub async fn start_if_enabled(app_config: &Config) {
+    if !app_config.components.voice {
+        log::info!("{LOG_PREFIX} [components].voice is off — always-on stays down");
+        shutdown().await;
+        return;
+    }
     if !app_config.voice_server.always_on_enabled {
         shutdown().await;
         return;

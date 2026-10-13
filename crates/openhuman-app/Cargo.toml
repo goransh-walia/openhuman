@@ -303,12 +303,20 @@ tinyinference-llm = { path = "../../vendor/tinyagents/vendor/tinyinference/crate
 tinyinference-local = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-local" }
 tinyinference-voice = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-voice" }
 
+[patch."https://github.com/tinyhumansai/tinybus"]
+# tinystoragedrivers-bus names tinybus by git rev. Redirect it to the in-tree
+# copy so the graph holds exactly one `tinybus` (one `Interface`, one
+# `Connection`) instead of a second one compiled only for the storage wire types.
+tinybus = { path = "../../vendor/tinybus/crates/tinybus" }
+
 [patch."https://github.com/tinyhumansai/tinystoragedrivers"]
-# tinyflows names the storage crates by git tag; redirect them to the copy
-# tinyagents vendors so this world links one `DocumentStore` trait and one
-# `libsqlite3-sys`. Mirrors the root Cargo.toml.
+# tinyflows names the storage crates by git tag (v0.7.0); redirect them to the
+# copy tinyagents vendors so this world links one `DocumentStore` trait and one
+# `libsqlite3-sys`. Still needed although the versions agree: a git and a path
+# source are distinct packages. Mirrors the root Cargo.toml.
 tinystoragedrivers-core = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
 tinystoragedrivers-sqlite = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
+tinystoragedrivers-secrets = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
 
 [patch.crates-io]
 # Keep reqwest defaults disabled in this independent Cargo world too. Without

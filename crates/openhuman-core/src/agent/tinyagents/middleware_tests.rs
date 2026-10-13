@@ -402,6 +402,8 @@ mod failure_effect_tests;
 mod failure_policy_class_tests;
 #[path = "middleware_loop_guard_tests.rs"]
 mod loop_guard_tests;
+#[path = "middleware_memory_budget_tests.rs"]
+mod memory_budget_tests;
 #[path = "middleware_stop_cause_tests.rs"]
 mod stop_cause_tests;
 
@@ -412,8 +414,6 @@ mod research_budget_tests;
 mod memory_and_hooks_tests;
 #[path = "middleware_tool_output_artifact_tests.rs"]
 mod tool_output_artifact_tests;
-#[path = "middleware_tool_output_file_read_tests.rs"]
-mod tool_output_file_read_tests;
 #[path = "middleware_tool_output_tests.rs"]
 mod tool_output_tests;
 #[path = "middleware_tool_policy_tests.rs"]

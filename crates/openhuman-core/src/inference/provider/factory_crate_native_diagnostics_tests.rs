@@ -1,8 +1,6 @@
 use super::*;
 
-use crate::inference::provider::factory::cloud_slug::{
-    openrouter_default_provider_options, OPENROUTER_PROVIDER_SORT,
-};
+use tinyinference_llm::providers::registry::openrouter_default_provider_options;
 
 #[test]
 fn crate_native_chat_model_factory_preserves_invalid_route_diagnostics() {
@@ -173,7 +171,6 @@ fn direct_openrouter_endpoints_get_price_sorted_routing_and_nothing_else() {
     // reason in tinyhumansai/backend#1370).
     let options = openrouter_default_provider_options("https://openrouter.ai/api/v1")
         .expect("openrouter endpoint carries routing options");
-    assert_eq!(OPENROUTER_PROVIDER_SORT, "price");
     assert_eq!(
         options,
         serde_json::json!({ "provider": { "sort": "price" } }),

@@ -10,7 +10,9 @@ async fn a_timeout_is_not_reported_as_a_provider_error_left_in_the_slot() {
         tinyagents_harness::TinyAgentsError::Cancelled,
     ] {
         let slot: ModelErrorSlot = std::sync::Arc::new(std::sync::Mutex::new(Some(
-            anyhow::anyhow!("OpenHuman returned HTTP 503: upstream unavailable"),
+            tinyinference_llm::Error::Model(
+                "OpenHuman returned HTTP 503: upstream unavailable".to_string(),
+            ),
         )));
         let mapped = map_turn_run_error(error, "m", 10, &slot, None).await;
         assert!(

@@ -461,9 +461,8 @@ async fn scheduler_tick_once_publishes_health_recovery_signal_on_empty_queue() {
     let mut last_emitted_health: Option<bool> = None;
     tick_once(
         &config,
-        &security,
         &mut last_emitted_health,
-        &mut JobDispatcher::new(1),
+        &mut JobDispatcher::new(&config, &security),
     )
     .await;
 
@@ -525,9 +524,8 @@ async fn scheduler_tick_once_does_not_re_emit_recovery_signal_on_steady_state() 
     // First tick: transition from None → Some(true), publishes once.
     tick_once(
         &config,
-        &security,
         &mut last_emitted_health,
-        &mut JobDispatcher::new(1),
+        &mut JobDispatcher::new(&config, &security),
     )
     .await;
     assert_eq!(
@@ -544,9 +542,8 @@ async fn scheduler_tick_once_does_not_re_emit_recovery_signal_on_steady_state() 
     for tick in 2..=5 {
         tick_once(
             &config,
-            &security,
             &mut last_emitted_health,
-            &mut JobDispatcher::new(1),
+            &mut JobDispatcher::new(&config, &security),
         )
         .await;
         assert_eq!(

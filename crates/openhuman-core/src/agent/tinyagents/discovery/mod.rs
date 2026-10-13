@@ -218,7 +218,9 @@ impl ToolRanker for OverlapRanker {
 
 mod embedding_ranker;
 
-pub use embedding_ranker::{embedding_provider_is_usable, embedding_tool_ranker};
+pub use embedding_ranker::{
+    embedding_provider_is_usable, embedding_tool_ranker, embedding_tool_ranker_in,
+};
 
 #[cfg(test)]
 #[path = "discovery_tests.rs"]

@@ -75,7 +75,15 @@ impl AttachmentModel {
                     }
                     _ => None,
                 };
-                if let Some(format) = format {
+                if format.is_some() && !self.config.components.documents {
+                    log::debug!(
+                        "[attachments] document extraction skipped: component 'documents' disabled"
+                    );
+                    cacheable = false;
+                    text.push_str(
+                        "\nDocument extraction is disabled ([components] documents = false); original remains available.",
+                    );
+                } else if let Some(format) = format {
                     let (_, _, limit) = self.config.multimodal_files.effective_limits();
                     let mut spec = tinydocs_bus::ExtractDocumentSpec::new(format);
                     spec.max_text_bytes = limit.min(200_000) as u32;

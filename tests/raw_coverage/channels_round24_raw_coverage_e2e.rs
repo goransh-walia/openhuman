@@ -3,12 +3,12 @@
 //! Parser/state seams only: no real network traffic.
 
 use openhuman_core::channels::test_support as runtime_support;
-use openhuman_core::channels::traits::ChannelMessage;
 use serde_json::json;
 use tinychannels::delivery::progressive::{
     extract_message_id, latest_thinking_snippet, StreamingState,
 };
 use tinychannels::providers::email_channel::test_support as email_support;
+use tinychannels::ChannelMessage;
 
 fn channel_message(channel: &str, reply_target: &str, content: &str) -> ChannelMessage {
     ChannelMessage {

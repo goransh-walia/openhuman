@@ -65,10 +65,7 @@ async fn handle_does_not_panic_on_arbitrary_events() {
         job_type: "shell".into(),
     })
     .await;
-    sub.handle(&DomainEvent::FlowScheduleTick {
-        flow_id: "missing-flow".into(),
-    })
-    .await;
+    sub.dispatch_schedule_tick("missing-flow").await;
 }
 
 #[test]
@@ -163,10 +160,7 @@ async fn handle_schedule_tick_ignores_disabled_flow() {
     // Must not panic and must not spawn a run for a disabled flow — we
     // can't directly observe "no run happened" without a full flows_run
     // fixture, but this exercises the early-return path without error.
-    sub.handle(&DomainEvent::FlowScheduleTick {
-        flow_id: "sched-flow".into(),
-    })
-    .await;
+    sub.dispatch_schedule_tick("sched-flow").await;
 }
 
 // ── in-flight dedupe (CodeRabbit finding B) ─────────────────────

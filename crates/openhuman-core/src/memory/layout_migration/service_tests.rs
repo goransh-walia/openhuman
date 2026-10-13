@@ -5,6 +5,7 @@ use tinymemory_api::MemoryEngine;
 
 use super::*;
 use crate::memory::layout_migration::test_host::{count, fact, FakeHost};
+use crate::memory::layout_migration::{state, Phase};
 
 fn never() -> Arc<dyn Fn() -> bool + Send + Sync> {
     Arc::new(|| false)
@@ -25,9 +26,9 @@ async fn settle(config: &Config) {
 async fn scan_finds_legacy_memory_and_nothing_after_the_move() {
     let tmp = tempfile::tempdir().unwrap();
     let config = crate::memory::test_fixtures::config_in(&tmp);
-    let host = Arc::new(FakeHost::with(3).await);
+    let host = Arc::new(FakeHost::with(3, &config).await);
     assert_eq!(
-        scan(&config, host.as_ref()).await.unwrap(),
+        scan(host.as_ref()).await.unwrap(),
         ScanView {
             needed: true,
             shared: false
@@ -35,7 +36,7 @@ async fn scan_finds_legacy_memory_and_nothing_after_the_move() {
     );
     assert!(start(config.clone(), host.clone(), Trigger::Auto, never()));
     settle(&config).await;
-    assert!(!scan(&config, host.as_ref()).await.unwrap().needed);
+    assert!(!scan(host.as_ref()).await.unwrap().needed);
     assert_eq!(status(&config).unwrap().state.phase, Phase::Cleaned);
 }
 
@@ -43,15 +44,15 @@ async fn scan_finds_legacy_memory_and_nothing_after_the_move() {
 async fn nothing_to_move_shows_nothing() {
     let tmp = tempfile::tempdir().unwrap();
     let config = crate::memory::test_fixtures::config_in(&tmp);
-    let host = FakeHost::with(0).await;
-    assert!(!scan(&config, &host).await.unwrap().needed);
+    let host = FakeHost::with(0, &config).await;
+    assert!(!scan(&host).await.unwrap().needed);
 }
 
 #[tokio::test]
 async fn one_run_per_workspace_at_a_time() {
     let tmp = tempfile::tempdir().unwrap();
     let config = crate::memory::test_fixtures::config_in(&tmp);
-    let host = Arc::new(FakeHost::with(200).await);
+    let host = Arc::new(FakeHost::with(200, &config).await);
     assert!(start(config.clone(), host.clone(), Trigger::Auto, never()));
     assert!(
         !start(config.clone(), host.clone(), Trigger::Auto, never()),
@@ -65,7 +66,7 @@ async fn one_run_per_workspace_at_a_time() {
 async fn a_stopped_run_reads_as_interrupted_and_a_tick_resumes_it() {
     let tmp = tempfile::tempdir().unwrap();
     let config = crate::memory::test_fixtures::config_in(&tmp);
-    let host = Arc::new(FakeHost::with(120).await);
+    let host = Arc::new(FakeHost::with(120, &config).await);
     let mut stopped = state::load(&config.workspace_dir).unwrap();
     stopped.phase = Phase::Copying;
     state::save(&config.workspace_dir, &stopped).unwrap();
@@ -81,7 +82,7 @@ async fn a_stopped_run_reads_as_interrupted_and_a_tick_resumes_it() {
 async fn nothing_starts_while_an_import_is_unfinished() {
     let tmp = tempfile::tempdir().unwrap();
     let config = crate::memory::test_fixtures::config_in(&tmp);
-    let host = Arc::new(FakeHost::with(3).await);
+    let host = Arc::new(FakeHost::with(3, &config).await);
     let path = config
         .workspace_dir
         .join("memory")
@@ -111,7 +112,7 @@ async fn nothing_starts_while_an_import_is_unfinished() {
 async fn a_tick_starts_nothing_while_background_work_is_paused() {
     let tmp = tempfile::tempdir().unwrap();
     let config = crate::memory::test_fixtures::config_in(&tmp);
-    let host = Arc::new(FakeHost::with(3).await);
+    let host = Arc::new(FakeHost::with(3, &config).await);
     assert!(!tick(&config, host.clone(), Arc::new(|| true)));
     assert_eq!(count(host.tree.as_ref()).await, 0);
 }
@@ -120,7 +121,7 @@ async fn a_tick_starts_nothing_while_background_work_is_paused() {
 async fn retry_puts_a_lost_copy_back_in_line() {
     let tmp = tempfile::tempdir().unwrap();
     let config = crate::memory::test_fixtures::config_in(&tmp);
-    let host = Arc::new(FakeHost::with(4).await);
+    let host = Arc::new(FakeHost::with(4, &config).await);
     host.free.store(true, Ordering::SeqCst);
     assert!(start(config.clone(), host.clone(), Trigger::Auto, never()));
     settle(&config).await;
@@ -139,4 +140,16 @@ async fn retry_puts_a_lost_copy_back_in_line() {
     settle(&config).await;
     assert_eq!(count(host.tree.as_ref()).await, 5);
     assert_eq!(count(host.legacy.as_ref()).await, 0);
+}
+
+#[tokio::test]
+async fn a_damaged_state_file_surfaces_as_the_hosts_engine_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = crate::memory::test_fixtures::config_in(&tmp);
+    std::fs::create_dir_all(config.workspace_dir.join("memory")).unwrap();
+    std::fs::write(state::path(&config.workspace_dir), b"{ torn").unwrap();
+    let error = status(&config).unwrap_err();
+    assert_eq!(error.code(), "ENGINE");
+    let host = Arc::new(FakeHost::with(1, &config).await);
+    assert!(!tick(&config, host, never()), "a torn state starts nothing");
 }

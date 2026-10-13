@@ -8,11 +8,10 @@
 
 use std::time::Duration;
 use std::{
-    collections::HashMap,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, OnceLock,
+        Arc,
     },
 };
 
@@ -21,6 +20,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{Map, Value};
 use tinymcp_bus::{
     agent_tools::{McpToolPresentation, PrepareAgentToolsRequest},
+    client_lifecycle::{CleanupAction, ConfiguredLifecycle, Fault, Poll, Retire, Step},
     config::{McpClientConfig, OpenConfiguredRequest, OpenConfiguredResponse, TransitionStatus},
     names, McpRemoteTool, ScrubStaticToolsRequest, ServerArgumentsValidation, SupervisorBatch,
     ValidateServerArgumentsRequest,
@@ -34,48 +34,16 @@ use crate::{
 const MODULE: &str = "tinymcp";
 const TRANSITION_TIMEOUT: Duration = Duration::from_secs(30);
 const TRANSITION_POLL_INTERVAL: Duration = Duration::from_millis(20);
-static CLIENTS: OnceLock<Mutex<HashMap<PathBuf, Arc<McpConfiguredClient>>>> = OnceLock::new();
-type CleanupAction = Arc<dyn Fn() -> bool + Send + Sync>;
-
-#[derive(Default)]
-struct CleanupReservation {
-    after_close: Mutex<Option<CleanupAction>>,
-}
-
-static CLEANUP_RESERVATIONS: OnceLock<Mutex<HashMap<PathBuf, Arc<CleanupReservation>>>> =
-    OnceLock::new();
 static SHUTDOWN_REGISTERED: AtomicBool = AtomicBool::new(false);
 static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
 
-#[cfg(test)]
-static AFTER_CONTEXT_CHECK: OnceLock<Mutex<Option<(PathBuf, tokio::sync::oneshot::Sender<()>)>>> =
-    OnceLock::new();
-
-#[derive(Clone)]
-struct OpenObject {
-    config: McpClientConfig,
-    object_path: String,
-}
-
-#[derive(Clone)]
-enum State {
-    Closed,
-    StartingOpen {
-        config: McpClientConfig,
-        previous: Option<OpenObject>,
-    },
-    Opening {
-        config: McpClientConfig,
-        previous: Option<OpenObject>,
-        receipt: OpenConfiguredResponse,
-    },
-    Open(OpenObject),
-    StartingClose(OpenObject),
-    Closing {
-        object: OpenObject,
-        transition_id: String,
-    },
-}
+/// TinyMCP admits one directory lifecycle transition at a time across every
+/// workspace it serves, and answers a second concurrent open or close with
+/// `InvalidArgument: a directory lifecycle transition is pending`. The module
+/// does not queue them, so the host serializes them here: the gate is held from
+/// the first lifecycle call until the transition has been polled to a terminal
+/// status (the module releases its own gate only then).
+static LIFECYCLE_GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[async_trait]
 pub(crate) trait McpModulePort: Send + Sync {
@@ -241,7 +209,7 @@ impl McpModulePort for TinyMcpPort {
 pub(crate) struct McpConfiguredClient {
     data_dir: String,
     port: Box<dyn McpModulePort>,
-    state: tokio::sync::Mutex<State>,
+    state: tokio::sync::Mutex<ConfiguredLifecycle>,
     retiring: AtomicBool,
 }
 
@@ -408,6 +376,7 @@ impl McpConfiguredClient {
                         name: tool.name,
                         description: tool.description.or(tool.title),
                         input_schema: tool.input_schema,
+                        meta: None,
                     })
                     .collect(),
             );
@@ -417,12 +386,7 @@ impl McpConfiguredClient {
                 family: server.name.clone(),
                 display_name: server.name.clone(),
                 tools,
-                default_exposure: match declared.expose {
-                    crate::config::McpToolExposure::Direct => tinymcp_bus::McpToolExposure::Direct,
-                    crate::config::McpToolExposure::Deferred => {
-                        tinymcp_bus::McpToolExposure::Deferred
-                    }
-                },
+                default_exposure: declared.expose,
                 direct_tools: declared.direct_tools.clone(),
             });
         }
@@ -459,150 +423,77 @@ impl McpConfiguredClient {
     /// retried from the retained transition state on the next call.
     pub(crate) async fn close(&self) -> Result<(), ModuleCallError> {
         let mut state = self.state.lock().await;
-        match state.clone() {
-            State::Closed => return Ok(()),
-            State::Open(object) => *state = State::StartingClose(object),
-            State::StartingOpen { .. } | State::Opening { .. } => {
-                self.finish_open(&mut state).await?;
-                if let State::Open(object) = state.clone() {
-                    *state = State::StartingClose(object);
-                }
-            }
-            State::StartingClose(_) | State::Closing { .. } => {}
-        }
-        self.finish_close(&mut state).await
+        self.drive(&mut state, None).await.map(|_| ())
     }
 
     async fn ensure_open(
         &self,
-        state: &mut State,
+        state: &mut ConfiguredLifecycle,
         requested: &McpClientConfig,
-    ) -> Result<OpenObject, ModuleCallError> {
+    ) -> Result<tinymcp_bus::client_lifecycle::OpenObject, ModuleCallError> {
+        self.drive(state, Some(requested))
+            .await?
+            .ok_or(ModuleCallError::ModuleFault)
+    }
+
+    /// Performs the bus call each `Step` of the module-owned lifecycle names
+    /// and feeds the reply back, until the target is open (`Some`) or closed.
+    async fn drive(
+        &self,
+        state: &mut ConfiguredLifecycle,
+        requested: Option<&McpClientConfig>,
+    ) -> Result<Option<tinymcp_bus::client_lifecycle::OpenObject>, ModuleCallError> {
+        let mut gate = None;
         loop {
-            match state.clone() {
-                State::Open(object) if object.config == *requested => return Ok(object),
-                State::Open(object) => {
-                    *state = State::StartingOpen {
-                        config: requested.clone(),
-                        previous: Some(object),
-                    };
+            let step = match requested {
+                Some(config) => state.open_step(config),
+                None => state.close_step(),
+            };
+            if gate.is_none() && !matches!(step, Step::Ready(_) | Step::Closed) {
+                log::debug!(
+                    "[mcp] waiting for the module lifecycle gate data_dir_len={}",
+                    self.data_dir.len()
+                );
+                gate = Some(LIFECYCLE_GATE.lock().await);
+            }
+            match step {
+                Step::Ready(object) => return Ok(Some(object)),
+                Step::Closed => return Ok(None),
+                Step::CallOpen(config) => {
+                    // The lifecycle recorded intent before this confidential
+                    // call; retrying the same configuration recovers the
+                    // module's idempotent receipt after a cancelled caller.
+                    // Servers and audit rows from before the storage contract
+                    // move into the module's storage before it reads them.
+                    // Best effort: a failure is retried at the next open.
+                    crate::modules::import_legacy_mcp(std::path::Path::new(&self.data_dir)).await;
+                    let reply = self.port.open_configured(&self.data_dir, &config).await;
+                    state.open_replied(reply.clone().map_err(|_| ()));
+                    reply?;
                 }
-                State::Closed => {
-                    *state = State::StartingOpen {
-                        config: requested.clone(),
-                        previous: None,
-                    };
+                Step::PollOpen(id) => {
+                    let status = self.poll_transition(&id).await?;
+                    Self::settle(state.open_polled(status))?;
                 }
-                State::StartingOpen { .. } | State::Opening { .. } => {
-                    self.finish_open(state).await?;
+                Step::CallClose => {
+                    let reply = self.port.close(&self.data_dir).await;
+                    state.close_replied(reply.clone().map_err(|_| ()));
+                    reply?;
                 }
-                State::StartingClose(_) | State::Closing { .. } => {
-                    self.finish_close(state).await?;
+                Step::PollClose(id) => {
+                    let status = self.poll_transition(&id).await?;
+                    Self::settle(state.close_polled(status))?;
                 }
+                _ => return Err(ModuleCallError::ModuleFault),
             }
         }
     }
 
-    async fn finish_open(&self, state: &mut State) -> Result<(), ModuleCallError> {
-        let mut retried_terminal_transition = false;
-        loop {
-            match state.clone() {
-                State::StartingOpen { config, previous } => {
-                    // Record intent before awaiting the confidential call. If
-                    // the caller is cancelled after TinyMCP accepts it, retrying
-                    // this same configuration recovers the idempotent receipt.
-                    match self.port.open_configured(&self.data_dir, &config).await {
-                        Ok(receipt) => {
-                            *state = State::Opening {
-                                config,
-                                previous,
-                                receipt,
-                            };
-                        }
-                        Err(error) => {
-                            *state = previous.map_or(State::Closed, State::Open);
-                            return Err(error);
-                        }
-                    }
-                }
-                State::Opening {
-                    config,
-                    previous,
-                    receipt,
-                } => {
-                    let status = self.poll_transition(&receipt.transition_id).await?;
-                    match status {
-                        TransitionStatus::Pending => continue,
-                        TransitionStatus::Complete => {
-                            *state = State::Open(OpenObject {
-                                config,
-                                object_path: receipt.object_path,
-                            });
-                            return Ok(());
-                        }
-                        TransitionStatus::Failed | TransitionStatus::Unknown => {
-                            if retried_terminal_transition {
-                                return Err(ModuleCallError::TransportFailed);
-                            }
-                            retried_terminal_transition = true;
-                            *state = State::StartingOpen { config, previous };
-                        }
-                        _ => return Err(ModuleCallError::ModuleFault),
-                    }
-                }
-                State::Open(_) | State::Closed => return Ok(()),
-                State::StartingClose(_) | State::Closing { .. } => {
-                    return Err(ModuleCallError::TransportFailed);
-                }
-            }
-        }
-    }
-
-    async fn finish_close(&self, state: &mut State) -> Result<(), ModuleCallError> {
-        let mut retried_terminal_transition = false;
-        loop {
-            match state.clone() {
-                State::Closed => return Ok(()),
-                State::StartingClose(object) => {
-                    // The module returns the same pending receipt if a previous
-                    // Close reply was lost. `None` means cleanup already ended.
-                    match self.port.close(&self.data_dir).await {
-                        Ok(Some(transition_id)) => {
-                            *state = State::Closing {
-                                object,
-                                transition_id,
-                            };
-                        }
-                        Ok(None) => {
-                            *state = State::Closed;
-                            return Ok(());
-                        }
-                        Err(error) => return Err(error),
-                    }
-                }
-                State::Closing {
-                    object,
-                    transition_id,
-                } => match self.poll_transition(&transition_id).await? {
-                    TransitionStatus::Pending => continue,
-                    TransitionStatus::Complete => {
-                        *state = State::Closed;
-                        return Ok(());
-                    }
-                    TransitionStatus::Failed | TransitionStatus::Unknown => {
-                        if retried_terminal_transition {
-                            return Err(ModuleCallError::TransportFailed);
-                        }
-                        retried_terminal_transition = true;
-                        *state = State::StartingClose(object);
-                    }
-                    _ => return Err(ModuleCallError::ModuleFault),
-                },
-                State::Open(object) => *state = State::StartingClose(object),
-                State::StartingOpen { .. } | State::Opening { .. } => {
-                    return Err(ModuleCallError::TransportFailed);
-                }
-            }
+    fn settle(poll: Poll) -> Result<(), ModuleCallError> {
+        match poll {
+            Poll::Fault(Fault::Transport) => Err(ModuleCallError::TransportFailed),
+            Poll::Fault(_) => Err(ModuleCallError::ModuleFault),
+            _ => Ok(()),
         }
     }
 
@@ -637,3 +528,13 @@ fn current_agent_context_is_removed() -> bool {
 #[cfg(test)]
 #[path = "module_client_tests.rs"]
 mod tests;
+
+impl Retire for McpConfiguredClient {
+    fn mark_retiring(&self) {
+        self.retiring.store(true, Ordering::Release);
+    }
+
+    fn is_retiring(&self) -> bool {
+        self.retiring.load(Ordering::Acquire)
+    }
+}

@@ -145,7 +145,7 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
         // gate: a user who presses Fetch is owed the explanation. Only the
         // timer is silenced, which is why the check lives here rather than
         // inside `run_source_once` (which both paths share).
-        if !source.provider.can_fetch() {
+        if !super::types::provider_can_fetch(source.provider) {
             tracing::debug!(
                 source_id = %source.id,
                 provider = %source.provider.as_str(),

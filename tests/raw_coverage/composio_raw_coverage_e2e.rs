@@ -95,6 +95,12 @@ async fn composio_connected_integrations_public_helpers_handle_empty_auth_and_id
 #[tokio::test]
 async fn composio_ops_mode_is_local_and_trigger_history_reads_the_module_archive() {
     let _module = crate::CONNECTOR_MODULE_LOCK.lock().await;
+    // The connector module keeps the trigger archive in host storage.
+    let env_lock = ENV_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
+    let _storage = crate::HostStorage::install(&env_lock);
     crate::tinyhumans_boot::boot();
     let dir = tempdir().expect("tempdir");
     let mut config = Config {
@@ -197,10 +203,12 @@ fn composio_client_factory_modes_are_deterministic_without_network() {
 
 #[tokio::test]
 async fn composio_controller_registry_and_scope_handlers_cover_validation_edges() {
-    let _env_lock = ENV_LOCK
+    let env_lock = ENV_LOCK
         .get_or_init(|| tokio::sync::Mutex::new(()))
         .lock()
         .await;
+    // Scope preferences live in the connector module's host storage.
+    let _storage = crate::HostStorage::install(&env_lock);
     crate::tinyhumans_boot::boot();
     // The controller loads config through the process workspace resolver. Pin
     // the test to an isolated workspace so the scope store does not depend on
@@ -247,14 +255,14 @@ async fn composio_controller_registry_and_scope_handlers_cover_validation_edges(
     .await
     .expect_err("write must be bool");
     assert!(invalid_write.contains("invalid 'write'"));
-    // The storage half persists to `<workspace>/integrations/composio_user_scopes.json`
-    // (no memory driver involved) and reads back through `get_user_scopes`.
+    // The pref persists in the connector module's host storage (b80c12358a)
+    // and reads back through `get_user_scopes`.
     let saved = composio_call(
         set_scopes,
         json!({ "toolkit": " GitHub ", "read": true, "write": false, "admin": true }),
     )
     .await
-    .expect("set_user_scopes persists to the workspace file store");
+    .expect("set_user_scopes persists to host storage");
     assert_eq!(saved.pointer("/admin"), Some(&json!(true)));
     assert_eq!(saved.pointer("/write"), Some(&json!(false)));
     let reread = composio_call(get_scopes, json!({ "toolkit": "github" }))
@@ -263,11 +271,11 @@ async fn composio_controller_registry_and_scope_handlers_cover_validation_edges(
     assert_eq!(reread.pointer("/admin"), Some(&json!(true)));
     assert_eq!(reread.pointer("/write"), Some(&json!(false)));
     assert!(
-        workspace_dir
+        !workspace_dir
             .join("integrations")
             .join("composio_user_scopes.json")
             .exists(),
-        "the pref lands in the workspace file store"
+        "the legacy workspace file is no longer written"
     );
 }
 

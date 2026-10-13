@@ -36,7 +36,7 @@ The adapter seam between OpenHuman and the vendored [`tinyagents`](../../../../.
 | [`middleware/research_budget.rs`](./middleware/research_budget.rs) | Withdraws the web tools from a top-level turn after eight successful search or fetch calls (forcing an answer only when no other tool remains), and notes once when consecutive web calls fail. |
 | `model.rs` | Helpers and wrappers over native crate `ChatModel` values: message/response translation, usage merging, stream-delta forwarding, `MaxTokensModel`, `ProfileOverrideModel`. |
 | [`tools.rs`](./tools.rs) | `CanonicalSharedToolAdapter`: resolves an OpenHuman shared tool registry and forwards the canonical `tinytools::Tool` contract; `EarlyExitHook` pauses successful `ask_user_clarification`-style calls. |
-| `routes.rs` | `WORKLOAD_ROUTE_TIERS` (the tier inventory projected into the model registry), `RequiredCapabilitiesMiddleware`, `FallbackObserverMiddleware`, `UsageCarryMiddleware`, and the per-model fallback policy. |
+| `routes.rs` | the workload router projected from the upstream `WORKLOAD_ROUTES` table, `RequiredCapabilitiesMiddleware`, `FallbackObserverMiddleware`, `UsageCarryMiddleware`, and the per-model fallback policy. |
 | `topology.rs` | `all_graph_topologies`: behaviour-free `GraphTopology` exports of every custom OpenHuman graph for debug/inspection. |
 | [`observability.rs`](./observability.rs) + `observability/` | `event_bridge.rs`: `OpenhumanEventBridge`, translating crate `AgentEvent`s into `AgentProgress` and feeding per-call usage into `crate::platform::cost`. `event_projection.rs`: its `EventListener` impl. `cap_pauser.rs`: `CapPauser` and `SubagentScope`. `graph_tracing.rs`: `GraphTracingSink`. |
 | [`host/steering.rs`](./host/steering.rs) | OpenHuman's steering allowlist and the shared `SteeringRegistry` for detached sub-agents. Task primitives are imported directly from `tinyagents_graph::orchestration`. |
@@ -47,7 +47,7 @@ The adapter seam between OpenHuman and the vendored [`tinyagents`](../../../../.
 | [`steering_forwarder.rs`](./steering_forwarder.rs) | Host adapter over `tinyagents_harness::run_queue::SteeringForwarderGuard` (forwards `RunQueue` steer/collect messages into the harness `SteeringHandle`; abort-on-drop so drop-based cancellation always deregisters it, issue #4456): `QueuedMessage for QueuedTurn`, the `RunQueue*` domain-event sink and the steering-registry cleanup hook. |
 | [`stop_hooks.rs`](./stop_hooks.rs) | Host accounting and halt-summary projection for the TinyAgents stop-hook middleware; budget and goal policies remain in OpenHuman. |
 | `summarize.rs` | `ModelSummarizer` / `FaultTolerantCachingSummarizer` plus a context-window-aware `SummarizationPolicy` driving the crate's `ContextCompressionMiddleware`. |
-| [`embeddings.rs`](./embeddings.rs) | `ProviderEmbeddingModel`: adapts `crate::inference::embedding_host::EmbeddingProvider` onto the crate's `EmbeddingModel` trait. |
+| [`embeddings.rs`](./embeddings.rs) | `ProviderEmbeddingModel`: cost-recording binding over the host-built `tinyinference_embeddings::EmbeddingModel`. |
 | [`todos.rs`](./todos.rs) | `todos_store` / `scratch_todos_store` (the crate `Store` behind per-thread agent todos, `tinyagents_graph::todos`). |
 | [`config.rs`](./config.rs) | Maps OpenHuman's `Config` (including model pins) onto `tinyagents_harness::config` structs. |
 | `*_tests.rs` | Sibling test suites for each file/part group above. |
@@ -65,7 +65,7 @@ that installed ranker together with `agent.tool_search`
 process-wide, like the backend transport, because the credential a
 decision-model ranker needs belongs to the process's signed-in user rather
 than to any one agent config. See
-[the Jev page](../../../../../gitbooks/developing/jev.md) for the ranking
+[the Jev page](../../../../../docs/gitbooks/en/developing/jev.md) for the ranking
 mechanism and its measured accuracy against plain BM25.
 
 ## Public surface
@@ -131,7 +131,7 @@ through the typed parent run.
 - The taint/scope/redaction/approval/budget guarantees the crate deliberately does not know about are enforced in `host/` and `middleware*.rs`. Widening a permission or dropping a scope filter to make an adapter signature fit would silently disable a guarantee the rest of the system assumes.
 - `journal.rs` is best-effort: store opening and every write swallow errors behind a `[journal]` log line rather than failing a turn. `reaper.rs` logs its sweep under `[agent] startup run sweep`.
 - `defer_turn_completed_to_caller` (a `run_turn_via_tinyagents_shared` parameter, issue #4457) exists because the chat/session path emits its own `TurnCompleted` after streaming a post-run checkpoint; callers without that step (channel/CLI) pass `false` and rely on this seam's emit.
-- [gitbooks/developing/architecture/agent-harness.md](../../../../../gitbooks/developing/architecture/agent-harness.md) is the narrative overview of the turn lifecycle and where this seam sits in it.
+- [docs/gitbooks/en/developing/architecture/agent-harness.md](../../../../../docs/gitbooks/en/developing/architecture/agent-harness.md) is the narrative overview of the turn lifecycle and where this seam sits in it.
 
 ## Further reading
 

@@ -62,6 +62,7 @@ web3 = ["openhuman-tinyhumans/web3"]
 # `session_store::install_for_host`).
 storage-sqlite = ["openhuman-tinyhumans/storage-sqlite"]
 storage-mongodb = ["openhuman-tinyhumans/storage-mongodb"]
+storage-s3 = ["openhuman-tinyhumans/storage-s3"]
 storage-file = ["openhuman-tinyhumans/storage-file"]
 media = ["openhuman-tinyhumans/media"]
 flows = ["openhuman-tinyhumans/flows"]

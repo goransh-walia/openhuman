@@ -99,6 +99,9 @@ fn the_saas_presets_are_closed() {
         DomainSet::saas(),
         DomainSet {
             operator: true,
+            // Only the reviewed Agent controls pass profiles::surface;
+            // the actual dispatch regression keeps other Agent methods denied.
+            agent: true,
             threads: true,
             channels: true,
             memory: true,

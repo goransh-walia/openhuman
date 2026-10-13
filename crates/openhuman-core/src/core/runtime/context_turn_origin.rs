@@ -63,6 +63,7 @@ impl CoreContext {
             ),
             domains: ctx.domains,
             tool_groups: ctx.tool_groups.clone(),
+            components: ctx.components,
             embedder_config: ctx.embedder_config.clone(),
             user_skill_roots: ctx.user_skill_roots,
             backend_transport: ctx.backend_transport.clone(),

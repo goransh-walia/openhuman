@@ -73,7 +73,7 @@ pub enum AgentProgress {
         /// failure (class, category, plain-language cause + next action) that
         /// the chat "View processing" timeline renders. `None` on success and
         /// on legacy snapshots. See `crate::tools::status`.
-        failure: Option<crate::tools::status::ClassifiedFailure>,
+        failure: Option<tinytools::status::ClassifiedFailure>,
         /// Server-computed human label recomputed from the tool's OWN
         /// [`tinytools::Tool::display_label`] using the real call arguments
         /// (the matching `ToolCallStarted.display_label` was computed with no
@@ -275,7 +275,7 @@ pub enum AgentProgress {
         /// child tool failure, mirroring [`Self::ToolCallCompleted::failure`] so
         /// a failed sub-agent row carries the same "why + what to do next" copy
         /// instead of discarding the already-computed classification (#4459).
-        failure: Option<crate::tools::status::ClassifiedFailure>,
+        failure: Option<tinytools::status::ClassifiedFailure>,
         /// Mirrors [`Self::ToolCallCompleted::display_label`], recomputed from
         /// the child tool's own `Tool::display_label` using the real call
         /// arguments.

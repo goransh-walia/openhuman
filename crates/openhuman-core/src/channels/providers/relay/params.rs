@@ -6,7 +6,7 @@ use serde_json::Value;
 
 #[cfg(test)]
 use crate::channels::bus::derive_inbound_thread_id;
-use crate::channels::traits::ChannelMessage;
+use tinychannels_bus::ChannelMessage;
 
 /// Longest channel name: `telegram`, `imessage`, `discord`, ...
 pub const MAX_CHANNEL_LEN: usize = 32;

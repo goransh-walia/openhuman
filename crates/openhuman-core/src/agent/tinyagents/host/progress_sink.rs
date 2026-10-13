@@ -492,7 +492,7 @@ impl ProgressSink for OpenHumanProgressSink {
                 let failure = if success {
                     None
                 } else {
-                    Some(crate::tools::status::classify(&output, false))
+                    Some(tinytools::status::classify(&output, false))
                 };
 
                 self.forward_lifecycle(AgentProgress::ToolCallCompleted {

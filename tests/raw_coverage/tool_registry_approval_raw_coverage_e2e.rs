@@ -29,8 +29,9 @@ use openhuman_core::security::approval::{
     GateOutcome,
 };
 use openhuman_core::security::{live_policy, SecurityPolicy};
-use openhuman_core::tools::registry::{denials, registry_entries, registry_entries_for_config};
+use openhuman_core::tools::registry::{registry_entries, registry_entries_for_config};
 use openhuman_rpc::server::build_core_http_router;
+use tinytools::registry::denials;
 
 const TEST_RPC_TOKEN: &str = "tool-registry-approval-raw-e2e-token";
 
@@ -53,7 +54,8 @@ fn env_lock() -> tokio::sync::MutexGuard<'static, ()> {
 async fn env_lock_async() -> tokio::sync::MutexGuard<'static, ()> {
     ENV_LOCK
         .get_or_init(|| tokio::sync::Mutex::new(()))
-        .lock().await
+        .lock()
+        .await
 }
 
 fn ensure_rpc_auth() {
@@ -213,13 +215,38 @@ fn test_mcp_server() -> InstalledServer {
     }
 }
 
-fn install_test_mcp_server(config: &Config, server: &InstalledServer) {
-    openhuman_core::mcp::host::for_config(config)
-        .expect("open test MCP host")
-        .dynamic()
-        .store()
-        .insert_server(server)
-        .expect("install test MCP server");
+async fn install_test_mcp_server(config: &Config, server: &InstalledServer) -> InstalledServer {
+    openhuman_core::mcp::registry::config_ops::mcp_clients_config_set(
+        config,
+        json!({
+            "mcpServers": {
+                server.qualified_name.clone(): {
+                    "command": server.command.clone(),
+                    "args": server.args.clone(),
+                    "enabled": false,
+                }
+            }
+        }),
+    )
+    .await
+    .expect("install test MCP server through the module-owned config document");
+    let status = openhuman_core::mcp::registry::ops::mcp_clients_status(config)
+        .await
+        .expect("read module-owned MCP server status");
+    let server_id = status.value["servers"]
+        .as_array()
+        .and_then(|servers| {
+            servers
+                .iter()
+                .find(|entry| entry["qualified_name"] == server.qualified_name)
+        })
+        .and_then(|entry| entry["server_id"].as_str())
+        .expect("the installed server has a module-owned id")
+        .to_owned();
+    let mut installed = server.clone();
+    installed.server_id = server_id;
+    installed.enabled = false;
+    installed
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -385,8 +412,14 @@ async fn tool_registry_entries_include_connected_mcp_client_tools() {
         workspace_dir: tmp.path().to_path_buf(),
         ..Config::default()
     };
-    let server = test_mcp_server();
-    install_test_mcp_server(&config, &server);
+    let server = install_test_mcp_server(&config, &test_mcp_server()).await;
+    openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(
+        &config,
+        server.server_id.clone(),
+        true,
+    )
+    .await
+    .expect("enable test MCP server");
     let tools = connections::connect(&config, &server)
         .await
         .expect("connect test mcp server");
@@ -400,8 +433,14 @@ async fn tool_registry_entries_include_connected_mcp_client_tools() {
         workspace_dir: other_tmp.path().to_path_buf(),
         ..Config::default()
     };
-    let other_server = test_mcp_server();
-    install_test_mcp_server(&other_config, &other_server);
+    let other_server = install_test_mcp_server(&other_config, &test_mcp_server()).await;
+    openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(
+        &other_config,
+        other_server.server_id.clone(),
+        true,
+    )
+    .await
+    .expect("enable second test MCP server");
     connections::connect(&other_config, &other_server)
         .await
         .expect("connect second test mcp server");
@@ -460,12 +499,17 @@ async fn tool_registry_diagnostics_reports_config_and_audit_store_failures() {
         .expect_err("workspace file should prevent config load");
     assert!(err.contains("failed to load config for tool registry diagnostics"));
 
-    let broken_audit_config = Config {
+    // The write audit lives in the TinyMCP module (605ca6e841), which picks its
+    // storage provider once per process at load, so a broken workspace no
+    // longer reaches it. Fail it at the module seam instead; storage failures
+    // inside the audit are covered by tinymcp's `storage/failing.rs`.
+    let mut broken_audit_config = Config {
         workspace_dir: workspace_file,
         ..Config::default()
     };
+    broken_audit_config.modules.enabled = false;
     let diagnostics =
-        openhuman_core::tools::registry::ops::diagnostics_for_config(&broken_audit_config);
+        openhuman_core::tools::registry::ops::diagnostics_for_config(&broken_audit_config).await;
     assert!(diagnostics.value.mcp_write_audit.enabled);
     assert_eq!(diagnostics.value.mcp_write_audit.recent_rows, None);
     assert!(diagnostics
@@ -473,7 +517,7 @@ async fn tool_registry_diagnostics_reports_config_and_audit_store_failures() {
         .mcp_write_audit
         .last_error
         .as_deref()
-        .is_some_and(|error| !error.is_empty()));
+        .is_some_and(|error| error.contains("MCP module unavailable")));
 }
 
 #[tokio::test]
@@ -972,11 +1016,15 @@ async fn approval_rpc_decision_paths_persist_always_allow_and_recent_audit() {
     let second_init = ApprovalGate::init_global(Config::default(), "session-ignored-second");
     assert_eq!(second_init.session_id(), gate.session_id());
 
-    let approval_dir = config.workspace_dir.join("approval");
-    if approval_dir.exists() {
-        std::fs::remove_dir_all(&approval_dir).expect("remove approval dir before failure branch");
+    // Approvals are documents in the workspace's default storage database
+    // (`sqlite:<workspace>/storage`, 5995128210). Drop the cached handle and
+    // block that directory, so the store's next open fails.
+    openhuman_core::storage::local::forget(&config.workspace_dir);
+    let storage_dir = config.workspace_dir.join("storage");
+    if storage_dir.exists() {
+        std::fs::remove_dir_all(&storage_dir).expect("remove storage dir before failure branch");
     }
-    std::fs::write(&approval_dir, "not a directory").expect("replace approval dir with file");
+    std::fs::write(&storage_dir, "not a directory").expect("replace storage dir with file");
 
     gate.record_execution(
         &request_id,

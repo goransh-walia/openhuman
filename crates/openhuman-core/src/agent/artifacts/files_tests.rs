@@ -74,11 +74,8 @@ async fn new_artifact_is_written_to_the_files_folder_not_the_workspace() {
         meta.file_root.as_deref(),
         Some(files_dir.to_string_lossy().as_ref())
     );
-    // Metadata stays hidden in the workspace; no bytes land beside it.
-    assert_eq!(
-        names_in(&workspace.join("artifacts").join(&meta.id)),
-        vec!["meta.json"]
-    );
+    // The record is a document, not a file: no bytes land in the workspace.
+    assert!(!workspace.join("artifacts").join(&meta.id).exists());
 }
 
 #[tokio::test]
@@ -294,6 +291,7 @@ async fn a_legacy_record_still_resolves_under_the_workspace() {
     let tmp = TempDir::new().unwrap();
     let meta = legacy_meta("legacy-1", "legacy-1/old.txt");
     save_artifact_meta(tmp.path(), &meta).await.unwrap();
+    std::fs::create_dir_all(tmp.path().join("artifacts/legacy-1")).unwrap();
     std::fs::write(tmp.path().join("artifacts/legacy-1/old.txt"), b"old").unwrap();
 
     assert_eq!(

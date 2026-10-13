@@ -35,7 +35,7 @@ fn assert_contains_all(names: &[String], expected: &[&str]) {
 
 fn only_json_content(result: &ToolResult) -> &serde_json::Value {
     match result.content.as_slice() {
-        [ToolContent::Json { data }] => &data,
+        [ToolContent::Json { data }] => data,
         other => panic!("expected a single JSON content block, got {other:?}"),
     }
 }

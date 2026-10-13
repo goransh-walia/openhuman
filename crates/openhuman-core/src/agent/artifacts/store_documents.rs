@@ -1,9 +1,10 @@
 //! Artifact records on the `tinystoragedrivers` document port.
 //!
-//! Used instead of `<workspace>/artifacts/<id>/meta.json` and `args.json`
-//! when the host configured a storage backend ([`crate::storage`]);
-//! `store.rs` picks it per call, so the records live under the acting agent's
-//! storage scope (`local` on a single-user host).
+//! The only record store (`<workspace>/artifacts/<id>/meta.json` and
+//! `args.json` are legacy, imported once): `store.rs` opens it per call, so the
+//! records live under the acting agent's storage scope (`local` on a
+//! single-user host) in the installed backend, or the workspace default when
+//! none is installed ([`crate::storage::local`]).
 //!
 //! # Layout
 //!
@@ -47,13 +48,14 @@ fn collections() -> Vec<CollectionSpec> {
     vec![CollectionSpec::new(ARTIFACTS), CollectionSpec::new(ARGS)]
 }
 
-/// The document store for this call, when the host configured one.
-pub(super) fn current() -> Result<Option<Docs>> {
+/// The document store for this call: the installed backend, else the
+/// workspace default, in the acting scope.
+pub(super) fn current(workspace_dir: &Path) -> Result<Docs> {
     #[cfg(test)]
     if let Some(docs) = TEST_OVERRIDE.with(|slot| slot.borrow().clone()) {
-        return Ok(Some(docs));
+        return Ok(docs);
     }
-    Ok(Repo::current(DOMAIN, collections)?.map(Docs))
+    Ok(Docs(Repo::current_for(workspace_dir, DOMAIN, collections)?))
 }
 
 /// Runs `f` with `docs` standing in for the installed backend, on this thread
@@ -271,14 +273,11 @@ pub(super) async fn on_docs<T: Send + 'static>(
         .map_err(|e| format!("[artifacts] storage: {e:#}"))
 }
 
-/// The document store for this call, when a storage backend is configured.
-/// The first call of a process for this backend instance, scope and workspace
+/// The document store for this call. The first call of a process for this backend instance, scope and workspace
 /// imports the workspace's legacy `meta.json` / `args.json` files (recorded
 /// only once the import succeeded, so a failed one is retried).
-pub(super) async fn documents(workspace_dir: &Path) -> Result<Option<Docs>, String> {
-    let Some(docs) = current().map_err(|e| format!("[artifacts] storage: {e:#}"))? else {
-        return Ok(None);
-    };
+pub(super) async fn documents(workspace_dir: &Path) -> Result<Docs, String> {
+    let docs = current(workspace_dir).map_err(|e| format!("[artifacts] storage: {e:#}"))?;
     let legacy = workspace_dir.join("artifacts");
     on_docs(docs.clone(), move |docs| {
         let key = legacy.display().to_string();
@@ -286,7 +285,7 @@ pub(super) async fn documents(workspace_dir: &Path) -> Result<Option<Docs>, Stri
             .once_per_backend(&key, || docs.import_legacy(&legacy).map(|_| ()))
     })
     .await?;
-    Ok(Some(docs))
+    Ok(docs)
 }
 
 /// Deletes artifact `id` in document mode. The legacy directory

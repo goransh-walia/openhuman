@@ -1,5 +1,5 @@
 //! Forwards a running turn's `AgentProgress` stream into `WebChannelEvent`
-//! socket events and mirrors it into `TurnStateStore`. Also emits the
+//! socket events and mirrors it into the `TurnStates` port. Also emits the
 //! `inference_heartbeat` liveness beat (see [`INFERENCE_HEARTBEAT_SECS`])
 //! so a long silent prefill can't trip the frontend's ~120s silence timeout.
 
@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::threads::turn_state::mirror::ObserveProgress;
 use crate::web_chat::{SubagentProgressDetail, WebChannelEvent};
-use tinyagents_session::turn_state::{TurnStateMirror, TurnStateStore};
+use tinyagents_session::{port::TurnStates, turn_state::TurnStateMirror};
 
 use super::event_bus::publish_web_channel_event;
 use super::types::ChatRequestMetadata;
@@ -165,13 +165,13 @@ mod wire_caps;
 use wire_caps::MAX_WIRE_SUBAGENT_OUTPUT;
 use wire_caps::{cap_wire_args, cap_wire_output};
 
+use crate::agent::session_store::ledger_sync;
+
 pub(super) fn ledger_upsert_agent_run(
     config: &crate::config::Config,
     upsert: tinyagents_session::run_ledger::AgentRunUpsert,
 ) {
-    if let Err(err) =
-        tinyagents_session::run_ledger::upsert_agent_run(&config.workspace_dir, upsert)
-    {
+    if let Err(err) = ledger_sync::upsert_agent_run(&config.workspace_dir, upsert) {
         log::warn!("[run_ledger][web_channel] failed to upsert run: {err}");
     }
 }
@@ -180,8 +180,7 @@ pub(super) fn ledger_append_event(
     config: &crate::config::Config,
     event: tinyagents_session::run_ledger::RunEventAppend,
 ) {
-    if let Err(err) = tinyagents_session::run_ledger::append_run_event(&config.workspace_dir, event)
-    {
+    if let Err(err) = ledger_sync::append_run_event(&config.workspace_dir, event) {
         log::warn!("[run_ledger][web_channel] failed to append event: {err}");
     }
 }
@@ -190,9 +189,7 @@ pub(super) fn ledger_upsert_telemetry(
     config: &crate::config::Config,
     telemetry: tinyagents_session::run_ledger::RunTelemetryUpsert,
 ) {
-    if let Err(err) =
-        tinyagents_session::run_ledger::upsert_run_telemetry(&config.workspace_dir, telemetry)
-    {
+    if let Err(err) = ledger_sync::upsert_run_telemetry(&config.workspace_dir, telemetry) {
         log::warn!("[run_ledger][web_channel] failed to upsert telemetry: {err}");
     }
 }
@@ -201,7 +198,7 @@ pub(super) fn ledger_get_telemetry(
     config: &crate::config::Config,
     run_id: &str,
 ) -> Option<tinyagents_session::run_ledger::RunTelemetry> {
-    match tinyagents_session::run_ledger::get_agent_run(&config.workspace_dir, run_id) {
+    match ledger_sync::get_agent_run(&config.workspace_dir, run_id) {
         Ok(Some(run)) => {
             let telemetry = run.telemetry;
             log::debug!(
@@ -275,7 +272,7 @@ pub(crate) fn spawn_progress_bridge(
     client_id: String,
     thread_id: String,
     request_id: String,
-    turn_state_store: TurnStateStore,
+    turn_state_store: std::sync::Arc<dyn TurnStates>,
     metadata: ChatRequestMetadata,
     config: crate::config::Config,
 ) -> ProgressBridgeHandle {

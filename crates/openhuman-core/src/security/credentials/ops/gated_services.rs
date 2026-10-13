@@ -132,7 +132,7 @@ pub async fn start_credential_gated_services(config: &Config) {
             tokio::spawn(async move {
                 let step = std::time::Instant::now();
                 crate::voice::server::start_if_enabled(&config).await;
-                if !config.voice_server.auto_start {
+                if !config.voice_server.auto_start && config.components.voice {
                     crate::voice::dictation_listener::start_if_enabled(&config).await;
                 }
                 log::debug!(

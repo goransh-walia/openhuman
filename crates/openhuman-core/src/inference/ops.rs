@@ -375,8 +375,9 @@ pub async fn inference_provider_auth_errors() -> Result<Outcome<Value>, String> 
 
 pub async fn inference_openai_oauth_start(config: &Config) -> Result<Outcome<Value>, String> {
     debug!("{LOG_PREFIX} openai_oauth_start:start");
-    let result =
-        crate::security::credentials::openai_oauth::start_openai_oauth(config).map(|start| {
+    let result = crate::security::credentials::openai_oauth::start_openai_oauth(config)
+        .await
+        .map(|start| {
             Outcome::single_log(
                 json!({
                     "authUrl": start.auth_url,
@@ -460,6 +461,7 @@ pub async fn inference_openai_oauth_status(config: &Config) -> Result<Outcome<Va
 pub async fn inference_openai_oauth_disconnect(config: &Config) -> Result<Outcome<Value>, String> {
     debug!("{LOG_PREFIX} openai_oauth_disconnect:start");
     let result = crate::security::credentials::openai_oauth::disconnect_openai_oauth(config)
+        .await
         .map(|payload| Outcome::single_log(payload, "openai oauth disconnected"));
     match &result {
         Ok(_) => debug!("{LOG_PREFIX} openai_oauth_disconnect:ok"),

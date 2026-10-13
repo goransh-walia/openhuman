@@ -19,8 +19,9 @@ use tinyflows::error::{EngineError, Result};
 use super::*;
 use crate::config::{Config, HttpRequestConfig};
 use crate::security::credentials::{HttpCredential, HttpCredentialsStore};
-use crate::security::{CommandClass, SecurityPolicy};
+use crate::security::SecurityPolicy;
 use crate::tools::http_request_tool;
+use tinybox_bus::CommandClass;
 use tinytools::Tool as _;
 
 /// [`HttpClient`] adapter over `HttpRequestTool`

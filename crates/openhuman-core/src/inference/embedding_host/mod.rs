@@ -15,9 +15,7 @@
 
 #[path = "cloud_adapter.rs"]
 pub mod cloud;
-mod embedding_trait;
 mod factory;
-mod provider_trait;
 mod rpc;
 mod schemas;
 
@@ -27,9 +25,6 @@ pub use cloud::{
 pub use factory::{
     create_embedding_provider_with_config, create_embedding_provider_with_credentials,
     default_embedding_provider_with_config,
-};
-pub use provider_trait::{
-    format_embedding_signature, EmbeddingProvider, TinyInferenceEmbeddingProvider,
 };
 pub use rpc::provider_from_config;
 pub use schemas::{

@@ -8,25 +8,20 @@ use std::sync::Arc;
 use super::types::ProfileId;
 use crate::core::runtime::CoreContext;
 
-/// Settle what a previous holder left in profile `id`'s workspace: turns that
-/// were mid-flight become interrupted and run-ledger rows left running are
-/// closed. The sweep a single-user core runs at boot, run when a profile's
-/// lease is taken over from a holder that never released it. Failures are
-/// logged; the profile still opens.
+/// Settle what a previous holder left in profile `id`'s workspace: turn-state
+/// files that were mid-flight become interrupted. The run ledger and the
+/// stored turn states live in the storage backend and are swept by
+/// [`recover_session_store`]. Run when a profile's lease is taken over from a
+/// holder that never released it. Failures are logged; the profile still
+/// opens.
 pub(crate) fn recover_workspace(id: &ProfileId, workspace_dir: &std::path::Path) {
     let now = chrono::Utc::now().to_rfc3339();
-    match tinyagents_session::turn_state::store::mark_all_interrupted(
-        workspace_dir.to_path_buf(),
-        &now,
-    ) {
+    match crate::agent::session_store::default_turn_states_for(workspace_dir)
+        .mark_all_interrupted(&now)
+    {
         Ok(0) => {}
         Ok(turns) => log::info!("[profiles] profile={id} recovered {turns} interrupted turn(s)"),
         Err(error) => log::warn!("[profiles] profile={id} turn recovery failed: {error}"),
-    }
-    match tinyagents_session::run_ledger::interrupt_orphaned_agent_runs(workspace_dir) {
-        Ok(0) => {}
-        Ok(runs) => log::info!("[profiles] profile={id} settled {runs} orphaned run(s)"),
-        Err(error) => log::warn!("[profiles] profile={id} run recovery failed: {error:#}"),
     }
 }
 
@@ -53,5 +48,28 @@ pub(crate) fn recover_session_store(id: &ProfileId, context: &Arc<CoreContext>) 
             log::info!("[profiles] profile={id} recovered {turns} interrupted stored turn(s)");
         }
         Err(error) => log::warn!("[profiles] profile={id} stored turn recovery failed: {error}"),
+    }
+    if crate::storage::installed_is_shared() {
+        // Another replica may still be driving a run in a shared backend.
+        return;
+    }
+    match provider.run_ledger_for_agent(&key) {
+        Ok(Some(ledger)) => {
+            let swept = crate::storage::block_on(async move {
+                Ok(ledger.interrupt_orphaned_agent_runs().await)
+            });
+            match swept {
+                Ok(Ok(0)) => {}
+                Ok(Ok(runs)) => {
+                    log::info!("[profiles] profile={id} settled {runs} orphaned run(s)");
+                }
+                Ok(Err(error)) => {
+                    log::warn!("[profiles] profile={id} run recovery failed: {error:#}");
+                }
+                Err(error) => log::warn!("[profiles] profile={id} run recovery failed: {error}"),
+            }
+        }
+        Ok(None) => {}
+        Err(error) => log::warn!("[profiles] profile={id} run ledger unavailable: {error}"),
     }
 }

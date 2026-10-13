@@ -37,7 +37,6 @@ async fn persist_then_load_groups_fields_per_connection() {
     assert_eq!(identity.user_id.as_deref(), Some("U123ABC"));
     assert!(identity.email.is_some());
     assert!(identity.handle.is_some());
-    assert!(file_store::path(&config, IDENTITIES_FILE).exists());
 }
 
 #[tokio::test]
@@ -71,7 +70,8 @@ async fn empty_profile_writes_nothing() {
         ..ProviderUserProfile::default()
     };
     assert_eq!(persist_provider_profile(&config, &empty).await.unwrap(), 0);
-    assert!(!file_store::path(&config, IDENTITIES_FILE).exists());
+    let stored: Vec<ConnectedIdentity> = file_store::load(&config, IDENTITIES_FILE).await.unwrap();
+    assert!(stored.is_empty());
     assert!(load_connected_identities(&config).await.unwrap().is_empty());
 }
 

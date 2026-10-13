@@ -4511,6 +4511,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'Готов',
   'computer.status.state.failed': 'Ошибка',
   'computer.status.state.unsupported': 'Не поддерживается на этом устройстве',
+  'computer.status.state.disabled': 'Отключён в конфигурации',
   'desktop.permission.accessibility': 'Универсальный доступ',
   'desktop.permission.screen_recording': 'Запись экрана',
   'channels.status.configuring': 'Настройка',

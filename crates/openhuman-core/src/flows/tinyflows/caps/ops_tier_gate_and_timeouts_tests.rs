@@ -1,6 +1,7 @@
 use super::*;
 use tinyagents_harness::tool::response_fields_from_schema;
 use tinyflows::nodes::integration::agent_prompt::scale_timeout_for_iteration_cap;
+use tinytools::status::POLICY_BLOCKED_MARKER;
 
 /// The tier gate an `http_request` (Network-class) node calls: BLOCKED under
 /// a read-only tier, and passed through (to the ApprovalGate) under
@@ -498,14 +499,14 @@ async fn resolver_rejects_an_engine_incompatible_saved_graph() {
             { "from_node": "c", "from_port": "main", "to_node": "m" }
         ]
     });
-    let db = config.workspace_dir.join("flows").join("flows.db");
-    rusqlite::Connection::open(db)
-        .unwrap()
-        .execute(
-            "UPDATE flow_definitions SET graph_json = ?1 WHERE id = ?2",
-            rusqlite::params![unsafe_graph.to_string(), flow.id],
-        )
-        .unwrap();
+    // Stage a stored graph no save path would accept: written raw, under the
+    // flow's id, as a legacy row would be.
+    crate::flows::store::force_corrupt_graph_json_for_test(
+        &config,
+        &flow.id,
+        &unsafe_graph.to_string(),
+    )
+    .unwrap();
 
     let error = OpenHumanWorkflowResolver { config }
         .resolve(&flow.id)

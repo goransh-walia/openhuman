@@ -32,6 +32,7 @@ use crate::core::events::DomainEvent;
 
 use super::error::MemoryError;
 use super::ops;
+pub use super::tool_budget::is_budget_refusal;
 use super::types::{FetchParams, ForgetParams, LearnParams, RecallParams, TurnCitation};
 
 /// Most citations kept per thread between two drains.
@@ -361,34 +362,35 @@ impl Tool for MemoryTool {
             .and_then(ToolRunContext::host_extension)
             .and_then(|any| any.downcast_ref::<tinyagents_harness::tool::ToolExecutionContext>())
             .map(|ctx| ctx.run_id.as_str().to_string());
+        // Writes are local queue entries, bounded by the outbox (`tool_writes`),
+        // so only engine reads spend the run's call and latency budget.
+        if matches!(
+            args.get("action").and_then(Value::as_str),
+            Some("learn" | "forget")
+        ) {
+            let config = self.config.clone();
+            let write_args = args.clone();
+            let queued = crate::core::runtime::spawn_blocking_scoped(move || {
+                super::tool_writes::enqueue(&config, &write_args, &facts)
+            })
+            .await;
+            return Ok(
+                match queued.unwrap_or_else(|_| {
+                    Err(MemoryError::Unavailable(
+                        "memory write queue unavailable".into(),
+                    ))
+                }) {
+                    Ok(value) => {
+                        super::tool_writes::schedule(self.config.clone());
+                        ToolResult::success(value.to_string())
+                    }
+                    Err(error) => ToolResult::error(render_error(error)),
+                },
+            );
+        }
         Ok(self
             .budget
-            .run(run_id, async {
-                if matches!(
-                    args.get("action").and_then(Value::as_str),
-                    Some("learn" | "forget")
-                ) {
-                    let config = self.config.clone();
-                    let write_args = args.clone();
-                    let queued = crate::core::runtime::spawn_blocking_scoped(move || {
-                        super::tool_writes::enqueue(&config, &write_args, &facts)
-                    })
-                    .await;
-                    match queued.unwrap_or_else(|_| {
-                        Err(MemoryError::Unavailable(
-                            "memory write queue unavailable".into(),
-                        ))
-                    }) {
-                        Ok(value) => {
-                            super::tool_writes::schedule(self.config.clone());
-                            ToolResult::success(value.to_string())
-                        }
-                        Err(error) => ToolResult::error(render_error(error)),
-                    }
-                } else {
-                    run_action(&self.config, &args, &facts).await
-                }
-            })
+            .run(run_id, run_action(&self.config, &args, &facts))
             .await)
     }
 }

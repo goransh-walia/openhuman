@@ -4,18 +4,15 @@
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 use std::sync::Arc;
-use tinyagents_orchestration::workflow::{
-    reset_running_phases, SessionWorkflowStore, WorkflowEngine,
-};
+use tinyagents_orchestration::workflow::{reset_running_phases, WorkflowEngine};
 
 use crate::agent::orchestration::parent_context::with_root_parent;
 use crate::config::Config;
-use tinyagents_session::run_ledger::{
-    compare_and_swap_workflow_run_lifecycle, get_workflow_run, WorkflowRun, WorkflowRunStatus,
-    WorkflowRunUpsert,
-};
+use tinyagents_session::run_ledger::{WorkflowRun, WorkflowRunStatus, WorkflowRunUpsert};
 
-use super::super::ops::definition_by_id;
+use super::super::ops::{
+    compare_and_swap_workflow_run_lifecycle, definition_by_id, get_workflow_run, workflow_store,
+};
 use super::cancel::{
     cancel_signal_if_current, clear_cancel_signal, is_current_cancel_signal, lookup_cancel_signal,
     register_cancel_signal, replace_cancel_signal, WorkflowCancelSignal,
@@ -46,7 +43,7 @@ pub async fn start_workflow_run(
 
     let run_id = format!("wfrun-{}", uuid::Uuid::new_v4());
     let initial_engine = WorkflowEngine::new(
-        Arc::new(SessionWorkflowStore::new(config.workspace_dir.clone())),
+        workflow_store(config)?,
         Arc::new(super::super::host::OpenHumanWorkflowExecutor::new(
             &run_id,
             None,
@@ -103,7 +100,7 @@ pub async fn start_workflow_run(
 /// terminal or unknown run is a no-op that returns the current row.
 pub async fn stop_workflow_run(config: &Config, id: &str) -> Result<Option<WorkflowRun>> {
     log::debug!(target: LOG_TARGET, "[workflow_run_engine] stop.entry run={id}");
-    let Some(run) = get_workflow_run(&config.workspace_dir, id)? else {
+    let Some(run) = get_workflow_run(config, id)? else {
         log::debug!(target: LOG_TARGET, "[workflow_run_engine] stop.unknown run={id}");
         return Ok(None);
     };
@@ -131,7 +128,7 @@ pub async fn stop_workflow_run(config: &Config, id: &str) -> Result<Option<Workf
         "workflow interrupted by host; phase will retry on resume",
     );
     let updated = compare_and_swap_workflow_run_lifecycle(
-        &config.workspace_dir,
+        config,
         WorkflowRunUpsert {
             id: run.id.clone(),
             definition_id: run.definition_id.clone(),
@@ -168,8 +165,7 @@ pub async fn stop_workflow_run(config: &Config, id: &str) -> Result<Option<Workf
 /// definition no longer exists.
 pub async fn resume_workflow_run(config: &Config, id: &str) -> Result<WorkflowRun> {
     log::debug!(target: LOG_TARGET, "[workflow_run_engine] resume.entry run={id}");
-    let run = get_workflow_run(&config.workspace_dir, id)?
-        .ok_or_else(|| anyhow!("unknown workflow run: {id}"))?;
+    let run = get_workflow_run(config, id)?.ok_or_else(|| anyhow!("unknown workflow run: {id}"))?;
 
     if matches!(run.status, WorkflowRunStatus::Completed) {
         return Err(anyhow!("workflow run {id} is already completed"));
@@ -180,7 +176,7 @@ pub async fn resume_workflow_run(config: &Config, id: &str) -> Result<WorkflowRu
     let _safety_tier = super::super::host::admit_workflow(&definition)?;
 
     let resumed = compare_and_swap_workflow_run_lifecycle(
-        &config.workspace_dir,
+        config,
         WorkflowRunUpsert {
             id: run.id.clone(),
             definition_id: run.definition_id.clone(),
@@ -242,7 +238,7 @@ pub(crate) async fn run_engine_loop(
     definition: WorkflowDefinition,
     cancel: WorkflowCancelSignal,
 ) {
-    let model_override = get_workflow_run(&config.workspace_dir, run_id)
+    let model_override = get_workflow_run(config, run_id)
         .ok()
         .flatten()
         .and_then(|run| {
@@ -256,9 +252,9 @@ pub(crate) async fn run_engine_loop(
         Ok(tier) => tier,
         Err(error) => {
             log::error!(target: LOG_TARGET, "[workflow_run_engine] loop.safety_admission_failed run={run_id} err={error}");
-            if let Ok(Some(run)) = get_workflow_run(&config.workspace_dir, run_id) {
+            if let Ok(Some(run)) = get_workflow_run(config, run_id) {
                 let _ = compare_and_swap_workflow_run_lifecycle(
-                    &config.workspace_dir,
+                    config,
                     WorkflowRunUpsert {
                         id: run.id.clone(),
                         definition_id: run.definition_id.clone(),
@@ -278,8 +274,16 @@ pub(crate) async fn run_engine_loop(
             return;
         }
     };
+    let store = match workflow_store(config) {
+        Ok(store) => store,
+        Err(error) => {
+            log::error!(target: LOG_TARGET, "[workflow_run_engine] loop.no_store run={run_id} err={error:#}");
+            clear_cancel_signal(run_id, &cancel);
+            return;
+        }
+    };
     let engine = WorkflowEngine::new(
-        Arc::new(SessionWorkflowStore::new(config.workspace_dir.clone())),
+        store,
         Arc::new(super::super::host::OpenHumanWorkflowExecutor::new(
             run_id,
             model_override,
@@ -315,7 +319,7 @@ pub(crate) async fn run_engine_loop(
             "[workflow_run_engine] loop.failed run={run_id} err={err}"
         );
         // Best-effort terminal failure write, preserving partial phase state.
-        if let Ok(Some(run)) = get_workflow_run(&config.workspace_dir, run_id) {
+        if let Ok(Some(run)) = get_workflow_run(config, run_id) {
             if !matches!(
                 run.status,
                 WorkflowRunStatus::Completed
@@ -324,7 +328,7 @@ pub(crate) async fn run_engine_loop(
                     | WorkflowRunStatus::Interrupted
             ) {
                 let _ = compare_and_swap_workflow_run_lifecycle(
-                    &config.workspace_dir,
+                    config,
                     WorkflowRunUpsert {
                         id: run.id.clone(),
                         definition_id: run.definition_id.clone(),

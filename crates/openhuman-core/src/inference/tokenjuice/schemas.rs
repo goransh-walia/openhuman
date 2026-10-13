@@ -263,12 +263,27 @@ pub fn schemas(function: &str) -> ControllerSchema {
 
 // ── Handlers ─────────────────────────────────────────────────────────
 
+/// Refuse with the typed `COMPONENT_DISABLED:juice` error while `[components]
+/// juice` is off. Read from the ambient core context (set at boot); a call with
+/// no context is on, since the set only narrows.
+fn gate() -> Result<(), String> {
+    let on = crate::core::runtime::context::CoreContext::current()
+        .is_none_or(|ctx| ctx.components().juice);
+    if on {
+        Ok(())
+    } else {
+        log::debug!("[tokenjuice][rpc] refused, component 'juice' disabled");
+        Err(crate::core::runtime::components::component_disabled("juice").encode())
+    }
+}
+
 fn str_param(params: &Map<String, Value>, key: &str) -> Option<String> {
     params.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
 fn handle_detect(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let content = str_param(&params, "content").ok_or("missing 'content'")?;
         let hint = ContentHint {
             source_tool: str_param(&params, "tool_name"),
@@ -317,6 +332,7 @@ fn compress_hint_from_params(params: &Map<String, Value>) -> Result<ContentHint,
 
 fn handle_compress(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let content = str_param(&params, "content").ok_or("missing 'content'")?;
         let hint = compress_hint_from_params(&params)?;
         let res = super::compress(content, hint).await?;
@@ -335,6 +351,7 @@ fn handle_compress(params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_cache_stats(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let stats = super::cache_stats().await?;
         Ok(serde_json::json!({ "entries": stats.entries, "bytes": stats.bytes }))
     })
@@ -342,6 +359,7 @@ fn handle_cache_stats(_params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_retrieve(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let token = str_param(&params, "token").ok_or("missing 'token'")?;
         match super::retrieve(token, None).await? {
             Some(content) => Ok(serde_json::json!({ "found": true, "content": content })),
@@ -352,6 +370,7 @@ fn handle_retrieve(params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_settings_get(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let config = crate::config::Config::load_or_init()
             .await
             .map_err(|e| format!("load config: {e}"))?;
@@ -363,6 +382,7 @@ fn handle_settings_get(_params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_settings_update(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         // Accept either {"patch": {...}} or a bare object of fields.
         let patch = params
             .get("patch")
@@ -391,8 +411,13 @@ fn handle_settings_update(params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_savings_stats(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
+        gate()?;
         let cache = super::cache_stats().await?;
-        let agg = super::savings::stats();
+        let config = crate::config::Config::load_or_init()
+            .await
+            .map_err(|e| e.to_string())?;
+        super::install_from_config(&config).await?;
+        let agg = super::savings::stats(&super::client(&config)).await?;
         Ok(serde_json::json!({
             "attributionModel": super::savings::attribution_model(),
             "total": agg.total,
@@ -405,7 +430,12 @@ fn handle_savings_stats(_params: Map<String, Value>) -> ControllerFuture {
 
 fn handle_savings_reset(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        super::savings::reset();
+        gate()?;
+        let config = crate::config::Config::load_or_init()
+            .await
+            .map_err(|e| e.to_string())?;
+        super::install_from_config(&config).await?;
+        super::savings::reset(&super::client(&config)).await?;
         Ok(serde_json::json!({ "ok": true }))
     })
 }

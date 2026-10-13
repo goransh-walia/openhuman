@@ -42,7 +42,8 @@ pub async fn get_sandbox_settings() -> Result<Outcome<serde_json::Value>, String
     let detected_backend = detect_os_sandbox_backend();
 
     let value = serde_json::json!({
-        "enabled": sandbox.enabled.unwrap_or(true),
+        "enabled": sandbox.enabled.unwrap_or(true)
+            && crate::core::runtime::ComponentSet::from_config(&config.components).sandbox,
         "backend": backend_str,
         "docker_image": docker.image,
         "docker_memory_limit_mb": docker.memory_limit_mb,

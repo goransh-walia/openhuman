@@ -129,10 +129,10 @@ pub async fn sweep(host: &ProfileHost, now: DateTime<Utc>) -> SweepReport {
                 &profile_config.workspace_dir,
                 &profile_config.action_dir,
             ));
-            let mut dispatcher = JobDispatcher::new(profile_config.scheduler.max_concurrent);
-            dispatcher
-                .dispatch(&profile_config, &security, claimed)
-                .await;
+            let mut dispatcher = JobDispatcher::new(&profile_config, &security);
+            if let Err(error) = dispatcher.dispatch(claimed).await {
+                log::warn!("[profiles][cron] dispatch failed: {error}");
+            }
             // Stop at once if the profile is fenced while its jobs run.
             tokio::select! {
                 biased;

@@ -48,14 +48,8 @@ impl Tool for ListConnectableToolkitsTool {
     }
 
     async fn execute(&self, _args: Value) -> anyhow::Result<ToolResult> {
-        // The contract crate, not `memory::sync::composio::providers` (#5560).
-        // That host shim is `pub use tinymemory_core::sync::composio::providers::*`
-        // and the engine's `providers` module in turn re-exports this function
-        // verbatim from `crate::integrations::composio::contract::scopes` — so the two paths
-        // name the SAME item and this is a path change with no behaviour delta.
-        // Naming the contract directly is what lets the shim's caller list
-        // shrink to the sites that genuinely need the engine's registry and
-        // curated catalogs.
+        // The agent-ready list is the connector module's (`GetVocabulary`),
+        // read through the host's curated snapshot.
         use crate::integrations::composio::contract::agent_ready_toolkits;
         tracing::debug!(target: "flows", "[flows] list_connectable_toolkits: listing toolkits + connected state (read-only) via the memory contract");
         let connected = ops::connected_toolkits(&self.config).await;

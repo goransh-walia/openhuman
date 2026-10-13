@@ -14,7 +14,7 @@ use crate::integrations::composio::contract::{NormalizedTask, TaskContainer};
 use super::types::{
     FetchReason, FilterSpec, ProviderSlug, SourceTarget, TaskSource, TaskSourcePatch,
 };
-use super::{filter, pipeline, store};
+use super::{pipeline, store};
 
 /// List all configured task sources.
 pub async fn list(config: &Config) -> Result<Outcome<Vec<TaskSource>>, String> {
@@ -154,7 +154,7 @@ pub async fn preview_filter(
     }
     let _ = connection_id;
     let max = max.unwrap_or(config.task_sources.max_tasks_per_fetch);
-    let _fetch_filter = filter::to_fetch_filter(&filter_spec, max);
+    let _fetch_filter = filter_spec.to_fetch_filter(max);
     // `ComposioProvider::fetch_tasks` has no replacement — see
     // `pipeline::fetch_tasks_unavailable`'s doc comment for why.
     Err(format!(

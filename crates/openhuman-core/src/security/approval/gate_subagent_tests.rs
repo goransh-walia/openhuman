@@ -228,8 +228,8 @@ async fn an_expired_park_tells_the_model_nobody_answered() {
     assert!(reason.contains("ask again"), "{reason}");
     // The status classifier still reads it as an expired approval.
     assert_eq!(
-        crate::tools::status::classify(&reason, false).class,
-        crate::tools::status::ToolFailureClass::ApprovalExpired,
+        tinytools::status::classify(&reason, false).class,
+        tinytools::status::ToolFailureClass::ApprovalExpired,
         "{reason}"
     );
 }

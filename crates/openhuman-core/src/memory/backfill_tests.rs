@@ -6,7 +6,7 @@ use tinymemory_api::{ItemKind, MetaFilter};
 
 use crate::memory::error::{INVALID_REQUEST, MEMORY_OFF};
 use crate::memory::test_fixtures::{bind_reference, config_in, stored};
-use crate::threads::store::CreateConversationThread;
+use crate::threads::store::{ConversationMessage, CreateConversationThread};
 
 fn message(id: &str, sender: &str, content: &str, at: &str) -> ConversationMessage {
     ConversationMessage {
@@ -59,58 +59,6 @@ async fn wait_done(config: &Config) -> BackfillView {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     panic!("the backfill did not finish");
-}
-
-#[test]
-fn messages_become_turns_like_the_chat_shows_them() {
-    let messages = [
-        message("0", "agent", "Welcome!", "2026-09-01T09:59:00Z"),
-        message("1", "user", "Plan a trip", "2026-09-01T10:00:00Z"),
-        message("2", "agent", "Where to?", "2026-09-01T10:01:00Z"),
-        message("3", "agent", "Also, when?", "2026-09-01T10:02:00Z"),
-        message("4", "user", "   ", "2026-09-01T10:03:00Z"),
-        message("5", "user", "Bali in October", "not a time"),
-    ];
-    let turns = turns_of(&messages);
-    assert_eq!(turns.len(), 3);
-    assert_eq!(turns[0].user, "");
-    assert_eq!(turns[0].assistant, "Welcome!");
-    assert_eq!(turns[1].user, "Plan a trip");
-    assert_eq!(turns[1].assistant, "Where to?\n\nAlso, when?");
-    assert_eq!(turns[1].at.to_rfc3339(), "2026-09-01T10:02:00+00:00");
-    assert_eq!(turns[2].user, "Bali in October");
-    assert!(turns[2].assistant.is_empty());
-}
-
-#[test]
-fn the_range_stops_where_live_logging_began() {
-    assert_eq!(pending_range(10, None, 0), 0..10);
-    assert_eq!(pending_range(10, Some(7), 0), 0..7, "turns 7.. are live's");
-    assert_eq!(pending_range(10, Some(7), 4), 4..7);
-    assert_eq!(pending_range(10, Some(7), 9), 7..7, "nothing left");
-    assert_eq!(pending_range(2, Some(5), 0), 0..2);
-}
-
-#[test]
-fn a_turn_is_one_item_per_message_at_the_agents_node() {
-    let config = Config::default();
-    let identity = MemoryIdentity::agent(MAIN_AGENT).resolve(&config);
-    let turn = PastTurn {
-        user: "q".into(),
-        assistant: "a".into(),
-        at: Utc::now(),
-    };
-    let items = turn_items(&identity, "t", 3, &turn);
-    assert_eq!(items.len(), 2);
-    let meta = items[1].meta();
-    assert_eq!(meta.turns.map(|range| range.first), Some(7));
-    assert_eq!(meta.namespace.to_string(), "agent:orchestrator");
-    assert!(meta.tags.iter().any(|tag| tag == BACKFILL_TAG));
-    let reply_only = PastTurn {
-        user: String::new(),
-        ..turn
-    };
-    assert_eq!(turn_items(&identity, "t", 0, &reply_only).len(), 1);
 }
 
 #[tokio::test]

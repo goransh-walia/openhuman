@@ -1,5 +1,5 @@
 //! Which agent a flow belongs to, for the subscribers that act on a flow
-//! named only by id in an event (`FlowScheduleTick`, `FlowRunFinished`).
+//! named only by id (a schedule trigger, `FlowRunFinished`).
 //!
 //! A flow saved from inside an agent's context lives in that agent's storage
 //! scope (`crate::storage`). The subscribers run outside any agent, so they

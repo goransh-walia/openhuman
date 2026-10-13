@@ -4504,6 +4504,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'तैयार',
   'computer.status.state.failed': 'विफल',
   'computer.status.state.unsupported': 'इस डिवाइस पर समर्थित नहीं',
+  'computer.status.state.disabled': 'कॉन्फ़िगरेशन में बंद',
   'desktop.permission.accessibility': 'एक्सेसिबिलिटी',
   'desktop.permission.screen_recording': 'स्क्रीन रिकॉर्डिंग',
   'channels.status.configuring': 'कॉन्फिगर हो रहा है',

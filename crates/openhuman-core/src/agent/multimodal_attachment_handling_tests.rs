@@ -180,8 +180,8 @@ async fn stash_image_attachments_replaces_marker_with_placeholder() {
 }
 
 #[tokio::test]
-async fn image_placeholder_rehydrates_to_disk_path_for_provider() {
-    // Ingress: stash the image to disk and leave a placeholder.
+async fn image_placeholder_rehydrates_to_inline_data_uri_for_provider() {
+    // Ingress: stash the image in the blob store and leave a placeholder.
     let msg = format!("describe [IMAGE:{TINY_PNG_DATA_URI}]");
     let placeholdered = stash_image_attachments(&msg, &MultimodalConfig::default()).await;
     let messages = vec![TranscriptMessage::user(placeholdered)];
@@ -190,7 +190,7 @@ async fn image_placeholder_rehydrates_to_disk_path_for_provider() {
     // Dispatch (vision model): rehydrate to an inline [IMAGE:<path>] marker that
     // points at the on-disk attachment. The index is rebuilt from disk on every
     // call (no in-memory state), so this resolves even after a process restart.
-    let rehydrated = rehydrate_image_placeholders(&messages);
+    let rehydrated = rehydrate_image_placeholders(&messages).await;
     assert_eq!(rehydrated.len(), 1);
     let content = rehydrated[0].content.clone();
     assert!(
@@ -202,14 +202,10 @@ async fn image_placeholder_rehydrates_to_disk_path_for_provider() {
         "placeholder consumed: {content}"
     );
 
-    // The marker points at a real file on disk.
-    let start = content.find("[IMAGE:").unwrap() + "[IMAGE:".len();
-    let end = content[start..].find(']').unwrap() + start;
-    let path = &content[start..end];
-    assert!(path.ends_with(".png"), "disk path carries ext: {path}");
+    // The marker carries the stashed bytes as an inline data URI.
     assert!(
-        std::path::Path::new(path).is_file(),
-        "attachment persisted to disk: {path}"
+        content.contains("[IMAGE:data:image/png;base64,"),
+        "stashed attachment rehydrated inline: {content}"
     );
 
     // Round-trip: the provider prep step re-reads the file back into a data URI,
@@ -230,14 +226,14 @@ async fn image_placeholder_rehydrates_to_disk_path_for_provider() {
     );
 }
 
-#[test]
-fn rehydrate_missing_stash_id_keeps_placeholder_text() {
+#[tokio::test]
+async fn rehydrate_missing_stash_id_keeps_placeholder_text() {
     // A placeholder whose id is absent from the stash (e.g. after a restart) is
     // left verbatim rather than dropped — the model still sees a text mention.
     let messages = vec![TranscriptMessage::user(
         "see [Image: image #att:deadbeefdeadbeef]".to_string(),
     )];
-    let out = rehydrate_image_placeholders(&messages);
+    let out = rehydrate_image_placeholders(&messages).await;
     assert!(out[0]
         .content
         .contains("[Image: image #att:deadbeefdeadbeef]"));
@@ -296,7 +292,7 @@ fn extract_image_placeholders_pulls_att_tokens_in_order() {
 #[tokio::test]
 async fn sweep_keeps_fresh_attachments() {
     // A freshly-written attachment (age < TTL) survives the startup sweep, and
-    // the disk index resolves it — the core of restart-survival.
+    // the index resolves it — the core of restart-survival.
     let msg = format!("[IMAGE:{TINY_PNG_DATA_URI}]");
     let placeholdered = stash_image_attachments(&msg, &MultimodalConfig::default()).await;
     let id = placeholdered
@@ -308,9 +304,22 @@ async fn sweep_keeps_fresh_attachments() {
 
     sweep_stale_attachments().await;
 
-    let index = build_attachment_index();
+    let index = build_attachment_index(&[TranscriptMessage::user(placeholdered.clone())]).await;
     assert!(
         index.contains_key(&id),
         "fresh attachment {id} retained after sweep"
     );
+}
+
+#[test]
+fn legacy_sidecar_files_stay_indexed_by_id() {
+    // Conversations written before the blob stash keep `<id>.<ext>` files in the
+    // attachments directory; their placeholders must still resolve.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("abc123.png"), b"png").unwrap();
+    std::fs::create_dir(dir.path().join("nested")).unwrap();
+    std::fs::write(dir.path().join("bad name.png"), b"png").unwrap();
+    let index = legacy_attachment_index_in(dir.path());
+    assert_eq!(index.len(), 1, "{index:?}");
+    assert_eq!(index["abc123"], dir.path().join("abc123.png"));
 }

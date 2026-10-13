@@ -116,10 +116,16 @@ impl FlowTriggerSubscriber {
         super::owner::config_for_scope(&self.config)
     }
 
-    /// `DomainEvent::FlowScheduleTick` — a `flow`-type cron job fired. Loads
-    /// the one named flow, checks it is still enabled with a `schedule`
-    /// trigger (it may have been disabled/edited since the job was
-    /// registered), and dispatches it with an empty trigger payload.
+    /// A `flow`-type cron job fired (`cron::scheduler`'s trigger sink calls
+    /// this directly). Runs as the agent the flow belongs to
+    /// (`super::owner`), then loads the one named flow, checks it is still
+    /// enabled with a `schedule` trigger (it may have been disabled/edited
+    /// since the job was registered), and dispatches it with an empty trigger
+    /// payload.
+    pub(crate) async fn dispatch_schedule_tick(&self, flow_id: &str) {
+        super::owner::as_owner(&self.config, flow_id, self.handle_schedule_tick(flow_id)).await
+    }
+
     async fn handle_schedule_tick(&self, flow_id: &str) {
         let config = self.config_for_scope();
         let flow = match store::get_flow(&config, flow_id) {
@@ -255,11 +261,6 @@ impl EventHandler<DomainEvent> for FlowTriggerSubscriber {
 
     async fn handle(&self, event: &DomainEvent) {
         match event {
-            // The flow runs as the agent it belongs to (`super::owner`).
-            DomainEvent::FlowScheduleTick { flow_id } => {
-                super::owner::as_owner(&self.config, flow_id, self.handle_schedule_tick(flow_id))
-                    .await
-            }
             // Every scope's flows may listen for this trigger: match them in
             // each, so each run starts as its flow's owner.
             DomainEvent::ComposioTriggerReceived {

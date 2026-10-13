@@ -343,12 +343,9 @@ async fn thread_delete_removes_persisted_turn_state_snapshot() {
         .workspace_dir;
 
     let snapshot = TurnState::started(thread_id, "req-1", 4, "2026-01-01T00:00:00Z");
-    tinyagents_session::turn_state::store::put(dir.clone(), &snapshot).expect("put snapshot");
-    assert!(
-        tinyagents_session::turn_state::store::get(dir.clone(), thread_id)
-            .unwrap()
-            .is_some()
-    );
+    let store = crate::agent::session_store::turn_states_for(&dir);
+    store.put(&snapshot).expect("put snapshot");
+    assert!(store.get(thread_id).unwrap().is_some());
 
     // Queue a finished background sub-agent result for this thread; deleting the
     // thread must discard it so it's never delivered into a dead thread.
@@ -386,7 +383,7 @@ async fn thread_delete_removes_persisted_turn_state_snapshot() {
 }
 
 #[tokio::test]
-async fn threads_purge_removes_valid_and_corrupted_turn_state_files() {
+async fn threads_purge_removes_every_turn_state_snapshot() {
     let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let workspace = tempfile::tempdir().expect("workspace");
     let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
@@ -398,15 +395,16 @@ async fn threads_purge_removes_valid_and_corrupted_turn_state_files() {
         .workspace_dir;
 
     let snapshot = TurnState::started("thread-a", "req-1", 4, "2026-01-01T00:00:00Z");
-    tinyagents_session::turn_state::store::put(dir.clone(), &snapshot).expect("put snapshot");
-
-    let turn_state_dir = dir.join("memory").join("conversations").join("turn_states");
-    std::fs::create_dir_all(&turn_state_dir).unwrap();
-    std::fs::write(
-        turn_state_dir.join("corrupted.json"),
-        "{ definitely not json",
-    )
-    .unwrap();
+    let store = crate::agent::session_store::turn_states_for(&dir);
+    store.put(&snapshot).expect("put snapshot");
+    store
+        .put(&TurnState::started(
+            "thread-b",
+            "req-2",
+            4,
+            "2026-01-01T00:00:01Z",
+        ))
+        .expect("put second snapshot");
 
     // Queue background sub-agent results across sessions; a full purge must wipe
     // them all since no parent thread survives.
@@ -437,14 +435,10 @@ async fn threads_purge_removes_valid_and_corrupted_turn_state_files() {
     assert!(bg::pending_for(&dir, "thread-a").is_empty());
     assert!(bg::pending_for(&dir, "thread-b").is_empty());
 
-    if turn_state_dir.exists() {
-        let remaining_json: Vec<_> = std::fs::read_dir(&turn_state_dir)
-            .unwrap()
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("json"))
-            .collect();
-        assert!(remaining_json.is_empty(), "expected no snapshot json files");
-    }
+    assert!(
+        store.list().expect("list").is_empty(),
+        "a purge leaves no turn snapshot behind"
+    );
 }
 
 #[tokio::test]

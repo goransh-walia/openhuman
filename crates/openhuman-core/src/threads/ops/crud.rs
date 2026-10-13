@@ -19,7 +19,6 @@ use crate::threads::{
 };
 use crate::web_chat as web_channel;
 use std::path::PathBuf;
-use tinyagents_session::turn_state;
 
 /// Lists all conversation threads.
 pub async fn threads_list(
@@ -174,6 +173,19 @@ async fn message_append_with_config(
             || request.message.content.contains("[FILE:");
         let durable_files = crate::agent::attachments::parse(&request.message.content).1;
         let durable_upload = !durable_files.is_empty();
+        // Raw and durable uploads both live under the thread's working folder,
+        // where the turn reads them (#7714).
+        let workspace = if raw_upload || durable_upload {
+            crate::agent::attachments::thread_action_dir(
+                config,
+                persistence_dir,
+                Some(&request.thread_id),
+            )
+            .await
+            .map_err(|error| ThreadsError::Message(format!("stage user attachments: {error}")))?
+        } else {
+            config.action_dir.clone()
+        };
         if durable_upload {
             let image_count = durable_files
                 .iter()
@@ -206,7 +218,7 @@ async fn message_append_with_config(
                         origin,
                         Some(crate::agent::turn_origin::AgentTurnOrigin::ExternalChannel { .. })
                     ),
-                    workspace: Some(config.action_dir.clone()),
+                    workspace: Some(workspace.clone()),
                 };
                 let path = crate::agent::attachments::resolve_path(config, &file.path, &scope)
                     .await
@@ -253,7 +265,7 @@ async fn message_append_with_config(
         request.message.content = crate::agent::attachments::stage_turn(
             &request.message.content,
             Some(config),
-            None,
+            Some(&tinytools::WorkspaceDescriptor::new(workspace)),
             Some(&request.thread_id),
             origin,
         )
@@ -443,12 +455,14 @@ async fn thread_delete_inner(
     // mirrors conversation-derived state) remains on disk; the
     // thread row itself is already gone at this point so the caller
     // sees a partial failure they can act on instead of silent drift.
-    turn_state::store::delete(dir.clone(), &request.thread_id).map_err(|err| {
-        format!(
-            "thread {} deleted but turn-snapshot cleanup failed: {err}",
-            request.thread_id
-        )
-    })?;
+    crate::agent::session_store::turn_states_for(&dir)
+        .delete(&request.thread_id)
+        .map_err(|err| {
+            format!(
+                "thread {} deleted but turn-snapshot cleanup failed: {err}",
+                request.thread_id
+            )
+        })?;
     // The thread's conversation memory goes too, for good (by `memory_ids`).
     // Memory off (signed out) or a failed forget queues the deletion for the
     // next sign-in (`memory::deletion`) rather than failing the delete: the

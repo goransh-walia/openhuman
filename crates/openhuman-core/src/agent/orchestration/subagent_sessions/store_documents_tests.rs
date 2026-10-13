@@ -69,16 +69,18 @@ fn scopes_do_not_see_each_others_sessions() {
 }
 
 #[test]
-fn the_file_store_still_works_with_no_backend() {
+fn the_store_uses_the_workspace_default_with_no_backend_installed() {
     let dir = tempfile::tempdir().unwrap();
     let store = SubagentSessionStore::new(dir.path().to_path_buf());
     assert!(store.load().unwrap().is_empty());
     store.save(&[session("a")]).unwrap();
-    assert!(dir
+    assert_eq!(store.load().unwrap().len(), 1);
+    // No JSON file store: the records are in the workspace's own database.
+    assert!(!dir
         .path()
         .join(".openhuman/subagent_sessions.json")
         .exists());
-    assert_eq!(store.load().unwrap().len(), 1);
+    assert!(dir.path().join("storage").exists());
 }
 
 #[test]
@@ -138,4 +140,24 @@ fn a_stale_snapshot_does_not_revert_a_newer_session() {
         .find(|s| s.subagent_session_id == "a")
         .unwrap();
     assert_eq!(a.status, DurableSubagentStatus::Failed);
+}
+
+#[test]
+fn a_legacy_session_file_is_imported_once_and_retired() {
+    let dir = tempfile::tempdir().unwrap();
+    let legacy = dir.path().join(".openhuman");
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::write(
+        legacy.join("subagent_sessions.json"),
+        serde_json::to_string(&vec![session("legacy-1")]).unwrap(),
+    )
+    .unwrap();
+    let store = SubagentSessionStore::new(dir.path().to_path_buf());
+
+    let loaded = store.load().unwrap();
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].subagent_session_id, "legacy-1");
+    assert!(!legacy.join("subagent_sessions.json").exists());
+    assert!(legacy.join("subagent_sessions.json.migrated").exists());
+    assert_eq!(store.load().unwrap().len(), 1);
 }

@@ -44,19 +44,22 @@ impl Drop for RemovalSlot<'_> {
         if self.purge && !self.mcp_cleanup_confirmed {
             self.inner.teardown_without_mcp_cleanup("agent_removed");
             let home = self.inner.layout.home.clone();
-            let runtime_guard = Arc::clone(&self.inner._runtime_guard);
+            // Only the workspace outlives this removal: the retained callback
+            // must not hold the runtime's process slot (see
+            // `CoreGuard::workspace_keepalive`).
+            let workspace = self.inner._runtime_guard.workspace_keepalive();
             let cleanup = Arc::new(move || match std::fs::remove_dir_all(&home) {
                 Ok(()) => {
-                    let _ = &runtime_guard;
+                    let _ = &workspace;
                     true
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    let _ = &runtime_guard;
+                    let _ = &workspace;
                     true
                 }
                 Err(error) => {
                     log::warn!("[embed][runtime] deferred agent purge failed: {error}");
-                    let _ = &runtime_guard;
+                    let _ = &workspace;
                     false
                 }
             });

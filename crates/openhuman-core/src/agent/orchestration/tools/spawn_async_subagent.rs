@@ -290,6 +290,24 @@ impl SpawnAsyncSubagentTool {
 
 include!("spawn_async_subagent_execute.rs");
 include!("spawn_async_subagent_args.rs");
+include!("spawn_async_subagent_results.rs");
+
+/// Settle a late registration refusal before an accepted response is built.
+fn finish_spawn_registration(
+    registration: Result<(), running_subagents::RegistrationError>,
+    store: &SubagentSessionStore,
+    session_id: &str,
+    task_id: &str,
+) -> Result<(), String> {
+    if let Err(error) = registration {
+        let refusal = format!("spawn_async_subagent: registration refused: {error}");
+        subagent_sessions::mark_failed(store, session_id, task_id, refusal.clone()).map_err(
+            |failure| format!("{refusal}; failed to settle persisted session: {failure}"),
+        )?;
+        return Err(refusal);
+    }
+    Ok(())
+}
 
 /// Format the user-facing acceptance text around a structured async sub-agent reference.
 ///

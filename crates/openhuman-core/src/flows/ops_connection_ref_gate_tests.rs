@@ -244,6 +244,16 @@ fn connection_refs_fail_open_on_unavailable_connections_but_keep_mismatch() {
     assert!(errors[0].contains("tiktok"), "{}", errors[0]);
 }
 
+/// The mock-run argument preflight as `run_builder_gates` invokes it: the
+/// analysis is `tinyflows::preflight`'s, this pins the host's native slug prefix.
+async fn validate_required_arg_resolvability(graph: &WorkflowGraph) -> Vec<String> {
+    tinyflows::preflight::unresolvable_tool_args(
+        graph,
+        &[crate::flows::tinyflows::caps::NATIVE_TOOL_PREFIX],
+    )
+    .await
+}
+
 // ── validate_required_arg_resolvability (issue B18) ─────────────────────────
 //
 // `validate_tool_contracts`'s `missing_required_args` only proves an arg is
@@ -347,7 +357,10 @@ async fn mock_opaque_tool_call_upstream_ref_matches_native_and_composio_upstream
         ],
         "edges": []
     }));
-    let up = |expr: &str| mock_opaque_tool_call_upstream_ref(expr, &g, "sink").map(str::to_string);
+    let up = |expr: &str| {
+        tinyflows::preflight::mock_opaque_tool_call_upstream_ref(expr, &g, "sink")
+            .map(str::to_string)
+    };
     assert_eq!(
         up("=nodes.native_up.item.json.url").as_deref(),
         Some("native_up")

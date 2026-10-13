@@ -2,9 +2,9 @@ use std::path::Path;
 
 use super::types::{
     ActionTracker, AutonomyLevel, SecurityPolicy, ToolOperation, TrustedAccess, TrustedRoot,
-    POLICY_BLOCKED_MARKER,
 };
 use std::sync::Arc;
+use tinytools::status::POLICY_BLOCKED_MARKER;
 use tokio::sync::OnceCell;
 
 impl SecurityPolicy {

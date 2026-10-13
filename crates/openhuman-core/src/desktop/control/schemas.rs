@@ -80,6 +80,7 @@ fn status(_: Map<String, Value>) -> ControllerFuture {
         let config = crate::config::rpc::load_config_with_timeout()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
+        crate::core::runtime::components::require_config(&config, "computer")?;
         serde_json::to_value(super::ops::status(&config).await).map_err(|error| error.to_string())
     })
 }
@@ -93,6 +94,7 @@ fn set_enabled(params: Map<String, Value>) -> ControllerFuture {
         let config = crate::config::rpc::load_config_with_timeout()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
+        crate::core::runtime::components::require_config(&config, "computer")?;
         let result = super::ops::set_enabled(&config, value).await?;
         serde_json::to_value(result).map_err(|error| error.to_string())
     })
@@ -103,12 +105,17 @@ fn probe(_: Map<String, Value>) -> ControllerFuture {
         let config = crate::config::rpc::load_config_with_timeout()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
+        crate::core::runtime::components::require_config(&config, "computer")?;
         serde_json::to_value(super::ops::probe(&config).await).map_err(|error| error.to_string())
     })
 }
 
 fn pending(_: Map<String, Value>) -> ControllerFuture {
     Box::pin(async {
+        let config = crate::config::rpc::load_config_with_timeout()
+            .await
+            .map_err(|error| format!("config unavailable: {error}"))?;
+        crate::core::runtime::components::require_config(&config, "computer")?;
         serde_json::to_value(super::confirmation::pending()).map_err(|error| error.to_string())
     })
 }
@@ -127,6 +134,7 @@ fn confirm(params: Map<String, Value>) -> ControllerFuture {
         let config = crate::config::rpc::load_config_with_timeout()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
+        crate::core::runtime::components::require_config(&config, "computer")?;
         super::confirmation::confirm(&config, id, approve).await
     })
 }

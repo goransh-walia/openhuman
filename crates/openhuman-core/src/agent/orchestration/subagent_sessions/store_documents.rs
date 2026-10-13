@@ -1,9 +1,9 @@
 //! Durable sub-agent sessions on the `tinystoragedrivers` document port.
 //!
-//! Used instead of `<workspace>/.openhuman/subagent_sessions.json` when the
-//! host configured a storage backend ([`crate::storage`]); `store.rs` picks it
-//! per call, so the sessions live under the acting agent's storage scope
-//! (`local` on a single-user host).
+//! The only store: sessions live under the acting agent's storage scope
+//! (`local` on a single-user host) in the backend the host installed
+//! ([`crate::storage`]), or the workspace default when none is installed
+//! ([`crate::storage::local`]). `store.rs` opens it per call.
 //!
 //! # Layout
 //!
@@ -11,8 +11,7 @@
 //! | --- | --- | --- |
 //! | `subagent_sessions` | the session id | one [`DurableSubagentSession`] plus `created_at` for ordering |
 //!
-//! The file store loads and saves the whole list, last writer wins. `save`
-//! keeps that contract for the callers in `ops.rs`, but writes each session as
+//! The callers in `ops.rs` load and save the whole list. `save` writes each session as
 //! its own document, so a session's history stays well under any document-size
 //! limit and two processes only collide on a session they both changed. `save`
 //! never deletes: `ops.rs` only replaces a session (remove then re-add the same
@@ -34,13 +33,14 @@ fn collections() -> Vec<CollectionSpec> {
     vec![CollectionSpec::new(SESSIONS)]
 }
 
-/// The document store for this call, when the host configured one.
-pub(super) fn current() -> Result<Option<Docs>> {
+/// The document store for this call: the installed backend, else the
+/// workspace default, in the acting scope.
+pub(super) fn current(workspace_dir: &std::path::Path) -> Result<Docs> {
     #[cfg(test)]
     if let Some(docs) = TEST_OVERRIDE.with(|slot| slot.borrow().clone()) {
-        return Ok(Some(docs));
+        return Ok(docs);
     }
-    Ok(Repo::current(DOMAIN, collections)?.map(Docs))
+    Ok(Docs(Repo::current_for(workspace_dir, DOMAIN, collections)?))
 }
 
 /// Runs `f` with `docs` standing in for the installed backend, on this thread

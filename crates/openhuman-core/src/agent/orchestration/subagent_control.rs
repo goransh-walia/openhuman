@@ -209,12 +209,8 @@ fn handle_subagent_steer(params: Map<String, Value>) -> ControllerFuture {
                 let reason = match err {
                     SteerError::Unknown => "unknown",
                     SteerError::AlreadyDone => "already_done",
-                    // `steer_control` is trusted UI/RPC control and currently
-                    // does not perform parent ownership checks, so this arm is
-                    // unreachable on THIS path. The variant is not dead overall:
-                    // the agent-tool `running_subagents::steer` path enforces
-                    // ownership and returns `NotOwned`. Kept here for the Phase 4
-                    // SteeringRegistry ownership consolidation.
+                    // SaaS user controls check the captured worker profile,
+                    // independently of the caller-supplied task ID.
                     SteerError::NotOwned => "not_owned",
                     SteerError::UnsupportedLane => "unsupported_lane",
                 };

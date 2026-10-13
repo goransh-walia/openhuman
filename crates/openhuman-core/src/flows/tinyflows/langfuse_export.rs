@@ -27,6 +27,7 @@ use serde_json::{json, Map};
 use tinyagents_graph::{GraphLangfuseExporter, GraphObservation};
 use tinyagents_harness::{LangfuseAuth, LangfuseClient, LangfuseTraceConfig};
 use tinyflows::engine::GraphObservation as FlowObservation;
+use tinyflows::observe::to_exporter_observations;
 
 use crate::config::Config;
 use crate::security::credentials::session_support::direct_backend_credential;
@@ -105,42 +106,6 @@ fn build_flow_exporter(client: LangfuseClient, flow_id: &str) -> GraphLangfuseEx
     })
 }
 
-/// Re-types the engine's observations for the exporter.
-///
-/// The engine now emits `tinyflows::engine::GraphObservation` — tinyflows
-/// vendored its state-graph runtime in PR #43 — while the Langfuse batch is
-/// still built by `tinyagents`' exporter, which names its own. The two types
-/// are the same shape (`tinyagents` is where tinyflows' copy came from) down
-/// to the `GraphEvent` payload, so this re-types through their shared serde
-/// representation rather than duplicating a 20-field mapping that would then
-/// have to be kept in step by hand.
-///
-/// An observation that fails to convert is **dropped, not fatal**: exporting
-/// is best-effort throughout this module, and losing one span from a trace is
-/// a better outcome than losing the trace. A drop is logged at `warn` because
-/// the only way it can happen is the two types drifting apart, which is worth
-/// hearing about — `re_typing_preserves_every_field` is the guard that should
-/// catch it first.
-fn to_exporter_observations(observations: &[FlowObservation]) -> Vec<GraphObservation> {
-    observations
-        .iter()
-        .filter_map(|obs| {
-            match serde_json::to_value(obs).and_then(serde_json::from_value::<GraphObservation>) {
-                Ok(converted) => Some(converted),
-                Err(err) => {
-                    tracing::warn!(
-                        target: LOG_TARGET,
-                        error = %err,
-                        "[flows] dropped an observation the exporter could not read — \
-                         tinyflows and tinyagents GraphObservation have drifted"
-                    );
-                    None
-                }
-            }
-        })
-        .collect()
-}
-
 /// Exports one settled flow run to Langfuse as a single trace. Best-effort:
 /// every failure path logs a `[flows]`-prefixed warning and returns — a
 /// Langfuse outage can never fail or delay-fail the run. No-op when
@@ -210,7 +175,7 @@ pub async fn export_flow_run_trace(
         }
     };
 
-    let observations = to_exporter_observations(journal_observations);
+    let observations = to_exporter_observations::<GraphObservation>(journal_observations);
     if observations.is_empty() {
         tracing::warn!(
             target: LOG_TARGET,

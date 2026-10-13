@@ -4365,6 +4365,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'جاهزة',
   'computer.status.state.failed': 'فشلت',
   'computer.status.state.unsupported': 'غير مدعومة على هذا الجهاز',
+  'computer.status.state.disabled': 'معطّلة في الإعدادات',
   'desktop.permission.accessibility': 'إمكانية الوصول',
   'desktop.permission.screen_recording': 'تسجيل الشاشة',
   'channels.status.configuring': 'جارٍ الضبط',

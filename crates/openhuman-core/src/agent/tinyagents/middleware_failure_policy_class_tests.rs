@@ -279,7 +279,7 @@ fn a_failed_browser_task_gets_one_changed_attempt_not_a_credential_halt() {
     ] {
         let error = format!(
             "{} Browser task failed at step 1: {reason} Hint: narrow the goal",
-            crate::tools::status::TASK_FAILED_MARKER
+            tinytools::status::TASK_FAILED_MARKER
         );
         assert_eq!(
             recovery_policy("browser", &error, false),
@@ -290,7 +290,7 @@ fn a_failed_browser_task_gets_one_changed_attempt_not_a_credential_halt() {
     // A model gateway failing under the rescuer is transient.
     let error = format!(
         "{} Browser task failed at step 3: the rescuer gave up: rescue model returned HTTP 504",
-        crate::tools::status::TASK_FAILED_MARKER
+        tinytools::status::TASK_FAILED_MARKER
     );
     assert_eq!(
         recovery_policy("browser", &error, false),
@@ -305,7 +305,7 @@ fn a_failed_task_is_classified_by_its_headline_not_its_attached_report() {
     // not override the headline's gateway 504.
     let error = format!(
         "{} Browser task failed at step 3: the rescuer gave up: rescue model returned HTTP 504\n\n{}",
-        crate::tools::status::TASK_FAILED_MARKER,
+        tinytools::status::TASK_FAILED_MARKER,
         serde_json::json!({"summary": "the site said authentication failed on the login page"})
     );
     assert_eq!(
@@ -319,7 +319,7 @@ async fn a_failed_browser_task_nudges_toward_its_hint_then_stops_on_a_repeat() {
     let (mw, handle, slot) = breaker();
     let error = format!(
         "{} Browser task failed at step 1: Planning failed Hint: name the exact button",
-        crate::tools::status::TASK_FAILED_MARKER
+        tinytools::status::TASK_FAILED_MARKER
     );
     let args =
         serde_json::json!({"action": "task", "goal": "book it", "url": "https://shop.test/"});

@@ -125,7 +125,7 @@ pub(crate) async fn run_channel_turn_via_graph(
         }
     }
     let prepared = if crate::agent::multimodal::has_image_placeholders(history) {
-        crate::agent::multimodal::rehydrate_image_placeholders(history)
+        crate::agent::multimodal::rehydrate_image_placeholders(history).await
     } else {
         history.clone()
     };

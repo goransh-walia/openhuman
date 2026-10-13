@@ -3,9 +3,9 @@
 //! (which rebuilds the tool policy snapshot on every change).
 
 use super::super::types::{OpenHumanSessionHost, SessionHostBuilder};
-use crate::tools::agent_policy::ToolPolicyEngine;
 use std::collections::HashSet;
 use std::sync::Arc;
+use tinytools::ToolPolicyEngine;
 use tinytools::{Tool, ToolSpec};
 use tinytools_agent::dialect::TranscriptEntry;
 
@@ -119,9 +119,7 @@ impl OpenHumanSessionHost {
     }
 
     #[cfg(test)]
-    pub(crate) fn tool_policy_session_for_test(
-        &self,
-    ) -> &crate::tools::agent_policy::ToolPolicySession {
+    pub(crate) fn tool_policy_session_for_test(&self) -> &tinytools::ToolPolicySession {
         &self.tool_policy_session
     }
 
@@ -419,7 +417,7 @@ impl OpenHumanSessionHost {
         );
         // Durable `Hidden` members leave the wire here; the deferred split
         // over both sets is the shared recompute below.
-        let _ = crate::tools::implementations::meta::strip_deferred_from_visible(
+        let _ = tinytools::strip_deferred_from_visible(
             &mut self.visible_tool_names,
             self.tools.as_slice(),
         );
@@ -437,7 +435,7 @@ impl OpenHumanSessionHost {
             self.deferred_tool_names.clear();
             return;
         }
-        let mut deferred = crate::tools::implementations::meta::deferred_set(
+        let mut deferred = tinytools::deferred_set(
             self.tools.as_slice(),
             self.synthesized_tools.as_slice(),
             &self.requested_deferred_tools,

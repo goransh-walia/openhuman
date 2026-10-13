@@ -1,5 +1,6 @@
-//! The store itself is tested upstream (`tinyflows-sqlite`); these pin the
-//! host mapping from `Config` to its options.
+//! The store itself is tested upstream (`tinyflows-drivers`); these pin the
+//! host mapping from `Config` to its options and the import of the `jobs.db`
+//! tinyflows used to write.
 
 use super::*;
 use chrono::Duration as ChronoDuration;
@@ -17,11 +18,11 @@ fn test_config(tmp: &TempDir) -> Config {
 }
 
 #[test]
-fn database_lives_at_workspace_cron_jobs_db() {
+fn jobs_live_in_the_workspace_default_database() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     add_job(&config, "*/5 * * * *", "echo ok").unwrap();
-    assert!(tmp.path().join("workspace/cron/jobs.db").is_file());
+    assert!(tmp.path().join("workspace/storage/storage.db").is_file());
 }
 
 #[test]
@@ -65,7 +66,7 @@ fn agent_context(
 }
 
 #[tokio::test]
-async fn an_agents_jobs_live_in_its_own_database() {
+async fn an_agents_jobs_live_in_its_own_scope() {
     use crate::core::runtime::CoreContext;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -75,10 +76,6 @@ async fn an_agents_jobs_live_in_its_own_database() {
     })
     .await;
 
-    assert!(tmp
-        .path()
-        .join("workspace/agents/alpha/cron/jobs.db")
-        .is_file());
     let alpha_ids = CoreContext::scope(agent_context(&config, "alpha"), async {
         list_jobs(&config)
             .unwrap()
@@ -111,9 +108,9 @@ async fn a_job_whose_agent_is_not_live_stays_dormant() {
     .await;
     drop(ctx);
 
-    let mut dispatcher = crate::cron::scheduler::JobDispatcher::new(1);
-    crate::cron::scheduler::tick_live_agents(&mut dispatcher).await;
-    dispatcher.drain().await;
+    let mut agents = crate::cron::scheduler::LiveAgentSchedulers::default();
+    agents.tick().await;
+    agents.drain().await;
 
     let after = CoreContext::scope(agent_context(&config, "dormant-agent"), async {
         get_job(&config, &job.id).unwrap()
@@ -123,4 +120,47 @@ async fn a_job_whose_agent_is_not_live_stays_dormant() {
         after.last_run.is_none(),
         "nothing ran the dormant agent's job"
     );
+}
+
+fn legacy_fixture() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/storage/import/fixtures/tinyflows/workspace/cron/jobs.db")
+}
+
+#[test]
+fn a_legacy_jobs_db_is_imported_by_the_storage_importer_and_left_untouched() {
+    let tmp = TempDir::new().unwrap();
+    let config = test_config(&tmp);
+    let legacy = legacy_db_path(&config);
+    std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    std::fs::copy(legacy_fixture(), &legacy).unwrap();
+    let before = std::fs::read(&legacy).unwrap();
+
+    let backend = crate::storage::local::backend_for(&config.workspace_dir).unwrap();
+    for report in crate::storage::import::tinyflows::run_with(&backend, &config) {
+        report.outcome.unwrap();
+    }
+
+    let jobs = list_jobs(&config).unwrap();
+    assert_eq!(jobs.len(), 3);
+    assert!(jobs.iter().any(|job| job.name.as_deref() == Some("inbox")));
+    assert!(find_flow_schedule_job(&config, "flow-beta")
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        std::fs::read(&legacy).unwrap(),
+        before,
+        "jobs.db was modified"
+    );
+
+    // Imported once: a job removed afterwards stays removed.
+    let inbox = jobs
+        .iter()
+        .find(|job| job.name.as_deref() == Some("inbox"))
+        .unwrap();
+    remove_job(&config, &inbox.id).unwrap();
+    for report in crate::storage::import::tinyflows::run_with(&backend, &config) {
+        report.outcome.unwrap();
+    }
+    assert_eq!(list_jobs(&config).unwrap().len(), 2);
 }

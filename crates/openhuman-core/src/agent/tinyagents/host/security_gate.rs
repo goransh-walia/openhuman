@@ -83,9 +83,10 @@ use tinyagents_harness::host::security_gate::{GateDecision, ToolCallRequest};
 
 use crate::agent::tinyagents::policy_denial::PolicyDenial;
 use crate::security::approval::{redact_args, summarize_action, ApprovalGate, GateOutcome};
-use crate::security::policy::{CommandClass, GateDecision as PolicyGateDecision, SecurityPolicy};
-use crate::tools::agent_policy::{ToolPolicyAction, ToolPolicySession};
+use crate::security::policy::{GateDecision as PolicyGateDecision, SecurityPolicy};
+use tinybox_bus::CommandClass;
 use tinytools::{PermissionLevel, Tool};
+use tinytools::{ToolPolicyAction, ToolPolicySession};
 
 #[path = "security_gate_shell_analysis.rs"]
 mod shell_analysis;
@@ -504,7 +505,7 @@ impl OpenHumanSecurityGate {
         {
             return Ok(GateDecision::deny(format!(
                 "{} Scheduled agent turns may use read-only tools only; '{}' needs a live user action.",
-                crate::security::POLICY_DENIED_MARKER,
+                tinytools::status::POLICY_DENIED_MARKER,
                 call.tool_name
             )));
         }
@@ -523,7 +524,7 @@ impl OpenHumanSecurityGate {
                 else {
                     return Ok(GateDecision::deny(format!(
                         "{} Shell authorization facts are unavailable or do not match this call.",
-                        crate::security::POLICY_BLOCKED_MARKER
+                        tinytools::status::POLICY_BLOCKED_MARKER
                     )));
                 };
                 match Self::shell_decision(&policy, &effective_arguments, &analysis) {
@@ -548,7 +549,7 @@ impl OpenHumanSecurityGate {
                         let raw = format!(
                             "{} Security policy: this command's category is not permitted in the \
                          current access tier.",
-                            crate::security::POLICY_BLOCKED_MARKER
+                            tinytools::status::POLICY_BLOCKED_MARKER
                         );
                         return Ok(GateDecision::deny(
                             PolicyDenial::SecurityPolicyBlocked {
@@ -571,7 +572,7 @@ impl OpenHumanSecurityGate {
                 let _ = authorization_context;
                 return Ok(GateDecision::deny(format!(
                     "{} Shell command analysis is unavailable in this build.",
-                    crate::security::POLICY_BLOCKED_MARKER
+                    tinytools::status::POLICY_BLOCKED_MARKER
                 )));
             }
         }
@@ -590,7 +591,7 @@ impl OpenHumanSecurityGate {
             );
             let raw = format!(
                 "{} Security policy: read-only mode, cannot perform '{}'.",
-                crate::security::POLICY_BLOCKED_MARKER,
+                tinytools::status::POLICY_BLOCKED_MARKER,
                 call.tool_name
             );
             return Ok(GateDecision::deny(

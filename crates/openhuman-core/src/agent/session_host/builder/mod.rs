@@ -26,8 +26,8 @@ pub use host_tools::{HostTools, HostTurnTools, TurnContext};
 mod builder_tests;
 
 use crate::agent::harness::definition::{AgentDefinition, ToolScope};
-use crate::tools::agent_policy::ToolPolicySession;
 use std::sync::Arc;
+use tinytools::ToolPolicySession;
 use tinytools::{Tool, ToolSpec};
 
 /// Drop entries with duplicate `name` fields, first occurrence wins.
@@ -224,7 +224,8 @@ pub(super) fn ensure_tinyjuice_tools_visible(
 ) {
     ensure_recovery_tool_visible(
         visible,
-        config.context.compaction_enabled || summarizes_tool_output(agent_id, config),
+        crate::inference::tokenjuice::enabled(config)
+            && (config.context.compaction_enabled || summarizes_tool_output(agent_id, config)),
     );
     ensure_repl_tools_visible(
         visible,
@@ -246,7 +247,7 @@ pub(super) fn ensure_repl_tools_visible(
         return;
     }
     if !crate::agent::harness::definition::is_empty_tool_scope(visible) {
-        for name in crate::inference::tokenjuice::REPL_TOOL_NAMES {
+        for name in tinyjuice_bus::tools::REPL_TOOLS {
             visible.insert((*name).to_string());
         }
     }

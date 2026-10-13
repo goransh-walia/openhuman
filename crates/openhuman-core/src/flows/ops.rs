@@ -38,7 +38,9 @@ use std::sync::{Arc, LazyLock};
 
 use chrono::Utc;
 use serde_json::{json, Value};
+use tinyflows::authoring::validate_and_migrate_graph;
 use tinyflows::model::{NodeKind, TriggerKind, WorkflowGraph};
+use tinyflows::triggers::graph_trigger_warnings;
 // The save/run safety predicates are `tinyflows-catalog`'s: whether a graph
 // fires unattended, whether it can act on the world, whether it has anything to
 // do at all are properties of the graph, not of this host. Re-exported at
@@ -79,7 +81,7 @@ const FLOW_RUN_TIMEOUT_SECS: u64 = 600;
 /// forever. The two are distinct mechanisms (flow runs execute as
 /// `TrustedAutomation { Workflow }`, which the tool-call gate lets through), so
 /// this is a dedicated flows-side TTL, not a reuse of the approval store's.
-const FLOW_PARKED_TTL_SECS: i64 = 600;
+const FLOW_PARKED_TTL_SECS: i64 = tinyflows_catalog::run_management::PARKED_RUN_TTL_SECS;
 
 /// T-M1 fail-closed refusal: the graph hash pinned when this run parked no
 /// longer matches the flow's current graph (`save_workflow` rewrote it while

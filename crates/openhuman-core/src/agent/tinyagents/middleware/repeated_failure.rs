@@ -418,6 +418,16 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
             self.stop.record_refusal();
             return Ok(());
         }
+        // The memory budget refusing a call past its cap is the host's own
+        // limit (`memory::tool_budget`), not a failure: a parallel batch of
+        // memory calls past the cap must not halt the run (#7717).
+        if crate::memory::tools::is_budget_refusal(result) {
+            tracing::debug!(
+                tool = tool_name,
+                "[tinyagents::mw] skipping memory budget refusal in failure ladder"
+            );
+            return Ok(());
+        }
         let step = self.step.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Body-level failure signal: `validate_workflow` / `dry_run_workflow`
@@ -580,8 +590,8 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
         // fast-trip for BOTH (issue #4463 part 6: denied had drifted to the
         // generic 3).
         let policy_marked = |s: &str| {
-            s.contains(crate::security::POLICY_BLOCKED_MARKER)
-                || s.contains(crate::security::POLICY_DENIED_MARKER)
+            s.contains(tinytools::status::POLICY_BLOCKED_MARKER)
+                || s.contains(tinytools::status::POLICY_DENIED_MARKER)
         };
         let hard_reject = policy_marked(&content);
 
@@ -600,10 +610,10 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
             && !is_command_exit_report(&failure_text)
             && (is_recoverable_tool_failure(heuristic_failure_text)
                 || matches!(
-                    crate::tools::status::classify(heuristic_failure_text, false).class,
-                    crate::tools::status::ToolFailureClass::Timeout
-                        | crate::tools::status::ToolFailureClass::ServiceUnavailable
-                        | crate::tools::status::ToolFailureClass::ModelConnection
+                    tinytools::status::classify(heuristic_failure_text, false).class,
+                    tinytools::status::ToolFailureClass::Timeout
+                        | tinytools::status::ToolFailureClass::ServiceUnavailable
+                        | tinytools::status::ToolFailureClass::ModelConnection
                 ));
         if recoverable {
             // A poll tool's contract is the identical repeat (see

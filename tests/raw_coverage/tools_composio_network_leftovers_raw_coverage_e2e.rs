@@ -257,7 +257,15 @@ async fn round20_composio_ops_cover_authorize_scopes() {
     .await
     .expect("ops list tools")
     .value;
-    assert_eq!(listed.tools.len(), 2);
+    // The connector module lists only curated actions (b80c12358a): its
+    // GitHub catalog has no GITHUB_STAR_REPOSITORY, so the mock's second
+    // tool is gated out.
+    let names: Vec<&str> = listed
+        .tools
+        .iter()
+        .map(|tool| tool.function.name.as_str())
+        .collect();
+    assert_eq!(names, ["GMAIL_FETCH_EMAILS"]);
 
     let requests = state.requests.lock().expect("requests").clone();
     let authorize_body = requests

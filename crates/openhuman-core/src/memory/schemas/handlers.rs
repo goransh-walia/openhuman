@@ -307,7 +307,7 @@ pub(super) fn import_retry_failed(params: Map<String, Value>) -> ControllerFutur
 pub(super) fn migration_scan(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         parse::<EmptyParams>(params)?;
-        finish(layout_migration::scan(&load().await?, &layout_migration::AppHost).await)
+        finish(layout_migration::scan(&layout_migration::AppHost::new(load().await?)).await)
     })
 }
 
@@ -317,7 +317,7 @@ pub(super) fn migration_start(params: Map<String, Value>) -> ControllerFuture {
         let config = load().await?;
         let started = layout_migration::start(
             config.clone(),
-            std::sync::Arc::new(layout_migration::AppHost),
+            std::sync::Arc::new(layout_migration::AppHost::new(config.clone())),
             layout_migration::Trigger::Manual {
                 takeover: params.takeover,
             },

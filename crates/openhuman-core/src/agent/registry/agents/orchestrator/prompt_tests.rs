@@ -224,6 +224,7 @@ fn connected_mcp_block_lists_servers_and_direct_tool_route() {
         name: n.to_string(),
         description: None,
         input_schema: serde_json::json!({}),
+        meta: None,
     };
     let block = format_connected_mcp_block(&[ConnectedServerOverview {
         server_id: "id-1".into(),
@@ -276,6 +277,7 @@ fn connected_mcp_block_falls_back_to_tool_count_and_qualified_name() {
             name: format!("tool{i}"),
             description: None,
             input_schema: serde_json::json!({}),
+            meta: None,
         })
         .collect();
     let block = format_connected_mcp_block(&[ConnectedServerOverview {

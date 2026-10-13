@@ -32,6 +32,20 @@ pub(crate) async fn bootstrap_core_runtime(
     };
     let workspace_dir = cfg.workspace_dir.clone();
 
+    // --- Legacy store import ---------------------------------------------
+    // With a storage backend installed, bring the workspace's per-domain
+    // SQLite files (approvals, devices, notifications, task sources) into it
+    // once, read-only, before anything below opens those stores. A no-op
+    // without a backend; failures are logged and retried at the next boot.
+    for report in crate::storage::import::run(&cfg).await {
+        if let Err(error) = report.outcome {
+            log::warn!(
+                "[runtime] legacy {} store import failed: {error:#}",
+                report.domain
+            );
+        }
+    }
+
     // --- Event bus bootstrap ---
     // Ensure the global event bus is initialized (no-op if already done by start_channels).
     crate::core::bus::init().await.expect("bus init");
@@ -80,8 +94,8 @@ pub(crate) async fn bootstrap_core_runtime(
     // Stamp them as `Interrupted` so the UI can offer a retry without
     // confusing a stale `Streaming` lifecycle for an in-flight turn.
     //
-    // A host session store holds turn snapshots and runs per agent, not under
-    // this workspace, so it does its own repair, once, instead of both sweeps.
+    // An installed host session store repairs itself, once; with none, the
+    // workspace default store is swept.
     let host_store = crate::agent::session_store::installed();
     if let Some(provider) = &host_store {
         match provider.recover() {
@@ -91,10 +105,9 @@ pub(crate) async fn bootstrap_core_runtime(
     }
     if host_store.is_none() {
         let now = chrono::Utc::now().to_rfc3339();
-        match tinyagents_session::turn_state::store::mark_all_interrupted(
-            workspace_dir.clone(),
-            &now,
-        ) {
+        match crate::agent::session_store::default_turn_states_for(&workspace_dir)
+            .mark_all_interrupted(&now)
+        {
             Ok(0) => {}
             Ok(count) => {
                 log::info!("[runtime] marked {count} stale turn snapshot(s) as interrupted")
@@ -112,9 +125,11 @@ pub(crate) async fn bootstrap_core_runtime(
     // the finalizer never settled it. Stamp such rows `interrupted` so they stop
     // rendering as perpetual "running" timeline entries on thread reopen.
     if agent_enabled {
-        if host_store.is_none() {
-            match tinyagents_session::run_ledger::interrupt_orphaned_agent_runs(&cfg.workspace_dir)
-            {
+        if !crate::storage::installed_is_shared() {
+            match crate::agent::session_store::with_ledger(
+                &cfg.workspace_dir,
+                |ledger| async move { ledger.interrupt_orphaned_agent_runs().await },
+            ) {
                 Ok(0) => {}
                 Ok(count) => {
                     log::info!("[runtime] settled {count} orphaned agent run(s) on startup")

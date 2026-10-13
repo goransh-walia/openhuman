@@ -38,7 +38,7 @@ fn an_unbounded_command_gets_the_turn_remainder_as_its_deadline() {
 #[test]
 fn injected_timeout_never_exceeds_the_shell_schema_maximum() {
     let clamp = clamp_shell_timeout(None, SECS(7_200)).expect("unbounded is clamped");
-    assert_eq!(clamp.clamped_secs, crate::tools::timeout::MAX_TIMEOUT_SECS);
+    assert_eq!(clamp.clamped_secs, tinytools_std::timeout::MAX_TIMEOUT_SECS);
 }
 
 #[test]

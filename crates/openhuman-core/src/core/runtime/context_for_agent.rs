@@ -30,6 +30,7 @@ impl CoreContext {
             workspace_binding: RwLock::new(binding),
             domains: self.domains,
             tool_groups: self.tool_groups.clone(),
+            components: self.components,
             embedder_config: self.embedder_config.clone(),
             user_skill_roots: self.user_skill_roots,
             backend_transport: self.backend_transport.clone(),

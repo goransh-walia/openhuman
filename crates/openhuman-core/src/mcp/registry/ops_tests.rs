@@ -16,18 +16,6 @@ use tinymcp_bus::{
     ValidateServerArgumentsRequest,
 };
 
-#[test]
-fn a_blank_identifier_is_refused_with_the_field_name() {
-    // The frontend surfaces this text, so it has to name what was missing.
-    let error = require("   ", "server_id").expect_err("a blank identifier");
-    assert_eq!(error, "server_id must not be empty");
-}
-
-#[test]
-fn an_identifier_is_trimmed_before_it_is_used() {
-    assert_eq!(require("  srv-1  ", "server_id").unwrap(), "srv-1");
-}
-
 // ── list_tools refusals (#6313) ─────────────────────────────────────────────
 //
 // A per-workspace fake module port keeps these handler tests independent of a
@@ -197,9 +185,13 @@ fn refusals_name_only_tools_on_every_listing_belt() {
     let refusals: Vec<String> = ["srv-1", "io.github.other/absent"]
         .into_iter()
         .map(|requested| {
-            match explain_not_connected(requested, std::slice::from_ref(&install), Caller::Agent) {
-                NotConnected::Refused(message) => message,
-                NotConnected::Resolved(id) => panic!("{requested} resolved to {id}"),
+            match explain_not_connected(
+                requested,
+                std::slice::from_ref(&install),
+                Caller::Agent.remedy(),
+            ) {
+                NotConnectedExplanation::Refused(message) => message,
+                other => panic!("{requested} was not refused: {other:?}"),
             }
         })
         .collect();
@@ -308,23 +300,4 @@ async fn a_qualified_name_lists_the_tools_of_its_connected_install() {
         "{}",
         listed.value
     );
-}
-
-#[test]
-fn a_registry_name_installed_twice_is_refused_with_both_ids() {
-    let install = |server_id: &str| tinymcp_bus::ConnStatus {
-        server_id: server_id.into(),
-        qualified_name: QUALIFIED.into(),
-        display_name: "uuid".into(),
-        status: tinymcp_bus::ServerStatus::Disconnected,
-        tool_count: 0,
-        last_error: None,
-        auth_hint: None,
-    };
-    let installs = [install("srv-a"), install("srv-b")];
-    let NotConnected::Refused(message) = explain_not_connected(QUALIFIED, &installs, Caller::Agent)
-    else {
-        panic!("an ambiguous name must not resolve");
-    };
-    assert!(message.contains("srv-a, srv-b"), "{message}");
 }

@@ -316,10 +316,7 @@ impl OpenHumanDefinitionRegistry {
         match &def.tools {
             ToolScope::Named(named) => {
                 let mut names = named.clone();
-                if named
-                    .iter()
-                    .any(|name| name == crate::tools::implementations::meta::TOOL_SEARCH_NAME)
-                {
+                if named.iter().any(|name| name == tinytools::TOOL_SEARCH_NAME) {
                     if let Some(deferred) = self.deferred_tools.as_deref() {
                         names.extend(deferred.iter().cloned());
                     }

@@ -4406,6 +4406,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': '준비됨',
   'computer.status.state.failed': '실패',
   'computer.status.state.unsupported': '이 기기에서 지원되지 않음',
+  'computer.status.state.disabled': '설정에서 꺼짐',
   'desktop.permission.accessibility': '손쉬운 사용',
   'desktop.permission.screen_recording': '화면 기록',
   'channels.status.configuring': '구성 중',

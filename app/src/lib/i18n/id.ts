@@ -4500,6 +4500,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'Siap',
   'computer.status.state.failed': 'Gagal',
   'computer.status.state.unsupported': 'Tidak didukung di perangkat ini',
+  'computer.status.state.disabled': 'Dinonaktifkan di konfigurasi',
   'desktop.permission.accessibility': 'Aksesibilitas',
   'desktop.permission.screen_recording': 'Perekaman layar',
   'channels.status.configuring': 'Mengonfigurasi',

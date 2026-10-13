@@ -22,6 +22,7 @@ mod common;
 use common::{chat_completion, offline_config, runtime};
 use openhuman_embed::{Access, Harness, Provider, Workspace};
 use serde_json::json;
+use tinyagents_session::transcript::TranscriptLocator;
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -207,10 +208,17 @@ fn a_harness_runs_a_turn_against_the_provider_it_was_given() {
             let requests = common::chat_requests(&provider_server).await;
             assert_eq!(requests.len(), 102, "two serial + 100 concurrent turns");
 
-            // The session database landed in the harness's workspace.
+            // The first session's transcript landed in the harness agent's
+            // own transcript root under the workspace (the old
+            // `session_db/` files are gone). A harness session id is its
+            // thread id.
+            let transcripts = openhuman_core::agent::session_store::AgentTranscriptFiles::new(
+                &workspace_dir,
+                "harness",
+            );
             assert!(
-                workspace_dir.join("session_db/sessions.db").exists(),
-                "sessions were not persisted under the harness workspace"
+                transcripts.root_for_thread(&first.session_id).is_some(),
+                "the first session's transcript was not persisted"
             );
 
             // The harness is one runtime plus one agent, and says so.
@@ -243,6 +251,14 @@ fn a_harness_runs_a_turn_against_the_provider_it_was_given() {
                 "got {err:?}"
             );
 
+            // Dropping the agent only schedules its MCP close, and the deferred
+            // close keeps the ephemeral workspace until it is acknowledged;
+            // removing the agent awaits the close first.
+            harness
+                .runtime()
+                .remove_agent("harness")
+                .await
+                .expect("the harness agent is removed and its cleanup acknowledged");
             drop(harness);
             assert!(
                 !workspace_dir.exists(),

@@ -16,6 +16,7 @@ members = [
     "crates/openhuman-cli",
     "crates/openhuman-core",
     "crates/openhuman-embed",
+    "crates/openhuman-modules-linked",
     "crates/openhuman-rpc",
     "crates/openhuman-tinyhumans",
     "crates/openhuman-tui",
@@ -53,13 +54,28 @@ tinytools = { path = "vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 tinytools-std = { path = "vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 tinytools-agent = { path = "vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
 
+[patch."https://github.com/tinyhumansai/tinybus"]
+# tinystoragedrivers-bus names tinybus by git rev. Redirect it to the in-tree
+# copy so the graph holds exactly one `tinybus` (one `Interface`, one
+# `Connection`) instead of a second one compiled only for the storage wire types.
+tinybus = { path = "vendor/tinybus/crates/tinybus" }
+
 [patch."https://github.com/tinyhumansai/tinystoragedrivers"]
-# tinyflows names the storage crates by git tag so it can build on its own.
-# Redirect them to the copy tinyagents vendors — the one the session store and
-# the core `storage` domain link — so there is exactly one `DocumentStore`
-# trait and one `libsqlite3-sys` (`links = "sqlite3"`) in the graph.
+# tinyflows (tinyflows-drivers, tinyflows-import) names the storage crates by
+# git tag (v0.7.0, the version tinyagents vendors) so it can build on its own,
+# and its published `tinyflows` crate cannot carry a path or crates.io
+# dependency on them (tinystoragedrivers is not on crates.io). A git source and a
+# path source are different packages to cargo even at the same commit, so
+# without this redirect to the copy tinyagents vendors — the one the session
+# store and the core `storage` domain link — the graph would hold two
+# `DocumentStore` traits and two `libsqlite3-sys` (`links = "sqlite3"`). The pins
+# now agree on v0.7.0, but the sources still differ, so the patch stays until
+# tinyflows takes the storage crates from the same source as tinyagents.
 tinystoragedrivers-core = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
 tinystoragedrivers-sqlite = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
+# tinyinference-providers (the OAuth pending session) names the secrets port by
+# git tag too, and the host hands it a `DocumentSecrets` from the vendored copy.
+tinystoragedrivers-secrets = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
 
 [patch."https://github.com/tinyhumansai/tinyinference"]
 # tinymemes depends on the Jev client by git; resolve it to the vendored copy.

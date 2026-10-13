@@ -351,7 +351,7 @@ fn build_flow_connections_emits_parseable_refs_for_both_kinds() {
     )];
     let http = vec![http_summary("stripe", "bearer")];
 
-    let out = build_flow_connections(composio, http, &[]);
+    let out = build_flow_connections(composio, http, &[], &Default::default());
     assert_eq!(out.len(), 2);
 
     let gmail = &out[0];
@@ -387,7 +387,7 @@ fn build_flow_connections_skips_non_active_composio_accounts() {
         composio_conn("ca_ok", "notion", "ACTIVE", None),
         composio_conn("ca_pending", "slack", "PENDING", None),
     ];
-    let out = build_flow_connections(composio, Vec::new(), &[]);
+    let out = build_flow_connections(composio, Vec::new(), &[], &Default::default());
     assert_eq!(out.len(), 1, "only the ACTIVE connection is surfaced");
     assert_eq!(out[0].connection_ref, "composio:notion:ca_ok");
     // No cached identity → title-cased toolkit alone.
@@ -400,6 +400,7 @@ fn build_flow_connections_never_carries_secret_fields() {
         vec![composio_conn("ca_abc", "gmail", "ACTIVE", Some("u@x.io"))],
         vec![http_summary("stripe", "header")],
         &[],
+        &Default::default(),
     );
     let json = serde_json::to_string(&out).unwrap();
     // The serialized picker payload must expose only ref/kind/display/toolkit/
@@ -428,7 +429,7 @@ fn build_flow_connections_attaches_platform_user_id_from_a_seeded_identity() {
         ..Default::default()
     }];
 
-    let out = build_flow_connections(composio, Vec::new(), &identities);
+    let out = build_flow_connections(composio, Vec::new(), &identities, &Default::default());
     assert_eq!(out.len(), 1);
     assert_eq!(out[0].platform_user_id.as_deref(), Some("U123ABC"));
 }
@@ -439,7 +440,7 @@ fn build_flow_connections_platform_user_id_is_none_without_a_matching_identity()
 
     // No identities at all.
     let composio = vec![composio_conn("ca_slack1", "slack", "ACTIVE", None)];
-    let out = build_flow_connections(composio, Vec::new(), &[]);
+    let out = build_flow_connections(composio, Vec::new(), &[], &Default::default());
     assert_eq!(out.len(), 1);
     assert!(out[0].platform_user_id.is_none());
 
@@ -452,7 +453,7 @@ fn build_flow_connections_platform_user_id_is_none_without_a_matching_identity()
         user_id: Some("U123ABC".to_string()),
         ..Default::default()
     }];
-    let out = build_flow_connections(composio, Vec::new(), &identities);
+    let out = build_flow_connections(composio, Vec::new(), &identities, &Default::default());
     assert_eq!(out.len(), 1);
     assert!(out[0].platform_user_id.is_none());
 }

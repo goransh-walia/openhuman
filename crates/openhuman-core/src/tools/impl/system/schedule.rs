@@ -305,7 +305,7 @@ impl ScheduleTool {
                     active_hours: None,
                 }
             } else if let Some(delay_str) = delay {
-                let at = Utc::now() + cron::parse_human_delay(delay_str)?;
+                let at = Utc::now() + tinyflows_schedule::validation::parse_human_delay(delay_str)?;
                 Schedule::At { at }
             } else if let Some(at_str) = run_at {
                 let at: DateTime<Utc> = DateTime::parse_from_rfc3339(at_str)

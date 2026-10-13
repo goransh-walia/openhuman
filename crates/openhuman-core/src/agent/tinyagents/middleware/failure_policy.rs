@@ -149,10 +149,9 @@ fn is_argument_rejection(error: &str) -> bool {
 /// The shell agent commands run under on this host, for a nudge that has to
 /// say which commands exist.
 fn host_shell_description() -> String {
-    let shell = if cfg!(windows) {
-        "cmd.exe"
-    } else {
-        crate::agent::platform_shell::bash_path().unwrap_or("sh")
+    let shell = match crate::agent::host_runtime::host_shell_flavor() {
+        tinybox_bus::ShellFlavor::Cmd => "cmd.exe",
+        tinybox_bus::ShellFlavor::Posix => "bash or sh",
     };
     format!("{} (`{shell}`)", std::env::consts::OS)
 }
@@ -175,7 +174,7 @@ pub(super) fn classified_recovery_policy(
     body_level_failure: bool,
     effect: CallEffect,
 ) -> Option<(&'static str, usize)> {
-    use crate::tools::status::ToolFailureClass as Class;
+    use tinytools::status::ToolFailureClass as Class;
     if body_level_failure {
         return Some(("validation", 1));
     }
@@ -206,12 +205,12 @@ pub(super) fn classified_recovery_policy(
     // (5xx, connection) is transient like any other.
     if error
         .trim_start()
-        .starts_with(crate::tools::status::TASK_FAILED_MARKER)
+        .starts_with(tinytools::status::TASK_FAILED_MARKER)
     {
         // Classify the headline only: the task report appended after the
         // blank line is page and planner text, not the call's verdict.
         let headline = error.split("\n\n").next().unwrap_or(error);
-        let class = crate::tools::status::classify(headline, false).class;
+        let class = tinytools::status::classify(headline, false).class;
         return Some(match class {
             Class::ServiceUnavailable | Class::ModelConnection => ("transient", 2),
             _ => ("task_failed", 1),
@@ -221,7 +220,7 @@ pub(super) fn classified_recovery_policy(
     // so retrying the same tool cannot help. Steer the model off it once
     // rather than halting the run on the first call or spending a transient
     // budget on it (`restart the app to try again` read as recoverable).
-    if error.contains(crate::tools::status::MODULE_FAULT_MARKER)
+    if error.contains(tinytools::status::MODULE_FAULT_MARKER)
         && error.contains("restart the app to try again")
     {
         return Some(("unavailable", 1));
@@ -260,7 +259,7 @@ pub(super) fn classified_recovery_policy(
             _ => {}
         }
     }
-    let class = crate::tools::status::classify(error, false).class;
+    let class = tinytools::status::classify(error, false).class;
     Some(match class {
         Class::MissingPermission => ("permission", 0),
         Class::BadCredentials => ("authentication", 0),

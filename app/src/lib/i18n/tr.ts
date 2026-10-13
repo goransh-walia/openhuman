@@ -4466,6 +4466,7 @@ const messages: TranslationMap = {
   'computer.status.state.ready': 'Hazır',
   'computer.status.state.failed': 'Başarısız',
   'computer.status.state.unsupported': 'Bu cihazda desteklenmiyor',
+  'computer.status.state.disabled': 'Yapılandırmada kapatıldı',
   'desktop.permission.accessibility': 'Erişilebilirlik',
   'desktop.permission.screen_recording': 'Ekran Kaydı',
   'channels.status.configuring': 'Yapılandırılıyor',

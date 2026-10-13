@@ -41,7 +41,7 @@ use crate::agent::turn_origin::{self, AgentTurnOrigin, TrustedAutomationSource};
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
-use crate::security::POLICY_DENIED_MARKER;
+use tinytools::status::POLICY_DENIED_MARKER;
 
 use super::store;
 use super::types::{
@@ -277,6 +277,10 @@ pub(crate) struct RequestRoute {
     /// sub-agent routed through the origin fallback (#5499). Carried so the
     /// replay path re-emits the same `detached` flag the live event had.
     pub(crate) detached: bool,
+    /// The store the request was parked in, captured under the parking task's
+    /// storage scope, so a decision made from outside that scope (an RPC with
+    /// no agent or profile of its own) reaches the row where it was written.
+    pub(super) docs: Option<super::store_documents::Docs>,
 }
 
 /// Coordinator for pending approvals.
@@ -322,7 +326,7 @@ struct WaiterGuard<'a> {
     thread_key: Option<String>,
     /// Storage scope of the parking call, kept for `Drop`: the acting agent's
     /// task-local is gone by then.
-    docs: Result<Option<super::store_documents::Docs>, String>,
+    docs: Result<super::store_documents::Docs, String>,
     armed: bool,
 }
 
@@ -354,12 +358,7 @@ impl Drop for WaiterGuard<'_> {
             self.gate
                 .clear_thread_route_if_owned(thread_key, &self.request_id);
         }
-        let decided = store::decide_captured(
-            &self.gate.config,
-            &self.docs,
-            &self.request_id,
-            ApprovalDecision::Deny,
-        );
+        let decided = store::decide_captured(&self.docs, &self.request_id, ApprovalDecision::Deny);
         if let Ok(Some(row)) = decided {
             let route = self.gate.take_request_route(&self.request_id);
             BUS.publish(DomainEvent::ApprovalDecided {

@@ -172,10 +172,11 @@ impl AgentInner {
         if schedule_mcp_cleanup {
             // Keep an ephemeral runtime workspace alive until an outstanding
             // module close is acknowledged. The cleanup callback is retained
-            // by the path reservation if close needs a later retry.
-            let runtime_guard = Arc::clone(&self._runtime_guard);
+            // by the path reservation if close needs a later retry, so it
+            // holds only the workspace, never the runtime's process slot.
+            let workspace = self._runtime_guard.workspace_keepalive();
             let keep_workspace = Arc::new(move || {
-                let _ = &runtime_guard;
+                let _ = &workspace;
                 true
             });
             openhuman_core::mcp::host::schedule_agent_close_with_cleanup(

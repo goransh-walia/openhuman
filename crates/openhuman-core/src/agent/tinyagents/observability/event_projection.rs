@@ -569,15 +569,15 @@ impl EventListener for OpenhumanEventBridge {
                 // An unknown tool is `NotFound` from the typed event itself
                 // (#6277), whatever the text sniff made of the echoed names.
                 let failure = if was_unknown {
-                    Some(crate::tools::status::describe(
-                        crate::tools::status::ToolFailureClass::NotFound,
+                    Some(tinytools::status::describe(
+                        tinytools::status::ToolFailureClass::NotFound,
                     ))
                 } else {
                     match outcome {
                         Some((_, f, ..)) => f,
                         None => error
                             .as_deref()
-                            .map(|text| crate::tools::status::classify(text, false)),
+                            .map(|text| tinytools::status::classify(text, false)),
                     }
                 };
                 // Recompute the label/detail with the REAL call arguments

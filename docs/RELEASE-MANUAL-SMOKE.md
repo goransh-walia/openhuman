@@ -1,6 +1,6 @@
 # Release Manual Smoke Checklist
 
-Run this checklist on every release-cut. Sign-off lives as a GitHub commit comment on the `v<version>-staging` tagged commit that QA validated (paste the checklist with checked items + the sign-off block at the bottom). Before approving the production run, the `Release-Approval` reviewer checks the sign-off exists **and** that the run targets that validated commit (staging SHA passed as `commit_sha`, or separated from the target only by `[skip ci]` version-bump commits). Owns OS-level surfaces that drivers cannot assert — everything else is automated under WDIO, Vitest, or Rust integration tests (see [Testing Strategy](../gitbooks/developing/testing-strategy.md)).
+Run this checklist on every release-cut. Sign-off lives as a GitHub commit comment on the `v<version>-staging` tagged commit that QA validated (paste the checklist with checked items + the sign-off block at the bottom). Before approving the production run, the `Release-Approval` reviewer checks the sign-off exists **and** that the run targets that validated commit (staging SHA passed as `commit_sha`, or separated from the target only by `[skip ci]` version-bump commits). Owns OS-level surfaces that drivers cannot assert — everything else is automated under WDIO, Vitest, or Rust integration tests (see [Testing Strategy](../docs/gitbooks/en/developing/testing-strategy.md)).
 
 This is the **only** acceptable substitute for a `🚫` row in [`TEST-COVERAGE-MATRIX.md`](./TEST-COVERAGE-MATRIX.md). If a feature has neither automated coverage nor an entry on this checklist, treat it as untested and open a coverage gap.
 
@@ -140,7 +140,7 @@ Use a disposable staging account/workspace and synthetic facts. Keep inference r
 
 ### Current stable line
 
-- [ ] **OAuth gate respects `VITE_MINIMUM_SUPPORTED_APP_VERSION`** (per [Release Policy](../gitbooks/developing/release-policy.md)) — Set the variable to a value above this build's version, build, attempt OAuth from the older binary. Expected: gate blocks the deep link; opens `VITE_LATEST_APP_DOWNLOAD_URL`.
+- [ ] **OAuth gate respects `VITE_MINIMUM_SUPPORTED_APP_VERSION`** (per [Release Policy](../docs/gitbooks/en/developing/release-policy.md)) — Set the variable to a value above this build's version, build, attempt OAuth from the older binary. Expected: gate blocks the deep link; opens `VITE_LATEST_APP_DOWNLOAD_URL`.
 - [ ] **Gmail connect succeeds on a fresh install from `releases/latest`** — Per release-policy step 4. Expected: token exchange completes, inbox lists in-app.
 
 ---

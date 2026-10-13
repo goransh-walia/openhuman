@@ -116,6 +116,7 @@ impl std::fmt::Debug for ProfileHost {
 /// methods on [`USER_METHODS`](super::surface::USER_METHODS) are reachable.
 pub fn user_domains() -> DomainSet {
     DomainSet {
+        agent: true,
         threads: true,
         channels: true,
         memory: true,

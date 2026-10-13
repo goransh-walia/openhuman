@@ -299,6 +299,41 @@ fn memory_tool_is_registered_once_memory_is_on() {
     );
 }
 
+/// `[components] memory = false` unregisters the tool even with an engine
+/// installed, and the component's own RPC family answers `COMPONENT_DISABLED`.
+#[test]
+fn memory_tool_is_absent_when_the_memory_component_is_off() {
+    let tmp = TempDir::new().unwrap();
+    let mut cfg = test_config(&tmp);
+    crate::memory::test_fixtures::bind_reference(&cfg);
+    cfg.components.memory = false;
+    let security = Arc::new(SecurityPolicy::default());
+    let browser = BrowserConfig {
+        enabled: false,
+        allowed_domains: vec![],
+        session_name: None,
+        ..BrowserConfig::default()
+    };
+    let http = crate::config::HttpRequestConfig::default();
+    let tools = all_tools(
+        Arc::new(cfg.clone()),
+        &security,
+        AuditLogger::disabled(),
+        &browser,
+        &http,
+        tmp.path(),
+        &HashMap::new(),
+        &cfg,
+    );
+    let names = tool_names(&tools);
+    assert!(
+        !names.iter().any(|n| n == crate::memory::MEMORY_TOOL_NAME),
+        "got: {names:?}"
+    );
+    let off = crate::core::runtime::ComponentSet::from_config(&cfg.components);
+    assert!(off.require("memory").is_err());
+}
+
 /// The memory tool classifies as the Memory family (kept under `harness()`),
 /// and the old `memory_`/`goals_` prefixes no longer claim anything.
 #[test]

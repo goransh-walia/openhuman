@@ -6,8 +6,6 @@ use super::failure_classification::classify_agent_anyhow_for_user;
 use super::origin_context::build_run_prompt;
 use crate::agent::OpenHumanSessionHost;
 use crate::config::Config;
-use crate::core::bus::BUS;
-use crate::core::events::DomainEvent;
 use {tinyflows_schedule::types::CronJob, tinyflows_schedule::types::SessionTarget};
 
 /// Recency window the morning briefing installs around its turn so Composio
@@ -243,51 +241,6 @@ pub(super) async fn run_agent_job_for_run(
             (false, user_message.to_string(), Some(format!("{e:#}")))
         }
     }
-}
-
-/// Fires a `JobType::Flow` job. A system job (`system:<name>`, see
-/// [`crate::cron::system_jobs`]) publishes `DomainEvent::CronSystemJobDue` and,
-/// when a handler is registered for it
-/// ([`crate::cron::system_job_handlers`]), awaits that handler and returns its
-/// result;
-/// any other publishes `DomainEvent::FlowScheduleTick` for
-/// the bound flow id (stored in `job.command`, see `JobType::Flow`'s doc) and
-/// returns immediately. This job type does no work itself — dispatching the
-/// actual `flows::ops::flows_run` happens asynchronously in
-/// `flows::bus::FlowTriggerSubscriber`, which is the sole consumer of this
-/// event (kept out of the cron domain so cron stays flow-agnostic).
-pub(super) async fn run_flow_schedule_job(job: &CronJob) -> (bool, String) {
-    if let Some(name) = crate::cron::system_jobs::system_job_name(job) {
-        tracing::info!(job_id = %job.id, job = %name, "[cron] system job due — publishing CronSystemJobDue");
-        BUS.publish(DomainEvent::CronSystemJobDue {
-            job: name.to_string(),
-        });
-        // A host-registered handler is awaited and its result is the run's
-        // result; without one the job is announce-only and `ok` on dispatch.
-        let ctx = crate::cron::system_job_handlers::SystemJobContext {
-            job_id: job.id.clone(),
-            name: name.to_string(),
-        };
-        return match crate::cron::system_job_handlers::dispatch(ctx).await {
-            Some(Ok(())) => (true, format!("system job {name} completed")),
-            Some(Err(error)) => (false, format!("system job {name} failed: {error}")),
-            None => (true, format!("system job {name} dispatched")),
-        };
-    }
-    let flow_id = job.command.clone();
-    tracing::info!(
-        target: "flows",
-        job_id = %job.id,
-        %flow_id,
-        "[cron] flow schedule tick — publishing FlowScheduleTick"
-    );
-    BUS.publish(DomainEvent::FlowScheduleTick {
-        flow_id: flow_id.clone(),
-    });
-    (
-        true,
-        format!("flow schedule tick emitted for flow {flow_id}"),
-    )
 }
 
 /// Placeholder recorded in run history when an agent job succeeds but returns

@@ -1,7 +1,7 @@
 //! Gating and intercepting approval-gate replies on channels that surface
 //! approvals in chat.
 
-use crate::channels::traits;
+use tinychannels_bus as traits;
 
 /// Whether a channel surfaces approvals in chat: the
 /// `ChannelApprovalSurfaceSubscriber` turns `ApprovalRequested` events into

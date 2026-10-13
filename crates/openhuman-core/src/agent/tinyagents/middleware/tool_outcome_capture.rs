@@ -129,7 +129,7 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
         } else {
             let combined = crate::agent::tinyagents::middleware::tool_result_text(result);
             let timed_out = combined.contains("timed out");
-            Some(crate::tools::status::classify(&combined, timed_out))
+            Some(tinytools::status::classify(&combined, timed_out))
         };
         // Host-only structured payload (e.g. `{"kind":"web_search", ...}`) a
         // tool attached via `ToolResult::metadata` for a richer UI

@@ -26,7 +26,10 @@ pub(super) fn handle_list_capabilities(_params: Map<String, Value>) -> Controlle
 }
 
 pub(super) fn handle_list_agent_ready_toolkits(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async { to_json(ops::composio_list_agent_ready_toolkits().await?) })
+    Box::pin(async {
+        let config = config_rpc::load_config_with_timeout().await?;
+        to_json(ops::composio_list_agent_ready_toolkits(&config).await?)
+    })
 }
 
 pub(super) fn handle_list_connections(_params: Map<String, Value>) -> ControllerFuture {

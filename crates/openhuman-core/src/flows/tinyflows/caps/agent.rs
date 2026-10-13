@@ -156,7 +156,7 @@ pub(crate) fn route_for_agent_ref(agent_ref: &str) -> AgentRoute {
 /// the session builder's generic `chat` role — which inherits
 /// `config.default_model` — to `make_openhuman_backend`, which forwards non-tier
 /// ids to the backend unchanged. Mirrors the per-node routing
-/// [`OpenHumanLlm::complete`] applies via [`resolve_completion_model`].
+/// [`OpenHumanLlm::complete`] applies via `agent_prompt::resolve_completion_model`.
 pub(crate) fn harness_model_default_override(node_model: &str) -> String {
     if is_raw_passthrough_model(node_model) {
         return node_model.to_string();

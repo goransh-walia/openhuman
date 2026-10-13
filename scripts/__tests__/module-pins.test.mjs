@@ -591,7 +591,6 @@ test("the submodule probe is not fooled by the superproject above it", () => {
   }
 });
 
-
 test("conditional registry entries remain covered by the pin gate", () => {
   const source = `pub const ALL: &[ModuleRecord] = &[
     TINYSEARCH,
@@ -599,4 +598,17 @@ test("conditional registry entries remain covered by the pin gate", () => {
     TINYSECURITY,
   ];`;
   assert.deepEqual(parseAllList(source), ["TINYSEARCH", "TINYSECURITY"]);
+});
+
+test("a cfg attribute on an ALL element does not hide the record", () => {
+  const src = [
+    "pub const ALL: &[ModuleRecord] = &[",
+    "    TINYCOMPUTER,",
+    '    #[cfg(feature = "documents")]',
+    "    TINYDOCS,",
+    '    #[cfg(feature = "modules")] // loader only',
+    "    TINYBOX,",
+    "];",
+  ].join("\n");
+  assert.deepEqual(parseAllList(src), ["TINYCOMPUTER", "TINYDOCS", "TINYBOX"]);
 });

@@ -9,9 +9,6 @@
 //! surfaces as `needs_approval` and only `ContinueTask.approve` releases.
 
 use std::collections::BTreeMap;
-use std::future::Future;
-use std::path::PathBuf;
-use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -26,9 +23,6 @@ use crate::config::Config;
 #[cfg(test)]
 #[path = "browser_task_tests.rs"]
 mod tests;
-
-/// A pending `StartTask` call.
-pub(crate) type Started<'a> = Pin<Box<dyn Future<Output = Result<TaskView, String>> + Send + 'a>>;
 
 /// The longest one `AwaitTask` long-poll asks for. The module caps it at 60s.
 const AWAIT_SLICE_MS: u64 = 30_000;
@@ -51,16 +45,24 @@ pub struct BrowserTask {
     /// as a plan saved from an earlier run. `goal` then explains it.
     pub flow: Option<tinycomputer_bus::Flow>,
     /// The site the task starts on, from its starting address
-    /// ([`super::browser_sites::site_of`]): what it learns is kept under it,
-    /// and what earlier tasks there learned is handed to it.
+    /// ([`super::site_memory_host::site_of`]): the module keeps what it learns
+    /// under it, through the host's `SiteMemoryHost`, and hands the task what
+    /// earlier tasks there learned.
     pub site: Option<String>,
 }
 
 /// Build the `StartTask` request for a browser-only task under host policy.
 #[must_use]
 pub fn start_request(config: &Config, task: &BrowserTask) -> StartTaskRequest {
+    // With learning off the module is not told the site, so it neither reads
+    // nor writes what earlier tasks there left.
+    let site = task
+        .site
+        .clone()
+        .filter(|_| super::site_memory_host::learning(config));
     StartTaskRequest {
         task: Some(task.goal.clone()),
+        site,
         flow: task.flow.clone(),
         facts: task.facts.clone(),
         constraints: TaskConstraints {
@@ -89,70 +91,37 @@ pub fn start_request(config: &Config, task: &BrowserTask) -> StartTaskRequest {
 }
 
 /// Start a browser task and follow it until it pauses, finishes, or the host
-/// deadline passes (then the view still says `running`).
+/// deadline passes (then the view still says `running`). The module hands the
+/// task what earlier tasks on its site left, and keeps what it learns, through
+/// the host's `SiteMemoryHost` (see [`super::site_memory_host`]).
 ///
 /// # Errors
 ///
 /// Returns a module, transport, or task error without page content.
 pub async fn start(config: &Config, task: &BrowserTask) -> Result<TaskView, String> {
-    let view = begin(config, task, |request| {
-        Box::pin(call(config, methods::START_TASK, request, true))
-    })
-    .await?;
-    settle(config, view).await
-}
-
-/// Hands `task` to the module through `send`, its `StartTask` call, with what
-/// earlier tasks on its site left (see [`super::browser_sites`]), and follows
-/// the task for what it may teach. A saved plan the module refuses is
-/// forgotten, and the task is sent again to be planned afresh.
-///
-/// # Errors
-///
-/// Returns a module, transport, or task error without page content.
-pub(crate) async fn begin<'a>(
-    config: &'a Config,
-    task: &BrowserTask,
-    send: impl Fn(StartTaskRequest) -> Started<'a>,
-) -> Result<TaskView, String> {
     if task.origins.is_empty() {
         return Err("a browser task needs at least one allowed origin".to_owned());
     }
     let mut request = start_request(config, task);
-    let claimed = claim_profile(&mut request, super::browser_profile::PROFILE_WAIT).await;
-    let mut following = super::browser_sites::apply(config, task, &mut request).await;
+    let claimed = claim_profile(config, &mut request, super::profile_claim::TASK_WAIT_MS).await;
     tracing::debug!(
         origins = task.origins.len(),
         max_actions = task.max_actions,
         saved_flow = task.flow.is_some(),
-        learning = following.is_some(),
+        site_memory = request.site.is_some(),
         "[browser-task] starting"
     );
-    let sent = match send(request.clone()).await {
-        Err(error) if refused_flow(&error) => match following.as_mut() {
-            Some(reusing) if reusing.reuses_plan() => {
-                // The error's text is the module's, and can quote the plan.
-                tracing::warn!("[browser-task] the module refused a saved plan; planning afresh");
-                super::browser_sites::refused(config, reusing).await;
-                request.flow = None;
-                send(request).await
-            }
-            _ => Err(error),
-        },
-        sent => sent,
-    };
-    let view = match sent {
+    let view: TaskView = match call(config, methods::START_TASK, request, true).await {
         Ok(view) => view,
         Err(error) => {
             // A task that did not start starts no browser on the profile.
             if let Some(profile) = claimed {
-                super::browser_profile::release(&profile);
+                super::profile_claim::release(config, &profile).await;
             }
             return Err(error);
         }
     };
-    super::browser_sites::follow(config, &view.id, following);
-    Ok(view)
+    settle(config, view).await
 }
 
 /// Answer a paused task and follow it again.
@@ -162,7 +131,6 @@ pub(crate) async fn begin<'a>(
 /// Returns a module, transport, or task error.
 pub async fn resume(config: &Config, request: ContinueTaskRequest) -> Result<TaskView, String> {
     tracing::debug!(task = %request.id, approve = ?request.approve, "[browser-task] continuing");
-    super::browser_sites::note_inputs(config, &request.id, &request.inputs);
     let view: TaskView = call(config, methods::CONTINUE_TASK, request, true).await?;
     settle(config, view).await
 }
@@ -193,10 +161,7 @@ pub async fn wait(config: &Config, id: TaskId) -> Result<TaskView, String> {
 /// Returns a module or transport error.
 pub async fn cancel(config: &Config, id: TaskId) -> Result<TaskView, String> {
     tracing::debug!(task = %id, "[browser-task] cancelling");
-    let following = super::browser_sites::token_of(config, &id);
-    let view: TaskView = call(config, methods::CANCEL_TASK, TaskRef { id }, false).await?;
-    super::browser_sites::learn(config, &view, following).await;
-    Ok(view)
+    call(config, methods::CANCEL_TASK, TaskRef { id }, false).await
 }
 
 /// The task's record: its steps, what it collected, and every rescue. Page
@@ -232,15 +197,10 @@ pub(crate) async fn report_with(
 }
 
 /// Follow `view` until it stops or the host deadline passes, then record
-/// how it stopped (see [`super::browser_task_report`]) and learn from it
-/// once it has ended (see [`super::browser_sites`]).
+/// how it stopped (see [`super::browser_task_report`]).
 async fn settle(config: &Config, view: TaskView) -> Result<TaskView, String> {
-    // Taken before the wait: the module may be set up again meanwhile, and
-    // number another task as this one.
-    let following = super::browser_sites::token_of(config, &view.id);
     let view = follow(config, view).await?;
     super::browser_task_report::record(config, &view).await;
-    super::browser_sites::learn(config, &view, following).await;
     Ok(view)
 }
 
@@ -288,31 +248,28 @@ async fn call<Request: Serialize + Send, Reply: DeserializeOwned>(
     unwrap_response(member, response)
 }
 
-/// Whether `error`, as [`unwrap_response`] spells it, is the module refusing
-/// the flow a task was handed: its code, not text its message may quote.
-fn refused_flow(error: &str) -> bool {
-    error.starts_with(&format!(
-        "browser task {} failed [INVALID_FLOW]",
-        methods::START_TASK
-    ))
-}
-
 /// Claims `request`'s persistent profile for the task's browser, or leaves it
 /// a fresh profile when another browser still holds the folder after `wait`;
 /// the folder it claimed. Chrome lets one browser at a time use a profile
 /// folder, so a task waits a moment for one closing on it (the browser of the
 /// task before it, which closes as it ends), and otherwise runs in a fresh
 /// profile rather than fail to start its browser.
-async fn claim_profile(request: &mut StartTaskRequest, wait: Duration) -> Option<PathBuf> {
-    let profile = PathBuf::from(request.constraints.browser_profile.as_ref()?);
-    if super::browser_profile::claim_within(&profile, wait).await {
-        return Some(profile);
+async fn claim_profile(
+    config: &Config,
+    request: &mut StartTaskRequest,
+    wait_ms: u64,
+) -> Option<String> {
+    let profile = request.constraints.browser_profile.clone()?;
+    match super::profile_claim::claim(config, &profile, wait_ms).await {
+        super::profile_claim::Claim::Claimed(path) => Some(path),
+        super::profile_claim::Claim::Fresh => {
+            tracing::warn!(
+                "[browser-task] another browser holds the persistent profile; this task runs in a fresh profile"
+            );
+            request.constraints.browser_profile = None;
+            None
+        }
     }
-    tracing::warn!(
-        "[browser-task] another browser holds the persistent profile; this task runs in a fresh profile"
-    );
-    request.constraints.browser_profile = None;
-    None
 }
 
 /// A module reply as its data, or as the error the tool reports: its code,

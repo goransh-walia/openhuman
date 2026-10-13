@@ -234,6 +234,7 @@ impl Tool for McpListToolsTool {
                 name: tool.name.clone(),
                 description: projected.description.clone().or(projected.title.clone()),
                 input_schema: tool.input_schema.clone(),
+                meta: None,
             })
             .collect();
         let safe = crate::mcp::registry::tools_safe_for_agent(&server, policy_tools);

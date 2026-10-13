@@ -47,9 +47,11 @@ mod types;
 #[path = "presentation_tests.rs"]
 mod tests;
 
+use crate::tools::implementations::document::format::spec::SlideImage;
+
 use self::types::{
-    validate_input, GeneratePresentationInput, GeneratePresentationOutput, ResolvedSlideImage,
-    SlideImage, SlideImageSource, MAX_IMAGE_BYTES,
+    validate_input, GeneratePresentationInput, GeneratePresentationOutput, SlideImageRequest,
+    SlideImageSource, MAX_IMAGE_BYTES,
 };
 
 /// Generation timeout. `ppt-rs` typically completes the full 64-slide
@@ -441,7 +443,7 @@ impl PresentationTool {
     async fn resolve_images(
         &self,
         input: &GeneratePresentationInput,
-    ) -> (Vec<Vec<ResolvedSlideImage>>, Vec<String>) {
+    ) -> (Vec<Vec<SlideImage>>, Vec<String>) {
         self.resolve_images_with_inspector(
             input,
             &ModuleImageInspector {
@@ -455,8 +457,8 @@ impl PresentationTool {
         &self,
         input: &GeneratePresentationInput,
         inspector: &impl ImageInspector,
-    ) -> (Vec<Vec<ResolvedSlideImage>>, Vec<String>) {
-        let mut per_slide: Vec<Vec<ResolvedSlideImage>> = Vec::with_capacity(input.slides.len());
+    ) -> (Vec<Vec<SlideImage>>, Vec<String>) {
+        let mut per_slide: Vec<Vec<SlideImage>> = Vec::with_capacity(input.slides.len());
         let mut warnings: Vec<String> = Vec::new();
 
         for (slide_idx, spec) in input.slides.iter().enumerate() {
@@ -481,15 +483,15 @@ impl PresentationTool {
         (per_slide, warnings)
     }
 
-    /// Resolve a single [`SlideImage`] to validated, embeddable bytes.
+    /// Resolve a single [`SlideImageRequest`] to validated, embeddable bytes.
     /// Returns `Err(reason)` (a short human-readable string) when the
     /// image cannot be embedded — the caller turns that into a skip
     /// warning.
     async fn resolve_one_image(
         &self,
-        image: &SlideImage,
+        image: &SlideImageRequest,
         inspector: &impl ImageInspector,
-    ) -> Result<ResolvedSlideImage, String> {
+    ) -> Result<SlideImage, String> {
         let bytes = match &image.source {
             SlideImageSource::Artifact { artifact_id } => {
                 read_artifact_bytes(&self.workspace_dir, &self.files_dir, artifact_id)
@@ -534,7 +536,7 @@ impl PresentationTool {
 
         let facts = inspector.inspect(&bytes).await?;
 
-        Ok(ResolvedSlideImage {
+        Ok(SlideImage {
             bytes,
             format: facts.format,
             width_px: facts.width_px,

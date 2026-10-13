@@ -1,5 +1,7 @@
 use super::*;
-use crate::integrations::task_sources::types::{FilterSpec, ProviderSlug, SourceTarget};
+use crate::integrations::task_sources::types::{
+    provider_can_fetch, FilterSpec, ProviderSlug, SourceTarget,
+};
 use chrono::Utc;
 use serde_json::json;
 
@@ -83,7 +85,7 @@ fn no_provider_can_fetch_today() {
         ProviderSlug::Clickup,
     ] {
         assert!(
-            !provider.can_fetch(),
+            !provider_can_fetch(provider),
             "{} has no fetch path until the pipeline's fetch step is restored",
             provider.as_str()
         );
@@ -99,7 +101,7 @@ fn no_provider_can_fetch_today() {
 /// proof the source was skipped before `run_source_once` ran.
 ///
 /// This asserts through the scheduler rather than on the predicate, on
-/// purpose: a test that only checked `can_fetch()` would still pass if the
+/// purpose: a test that only checked `provider_can_fetch` would still pass if the
 /// guard were deleted from `run_one_tick`, which is the exact regression this
 /// PR exists to prevent.
 ///
@@ -151,7 +153,7 @@ async fn a_tick_over_an_unfetchable_source_records_nothing() {
     assert!(stored.enabled, "precondition: the source is enabled");
     assert!(is_due(&stored), "precondition: the source is due");
     assert!(
-        !stored.provider.can_fetch(),
+        !provider_can_fetch(stored.provider),
         "precondition: its provider has no fetch path, so the gate must skip it"
     );
 

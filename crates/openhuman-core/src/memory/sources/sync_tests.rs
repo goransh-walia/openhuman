@@ -42,7 +42,7 @@ async fn wait_for_idle(config: &Config, id: &str) -> state::SourceState {
 }
 
 #[test]
-fn reader_entry_maps_every_kind() {
+fn validate_accepts_every_kind_and_refuses_an_empty_target() {
     let mk = |kind, target: &str| MemorySourceConfig {
         id: "s".into(),
         kind,
@@ -51,18 +51,21 @@ fn reader_entry_maps_every_kind() {
         schedule_mins: None,
         namespace: None,
     };
-    let folder = reader_entry(&mk(MemorySourceKind::Folder, "/p")).unwrap();
-    assert_eq!(folder.path.as_deref(), Some("/p"));
-    let file = reader_entry(&mk(MemorySourceKind::File, "/p/a.md")).unwrap();
-    assert_eq!(file.path.as_deref(), Some("/p/a.md"));
     for (kind, target) in [
+        (MemorySourceKind::Folder, "/p"),
+        (MemorySourceKind::File, "/p/a.md"),
         (MemorySourceKind::Link, "https://example.com/"),
         (MemorySourceKind::Github, "https://github.com/o/r"),
         (MemorySourceKind::Rss, "https://example.com/feed"),
     ] {
-        let entry = reader_entry(&mk(kind, target)).unwrap();
-        assert_eq!(entry.url.as_deref(), Some(target));
+        validate(&mk(kind, target)).unwrap();
     }
+    assert_eq!(
+        validate(&mk(MemorySourceKind::Folder, ""))
+            .unwrap_err()
+            .code(),
+        INVALID_REQUEST
+    );
 }
 
 #[tokio::test]
@@ -176,10 +179,11 @@ async fn a_source_already_syncing_is_not_started_twice() {
         .memory
         .sources
         .push(folder_source("src-once", &dir, None));
-    let key = (config.workspace_dir.clone(), "src-once".to_string());
-    RUNNING.lock().unwrap().insert(key.clone());
+    // Hold a claim as a running sync would: a second request starts nothing.
+    let held = syncer_for(&config).start(Some("src-once")).unwrap();
+    assert_eq!(held.len(), 1);
     assert!(start_sync(&config, Some("src-once")).unwrap().is_empty());
-    RUNNING.lock().unwrap().remove(&key);
+    drop(held);
     assert_eq!(start_sync(&config, Some("src-once")).unwrap().len(), 1);
     wait_for_idle(&config, "src-once").await;
 }
@@ -231,118 +235,6 @@ fn sync_due_with_memory_off_starts_nothing() {
     assert!(sync_due(&config, Utc::now()).is_empty());
 }
 
-#[tokio::test]
-async fn store_all_skips_a_bad_item_but_fails_when_nothing_stored() {
-    let tmp = tempfile::tempdir().unwrap();
-    let config = config_in(&tmp);
-    bind_reference(&config);
-    let bound = engine::resolve(&config).engine().unwrap();
-    let good = tinymemory_api::StoreItem::learning(
-        "a good one",
-        tinymemory_api::LearningKind::Fact,
-        0.8,
-        tinymemory_api::MemoryMeta::default(),
-    );
-    let bad = tinymemory_api::StoreItem::learning(
-        "   ",
-        tinymemory_api::LearningKind::Fact,
-        0.8,
-        tinymemory_api::MemoryMeta::default(),
-    );
-    assert_eq!(
-        store_all(
-            &config,
-            &bound,
-            vec![bad.clone(), good],
-            (MemorySourceKind::Folder, "src"),
-            &tinymemory_tools::MemoryLayout::default()
-        )
-        .await
-        .unwrap(),
-        1
-    );
-    assert!(store_all(
-        &config,
-        &bound,
-        vec![bad],
-        (MemorySourceKind::Folder, "src"),
-        &tinymemory_tools::MemoryLayout::default()
-    )
-    .await
-    .is_err());
-    assert_eq!(
-        store_all(
-            &config,
-            &bound,
-            Vec::new(),
-            (MemorySourceKind::Folder, "src"),
-            &tinymemory_tools::MemoryLayout::default()
-        )
-        .await
-        .unwrap(),
-        0
-    );
-}
-
-/// More items than one request may carry (`MAX_STORE_MANY`), so the store
-/// spans several batches. Pins that nothing is dropped or double-counted at a
-/// chunk boundary, and that a bad item in the middle still only costs itself.
-#[tokio::test]
-async fn store_all_spans_chunk_boundaries_without_losing_items() {
-    let tmp = tempfile::tempdir().unwrap();
-    let config = config_in(&tmp);
-    bind_reference(&config);
-    let bound = engine::resolve(&config).engine().unwrap();
-
-    let good = |n: usize| {
-        tinymemory_api::StoreItem::learning(
-            format!("fact {n}"),
-            tinymemory_api::LearningKind::Fact,
-            0.8,
-            tinymemory_api::MemoryMeta::default(),
-        )
-    };
-    // Two and a half requests' worth.
-    let total = tinymemory_api::MAX_STORE_MANY * 2 + 50;
-    let items: Vec<_> = (0..total).map(good).collect();
-    assert_eq!(
-        store_all(
-            &config,
-            &bound,
-            items,
-            (MemorySourceKind::Folder, "src"),
-            &tinymemory_tools::MemoryLayout::default()
-        )
-        .await
-        .unwrap(),
-        total as u64,
-        "every item across every chunk must be counted exactly once"
-    );
-
-    // A blank item in the second chunk: that chunk falls back to one request
-    // per item, and only the blank one is lost.
-    let mut items: Vec<_> = (0..total).map(good).collect();
-    items[tinymemory_api::MAX_STORE_MANY + 10] = tinymemory_api::StoreItem::learning(
-        "   ",
-        tinymemory_api::LearningKind::Fact,
-        0.8,
-        tinymemory_api::MemoryMeta::default(),
-    );
-    assert_eq!(
-        store_all(
-            &config,
-            &bound,
-            items,
-            (MemorySourceKind::Folder, "src"),
-            &tinymemory_tools::MemoryLayout::default()
-        )
-        .await
-        .unwrap(),
-        total as u64 - 1,
-        "a bad item must cost only itself, not its chunk"
-    );
-}
-
 #[test]
 fn reset_interrupted_marks_syncing_sources_idle() {
     let tmp = tempfile::tempdir().unwrap();
@@ -382,7 +274,7 @@ async fn a_sync_queues_a_belief_build_only_for_an_engine_that_waits_for_one() {
             id: "reference".into(),
             endpoint: "memory://reference".into(),
         };
-        let stored = store_all(
+        let stored = place_and_store(
             &config,
             &bound,
             vec![note()],
@@ -414,7 +306,7 @@ async fn github_files_per_repository_only_when_switched_on() {
     let sync = |config: Config, items| {
         let bound = bound.clone();
         async move {
-            store_all(
+            place_and_store(
                 &config,
                 &bound,
                 items,

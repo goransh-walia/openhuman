@@ -346,6 +346,21 @@ async fn a_pdf_does_not_fall_back_to_a_local_parser_when_modules_are_disabled() 
 
 #[cfg(feature = "documents")]
 #[tokio::test]
+async fn a_disabled_documents_component_answers_a_typed_disabled_error() {
+    let raw = RawDocument::new(pdf_saying("hello")).with_filename("brief.pdf");
+    let mut config = Config::default();
+    config.components.documents = false;
+
+    let error = converter(&config).convert(&raw).await.unwrap_err();
+    assert!(
+        matches!(error, Error::Converter { ref converter, ref message }
+            if converter == "tinydocs" && message == "COMPONENT_DISABLED:documents"),
+        "expected COMPONENT_DISABLED:documents, got {error}"
+    );
+}
+
+#[cfg(feature = "documents")]
+#[tokio::test]
 async fn memory_module_intake_keeps_the_32_mib_limit() {
     let raw = RawDocument::new(vec![
         0;

@@ -8,6 +8,11 @@ repository.workspace = true
 readme = "README.md"
 publish = false
 
+# Core errors are intentionally carried by this facade's public fallible APIs;
+# keep the same size baseline as the underlying core crate under `-D warnings`.
+[lints.clippy]
+result_large_err = "allow"
+
 [features]
 langfuse = ["openhuman-core/langfuse"]
 # `channels` is in core's default set already; enabling it here too compiles
@@ -25,6 +30,7 @@ web3 = ["openhuman-core/web3"]
 # Storage drivers for `[storage] url` (see the core `storage` domain).
 storage-sqlite = ["openhuman-core/storage-sqlite"]
 storage-mongodb = ["openhuman-core/storage-mongodb"]
+storage-s3 = ["openhuman-core/storage-s3"]
 storage-file = ["openhuman-core/storage-file"]
 media = ["openhuman-core/media"]
 flows = ["openhuman-core/flows"]
@@ -86,6 +92,7 @@ tinyinference-embeddings = { path = "../../vendor/tinyagents/vendor/tinyinferenc
 # path as the core's so the trait unifies.
 # `AgentDefinitionSpec::tool_rules` takes the shared tool-rule vocabulary too.
 tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+tinytools-std = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }

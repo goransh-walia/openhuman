@@ -218,12 +218,6 @@ fn all_variants_have_correct_domain() {
             },
             "cron",
         ),
-        (
-            DomainEvent::FlowScheduleTick {
-                flow_id: "flow-1".into(),
-            },
-            "cron",
-        ),
         // Workflow
         (
             DomainEvent::WorkflowLoaded {

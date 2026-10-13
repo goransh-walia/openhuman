@@ -20,7 +20,7 @@ use crate::agent::prompts::ToolCallFormat;
 use crate::config::{AgentConfig, Config};
 use tinyagents_orchestration::teams::{SessionTeamLedger, TeamService};
 use tinyagents_session::run_ledger::{
-    self, AgentTeamMemberStatus, AgentTeamMemberUpsert, AgentTeamStatus, AgentTeamTaskStatus,
+    AgentTeamMemberStatus, AgentTeamMemberUpsert, AgentTeamStatus, AgentTeamTaskStatus,
     AgentTeamTaskUpsert, AgentTeamUpsert,
 };
 use tinyinference_llm::model::{ChatModel, ModelRequest, ModelResponse};
@@ -94,8 +94,11 @@ fn test_config() -> (tempfile::TempDir, Config) {
 }
 
 fn team_service(config: &Config) -> TeamService<SessionTeamLedger> {
-    TeamService::new(SessionTeamLedger::new(config.workspace_dir.clone()))
+    let ledger = crate::agent::session_store::require_ledger(&config.workspace_dir).unwrap();
+    TeamService::new(SessionTeamLedger::new(ledger).unwrap())
 }
+
+use crate::agent::session_store::ledger_sync as run_ledger;
 
 fn seed_team(config: &Config, team_id: &str) {
     run_ledger::upsert_agent_team(

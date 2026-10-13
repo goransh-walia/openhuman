@@ -160,13 +160,10 @@ fn wildcard_belt_defers_but_keeps_reachable() {
 /// it, and the belt's own `Direct` entries stay exactly as written.
 #[test]
 fn named_belt_opts_into_discovery_by_naming_tool_search() {
-    let visible: std::collections::HashSet<String> = [
-        "plain",
-        crate::tools::implementations::meta::TOOL_SEARCH_NAME,
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect();
+    let visible: std::collections::HashSet<String> = ["plain", tinytools::TOOL_SEARCH_NAME]
+        .into_iter()
+        .map(String::from)
+        .collect();
     let agent = build_with(direct_and_deferred(), visible);
 
     assert_eq!(

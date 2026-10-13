@@ -14,7 +14,7 @@ use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
 
 use super::types::{FetchOutcome, FetchReason, TaskSource};
-use super::{enrich, filter, route, store};
+use super::{enrich, route, store};
 
 /// Run a single fetch pass over `source`. Captures errors into the
 /// returned [`FetchOutcome`] rather than propagating them.
@@ -129,7 +129,7 @@ async fn run_inner(
     _reason: FetchReason,
     outcome: &mut FetchOutcome,
 ) -> Result<(), String> {
-    let fetch_filter = filter::to_fetch_filter(&source.filter, source.max_tasks_per_fetch);
+    let fetch_filter = source.filter.to_fetch_filter(source.max_tasks_per_fetch);
     let tasks = fetch_tasks_unavailable(source, &fetch_filter)?;
     outcome.fetched = tasks.len();
     // A fetch returns at most `fetch_filter.effective_max()` tasks (a hard

@@ -147,10 +147,10 @@ async fn released_runtime_scopes_callbacks_and_replays_one_final_send() {
         std::env::var("OPENHUMAN_CHANNELS_TEST_ARTIFACT").expect("verified artifact path");
     let mut config = crate::config::Config::default();
     config.modules.allow_download = false;
-    config.modules.overrides = vec![crate::config::schema::ModuleOverride {
-        id: "tinychannels".into(),
-        path: artifact,
-    }];
+    config.modules.overrides = vec![crate::config::schema::ModuleOverride::with_path(
+        "tinychannels",
+        artifact,
+    )];
     // This content fits the module state budget but exceeds the former
     // 128 KiB serialized-request limit after JSON escaping.
     let final_text = "\"\\".repeat(192 * 1024);
