@@ -12,9 +12,9 @@ use tinysecurity_bus::{
 
 use super::types::{
     SecurityPolicy, TrustedAccess, ACCOUNT_CONFIG_FILE, ARTIFACTS_DIR, ARTIFACT_TOOL_RESULTS_DIR,
-    POLICY_BLOCKED_MARKER, WORKSPACE_INTERNAL_DIRS, WORKSPACE_INTERNAL_FILES,
-    WORKSPACE_INTERNAL_PREFIXES,
+    WORKSPACE_INTERNAL_DIRS, WORKSPACE_INTERNAL_FILES, WORKSPACE_INTERNAL_PREFIXES,
 };
+use tinytools::status::POLICY_BLOCKED_MARKER;
 
 impl SecurityPolicy {
     /// Capture host-owned settings and the task-local turn grant before any await.
