@@ -2,6 +2,10 @@
 
 use super::{component_for, find, ALL, COMPONENT_OF};
 
+/// Modules that deliberately have no `[components]` switch: security
+/// enforcement must not be switchable off through configuration.
+const UNSWITCHABLE: &[&str] = &["tinysecurity"];
+
 /// The interface and object path each contract crate publishes, keyed by the
 /// module id the registry uses. This is written out from the contract
 /// constants, not from the records, so a record that drifts from its contract
@@ -74,6 +78,12 @@ fn contract_names() -> Vec<(&'static str, &'static str, &'static str)> {
         tinymemes_bus::STATE_INTERFACE,
         tinymemes_bus::STATE_PATH,
     ));
+    #[cfg(feature = "security-module")]
+    names.push((
+        "tinysecurity",
+        tinysecurity_bus::names::INTERFACE,
+        tinysecurity_bus::names::OBJECT_PATH,
+    ));
     names
 }
 
@@ -134,6 +144,14 @@ fn a_product_feature_build_carries_all_twelve_records() {
 #[test]
 fn every_record_maps_to_a_real_component() {
     for record in ALL {
+        if UNSWITCHABLE.contains(&record.id) {
+            assert!(
+                component_for(record.id).is_none(),
+                "'{}' is security enforcement and must have no [components] switch",
+                record.id
+            );
+            continue;
+        }
         let component = component_for(record.id)
             .unwrap_or_else(|| panic!("module '{}' has no component mapping", record.id));
         assert!(

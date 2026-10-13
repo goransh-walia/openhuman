@@ -106,7 +106,9 @@ pub fn find(id: &str) -> Option<&'static ModuleRecord> {
 /// Which `[components]` switch owns each module id.
 ///
 /// Every record in [`ALL`] has an entry (`registry_tests` enforces it), so a
-/// module is never exempt from a disabled component by omission.
+/// module is never exempt from a disabled component by omission. The one
+/// deliberate exception is `tinysecurity`: security enforcement has no
+/// `[components]` switch, so configuration cannot turn it off.
 pub const COMPONENT_OF: &[(&str, &str)] = &[
     ("tinycomputer", "computer"),
     ("tinysearch", "search"),
