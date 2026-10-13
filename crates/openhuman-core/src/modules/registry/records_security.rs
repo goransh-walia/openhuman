@@ -1,5 +1,5 @@
 //! Published TinySecurity admission pins copied verbatim from v0.2.2/checksum.toml.
-use crate::modules::types::{LoadPolicy, ModuleRecord, PlatformAsset};
+use crate::modules::types::{LoadPolicy, ModuleRecord, PlatformAsset, SourceSpec};
 
 pub(crate) const TINYSECURITY: ModuleRecord = ModuleRecord {
     id: "tinysecurity",
@@ -66,4 +66,11 @@ pub(crate) const TINYSECURITY: ModuleRecord = ModuleRecord {
         },
     ],
     load: LoadPolicy::Eager,
+    source: SourceSpec {
+        submodule: "tinysecurity",
+        manifest: "crates/tinysecurity-module/Cargo.toml",
+        package: "tinysecurity-module",
+        lib_name: "tinysecurity_module",
+        features: &[],
+    },
 };
