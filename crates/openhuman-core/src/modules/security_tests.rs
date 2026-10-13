@@ -91,7 +91,7 @@ fn attested_digest_must_be_one_of_the_compiled_release_artifacts() {
             sha256: "abcdef",
         }],
         load: super::super::LoadPolicy::Eager,
-        source: super::super::SourceSpec {
+        source: crate::modules::types::SourceSpec {
             submodule: "tinysecurity",
             manifest: "crates/tinysecurity-module/Cargo.toml",
             package: "tinysecurity-module",
@@ -128,7 +128,7 @@ async fn bus_name_ownership_without_artifact_attestation_is_refused() {
         release_url: "https://example.invalid",
         assets: &[],
         load: super::super::LoadPolicy::Eager,
-        source: super::super::SourceSpec {
+        source: crate::modules::types::SourceSpec {
             submodule: "tinysecurity",
             manifest: "crates/tinysecurity-module/Cargo.toml",
             package: "tinysecurity-module",

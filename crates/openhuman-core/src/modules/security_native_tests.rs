@@ -70,7 +70,7 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
                 .into_boxed_slice(),
             ),
             load: super::super::LoadPolicy::Eager,
-            source: super::super::SourceSpec {
+            source: crate::modules::types::SourceSpec {
                 submodule: "tinysecurity",
                 manifest: "crates/tinysecurity-module/Cargo.toml",
                 package: "tinysecurity-module",
