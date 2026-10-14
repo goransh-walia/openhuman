@@ -43,9 +43,11 @@ Crypto (contract 1.14): `modules/security_crypto.rs` calls the confidential
 existing keychain consent policy (`keyring_consent::policy::check_secret_access`;
 the prompt UX stays host-side). `modules/fixtures/legacy_password_payload.json`
 pins the legacy Argon2id/AES-GCM payload the module must keep opening. The host
-`encryption/core.rs`, `secret_storage/*` and `pairing.rs` implementations still
-serve production callers until the module is configured with a `CryptoConfig2`
-and the characterization suite is ported (see issue #7328 phase 8).
+`encryption/core.rs` is deleted (password crypt is module-owned, production
+`CryptoConfig2` enables it with keyring and pairing unset); `secret_storage/*`,
+`devices/crypto.rs` and `pairing.rs` still serve production callers until the
+sync-to-async seam lands and the module gains a Secret Service backend and
+pairing Begin/Verify (see issue #7328 phase 8).
 
 Callers are spread across the core. Every acting tool consults
 `SecurityPolicy` before it runs, the agent harness asks the approval gate
