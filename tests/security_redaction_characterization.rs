@@ -36,6 +36,15 @@ fn outputs(input: &str) -> Vec<(&'static str, String)> {
     ]
 }
 
+/// A case's input; secret-shaped literals are stored split (`input_parts`) so no
+/// credential-shaped string is committed in the fixture.
+fn input_of(case: &Value) -> String {
+    match case["input_parts"].as_array() {
+        Some(parts) => parts.iter().map(|p| p.as_str().unwrap()).collect(),
+        None => case["input"].as_str().unwrap().to_string(),
+    }
+}
+
 fn removed_by(input: &str, needle: &str) -> BTreeSet<String> {
     outputs(input)
         .into_iter()
@@ -59,7 +68,7 @@ fn pinned(case: &Value) -> BTreeSet<String> {
 fn extended_corpus_pins_which_redactors_remove_each_shape() {
     let corpus: Value = serde_json::from_str(EXTENDED).unwrap();
     for case in corpus["text"].as_array().unwrap() {
-        let actual = removed_by(case["input"].as_str().unwrap(), case["needle"].as_str().unwrap());
+        let actual = removed_by(&input_of(case), case["needle"].as_str().unwrap());
         assert_eq!(
             actual,
             pinned(case),
@@ -111,7 +120,7 @@ fn known_gaps() -> BTreeSet<(String, String)> {
                 "email" => "pii",
                 _ => "path",
             });
-            let removed = removed_by(case["input"].as_str().unwrap(), case["needle"].as_str().unwrap());
+            let removed = removed_by(&input_of(case), case["needle"].as_str().unwrap());
             for sink in required_sinks(kind) {
                 if !removed.contains(*sink) {
                     gaps.insert((name.to_string(), sink.to_string()));
