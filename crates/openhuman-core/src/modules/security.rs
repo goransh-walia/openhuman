@@ -33,7 +33,7 @@ pub fn module_config(config: &Config) -> ModuleConfig {
         trusted_host: super::runtime::started()
             .and_then(|runtime| runtime.connection().unique_name())
             .map(|name| name.to_string()),
-        judge: super::security_policy::judge_config(config),
+        judge: policy_translation::judge_config(config),
         ..ModuleConfig::default()
     }
 }
