@@ -246,7 +246,7 @@ pub fn reload_from_config(config: &crate::config::Config) -> u64 {
     match STATE.get() {
         None => {
             install(
-                rebuilt,
+                Arc::clone(&rebuilt),
                 config.workspace_dir.clone(),
                 config.action_dir.clone(),
             );
