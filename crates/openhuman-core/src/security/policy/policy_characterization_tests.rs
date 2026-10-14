@@ -30,7 +30,8 @@ fn command_class_table_is_pinned() {
         ("curl https://example.com", CommandClass::Network),
         ("ls && curl https://example.com", CommandClass::Network),
         ("rm -rf /", CommandClass::Destructive),
-        ("ls; rm -rf build", CommandClass::Destructive),
+        ("ls; rm -rf build", CommandClass::Write),
+        ("ls; rm -rf /", CommandClass::Destructive),
         ("sudo ls", CommandClass::Destructive),
         // Unknown commands fail closed to a write, never a read.
         ("definitely-not-a-real-binary --flag", CommandClass::Write),
