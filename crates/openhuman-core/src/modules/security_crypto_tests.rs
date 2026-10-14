@@ -71,13 +71,13 @@ fn crypto_config(dir: &std::path::Path) -> CryptoConfig2 {
     CryptoConfig2 {
         max_payload_bytes: 65_536,
         operations_per_minute: 256,
-        keyring: None::<KeyringConfig2>.or(Some(KeyringConfig2 {
+        keyring: Some(KeyringConfig2 {
             service: "openhuman-test-7328".into(),
             backend: KeyringBackend2::EncryptedFile {
                 directory: dir.to_string_lossy().into_owned(),
             },
             consent_timeout_ms: 2000,
-        })).and(None),
+        }),
         pairing: None,
     }
 }
@@ -89,8 +89,6 @@ fn crypto_config(dir: &std::path::Path) -> CryptoConfig2 {
 async fn password_crypt_opens_legacy_host_payloads_and_interoperates() {
     let fx =
         super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
-    let info: tinysecurity_bus::PolicyInfo = fx.proxy.call(names::methods::POLICY_INFO, ()).await.unwrap();
-    eprintln!("PROBE {:?} {:?}", info.contract_version, info.callbacks);
     let payload: LegacyPayload = serde_json::from_str(LEGACY_PAYLOAD).unwrap();
     let opened = password_decrypt(&fx.proxy, FIXTURE_PASSWORD.into(), payload)
         .await
@@ -113,6 +111,6 @@ async fn password_crypt_opens_legacy_host_payloads_and_interoperates() {
 }
 
 fn fx_dir() -> tempfile::TempDir {
-    tempfile::tempdir_in(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target"))
-        .unwrap()
+    let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
+    tempfile::tempdir_in(target.canonicalize().unwrap()).unwrap()
 }
