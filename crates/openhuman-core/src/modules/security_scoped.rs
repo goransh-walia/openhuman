@@ -424,11 +424,13 @@ pub(crate) async fn scoped_policy_info(
 
 /// Entry point for a `PolicyChanged` subscriber: drop every cached decision.
 pub(crate) async fn policy_changed(event: &PolicyChanged) {
+    super::text::flush_cache();
     scoped().lock().await.cache.invalidate(event);
 }
 
 /// A lagged or lost signal stream cannot say what it missed: drop everything.
 pub(crate) async fn flush_all() {
+    super::text::flush_cache();
     let mut scoped = scoped().lock().await;
     scoped.cache.observe(0);
     scoped.cache.entries.clear();
