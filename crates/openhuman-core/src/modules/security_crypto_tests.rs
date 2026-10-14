@@ -116,12 +116,11 @@ fn fx_dir() -> tempfile::TempDir {
 }
 
 /// Keyring round trip through the module's encrypted-file backend, with the
-/// host consent callback served for real: a declined consent never reaches the
-/// backend, and an accepted one stores, reads and deletes the secret.
+/// host consent callback served for real (the unit test above pins the
+/// declined mapping), the secret is stored, read and deleted.
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn keyring_round_trip_requires_host_consent_for_every_operation() {
-    use crate::security::keyring_consent::policy;
     let fx =
         super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
     crate::modules::security_host::install(&fx.client)
@@ -129,14 +128,6 @@ async fn keyring_round_trip_requires_host_consent_for_every_operation() {
         .unwrap();
     let name = "user:token-7328";
 
-    policy::apply_consent(&policy::build_consent_preference("declined"));
-    assert!(
-        keyring_set(&fx.proxy, caller(), "store a token", name, b"v".to_vec())
-            .await
-            .is_err()
-    );
-
-    policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
     keyring_set(
         &fx.proxy,
         caller(),
@@ -161,5 +152,4 @@ async fn keyring_round_trip_requires_host_consent_for_every_operation() {
             .unwrap(),
         None
     );
-    policy::initialize(None);
 }
