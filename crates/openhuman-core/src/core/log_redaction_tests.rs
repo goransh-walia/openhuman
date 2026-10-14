@@ -1,4 +1,4 @@
-use super::scrub_secrets;
+use super::{scrub_secrets, scrub_with, FLOOR_MAX_INPUT_BYTES, SUPPRESSED};
 
 #[test]
 fn scrubs_bearer_token() {
