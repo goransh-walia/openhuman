@@ -113,6 +113,11 @@ async fn shared_corpus_text_cases_are_redacted_by_the_module() {
         if ordinary {
             assert_eq!(out, input, "ordinary text must pass through");
         } else if module_owned || owners.contains(&"host_scrub") {
+            if case["case"] == "ordinary_text" {
+                // Not a secret: Text mode must keep it verbatim.
+                assert_eq!(out, input);
+                continue;
+            }
             assert!(!out.contains(needle), "case {} leaked", case["case"]);
         }
         let again = redact_on(&fx.proxy, &cache, mode, &out).await.unwrap();
