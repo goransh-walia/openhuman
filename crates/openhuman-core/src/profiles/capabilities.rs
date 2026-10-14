@@ -166,7 +166,7 @@ impl ProfileCapabilities {
                 // profile. The named packs narrow registration within those domains.
                 let assembly =
                     ctx.derive_with(ContextOverlay::new(config.clone(), ctx.domains(), groups));
-                let security = Arc::new(crate::security::SecurityPolicy::from_full_config(&config));
+                let security = Arc::new(crate::security::SecurityPolicy::from_full_config(config));
                 let native = CoreContext::sync_scope(assembly, || {
                     crate::tools::ops::all_tools(
                         Arc::new(config.clone()),

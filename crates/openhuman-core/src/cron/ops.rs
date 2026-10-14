@@ -107,7 +107,7 @@ pub fn update_cron_job(
     };
 
     if let Some(ref cmd) = command {
-        let security = SecurityPolicy::from_full_config(&config);
+        let security = SecurityPolicy::from_full_config(config);
         if !security.is_command_allowed(cmd) {
             anyhow::bail!("Command blocked by security policy: {cmd}");
         }
@@ -144,7 +144,7 @@ pub async fn cron_update(
     }
 
     if let Some(command) = &patch.command {
-        let security = SecurityPolicy::from_full_config(&config);
+        let security = SecurityPolicy::from_full_config(config);
         crate::cron::scheduler::shell_job::authorize_shell_command(config, &security, command)
             .await?;
     }

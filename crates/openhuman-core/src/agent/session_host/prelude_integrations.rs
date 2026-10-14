@@ -338,7 +338,7 @@ impl OpenHumanTurnPrelude {
             .mcp_tools
             .configured
             .clone();
-        let security = Arc::new(crate::security::SecurityPolicy::from_full_config(&config));
+        let security = Arc::new(crate::security::SecurityPolicy::from_full_config(config));
         crate::tools::implementations::network::configured_server_tools_from_presentations(
             config,
             presentations,

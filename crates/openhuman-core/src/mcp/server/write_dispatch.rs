@@ -33,7 +33,7 @@ pub(super) fn enforce_write_policy_for_config(
     config: &Config,
 ) -> Result<(), ToolCallError> {
     let policy =
-        SecurityPolicy::from_full_config(&config);
+        SecurityPolicy::from_full_config(config);
     match policy.enforce_tool_operation(ToolOperation::Act, tool_name) {
         Ok(()) => Ok(()),
         Err(message) => {

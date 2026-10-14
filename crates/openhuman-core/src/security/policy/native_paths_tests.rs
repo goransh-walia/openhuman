@@ -45,7 +45,7 @@ fn scope_preserves_product_internal_state_and_readonly_output_exception() {
     assert!(scope
         .reserved_paths
         .iter()
-        .any(|entry| entry.path == PathBuf::from("/account/config.toml")));
+        .any(|entry| entry.path == *"/account/config.toml"));
     let artifacts = scope
         .reserved_paths
         .iter()
