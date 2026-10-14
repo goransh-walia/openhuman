@@ -440,6 +440,7 @@ default = [
     "scheduler-gate",
     "file-logging",
     "modules",
+    "security-module",
     "jev",
     "tinymemes",
     "storage-sqlite",

@@ -28,6 +28,7 @@ default = [
     "scheduler-gate",
     "file-logging",
     "modules",
+    "security-module",
     "storage-sqlite",
 ]
 crash-reporting = ["openhuman-rpc/crash-reporting"]
