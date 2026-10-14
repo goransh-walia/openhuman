@@ -320,10 +320,7 @@ async fn trusted_read_root_blocks_write() {
         .validate_parent_path(target.to_str().unwrap())
         .await
         .expect_err("write into a read-only trusted root must be rejected");
-    assert!(
-        err.contains("escapes workspace"),
-        "got: {err}"
-    );
+    assert!(err.contains("escapes workspace"), "got: {err}");
 }
 
 #[tokio::test]
