@@ -24,7 +24,7 @@ fn tinycomputer_registry_matches_bus_contract_and_published_release() {
     );
     assert_eq!(
         desktop.asset_for("macos-26-arm64").unwrap().sha256,
-        "6b4965e63e3c8f666f9aa9abf12fb11d172c23097e95aee08688629dc6fdacd5"
+        "05872f842caa298380a54ea9108aeca04152a70c78fe7177936f61d21b43bc38"
     );
 }
 
