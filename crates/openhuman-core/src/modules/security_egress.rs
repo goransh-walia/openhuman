@@ -173,10 +173,12 @@ pub(crate) async fn send_pinned(
     if !request.payload.is_empty() {
         builder = builder.body(request.payload.clone());
     }
-    builder
-        .send()
-        .await
-        .map_err(|error| format!("pinned egress request failed (connect={})", error.is_connect()))
+    builder.send().await.map_err(|error| {
+        format!(
+            "pinned egress request failed (connect={})",
+            error.is_connect()
+        )
+    })
 }
 
 /// Check, consume and send one request. A 3xx answer is returned unfollowed:

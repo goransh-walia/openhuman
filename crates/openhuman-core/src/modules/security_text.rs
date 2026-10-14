@@ -15,10 +15,10 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use sha2::{Digest, Sha256};
-pub(crate) use tinysecurity_bus::{RedactMode, ScanResponse, ScanVerdict};
 use tinysecurity_bus::{
     names, RedactRequest, RedactResponse, ScanPromptRequest, ScanToolDefinitionRequest,
 };
+pub(crate) use tinysecurity_bus::{RedactMode, ScanResponse, ScanVerdict};
 
 use crate::config::Config;
 pub(crate) use crate::core::log_redaction::SUPPRESSED;
@@ -110,7 +110,11 @@ pub(crate) async fn redact_on(
 /// Redact through the live module. Errors are returned so callers that must
 /// deny (approvals, egress, prompts) can; log-path callers use
 /// [`redact_or_suppress`].
-pub(crate) async fn redact(config: &Config, mode: RedactMode, text: &str) -> Result<String, String> {
+pub(crate) async fn redact(
+    config: &Config,
+    mode: RedactMode,
+    text: &str,
+) -> Result<String, String> {
     super::require_enabled(config)?;
     let proxy = super::scoped_client::module_proxy(config).await?;
     redact_on(&proxy, cache(), mode, text).await
