@@ -426,3 +426,11 @@ async fn saas_requires_the_sandbox_even_when_the_host_turns_it_off() {
     // The parent process stays single-user: the off switch still wins here.
     assert!(!crate::core::runtime::is_saas());
 }
+
+#[test]
+fn untrusted_isolation_denies_noop_and_unsuitable_jails() {
+    assert!(require_untrusted_isolation(true, true).is_ok());
+    assert!(require_untrusted_isolation(true, false).is_err());
+    assert!(require_untrusted_isolation(false, true).is_err());
+    assert!(require_untrusted_isolation(false, false).is_err());
+}
