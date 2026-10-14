@@ -139,10 +139,10 @@ async fn pinned_transport_connects_to_approved_ip_without_a_second_lookup_or_red
 async fn unreachable_pinned_address_fails_closed_without_falling_back_to_dns() {
     // Approved address has no listener; `localhost` would resolve and succeed if
     // the client fell back to system DNS for the grant's hostname.
-    let dead = {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        l.local_addr().unwrap()
-    };
+    // reqwest takes the port from the URL and only the IP from the override, so
+    // the approved IP must differ from where the listener is: 127.0.0.2 has no
+    // listener, `localhost` (127.0.0.1) does.
+    let dead: std::net::SocketAddr = "127.0.0.2:9".parse().unwrap();
     let live = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let live_port = live.local_addr().unwrap().port();
     let url = format!("http://localhost:{live_port}/");
