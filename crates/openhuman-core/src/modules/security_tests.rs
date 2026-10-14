@@ -173,3 +173,22 @@ async fn disabled_modules_are_refused_before_using_cached_client_state() {
         "TinySecurity modules are disabled"
     );
 }
+
+#[tokio::test]
+async fn absent_module_fails_closed_instead_of_allowing() {
+    use tinybus::transport::memory::MemoryBus;
+    let transport = MemoryBus::new();
+    tinybus::broker::Broker::new().spawn(transport.clone());
+    let host = tinybus::Connection::connect(transport.connect().await.unwrap())
+        .await
+        .unwrap();
+    let proxy = host
+        .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
+        .unwrap()
+        .with_timeout(Duration::from_millis(200));
+    // Nothing owns the bus name (module killed or never loaded): not available,
+    // and an attestation request must be an error, never a permissive answer.
+    assert!(!proxy.is_available().await.unwrap());
+    let record = *super::super::registry::find(MODULE_ID).unwrap();
+    assert!(require_attestation(&proxy, &record).await.is_err());
+}

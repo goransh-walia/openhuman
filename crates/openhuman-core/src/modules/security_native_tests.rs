@@ -493,3 +493,26 @@ async fn verify_host_translation(proxy: &tinybus::Proxy, root: &std::path::Path)
         PathValidationResult::Denied { .. }
     ));
 }
+
+/// A tampered archive digest must be refused at admission, before any code runs.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn released_archive_with_tampered_digest_is_denied() {
+    let host_key = std::env::var("OPENHUMAN_TEST_SECURITY_RELEASE_HOST")
+        .expect("set OPENHUMAN_TEST_SECURITY_RELEASE_HOST");
+    let record = *super::super::registry::find(MODULE_ID).unwrap();
+    let asset = record.asset_for(&host_key).expect("pinned platform");
+    let tampered = "0".repeat(asset.sha256.len());
+    let transport = MemoryBus::new();
+    let broker = Broker::new();
+    let _task = broker.spawn(transport.clone());
+    let host = ModuleHost::new(broker);
+    let configuration = serde_json::to_value(ModuleConfig::default()).unwrap();
+    let result = host.load_github_release(
+        record.release_url,
+        asset.archive,
+        Some(&tampered),
+        configuration,
+    );
+    assert!(result.is_err(), "tampered digest must not be admitted");
+}
