@@ -335,7 +335,11 @@ Capability {
         category: CapabilityCategory::Settings,
         description: "Review a read-only audit trail of past tool-approval decisions \
                       (Approve once / Always allow / Deny), newest first. Summaries are \
-                      scrubbed of chat content and arguments are shown as redacted shape only.",
+                      scrubbed of chat content and arguments are shown as redacted shape only. \
+                      Decisions made automatically show who decided: the optional Jev judge \
+                      (`[security.auto_approve.judge]`, off by default, per-origin opt-in) \
+                      records its scores and the grant expiry; any low-confidence, failed or \
+                      over-budget judgement falls to a person.",
         how_to: "Settings → Agent OS access → View approval history",
         status: CapabilityStatus::Stable,
         privacy: None,
