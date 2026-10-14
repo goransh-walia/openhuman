@@ -118,3 +118,13 @@ fn scoped_response_must_match_the_active_policy_generation() {
     assert!(validate_scoped(0, 2, &fp, &active).is_err());
     assert!(validate_scoped(5, 2, "short", &active).is_err());
 }
+
+#[test]
+fn a_cached_decision_is_not_served_under_another_module_generation() {
+    let mut cache = DecisionCache::default();
+    cache.put(key(1, "a", "s"), &decision(3, true));
+    assert!(cache.get(&key(1, "a", "s")).is_some());
+    // Simulate a module generation change that was not yet observed as a flush.
+    cache.module_generation = 4;
+    assert!(cache.get(&key(1, "a", "s")).is_none());
+}

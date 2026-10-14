@@ -42,7 +42,13 @@ pub(crate) struct DecisionCache {
 
 impl DecisionCache {
     pub(crate) fn get(&self, key: &CacheKey) -> Option<Decision> {
-        self.entries.get(key).cloned()
+        // Keyed on the call fingerprint + policy generation (`CacheKey`) and
+        // additionally bound to the module generation that decided: an entry
+        // from any other module generation is never served.
+        self.entries
+            .get(key)
+            .filter(|decision| decision.generation == self.module_generation)
+            .cloned()
     }
 
     /// Store `decision` only when the module marked it cacheable. Returns

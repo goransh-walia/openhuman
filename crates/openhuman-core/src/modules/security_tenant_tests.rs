@@ -271,3 +271,105 @@ async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
         "the old policy stays in force while review is pending"
     );
 }
+
+/// Under required audit the plain scoped call denies permitted work, and the
+/// audited member answers with evidence and a never-cacheable decision. The
+/// fixture configures no audit client, so the audited call must not allow.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn audited_scoped_members_never_allow_without_committed_evidence() {
+    use super::super::security::scoped_client::{
+        activate_on, check_audited_on, evaluate_audited_on, Activation, AuditCorrelation,
+        ScopedState,
+    };
+    use tinysecurity_bus::{CommandExecutionMode, SubjectScope, Verdict};
+
+    let fixture = native_fixture().await;
+    let proxy = &fixture.proxy;
+    let root = fixture.acting.path().canonicalize().unwrap();
+    let state = tokio::sync::Mutex::new(ScopedState::default());
+    let scope = SubjectScope {
+        user: "audited".into(),
+        workspace: root.join("audited").to_string_lossy().into_owned(),
+        agent: "orchestrator".into(),
+    };
+    let config = two_tenant_config(&root, "audited", false, "unused_tool");
+    let Activation::Active(active) = activate_on(
+        proxy,
+        &state,
+        &config,
+        tenant_caller("orchestrator", "x-1"),
+        scope,
+        CommandExecutionMode::HarnessGated,
+    )
+    .await
+    .unwrap() else {
+        panic!("first registration activates without review")
+    };
+    let audit = AuditCorrelation {
+        event_id: "0".repeat(32),
+        expected_tail: 0,
+        generation: active.policy_generation,
+    };
+    let evaluated = evaluate_audited_on(
+        proxy,
+        &active,
+        tenant_caller("orchestrator", "x-2"),
+        tool("file_read"),
+        audit.clone(),
+    )
+    .await;
+    if let Ok(response) = evaluated {
+        assert!(!response.decision.decision.cacheable);
+        assert!(!matches!(
+            response.decision.decision.verdict,
+            Verdict::Allow
+        ));
+        assert!(!response.audit.committed);
+    }
+    let checked = check_audited_on(
+        proxy,
+        &active,
+        tenant_caller("orchestrator", "x-3"),
+        vec![tinysecurity_bus::Check::LocalDiagnostic {}],
+        audit,
+    )
+    .await;
+    if let Ok(response) = checked {
+        assert!(response
+            .decision
+            .decisions
+            .iter()
+            .all(|d| !d.cacheable && !matches!(d.verdict, Verdict::Allow)));
+    }
+}
+
+/// The operator's real forbidden list registers (tilde, relative, floor entries)
+/// instead of an empty one.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn real_forbidden_paths_register_with_the_module() {
+    use super::super::security::scoped_client::{activate_on, Activation, ScopedState};
+    use tinysecurity_bus::{CommandExecutionMode, SubjectScope};
+
+    let fixture = native_fixture().await;
+    let root = fixture.acting.path().canonicalize().unwrap();
+    let state = tokio::sync::Mutex::new(ScopedState::default());
+    let mut config = two_tenant_config(&root, "forbid", false, "unused_tool");
+    config.autonomy.forbidden_paths = vec!["~/.ssh".into(), "private".into(), "/etc".into()];
+    let activation = activate_on(
+        &fixture.proxy,
+        &state,
+        &config,
+        tenant_caller("orchestrator", "f-1"),
+        SubjectScope {
+            user: "forbid".into(),
+            workspace: root.join("forbid").to_string_lossy().into_owned(),
+            agent: "orchestrator".into(),
+        },
+        CommandExecutionMode::HarnessGated,
+    )
+    .await
+    .expect("tilde, relative and floor entries must register");
+    assert!(matches!(activation, Activation::Active(_)));
+}

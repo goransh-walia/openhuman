@@ -210,7 +210,11 @@ fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
     config.autonomy.forbidden_paths = vec!["~/.ssh".into(), "secrets".into(), "/etc".into()];
     assert_eq!(
         settings(&config).policy.forbidden_paths,
-        vec!["~/.ssh".to_string(), "secrets".to_string(), "/etc".to_string()]
+        vec![
+            "~/.ssh".to_string(),
+            "secrets".to_string(),
+            "/etc".to_string()
+        ]
     );
     assert!(
         !Config::default().autonomy.forbidden_paths.is_empty(),
