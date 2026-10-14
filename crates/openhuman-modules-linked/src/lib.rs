@@ -14,32 +14,45 @@
 //!
 //! # Which modules are available
 //!
-//! One cargo feature per module, named for its registry id, plus `all`. The
-//! table is what the current vendor pins support:
+//! One cargo feature per registry module id, plus `all`. Every module crate is
+//! built with its own `static-link` feature, which exports a Rust
+//! `linked_module()` instead of the C `TINYBUS_MODULE_ABI_V1` symbols, so all
+//! eleven share one executable without duplicate symbols:
 //!
-//! | feature          | status at the current vendor pins |
-//! | ---------------- | --------------------------------- |
-//! | `tinychannels`   | waits: v0.1.29 module crate pins `tinybus =0.1.4`, which cannot co-resolve with tinydocs-module (`=0.1.3`) and the workspace `tinybus` 0.1.3 |
-//! | `tinydocs`       | linked (needs tinydocs v0.2.2, whose module crate pins the workspace `tinybus` 0.1.3) |
-//! | `tinybox`        | waits: its module crate pins `tinybus =0.1.2`, which cannot unify with the workspace `tinybus` path |
-//! | `tinyconnectors` | waits: its workspace pins a `tinybus` the host does not carry (0.1.2 at the pin, 0.1.4 upstream) |
-//! | `tinyvoice`      | waits: upstream main needs nested `tinyagents` submodules that collide with the host's in Cargo.lock |
-//! | `tinymcp`        | waits: `static-link` exists but `linked_module` is not exported |
-//! | `tinycomputer`   | waits: no `static-link` |
-//! | `tinyjuice`      | waits: v0.9.0 has `static-link` + `linked_module`, but needs `tinybus 0.1.4` (nested `vendor/tinybus`) while the workspace carries 0.1.3, so `LinkedFactory` types do not unify |
-//! | `tinysearch`     | waits: v0.5.0 has `static-link` + `linked_module`, but needs `tinybus ^0.1.4` while its nested `vendor/tinybus` is 0.1.2 and the workspace carries 0.1.3, so Cargo cannot resolve the graph |
-//! | `tinywallet`     | waits: v0.20.0 has `static-link` + `linked_module`, but its nested `vendor/tinybus` (cbb2eea) collides with the workspace `tinybus` (9062dd8) in Cargo.lock; also see the attestation note below |
-//! | `tinyhosts`      | waits: no module crate yet |
+//! | feature          | crate                                   |
+//! | ---------------- | --------------------------------------- |
+//! | `tinybox`        | `tinybox-module`                        |
+//! | `tinychannels`   | `tinychannels-module`                   |
+//! | `tinycomputer`   | `tinycomputer`                          |
+//! | `tinyconnectors` | `tinyconnectors`                        |
+//! | `tinydocs`       | `tinydocs-module`                       |
+//! | `tinyhosts`      | `tinyhosts`                             |
+//! | `tinyjuice`      | `tinyjuice-module`                      |
+//! | `tinymcp`        | `tinymcp`                               |
+//! | `tinysearch`     | `tinysearch`                            |
+//! | `tinyvoice`      | `tinyvoice-module`                      |
+//! | `tinywallet`     | `tinywallet-module`                     |
 //!
-//! The waiting modules need the upstream static-link / tinybus alignment work (E0.3) and a re-pin;
-//! each gets its feature here, and a line in [`linked_modules`], when that lands.
+//! They resolve against the one `vendor/tinybus`, `vendor/tinyagents` and
+//! `tinystoragedrivers` through the root `[patch]` tables: every module repo
+//! names those by version range (never `=` pins or nested paths in
+//! `[dependencies]`) and patches its own nested copy for standalone builds
+//! only. `cargo build -p openhuman-modules-linked --features all` is the proof.
 //!
 //! # Attestation
 //!
 //! A linked module is attested by the executable's digest, not by a release
-//! digest. Confidential members (tinywallet's attested calls) must accept that
-//! digest in test builds for tinywallet to be linkable; until that is
-//! confirmed, treat tinywallet as `source`-only for local testing.
+//! digest. Confidential members (tinywallet's attested calls) are delivered to
+//! it: `lib_tests.rs` signs a transaction through the linked tinywallet over a
+//! confidential call and checks that every admitted module is attested as host
+//! code. tinywallet is therefore linkable, not `source`-only.
+//!
+//! # Process-global state
+//!
+//! Linked modules share one process. Each module's own runtime, caches and
+//! environment reads are its own; the shared surfaces are the module bus the
+//! host serves and the `tinystoragedrivers` host callbacks, which are keyed by
+//! module scope.
 
 use openhuman_rpc::embed::modules::{register_linked, LinkedFactory};
 
@@ -49,8 +62,28 @@ use openhuman_rpc::embed::modules::{register_linked, LinkedFactory};
 #[must_use]
 pub fn linked_modules() -> Vec<(&'static str, LinkedFactory)> {
     let modules: Vec<(&'static str, LinkedFactory)> = vec![
+        #[cfg(feature = "tinybox")]
+        ("tinybox", tinybox::linked_module),
+        #[cfg(feature = "tinychannels")]
+        ("tinychannels", tinychannels_module::linked_module),
+        #[cfg(feature = "tinycomputer")]
+        ("tinycomputer", tinycomputer::linked_module),
+        #[cfg(feature = "tinyconnectors")]
+        ("tinyconnectors", tinyconnectors::linked_module),
         #[cfg(feature = "tinydocs")]
         ("tinydocs", tinydocs_module::linked_module),
+        #[cfg(feature = "tinyhosts")]
+        ("tinyhosts", tinyhosts::linked_module),
+        #[cfg(feature = "tinyjuice")]
+        ("tinyjuice", tinyjuice_module::linked_module),
+        #[cfg(feature = "tinymcp")]
+        ("tinymcp", tinymcp::linked_module),
+        #[cfg(feature = "tinysearch")]
+        ("tinysearch", tinysearch::linked_module),
+        #[cfg(feature = "tinyvoice")]
+        ("tinyvoice", tinyvoice_module::linked_module),
+        #[cfg(feature = "tinywallet")]
+        ("tinywallet", tinywallet_module::linked_module),
     ];
     modules
 }

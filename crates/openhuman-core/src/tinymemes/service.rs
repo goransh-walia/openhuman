@@ -129,7 +129,7 @@ pub(crate) async fn remix(
         return Err("the memes component is off".to_owned());
     }
     crate::modules::ensure_loaded(config, MODULE_ID).await?;
-    let runtime = crate::modules::host::runtime()
+    let runtime = crate::modules::runtime::runtime()
         .await
         .map_err(|error| format!("the module bus is not running: {error}"))?;
     let proxy = runtime

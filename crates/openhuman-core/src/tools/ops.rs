@@ -385,6 +385,8 @@ pub fn all_tools_with_runtime(
     // `mcp::registry` domain gated above. Both are compiled out by the `mcp`
     // feature; see the static-vs-dynamic note in AGENTS.md.
     #[cfg(feature = "mcp")]
+    tools.push(crate::mcp::ui::show_ui_tool(root_config));
+    #[cfg(feature = "mcp")]
     if root_config.mcp_client.enabled && !root_config.mcp_client.servers.is_empty() {
         // Catalog retrieval runs in the async turn prelude. This synchronous
         // baseline contributes only the generic bridge; per-tool executors
@@ -392,7 +394,8 @@ pub fn all_tools_with_runtime(
         let mcp_config = Arc::new(root_config.clone());
         tools.push(Box::new(McpListServersTool::new(Arc::clone(&mcp_config))));
         tools.push(Box::new(McpListToolsTool::new(Arc::clone(&mcp_config))));
-        tools.push(Box::new(mcp_call_tool(mcp_config, security.clone())));
+        let call = Box::new(mcp_call_tool(Arc::clone(&mcp_config), security.clone()));
+        tools.push(crate::mcp::ui::ui_aware_call(call, &mcp_config));
     }
 
     tools.extend(crate::search::build_search_tools(root_config));

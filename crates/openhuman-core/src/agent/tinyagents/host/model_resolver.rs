@@ -44,8 +44,8 @@
 //!    `TODO(phase4)` on [`OpenHumanModelResolver::base_model_for_role`].
 //!
 //! 4. **`ModelResolveRequest::model_pin` is not honoured yet.** The field
-//!    exists now (`tinyagents#89`, which this resolver's `-v1` suffix test was
-//!    written against while the pin had nowhere to go), so a definition's exact
+//!    exists on the crate (this resolver's `-v1` suffix test was written
+//!    against it while the pin had nowhere to go), so a definition's exact
 //!    model id finally has a route here rather than being smuggled through
 //!    `role`. It is deliberately still unread, for two reasons:
 //!

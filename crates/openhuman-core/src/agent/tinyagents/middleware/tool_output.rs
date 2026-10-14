@@ -18,10 +18,13 @@ use tinytools::{ToolPolicy as TaToolPolicy, ToolResult as TaToolResult};
 use crate::agent::harness::tool_result_artifacts::{
     artifact_read_target, page_artifact_read, TINYAGENTS_TOOL_RESULT_ARTIFACT_STORE,
 };
-use crate::agent::tinyagents::payload_summarizer::PayloadSummarizer;
+use crate::agent::tinyagents::payload_summarizer::DynPayloadSummarizer;
 use crate::inference::tokenjuice::generate::GenerateTicket;
 use tinyagents_harness::artifacts::tool_results::{
     apply_per_result_persistence, ArtifactRead, ToolResultArtifactStore,
+};
+use tinyagents_harness::middleware::library::{
+    disclose, plan_output_stages, should_compact, OutputCapPolicy,
 };
 use tinyjuice_bus::types::AgentTokenjuiceCompression;
 
@@ -178,7 +181,7 @@ pub(crate) struct ToolOutputMiddleware {
     pub(crate) budget_bytes: usize,
     /// The model behind TinyJuice's summary stage. `None` means this agent's
     /// results are never summarized.
-    pub(crate) payload_summarizer: Option<Arc<dyn PayloadSummarizer>>,
+    pub(crate) payload_summarizer: Option<Arc<DynPayloadSummarizer>>,
     pub(crate) artifact_store: Option<ToolResultArtifactStore>,
     pub(crate) tokenjuice_compaction_enabled: bool,
     pub(crate) tokenjuice_compression: AgentTokenjuiceCompression,
@@ -255,6 +258,33 @@ impl ToolOutputMiddleware {
                 Some(Err(()))
             }
         }
+    }
+}
+
+/// The ladder's per-tool facts: this middleware's shared budget, the cap each
+/// tool declares, and the exempt name sets above. The harness decides what
+/// applies from them ([`plan_output_stages`]).
+impl OutputCapPolicy for ToolOutputMiddleware {
+    fn default_budget_bytes(&self) -> usize {
+        self.budget_bytes
+    }
+
+    fn tool_cap(&self, tool: &str) -> Option<usize> {
+        self.tool_char_cap(tool)
+    }
+
+    fn is_compaction_exempt(&self, tool: &str) -> bool {
+        is_compaction_exempt(tool)
+    }
+
+    fn is_truncation_exempt(&self, tool: &str) -> bool {
+        is_truncation_exempt(tool)
+    }
+
+    /// An artifact nobody can read back is worse than the processed copy, so
+    /// a body larger than `file_read` will open is not kept whole.
+    fn max_persistable_bytes(&self) -> u64 {
+        tinytools_std::filesystem::FileReadTool::MAX_FILE_SIZE_BYTES
     }
 }
 
@@ -389,8 +419,14 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext> for Too
         // breaks the whole-string JSON parse both proposal consumers do. See
         // [`is_compaction_exempt`]/[`is_truncation_exempt`] for which stages
         // each tool family skips and why.
-        let compaction_exempt = is_compaction_exempt(tool_name);
-        let truncation_exempt = is_truncation_exempt(tool_name);
+        let plan = plan_output_stages(
+            self,
+            tool_name,
+            content.len(),
+            self.artifact_store.is_some(),
+        );
+        let compaction_exempt = plan.compaction_exempt;
+        let truncation_exempt = plan.truncation_exempt;
         if compaction_exempt {
             tracing::debug!(
                 tool = tool_name,
@@ -424,34 +460,14 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext> for Too
         // the authoritative size with it (#6283).
         let mut summarized_from_bytes: Option<usize> = None;
 
-        // The tool's own declared cap, read before any stage runs. It used to
-        // be computed at step 3, *below* the summarizer, which meant a tool
-        // declaring `max_result_size_chars(50_000)` still handed its full
-        // megabyte to an LLM: the cap bounded the summary, never the
-        // summarizer's input. One research turn cost 1,083,069 input tokens
-        // that way, with the same page summarized three times.
-        let tool_cap = self.tool_char_cap(tool_name);
-
-        // What bounds this result. A tool that declares a cap is stating its
-        // own contract and that number wins; everything else falls back to the
-        // shared budget. Either way exactly one limit applies, so the two can
-        // no longer double-truncate.
-        let budget_bytes = tool_cap.unwrap_or(self.budget_bytes);
+        // What bounds this result: the tool's own declared cap when it has
+        // one, the shared budget otherwise (see [`plan_output_stages`]).
+        let budget_bytes = plan.budget_bytes;
 
         // The tool's own output, kept only when it could end up persisted (step
         // 4 with a store), so the artifact stores what the tool returned rather
-        // than the summarized or compacted copy the stages below produce. The
-        // live artifact otherwise held 71,650 compacted bytes of a 119,796-byte
-        // result and reported the smaller number as `original_bytes`. Skipped
-        // when the raw body is larger than `file_read` will open: an artifact
-        // nobody can read back is worse than the processed copy.
-        let full_output = (!truncation_exempt
-            && budget_bytes > 0
-            && self.artifact_store.is_some()
-            && content.len() > budget_bytes
-            && content.len() as u64
-                <= tinytools_std::filesystem::FileReadTool::MAX_FILE_SIZE_BYTES)
-            .then(|| content.clone());
+        // than the summarized or compacted copy the stages below produce.
+        let full_output = plan.keep_full_output.then(|| content.clone());
 
         // 1+2. TinyJuice: the LLM summary stage (when this agent has a
         //      summary model), then content-aware compaction (when enabled).
@@ -505,12 +521,11 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext> for Too
                 "[tinyagents::mw] file read: no payload summary"
             );
         }
-        if !raw_fetch
-            && !verbatim_file_read
-            && !compaction_exempt
-            && wants_tinyjuice
-            && (tool_cap.is_none() || focus.is_some())
-        {
+        if should_compact(
+            &plan,
+            focus.is_some(),
+            wants_tinyjuice && !raw_fetch && !verbatim_file_read,
+        ) {
             // Bind a summary call to this turn only when the result is big
             // enough for TinyJuice to want one; building the child context for
             // every small result would be waste. Never for a file read.
@@ -663,14 +678,12 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext> for Too
         //    be able to read *why* the payload is raw and that re-running will
         //    not summarize it — a half-truncated notice is worse than none,
         //    because it still looks like tool output.
-        if let Some(notice) = pending_notice {
-            content = format!("{notice}\n\n{content}");
-        }
-        if let Some(bytes) = summarized_from_bytes {
-            content = format!(
-                "[openhuman: summary of {bytes} bytes of tool output, complete]\n\n{content}"
-            );
-        }
+        let content = disclose(
+            content,
+            pending_notice.as_deref(),
+            summarized_from_bytes,
+            "openhuman",
+        );
 
         crate::agent::tinyagents::middleware::replace_tool_result_text(result, content);
 

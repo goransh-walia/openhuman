@@ -47,7 +47,7 @@ async fn provider_credentials_never_reach_an_unattested_bus() {
         )
         .unwrap();
     let error = check(
-        &ModuleClient::fixture(proxy),
+        &crate::modules::ops::fixture_client(proxy),
         ChannelsConfig::default(),
         HttpProxyPolicy::default(),
     )

@@ -9,8 +9,8 @@
 //! tool call so it inherits the turn's model, cancellation, thread and
 //! lineage.
 //!
-//! [`PayloadSummarizer`] is that seam. `ToolOutputMiddleware` asks it to
-//! [`prepare`](PayloadSummarizer::prepare) a call bound to the current turn,
+//! [`DynPayloadSummarizer`] is that seam. `ToolOutputMiddleware` asks it to
+//! [`prepare`](tinyagents_harness::summarization::payload_summarizer::PayloadSummarizer::prepare) a call bound to the current turn,
 //! registers it with [`crate::inference::tokenjuice::generate`], and sends the
 //! ticket's token with the result. TinyJuice calls back through
 //! `MlHost.Generate` only if it decides to summarize.
@@ -25,7 +25,9 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use tinyagents_harness::context::RunContext;
 use tinyagents_harness::runtime::{AgentHarness, InvalidArgsPolicy, RunPolicy, UnknownToolPolicy};
-use tinyagents_harness::summarization::payload_summarizer::summary_child_config;
+use tinyagents_harness::summarization::payload_summarizer::{
+    summary_child_config, PayloadSummarizer as HarnessPayloadSummarizer,
+};
 use tinyinference_llm::message::Message;
 use tracing::debug;
 
@@ -36,17 +38,19 @@ use {
     crate::inference::tokenjuice::generate::PreparedGenerate, tinyjuice_bus::wire::GenerateRequest,
 };
 
-/// Supplies the model call behind TinyJuice's summary stage.
+/// The host's payload-summary seam: the harness contract
+/// ([`HarnessPayloadSummarizer`]) bound to OpenHuman's turn context, the
+/// prepared call TinyJuice drives and `anyhow` errors.
 ///
 /// Public because it is an embedder seam: the default implementation runs the
 /// `summarizer` agent definition's model, and a host that routes models its own
 /// way supplies its own. The prompt is not part of this — TinyJuice writes it
 /// and sends it in the [`GenerateRequest`].
-pub trait PayloadSummarizer: Send + Sync {
-    /// Bind one model call to `parent_ctx`'s turn. Called before the result is
-    /// handed to TinyJuice; the call runs only if TinyJuice asks for it.
-    fn prepare(&self, parent_ctx: &RunContext<OpenHumanRunContext>) -> Result<PreparedGenerate>;
-}
+pub type DynPayloadSummarizer = dyn HarnessPayloadSummarizer<
+    OpenHumanRunContext,
+    Prepared = PreparedGenerate,
+    Error = anyhow::Error,
+>;
 
 /// Runs the `summarizer` agent definition's model as a unary child of the turn.
 pub struct SubagentPayloadSummarizer {
@@ -85,7 +89,10 @@ pub(crate) fn unary_child_context(
     Ok(child)
 }
 
-impl PayloadSummarizer for SubagentPayloadSummarizer {
+impl HarnessPayloadSummarizer<OpenHumanRunContext> for SubagentPayloadSummarizer {
+    type Prepared = PreparedGenerate;
+    type Error = anyhow::Error;
+
     fn prepare(&self, parent_ctx: &RunContext<OpenHumanRunContext>) -> Result<PreparedGenerate> {
         let parent =
             parent_ctx.data.parent.clone().ok_or_else(|| {

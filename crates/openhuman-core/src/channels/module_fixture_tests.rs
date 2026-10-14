@@ -8,21 +8,35 @@
 //! on a process-lifetime runtime, so it outlives the short Tokio runtimes of
 //! individual tests.
 
-use crate::modules::client::ModuleClient;
+use crate::config::schema::ModuleSourceMode;
+use crate::config::Config;
+use crate::modules::linked::register_linked;
+use crate::modules::{ops, runtime};
+use tinybus::module::ModuleClient;
 use tinychannels_bus::methods;
 
+const MODULE_ID: &str = "tinychannels";
+
 /// Return a client for the compiled, linked TinyChannels module fixture.
-///
-/// BLOCKED on the tinybus epic: `tinychannels-module` v0.1.29 pins `tinybus =0.1.4`
-/// while the workspace tinybus is 0.1.3, so the module cannot be a dev-dependency
-/// and the fixture cannot be linked. Tests that need it fail with this message
-/// until the dependency is restored.
 pub(crate) async fn client() -> ModuleClient {
-    panic!("tinychannels-module fixture unavailable: blocked on tinybus 0.1.4 (tinybus epic)")
+    register_linked(MODULE_ID, tinychannels_module::linked_module);
+    let mut config = Config::default();
+    config.modules.source = ModuleSourceMode::Linked;
+    ops::ensure_loaded(&config, MODULE_ID)
+        .await
+        .expect("the linked TinyChannels module should be admitted through the seam");
+    let proxy = runtime::runtime()
+        .await
+        .expect("the module host should be running")
+        .proxy(
+            tinychannels_module::BUS_NAME,
+            tinychannels_module::OBJECT_PATH,
+        )
+        .expect("the linked TinyChannels proxy should be valid");
+    ops::fixture_client(proxy)
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn linked_module_prepares_runtime_limits_over_confidential_bus_call() {
     use tinychannels_bus::module_control::{ChannelControlRequest, ChannelControlResult};
 
@@ -49,7 +63,6 @@ async fn linked_module_prepares_runtime_limits_over_confidential_bus_call() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn linked_module_prepares_legacy_inbound_facts_over_confidential_bus_call() {
     use tinychannels_bus::module_inbound::{
         ChannelInboundSource, PrepareChannelInboundRequest, PreparedChannelInbound,

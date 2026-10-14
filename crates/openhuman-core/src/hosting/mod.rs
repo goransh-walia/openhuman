@@ -27,7 +27,7 @@ type CallFixture =
 /// One configured hosting account and its authorized workspace.
 #[derive(Clone)]
 pub struct Account {
-    client: crate::modules::client::ModuleClient,
+    client: tinybus::module::ModuleClient,
     provider: String,
     api_key: String,
     team: Option<String>,
@@ -83,7 +83,7 @@ impl Account {
             return Ok(None);
         }
         Ok(Some(Self {
-            client: crate::modules::client::ModuleClient::new(config.clone()),
+            client: crate::modules::client(config.clone()),
             provider,
             api_key,
             team: config.hosting.team().map(str::to_owned),
@@ -123,7 +123,7 @@ impl Account {
         }
         let workspace_dir = config.workspace_dir.clone();
         Ok(Self {
-            client: crate::modules::client::ModuleClient::new(config),
+            client: crate::modules::client(config),
             provider: "vercel".to_owned(),
             api_key: api_key.trim().to_owned(),
             team: team
@@ -156,16 +156,13 @@ impl Account {
         self.providers_loaded
             .get_or_try_init(|| async {
                 let response = self.call_providers().await?;
-                let providers: Vec<String> =
-                    serde_json::from_str(&response).map_err(|_| {
-                        crate::modules::client::ModuleClient::report_malformed_reply("tinyhosts");
-                        anyhow::anyhow!(
-                            crate::modules::client::ModuleCallError::ModuleFault.to_string()
-                        )
-                    })?;
+                let providers: Vec<String> = serde_json::from_str(&response).map_err(|_| {
+                    crate::modules::report::malformed_reply("tinyhosts");
+                    anyhow::anyhow!(tinybus::module::ModuleCallError::ModuleFault.to_string())
+                })?;
                 if !providers.iter().any(|provider| provider == &self.provider) {
-                    crate::modules::client::ModuleClient::report_unavailable("tinyhosts");
-                    anyhow::bail!(crate::modules::client::ModuleCallError::Unavailable.to_string());
+                    crate::modules::report::unavailable("tinyhosts");
+                    anyhow::bail!(tinybus::module::ModuleCallError::Unavailable.to_string());
                 }
                 Ok::<(), anyhow::Error>(())
             })
@@ -190,9 +187,9 @@ impl Account {
             .await
             .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         if !outcome.matches(&operation) {
-            crate::modules::client::ModuleClient::report_malformed_reply("tinyhosts");
+            crate::modules::report::malformed_reply("tinyhosts");
             return Err(anyhow::anyhow!(
-                crate::modules::client::ModuleCallError::ModuleFault.to_string()
+                tinybus::module::ModuleCallError::ModuleFault.to_string()
             ));
         }
         Ok(outcome)
@@ -212,7 +209,7 @@ impl Account {
     async fn call_execute_json(
         &self,
         request: &str,
-    ) -> Result<tinyhosts_bus::rpc::Outcome, crate::modules::client::ModuleCallError> {
+    ) -> Result<tinyhosts_bus::rpc::Outcome, tinybus::module::ModuleCallError> {
         #[cfg(test)]
         if let Some(fixture) = &self.call_fixture {
             let response = fixture(
@@ -220,10 +217,10 @@ impl Account {
                 serde_json::json!([request]),
                 true,
             )
-            .map_err(|_| crate::modules::client::ModuleCallError::ModuleFault)?;
+            .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)?;
             return serde_json::from_str(&response).map_err(|_| {
-                crate::modules::client::ModuleClient::report_malformed_reply("tinyhosts");
-                crate::modules::client::ModuleCallError::ModuleFault
+                crate::modules::report::malformed_reply("tinyhosts");
+                tinybus::module::ModuleCallError::ModuleFault
             });
         }
         self.client

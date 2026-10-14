@@ -21,10 +21,13 @@ pub mod browser {
     pub use openhuman_core::modules::browser::MODULE_ID;
 }
 
-/// Pre-core calls through the process-wide loader, with explicit runtime configuration.
-pub use openhuman_core::modules::client::{ModuleCallError, ModuleClient};
+/// Pre-core calls through the process-wide loader, with explicit runtime
+/// configuration: [`client`] builds a [`ModuleClient`] over the same resolver
+/// the core uses, so a module loads once per process whoever asks first.
+pub use openhuman_core::modules::client;
+pub use tinybus::module::{ModuleCallError, ModuleClient};
 
-#[cfg(all(test, not(feature = "modules"), not(feature = "default")))]
+#[cfg(test)]
 #[path = "modules_tests.rs"]
 mod tests;
 

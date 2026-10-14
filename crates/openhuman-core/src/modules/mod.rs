@@ -36,8 +36,12 @@
 //! - [`wallet`] — the host half of the `tinywallet` module, which builds and
 //!   assembles transactions while the signing key stays in this process.
 //! - [`linked`] — the registry of modules linked into the executable (local development).
-//! - [`host`] — the module broker, connection and loader.
-//! - [`ops`] — resolving, loading, and reporting status.
+//! - [`runtime`] — the process-wide `tinybus::module::ModuleRuntime` and the host
+//!   callbacks served on its bus.
+//! - [`ops`] — the adapter over `tinybus::module::Resolver` and `ModuleClient`:
+//!   builds them from [`Config`](crate::config::Config) and the registry.
+//! - [`report`] — the Sentry sink for terminal module outcomes.
+//! - [`client`] — a `tinybus::module::ModuleClient`, with or without the loader.
 //! - [`schemas`] — the `modules` RPC surface.
 //! - [`boot`] — what happens at startup.
 
@@ -55,7 +59,6 @@ pub(crate) mod channel_controller;
 pub(crate) mod channel_health;
 #[cfg(all(feature = "channels", feature = "modules"))]
 pub(crate) mod channel_runtime;
-pub mod client;
 #[cfg(feature = "modules")]
 pub mod computer;
 #[cfg(feature = "modules")]
@@ -67,9 +70,6 @@ pub mod desktop;
 #[cfg(feature = "documents")]
 #[cfg(feature = "modules")]
 pub mod documents;
-mod failure;
-#[cfg(feature = "modules")]
-pub mod host;
 #[cfg(feature = "modules")]
 pub mod linked;
 #[cfg(feature = "modules")]
@@ -77,6 +77,9 @@ pub mod ops;
 #[cfg(feature = "modules")]
 pub(crate) mod profile_claim;
 pub mod registry;
+pub(crate) mod report;
+#[cfg(feature = "modules")]
+pub mod runtime;
 #[cfg(feature = "modules")]
 pub mod schemas;
 #[cfg(feature = "modules")]
@@ -106,6 +109,8 @@ pub mod storage_grants;
 pub(crate) mod storage_host;
 #[cfg(feature = "modules")]
 mod storage_host_linked;
+#[cfg(all(test, feature = "modules"))]
+mod storage_host_watching;
 #[cfg(feature = "modules")]
 mod storage_import_support;
 #[cfg(feature = "modules")]
@@ -123,6 +128,8 @@ pub mod tinybox;
 #[cfg(feature = "modules")]
 mod tokenjuice_host;
 pub mod types;
+#[cfg(not(feature = "modules"))]
+mod unloaded;
 #[cfg(feature = "voice")]
 #[cfg(feature = "modules")]
 pub mod voice;
@@ -139,11 +146,27 @@ pub(crate) mod web3_service;
 pub(crate) mod x402_service;
 
 #[cfg(feature = "modules")]
-pub use ops::{ensure_loaded, ensure_loaded_within, state_of, LoadError};
+pub use ops::{ensure_loaded, ensure_loaded_within, state_of};
 #[cfg(feature = "modules")]
 pub use schemas::{all_controller_schemas, all_registered_controllers};
 #[doc(hidden)]
 pub use source::local_artifact;
+/// A `tinybus::module::ModuleClient` that loads modules lazily through the
+/// process-wide resolver (see [`ops`]). Constructing one starts nothing. In a
+/// build without the `modules` feature there is no loader, and every call is
+/// unavailable and reported once with the `loader_disabled` reason.
+#[must_use]
+pub fn client(config: crate::config::Config) -> tinybus::module::ModuleClient {
+    #[cfg(feature = "modules")]
+    {
+        ops::client(config)
+    }
+    #[cfg(not(feature = "modules"))]
+    {
+        unloaded::client(config)
+    }
+}
+
 pub use types::{LoadPolicy, ModuleRecord, ModuleSource, ModuleState, ModuleStatus, PlatformAsset};
 
 /// Imports tinymcp's legacy SQLite files under `data_dir` into the module's
@@ -296,20 +319,58 @@ pub async fn import_legacy_tinybox(workspace_dir: &std::path::Path) {
     let _ = workspace_dir;
 }
 
+/// Scopes, under the current tenant, that hold expiring blobs written by
+/// modules (today TinyJuice's CCR originals), for the blob sweeper. A module
+/// whose scope cannot be resolved here is skipped. Without the `modules`
+/// feature no module writes blobs, so there is nothing to sweep.
+#[cfg(feature = "modules")]
+pub(crate) fn expiring_blob_module_scopes() -> Vec<crate::storage::Scope> {
+    #[cfg(feature = "modules")]
+    {
+        [storage_grant_tinyjuice::MODULE_ID]
+            .into_iter()
+            .filter_map(|id| storage_host::current_module_scope(id).ok())
+            .collect()
+    }
+    // Without the loader no module holds blobs.
+    #[cfg(not(feature = "modules"))]
+    {
+        Vec::new()
+    }
+}
+
+/// [`expiring_blob_module_scopes`] for SaaS profile `profile`, whose acting
+/// scope is `base`, from outside that profile's task scope.
+#[cfg(feature = "modules")]
+pub(crate) fn expiring_blob_module_scopes_for(
+    profile: &str,
+    base: &crate::storage::Scope,
+) -> Vec<crate::storage::Scope> {
+    [storage_grant_tinyjuice::MODULE_ID]
+        .into_iter()
+        .filter_map(|id| storage_host::module_scope(Some(profile), base, id).ok())
+        .collect()
+}
+
+/// See the `modules` build: with the feature off no module writes blobs.
+#[cfg(not(feature = "modules"))]
+pub(crate) fn expiring_blob_module_scopes_for(
+    _profile: &str,
+    _base: &crate::storage::Scope,
+) -> Vec<crate::storage::Scope> {
+    Vec::new()
+}
+
+/// See the `modules` build: with the feature off no module writes blobs.
+#[cfg(not(feature = "modules"))]
+pub(crate) fn expiring_blob_module_scopes() -> Vec<crate::storage::Scope> {
+    Vec::new()
+}
+
 /// Imports the legacy on-disk CCR tier under `root` into the tinyjuice
 /// module's blob storage, once per directory. `ttl` is the configured original
 /// lifetime. Never fails the caller: an error is logged and the import is
 /// retried at the next install.
-/// Scopes, under the current tenant, that hold expiring blobs written by
-/// modules (today TinyJuice's CCR originals), for the blob sweeper. A module
-/// whose scope cannot be resolved here is skipped.
-pub(crate) fn expiring_blob_module_scopes() -> Vec<crate::storage::Scope> {
-    [storage_grant_tinyjuice::MODULE_ID]
-        .into_iter()
-        .filter_map(|id| storage_host::current_module_scope(id).ok())
-        .collect()
-}
-
 pub async fn import_legacy_tinyjuice(root: &std::path::Path, ttl: Option<std::time::Duration>) {
     #[cfg(feature = "modules")]
     import_once(

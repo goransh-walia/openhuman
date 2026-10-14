@@ -10,8 +10,6 @@ use std::sync::{Arc, RwLock};
 use crate::agent::hooks::{PostTurnHook, ToolHook};
 use tinyinference_llm::model::ChatModel;
 
-use tinyagents_harness::cancel::CancellationToken;
-
 /// Runtime or agent host adapters, shared by every context derived from it.
 #[derive(Default)]
 pub struct HostOverrides {
@@ -138,21 +136,6 @@ impl HostOverrides {
             .cloned()
             .or_else(|| self.model.clone())
     }
-}
-
-tokio::task_local! { static TURN_CANCELLATION: CancellationToken; }
-
-/// Run a turn with a caller-owned cancellation token, shared with child runs.
-pub async fn with_cancellation<F: std::future::Future>(
-    token: CancellationToken,
-    future: F,
-) -> F::Output {
-    TURN_CANCELLATION.scope(token, future).await
-}
-
-/// The caller's token, or a fresh token for entrypoints without one.
-pub fn current_cancellation() -> CancellationToken {
-    TURN_CANCELLATION.try_with(Clone::clone).unwrap_or_default()
 }
 
 #[cfg(test)]

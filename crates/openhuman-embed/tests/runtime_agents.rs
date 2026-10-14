@@ -285,15 +285,15 @@ fn one_runtime_hosts_independently_configured_agents() {
                 .expect("visible turn runs");
 
             let stop_reason = std::sync::Arc::new(std::sync::Mutex::new(None));
-            let budgeted_turn = openhuman_core::agent::stop_hooks::with_stop_hooks(
-                vec![std::sync::Arc::new(RecordingBudgetStopHook {
+            let budgeted_turn = budget_agent
+                .turn("report a metered response")
+                .stop_hook(std::sync::Arc::new(RecordingBudgetStopHook {
                     inner: openhuman_core::agent::stop_hooks::BudgetStopHook::new(1.0),
                     reason: std::sync::Arc::clone(&stop_reason),
-                })],
-                budget_agent.run("report a metered response"),
-            )
-            .await
-            .expect("budgeted runtime-owned agent turn returns");
+                }))
+                .send()
+                .await
+                .expect("budgeted runtime-owned agent turn returns");
             assert_eq!(common::chat_requests(&budget_provider).await.len(), 1);
             assert_eq!(
                 stop_reason.lock().expect("stop reason lock").as_deref(),

@@ -1,5 +1,15 @@
 [
   {
+    "file": "crates/openhuman-core/src/mcp/ui/cache.rs",
+    "scope": "",
+    "name": "STORE",
+    "type": "LazyLock<Mutex<Store>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Every entry key is prefixed with the calling tenant's profile and agent scope through tenant_key, and a SaaS call with no tenant scope gets an isolated key that never matches.",
+    "verification": "mcp/ui/cache_tests.rs: entries_are_not_shared_across_tenants"
+  },
+  {
     "file": "crates/openhuman-core/src/mcp/module_client.rs",
     "scope": "",
     "name": "LIFECYCLE_GATE",
@@ -28,5 +38,55 @@
     "category": "B",
     "reason": "Holds only unit mutexes. The key is the workspace directory plus the acting memory identity, so different scopes never share or wait on a lock and no tenant data is stored.",
     "verification": "tinymemes/service_tests.rs: foreground_remixes_share_a_lock_per_workspace_and_never_across_workspaces"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/runtime.rs",
+    "scope": "",
+    "name": "RUNTIME",
+    "type": "OnceLock<Result<ModuleRuntime,String>>",
+    "count": 1,
+    "category": "A",
+    "reason": "The single tinybus module bus (broker, loader, connection) for the process; tinybus never unloads a module, so there is exactly one. Carries no tenant data: tenant scope is resolved per call by the host callbacks it serves.",
+    "verification": "modules/runtime_tests.rs: the_module_bus_is_a_singleton_and_serves_proxies"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/runtime.rs",
+    "scope": "",
+    "name": "CALLBACKS",
+    "type": "tokio::sync::OnceCell<Result<(),String>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Records that the host callback objects were served on the module bus once, before any module loads; infrastructure only.",
+    "verification": "modules/runtime_tests.rs: wallet_host_callback_is_served_before_the_module_is_loaded"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/report.rs",
+    "scope": "",
+    "name": "REPORTER",
+    "type": "OnceLock<Arc<FailureReporter>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Deduplicates terminal module outcomes per (module id, reason) so a broken install is one Sentry event per process; keys are registry ids only and no tenant data is held.",
+    "verification": "modules/report_tests.rs: terminal_reports_are_sanitized_and_deduplicated"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/registry.rs",
+    "scope": "",
+    "name": "TABLE",
+    "type": "std::sync::OnceLock<Vec<tinybus::module::ReleaseRecord>>",
+    "count": 1,
+    "category": "A",
+    "reason": "The compiled module registry in the shape the tinybus resolver consumes; constants only.",
+    "verification": "modules/ops_tests.rs: list_reports_every_registry_entry"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/ops.rs",
+    "scope": "",
+    "name": "LOGGED",
+    "type": "OnceLock<Mutex<std::collections::HashSet<&'static str>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Registry ids whose serving source was already logged, so each is logged once; holds static ids only.",
+    "verification": "modules/ops_tests.rs: status_reports_the_source_that_serves_a_module"
   }
 ]

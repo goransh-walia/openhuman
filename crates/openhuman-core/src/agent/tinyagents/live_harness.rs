@@ -51,6 +51,9 @@ pub(crate) struct LiveToolSurface {
     /// Whether the session is bound to a chat thread (thread-scoped tools are
     /// only offered then).
     pub(crate) has_thread: bool,
+    /// The session's agent/turn tool callbacks, registered after the
+    /// runtime's global ones.
+    pub(crate) tool_hooks: Vec<Arc<dyn crate::agent::hooks::ToolHook>>,
 }
 
 /// Builds the live session's tool harness.
@@ -62,6 +65,7 @@ pub(crate) fn assemble_live_tool_harness(
         allowed,
         tool_policy,
         has_thread,
+        tool_hooks,
     } = surface;
     let mut harness: AgentHarness<(), OpenHumanRunContext> = AgentHarness::new();
     harness.with_policy(run_policy_for(LIVE_MAX_TOOL_CALLS, false));
@@ -109,19 +113,18 @@ pub(crate) fn assemble_live_tool_harness(
             enforcement.policy,
             enforcement.session,
             tool_sets.clone(),
-            enforcement.session_id,
             enforcement.channel,
-            enforcement.agent_definition_id,
         )));
     }
     harness.push_tool_middleware(Arc::new(middleware::credential_scrub_middleware()));
     harness.push_middleware(Arc::new(ArgRecoveryMiddleware::new(tool_sets.clone())));
     let registered_tools = harness.tools().names();
-    harness.push_middleware(Arc::new(middleware::PackedToolRouteMiddleware::new(
+    harness.push_middleware(Arc::new(middleware::packed_tool_route_middleware(
         registered_tools,
         route_session,
     )));
-    let embedder_tool_hooks = crate::agent::hooks::turn_tool_hooks();
+    let mut embedder_tool_hooks = crate::agent::hooks::embedder_tool_hooks();
+    embedder_tool_hooks.extend(tool_hooks);
     if !embedder_tool_hooks.is_empty() {
         harness.push_middleware(Arc::new(middleware::EmbedderToolHooksMiddleware::new(
             embedder_tool_hooks,

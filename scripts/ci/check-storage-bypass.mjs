@@ -121,6 +121,12 @@ export const ALLOW = new Map(
       "paired with the OS keychain mnemonic (and holds it when there is no keychain): moves with the secrets work, not as a plain document",
     ],
     [
+      "agent/harness/artifact_offload/mod.rs",
+      "json-write",
+      "tokio::fs::write(&target, body)",
+      "a derived view of a blob-stored artifact, placed in the action dir so file_read can open the path a pointer hands back; the tenant's blob store stays the source of truth",
+    ],
+    [
       "inference/tokenjuice/savings.rs",
       "json-write",
       "if let Err(e) = std::fs::write(path, json) {",

@@ -193,6 +193,7 @@ async fn test_subagent_has_current_date_context() -> Result<()> {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     };
 
     let mut def =

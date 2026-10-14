@@ -124,7 +124,7 @@ fn text_dialect_tool_turn_projects_calls_on_their_issuing_row_as_settled() {
         ] {
             sidecar
                 .tool_outcomes
-                .push(crate::agent::tinyagents::ToolCallOutcome {
+                .push(tinyagents_harness::turn_outcome::ToolCallOutcome {
                     call_id: id.into(),
                     name: name.into(),
                     arguments,

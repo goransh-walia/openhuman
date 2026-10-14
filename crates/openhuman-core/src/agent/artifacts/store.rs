@@ -14,15 +14,6 @@ const META_FILENAME: &str = "meta.json";
 /// [`create_artifact`]; read by `ops::ai_regenerate`.
 const ARGS_FILENAME: &str = "args.json";
 
-tokio::task_local! {
-    /// When set (by `ops::ai_regenerate`), [`create_artifact`] reuses
-    /// this id + its existing directory instead of minting a fresh
-    /// UUID — so a Retry swaps the failed card in place rather than
-    /// appending a second card (#3162). Unset for all normal
-    /// generation paths, in which case a fresh UUID is minted.
-    pub static REGENERATE_TARGET_ID: String;
-}
-
 /// Returns the artifacts root directory, creating it if it doesn't exist.
 ///
 /// The root lives at `<workspace_dir>/artifacts/`.
@@ -339,6 +330,34 @@ pub async fn create_artifact_for_call(
     extension: &str,
     tool_call_id: Option<&str>,
 ) -> Result<(ArtifactMeta, PathBuf), String> {
+    create_artifact_regenerating(
+        workspace_dir,
+        files,
+        kind,
+        title,
+        extension,
+        tool_call_id,
+        None,
+    )
+    .await
+}
+
+/// As [`create_artifact_for_call`], but a `regenerate_target` (the id
+/// `ops::ai_regenerate` re-dispatches a failed card under) makes the call
+/// reuse that id and its existing record instead of minting a fresh UUID, so a
+/// Retry swaps the failed card in place rather than appending a second one
+/// (#3162). The target travels as an explicit argument from the regenerating
+/// caller to the tool that produces the artifact. A blank target mints a fresh
+/// id like `None`.
+pub async fn create_artifact_regenerating(
+    workspace_dir: &Path,
+    files: impl Into<FileRoots>,
+    kind: super::types::ArtifactKind,
+    title: &str,
+    extension: &str,
+    tool_call_id: Option<&str>,
+    regenerate_target: Option<&str>,
+) -> Result<(ArtifactMeta, PathBuf), String> {
     let roots = files.into();
     let files_dir = roots.current();
     let trimmed_title = title.trim();
@@ -356,14 +375,13 @@ pub async fn create_artifact_for_call(
     }
 
     // Normal path mints a fresh UUID. A regenerate (#3162) runs inside
-    // `REGENERATE_TARGET_ID.scope(...)` and reuses the original id so the
+    // an explicit `regenerate_target` and reuses the original id so the
     // Pending/Ready/Failed events that follow carry the same artifact_id
     // and the card swaps in place. The reused dir already exists; the
     // `create_dir_all` below is idempotent and the meta/file are
     // overwritten with the fresh generation.
-    let reused_id = REGENERATE_TARGET_ID
-        .try_with(|target| target.clone())
-        .ok()
+    let reused_id = regenerate_target
+        .map(str::to_owned)
         .filter(|target| !target.trim().is_empty());
     let is_regenerate = reused_id.is_some();
     let id = reused_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());

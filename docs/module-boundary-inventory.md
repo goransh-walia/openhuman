@@ -63,7 +63,8 @@ violation was observed; it does not mean this plan is complete.
 
 ## Remaining acceptance work
 
-The shared `openhuman_rpc::embed::modules::ModuleClient` takes explicit runtime
+`openhuman_rpc::embed::modules::client(config)` builds a
+`tinybus::module::ModuleClient` from explicit runtime
 configuration and uses the same process-wide loader before or after core
 startup. It has no linked fallback. Resolution reports and client errors use a
 closed reason vocabulary and registry metadata. Cached resolution failures and

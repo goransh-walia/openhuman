@@ -12,7 +12,7 @@ fn handle() -> SteeringHandle {
 fn the_default_harness_ceiling_is_clamped_below_the_backstop() {
     let backstop =
         Duration::from_secs(tinyagents_harness::turn_deadline::DEFAULT_TURN_BACKSTOP_SECS);
-    let default_ms = crate::agent::tinyagents::DEFAULT_AGENT_TURN_TIMEOUT_SECS * 1_000;
+    let default_ms = tinyagents_harness::turn_policy::DEFAULT_AGENT_TURN_TIMEOUT_SECS * 1_000;
     assert!(
         default_ms > backstop.as_millis() as u64,
         "precondition: the unclamped ceiling is later than the backstop"

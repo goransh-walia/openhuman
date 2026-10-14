@@ -174,8 +174,8 @@ pub async fn install_from_config(config: &crate::config::Config) -> Result<(), S
 }
 
 /// Construct explicit access over the shared process-wide loader.
-pub(super) fn client(config: &crate::config::Config) -> crate::modules::client::ModuleClient {
-    crate::modules::client::ModuleClient::new(config.clone())
+pub(super) fn client(config: &crate::config::Config) -> tinybus::module::ModuleClient {
+    crate::modules::client(config.clone())
 }
 
 /// Everything the module considers about one tool result.
@@ -348,7 +348,7 @@ fn compacted_from(response: tinyjuice_bus::wire::CompactResponse) -> CompactedTo
 }
 
 async fn record_savings(
-    client: &crate::modules::client::ModuleClient,
+    client: &tinybus::module::ModuleClient,
     response: &tinyjuice_bus::wire::CompactResponse,
 ) {
     use std::str::FromStr as _;

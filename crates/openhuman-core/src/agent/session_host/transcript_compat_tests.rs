@@ -34,7 +34,7 @@ const FIXTURE_DIR: &str = concat!(
 
 /// How a scenario's fixture files are laid out in a fresh workspace.
 #[derive(Clone, Copy, PartialEq)]
-enum Layout {
+pub(super) enum Layout {
     /// One head transcript at the session's own stem.
     Head,
     /// A sealed generation 0 plus its generation 1 head.
@@ -47,7 +47,7 @@ enum Layout {
 pub(super) struct Scenario {
     pub(super) name: &'static str,
     pub(super) native: bool,
-    layout: Layout,
+    pub(super) layout: Layout,
 }
 
 pub(super) static SCENARIOS: &[Scenario] = &[
@@ -208,7 +208,7 @@ pub(super) fn run_async<F: std::future::Future<Output = ()> + Send + 'static>(fu
         .expect("test thread panicked");
 }
 
-fn session_raw(root: &Path) -> PathBuf {
+pub(super) fn session_raw(root: &Path) -> PathBuf {
     root.join("workspace").join("session_raw")
 }
 
@@ -220,7 +220,7 @@ pub(super) fn stem_path(root: &Path, stem: &str) -> PathBuf {
 /// `variant` selects an alternate on-disk generation of a head fixture
 /// (`""` the committed legacy capture, `".typed"` the same rows re-written in
 /// the typed row form).
-fn place_fixture(root: &Path, scenario: &Scenario, stem: &str, variant: &str) {
+pub(super) fn place_fixture(root: &Path, scenario: &Scenario, stem: &str, variant: &str) {
     let name = scenario.name;
     match scenario.layout {
         Layout::Head => {

@@ -1,6 +1,16 @@
 use super::*;
 use tinyagents_session::port::InMemorySessionStores;
 
+/// Runs `future` under a derived context whose host overrides carry `provider`
+/// as the agent's session store, the explicit per-context seam `installed()`
+/// consults ahead of the process-wide provider.
+async fn scope<F: std::future::Future>(
+    provider: Arc<dyn SessionStoreProvider>,
+    future: F,
+) -> F::Output {
+    crate::core::runtime::CoreContext::scope(derived_with_store(None, None, provider), future).await
+}
+
 #[tokio::test]
 async fn a_scoped_provider_serves_only_its_own_task() {
     let provider: Arc<dyn SessionStoreProvider> = Arc::new(InMemorySessionStores::new());
@@ -73,6 +83,22 @@ async fn without_a_store_transcripts_are_workspace_files() {
 }
 
 fn derived(profile: Option<&str>, agent: Option<&str>) -> Arc<crate::core::runtime::CoreContext> {
+    derived_overlay(profile, agent, None)
+}
+
+fn derived_with_store(
+    profile: Option<&str>,
+    agent: Option<&str>,
+    provider: Arc<dyn SessionStoreProvider>,
+) -> Arc<crate::core::runtime::CoreContext> {
+    derived_overlay(profile, agent, Some(provider))
+}
+
+fn derived_overlay(
+    profile: Option<&str>,
+    agent: Option<&str>,
+    provider: Option<Arc<dyn SessionStoreProvider>>,
+) -> Arc<crate::core::runtime::CoreContext> {
     use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet};
     let mut overlay = ContextOverlay::new(
         crate::config::Config::default(),
@@ -84,6 +110,11 @@ fn derived(profile: Option<&str>, agent: Option<&str>) -> Arc<crate::core::runti
     }
     if let Some(agent) = agent {
         overlay = overlay.session_agent(agent);
+    }
+    if let Some(provider) = provider {
+        let mut overrides = crate::agent::host_overrides::HostOverrides::default();
+        overrides.session_store = Some(provider);
+        overlay = overlay.host_overrides(Arc::new(overrides));
     }
     CoreContext::for_test(DomainSet::full(), None).derive_with(overlay)
 }
@@ -124,12 +155,10 @@ async fn two_profiles_default_agents_keep_separate_session_keys_and_stores() {
     let provider: Arc<dyn SessionStoreProvider> = Arc::new(InMemorySessionStores::new());
     let stores_of = |profile: &'static str| {
         let provider = provider.clone();
-        scope(provider, async move {
-            crate::core::runtime::CoreContext::scope(derived(Some(profile), None), async {
-                current().map(|stores| stores.transcripts.destination_key())
-            })
-            .await
-        })
+        crate::core::runtime::CoreContext::scope(
+            derived_with_store(Some(profile), None, provider),
+            async { current().map(|stores| stores.transcripts.destination_key()) },
+        )
     };
     let (alice, bob) = (stores_of("alice").await, stores_of("bob").await);
     assert_ne!(alice, bob);

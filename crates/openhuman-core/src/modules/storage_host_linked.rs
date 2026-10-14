@@ -15,7 +15,7 @@
 //! a request.
 //!
 //! The module runs on its own runtime, so each call is handed back to the
-//! host's runtime (`ObjectService::runtime`), where the backend was opened.
+//! host's runtime (`HostEndpoint`'s runtime), where the backend was opened.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -29,6 +29,18 @@ use super::storage_host::{serve_objects, StorageHost};
 /// admitted, because a linked module's setup is a plain function with no state.
 static PENDING: Mutex<Option<(Arc<StorageHost>, tokio::runtime::Handle)>> = Mutex::new(None);
 
+/// The pending slot is process-wide, so every test that attaches (here and in
+/// `storage_host_cdylib_tests`) takes a turn on this one lock.
+#[cfg(test)]
+pub(super) static TEST_TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Held by [`attach`] from publishing `PENDING` until the module serves, so two
+/// concurrent attachments (any test that starts a runtime, not only the ones
+/// taking `TEST_TURN`) cannot overwrite each other's slot before `setup`
+/// reads it.
+#[cfg(test)]
+static ATTACH_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// How long [`attach`] waits for the module to claim the interface name.
 const READY_DEADLINE: Duration = Duration::from_secs(5);
 
@@ -38,7 +50,11 @@ async fn setup(connection: tinybus::Connection) -> tinybus::Result<()> {
         .unwrap_or_else(|poison| poison.into_inner())
         .clone()
         .ok_or_else(|| tinybus::Error::failed("storage host has nothing to serve"))?;
-    serve_objects(&connection, &host, Some(runtime)).await
+    // Dropping the handle leaves the objects registered for the life of the
+    // module's connection.
+    serve_objects(&connection, &host, Some(runtime))
+        .await
+        .map(drop)
 }
 
 mod export {
@@ -64,6 +80,8 @@ pub(super) async fn attach(
     connection: &tinybus::Connection,
     host: Arc<StorageHost>,
 ) -> tinybus::Result<()> {
+    #[cfg(test)]
+    let _attaching = ATTACH_GUARD.lock().await;
     *PENDING.lock().unwrap_or_else(|poison| poison.into_inner()) =
         Some((host, tokio::runtime::Handle::current()));
     modules.attach_linked_with_config(export::linked_module()?, serde_json::json!({}))?;

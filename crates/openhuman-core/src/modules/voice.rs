@@ -31,7 +31,7 @@
 
 use tinyvoice_bus::names::methods;
 
-use super::{host, ops, registry};
+use super::{ops, registry};
 use crate::config::Config;
 
 /// Registry id of the module these calls go to.
@@ -685,7 +685,7 @@ where
         .map_err(VoiceCallError::Unavailable)?;
     let record = registry::find(MODULE_ID)
         .ok_or_else(|| VoiceCallError::Unavailable(format!("unknown module '{MODULE_ID}'")))?;
-    let runtime = host::runtime()
+    let runtime = super::runtime::runtime()
         .await
         .map_err(|_| VoiceCallError::Unavailable("the module bus is not running".to_string()))?;
     let proxy = runtime

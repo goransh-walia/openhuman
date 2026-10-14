@@ -5,11 +5,11 @@ use super::credentials::hydrate_channel_credentials;
 use crate::channels::runtime::dispatch::RuntimeChannelMessage;
 use crate::config::Config;
 use crate::modules::channel_runtime::ChannelRuntimeLease;
-use crate::modules::client::{ModuleCallError, ModuleClient, ModuleObjectClient};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, Weak};
+use tinybus::module::{ModuleCallError, ModuleClient, ModuleObjectClient};
 use tinychannels_bus::module_runtime::{
     ChannelIngressKind, ChannelMessagePreparation, ConfiguredChannelInfo,
 };
@@ -45,7 +45,7 @@ impl ModuleChannelRuntime {
         context: Arc<OnceLock<Weak<crate::channels::context::ChannelRuntimeContext>>>,
         dispatch: mpsc::Sender<RuntimeChannelMessage>,
     ) -> Result<Self> {
-        let client = ModuleClient::new((*config).clone());
+        let client = crate::modules::client((*config).clone());
         // Queued deliveries from before the storage contract move into the
         // module's storage before it starts and reads its queue. Best effort:
         // a failure is retried at the next start, never fatal to channels.

@@ -1141,7 +1141,7 @@ pub(crate) fn spawn_progress_bridge(
                                     // the turn's final figure (or `null`)
                                     // arrives on `chat_done`.
                                     cost_usd: Some(total_usd),
-                                    cost_source: crate::agent::cost::CostSource::Charged,
+                                    cost_source: tinyagents_harness::cost::CostSource::Charged,
                                     context_window: 0,
                                     context_tokens: 0,
                                     subagents: Vec::new(),

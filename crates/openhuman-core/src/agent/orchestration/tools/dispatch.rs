@@ -13,7 +13,6 @@ use tinytools::ToolRunContext;
 use tinytools::{ToolCallOptions, ToolResult};
 
 mod dispatch_outcomes;
-mod tool_call_text;
 pub(crate) use dispatch_outcomes::*;
 
 /// Typed dispatch for the delegation tools synthesised from the active agent.

@@ -67,19 +67,22 @@ pub(crate) async fn spawn_parallel_turn(
                 task_cancel_token,
                 origin.clone(),
                 approval_ctx,
-                run_chat_task(
-                    &client_id_task,
-                    &thread_id_task,
-                    &request_id_task,
-                    &user_message,
-                    model_override,
-                    temperature,
-                    locale,
-                    run_queue,
-                    metadata,
-                    origin.clone(),
-                    /* fork */ true,
-                ),
+                |host_env| {
+                    run_chat_task(
+                        &client_id_task,
+                        &thread_id_task,
+                        &request_id_task,
+                        &user_message,
+                        model_override,
+                        temperature,
+                        locale,
+                        run_queue,
+                        metadata,
+                        origin.clone(),
+                        /* fork */ true,
+                        host_env,
+                    )
+                },
             )
             .await;
 

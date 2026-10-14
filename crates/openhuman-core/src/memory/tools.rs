@@ -143,7 +143,6 @@ impl CallFacts {
         let workspace = context
             .and_then(ToolRunContext::workspace_root)
             .map(std::path::Path::to_path_buf)
-            .or_else(crate::agent::turn_workspace::current)
             .unwrap_or_else(|| config.action_dir.clone());
         let identity = super::scope::current().unwrap_or_else(|| {
             // Outside a scoped turn (a legacy driver), fall back to the

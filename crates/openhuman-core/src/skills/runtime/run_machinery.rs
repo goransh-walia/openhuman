@@ -8,7 +8,6 @@
 use serde_json::Value;
 
 use crate::agent::session_host::OpenHumanSessionHost;
-use crate::agent::subagent_host::with_autonomous_iter_cap;
 use crate::config::Config;
 use crate::skills::{preflight, registry, run_log};
 
@@ -203,6 +202,7 @@ pub async fn spawn_workflow_run_background(
             // a post-construction override rather than a pre-set on `config`
             // (which the builder would otherwise clobber).
             agent.set_max_tool_iterations(WORKFLOW_RUN_MAX_ITERATIONS);
+            agent.set_autonomous_iter_cap(Some(WORKFLOW_RUN_MAX_ITERATIONS));
             tracing::debug!(
                 run_id = %run_id,
                 max_tool_iterations = WORKFLOW_RUN_MAX_ITERATIONS,
@@ -238,10 +238,7 @@ pub async fn spawn_workflow_run_background(
                 _ = cancel_token.cancelled() => None,
                 r = crate::agent::turn_origin::with_origin(
                     inherited_origin,
-                    with_autonomous_iter_cap(
-                        WORKFLOW_RUN_MAX_ITERATIONS,
-                        agent.run_single(&task_prompt),
-                    ),
+                    agent.run_single(&task_prompt),
                 ) => Some(r),
             };
             agent.set_on_progress(None);

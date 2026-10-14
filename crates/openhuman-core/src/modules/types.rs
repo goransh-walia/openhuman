@@ -36,6 +36,21 @@ impl ModuleRecord {
     pub fn asset_for(&self, host_key: &str) -> Option<&'static PlatformAsset> {
         self.assets.iter().find(|asset| asset.host_key == host_key)
     }
+
+    /// The part of this record the tinybus resolver consumes: identity, bus
+    /// address and the pinned release. The rest (`description`, `load`,
+    /// `source`) is host policy.
+    #[must_use]
+    pub fn release(&self) -> tinybus::module::ReleaseRecord {
+        tinybus::module::ReleaseRecord {
+            id: self.id,
+            bus_name: self.bus_name,
+            object_path: self.object_path,
+            version: self.version,
+            release_url: self.release_url,
+            assets: self.assets,
+        }
+    }
 }
 
 /// How to build a module's native library from its gitlink under `vendor/`.
@@ -73,16 +88,10 @@ impl SourceSpec {
     }
 }
 
-/// One published artifact and the digest that makes it legitimate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PlatformAsset {
-    /// Host identifier this artifact targets, e.g. `ubuntu-24.04-x86_64`.
-    pub host_key: &'static str,
-    /// Exact release asset name to download.
-    pub archive: &'static str,
-    /// Lowercase hex SHA-256 of the archive, taken from the release manifest.
-    pub sha256: &'static str,
-}
+/// One published artifact and the digest that makes it legitimate: the digest
+/// is copied verbatim from the release's `checksum.toml`. This is tinybus'
+/// own type, so the registry records feed the resolver without a conversion.
+pub type PlatformAsset = tinybus::module::ReleaseAsset<'static>;
 
 /// When a module is loaded into the process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

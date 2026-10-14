@@ -3,8 +3,8 @@
 use serde::{de::DeserializeOwned, Serialize};
 use tinycomputer_bus::{names::accessibility as methods, DesktopError, DesktopResponse};
 
-use super::client::{ModuleCallError, ModuleClient};
 use crate::config::Config;
+use tinybus::module::{ModuleCallError, ModuleClient};
 
 pub use tinycomputer_bus::accessibility::{
     FocusQuery, FocusTarget, FocusedTextContext, GlobeBatch, GlobeHandle, GlobeHotkeyStatus,
@@ -43,7 +43,7 @@ pub struct AccessibilityClient {
 impl AccessibilityClient {
     pub fn new(config: &Config) -> Self {
         Self {
-            client: ModuleClient::new(config.clone()),
+            client: crate::modules::client(config.clone()),
             computer_enabled: config.components.computer,
         }
     }
@@ -51,7 +51,7 @@ impl AccessibilityClient {
     #[cfg(all(test, feature = "modules"))]
     pub(crate) fn fixture(proxy: tinybus::Proxy) -> Self {
         Self {
-            client: ModuleClient::fixture(proxy),
+            client: crate::modules::ops::fixture_client(proxy),
             computer_enabled: true,
         }
     }
@@ -197,7 +197,7 @@ fn decode<T: DeserializeOwned>(raw: serde_json::Value) -> Result<T, Accessibilit
 }
 
 fn malformed() -> AccessibilityError {
-    ModuleClient::report_malformed_reply(MODULE);
+    crate::modules::report::malformed_reply(MODULE);
     AccessibilityError::Bus(ModuleCallError::ModuleFault)
 }
 

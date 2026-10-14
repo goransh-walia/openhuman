@@ -117,7 +117,6 @@ fn clear_and_compact_sender_history_update_cached_messages() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn overflow_detection_covers_edge_cases() {
     let ctx = runtime_context();
     assert!(is_context_window_overflow_error(

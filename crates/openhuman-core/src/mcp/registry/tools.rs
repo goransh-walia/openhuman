@@ -264,11 +264,24 @@ impl Tool for McpRegistryToolCallTool {
             .normalize_tool_arguments(args.get("arguments").cloned())
             .await
             .map_err(|_| anyhow::anyhow!("mcp_registry_tool_call: invalid tool arguments"))?;
-        emit!(
-            ops::mcp_clients_tool_call(&self.config, sid, tool_name, Value::Object(normalized),)
-                .await,
-            "mcp_registry_tool_call"
+        let arguments = Value::Object(normalized);
+        let outcome = ops::mcp_clients_tool_call(
+            &self.config,
+            sid.clone(),
+            tool_name.clone(),
+            arguments.clone(),
         )
+        .await
+        .map_err(|e| anyhow::anyhow!("mcp_registry_tool_call: {e}"))?;
+        let mut result = ToolResult::success(serde_json::to_string(&outcome.value)?);
+        if let Some(raw) = outcome.value.get("result").filter(|raw| raw.is_object()) {
+            let view = crate::mcp::ui::resolve::view_from_raw_result(
+                &sid, &tool_name, None, arguments, raw,
+            );
+            result.metadata = crate::mcp::ui::resolve::presentation_from_view(&view)
+                .map(|presentation| presentation.to_metadata());
+        }
+        Ok(result)
     }
 }
 

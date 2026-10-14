@@ -178,7 +178,7 @@ pub(crate) async fn process_channel_runtime_message(
                     emoji,
                 )) => Some(emoji),
                 Ok(_) => {
-                    crate::modules::client::ModuleClient::report_malformed_reply("tinychannels");
+                    crate::modules::report::malformed_reply("tinychannels");
                     None
                 }
                 Err(_) => None,
@@ -604,7 +604,7 @@ pub(crate) async fn process_channel_runtime_message(
             // Sentry funnel (OPENHUMAN-TAURI-98) and emit `log::info!`
             // instead — `Err` propagation through the surrounding match
             // arm is unchanged.
-            if crate::agent::error::is_max_iterations_error(&e.to_string()) {
+            if tinyagents_harness::agent_error::is_max_iterations_error(&e.to_string()) {
                 log::info!(
                     target: "channels",
                     "[channels.dispatch] suppressed Sentry emission for max-iteration cap \

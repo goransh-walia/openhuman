@@ -1,6 +1,5 @@
 //! `OpenHumanSessionHost::from_config` factory methods and internal `build_session_agent_inner` constructor.
 
-use super::host_tools::derive_turn_workspace_descriptor;
 use super::should_synthesize_delegation_tools;
 use crate::agent::harness::host_definition::{
     AgentDefinitionExt, AgentDefinitionRegistry, NO_TOOLS_SENTINEL,
@@ -152,7 +151,7 @@ impl OpenHumanSessionHost {
         host: Option<&super::HostTools>,
         session_id: Option<&str>,
     ) -> Result<Self> {
-        let workspace_descriptor = derive_turn_workspace_descriptor();
+        let workspace_descriptor: Option<tinytools::WorkspaceDescriptor> = None;
 
         let runtime: Arc<dyn host_runtime::RuntimeAdapter> = Arc::from(
             host_runtime::create_runtime(&config.runtime, config.shell.hide_window)?,
@@ -386,7 +385,7 @@ impl OpenHumanSessionHost {
             None => SystemPromptBuilder::with_defaults(),
         };
         let post_turn_hooks: Vec<Arc<dyn crate::agent::hooks::PostTurnHook>> =
-            crate::agent::hooks::turn_post_turn_hooks();
+            crate::agent::hooks::embedder_post_turn_hooks();
 
         // Best-effort prewarm from the shared Composio cache. This avoids
         // building the session with a knowingly stale `&[]` integration view
@@ -709,7 +708,7 @@ impl OpenHumanSessionHost {
         // `None` and their tool results stay untouched (the summarizer
         // itself MUST be `None` to avoid recursive self-summarization).
         let payload_summarizer: Option<
-            std::sync::Arc<dyn crate::agent::tinyagents::payload_summarizer::PayloadSummarizer>,
+            std::sync::Arc<crate::agent::tinyagents::payload_summarizer::DynPayloadSummarizer>,
         > = if !host_only && super::summarizes_tool_output(agent_id, config) {
             match crate::agent::harness::host_definition::AgentDefinitionRegistry::current() {
                 Some(reg) => match reg.get("summarizer") {

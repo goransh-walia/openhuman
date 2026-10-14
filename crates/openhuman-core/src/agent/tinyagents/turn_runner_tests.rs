@@ -117,9 +117,12 @@ async fn scoped_tool_limit_is_honored_by_the_hosted_runner_inner() {
         .expect("scripted turn models build");
     let (tx, _rx) = tokio::sync::mpsc::channel(8);
 
-    let _ = crate::agent::stop_hooks::with_tool_call_limit(Some(0), async {
+    let mut limited_context = root_context("limited-runner", "/tmp/limited-runner", tx);
+    // The host's explicit cap rides the run context: no tool may run.
+    limited_context.tool_call_limit = Some(0);
+    let _ = async {
         run_root_turn_via_hosted_agent(
-            root_context("limited-runner", "/tmp/limited-runner", tx),
+            limited_context,
             hosted_base(),
             "main".to_string(),
             models,
@@ -141,7 +144,7 @@ async fn scoped_tool_limit_is_honored_by_the_hosted_runner_inner() {
             true,
         )
         .await
-    })
+    }
     .await;
 
     assert!(model_calls.load(std::sync::atomic::Ordering::SeqCst) > 0);
@@ -173,13 +176,15 @@ async fn positive_scoped_tool_limit_caps_hosted_runner_inner() {
         .expect("scripted turn models build");
     let (tx, _rx) = tokio::sync::mpsc::channel(8);
 
-    let outcome = crate::agent::stop_hooks::with_tool_call_limit(Some(1), async {
+    let mut limited_context = root_context(
+        "limited-runner-positive",
+        "/tmp/limited-runner-positive",
+        tx,
+    );
+    limited_context.tool_call_limit = Some(1);
+    let outcome = async {
         run_root_turn_via_hosted_agent(
-            root_context(
-                "limited-runner-positive",
-                "/tmp/limited-runner-positive",
-                tx,
-            ),
+            limited_context,
             hosted_base(),
             "main".to_string(),
             models,
@@ -201,7 +206,7 @@ async fn positive_scoped_tool_limit_caps_hosted_runner_inner() {
             true,
         )
         .await
-    })
+    }
     .await;
 
     let outcome = outcome.expect("hosted runner succeeds after its permitted tool call");

@@ -1,5 +1,7 @@
 use super::*;
 use serde_json::json;
+use tinystoragedrivers_bus::STORAGE_INTERFACE;
+use tinystoragedrivers_busproxy::{ERROR_DENIED, OBJECT_ROOT};
 
 #[test]
 fn module_scopes_are_distinct_per_module_and_per_tenant() {
@@ -157,21 +159,7 @@ async fn the_bus_hands_the_host_the_brokers_sender_and_nothing_else() {
         Arc::clone(&rig.env) as Arc<dyn Environment>,
         Arc::clone(&rig.trail) as Arc<dyn AuditSink>,
     ));
-    for object in [Object::Documents, Object::Secrets] {
-        let path = ObjectPath::new(format!("{OBJECT_ROOT}/{}", object.as_str())).unwrap();
-        service
-            .serve_at(
-                path,
-                ObjectService {
-                    runtime: None,
-                    object,
-                    host: Arc::clone(&host),
-                },
-            )
-            .await
-            .unwrap();
-    }
-    service.request_name(STORAGE_INTERFACE).await.unwrap();
+    let _served = serve_objects(&service, &host, None).await.unwrap();
 
     let documents = |from: &Connection| {
         from.proxy(

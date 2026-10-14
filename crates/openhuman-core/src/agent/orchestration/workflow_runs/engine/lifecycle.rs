@@ -290,11 +290,9 @@ pub(crate) async fn run_engine_loop(
             safety_tier,
         )),
     )
-    .with_event_sink(Arc::new(
-        crate::agent::tinyagents::observability::GraphTracingSink::new(format!(
-            "workflow:{run_id}"
-        )),
-    ));
+    .with_event_sink(Arc::new(tinyagents_graph::GraphTracingSink::new(format!(
+        "workflow:{run_id}"
+    ))));
 
     let outcome = with_root_parent(config, "workflow_engine", "workflow", "workflow", async {
         engine

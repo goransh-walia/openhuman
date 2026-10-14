@@ -1,6 +1,6 @@
 //! Thin adapters for module-owned channel controller operations.
-use super::client::{ModuleCallError, ModuleClient};
 use serde::de::DeserializeOwned;
+use tinybus::module::{ModuleCallError, ModuleClient};
 use tinychannels_bus::{
     methods, ChannelControllerRequest, ChannelControllerResult, HttpProxyPolicy,
 };
@@ -37,7 +37,7 @@ fn decode_discord<R: DeserializeOwned>(
     };
     raw.and_then(|value| serde_json::from_value(value).ok())
         .ok_or_else(|| {
-            ModuleClient::report_malformed_reply("tinychannels");
+            crate::modules::report::malformed_reply("tinychannels");
             ModuleCallError::ModuleFault
         })
 }
@@ -53,7 +53,7 @@ pub(crate) async fn prepare_connection(
     match response {
         ChannelControllerResult::PreparedConnect(prepared) => Ok(*prepared),
         _ => {
-            ModuleClient::report_malformed_reply("tinychannels");
+            crate::modules::report::malformed_reply("tinychannels");
             Err(ModuleCallError::ModuleFault)
         }
     }

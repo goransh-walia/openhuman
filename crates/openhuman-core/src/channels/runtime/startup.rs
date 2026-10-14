@@ -11,8 +11,8 @@ mod relay;
 mod start_channels;
 mod turn_parts;
 
-use crate::modules::client::{ModuleCallError, ModuleClient};
 use anyhow::Result;
+use tinybus::module::{ModuleCallError, ModuleClient};
 
 /// Ask the owning module to prepare effective execution limits for this host
 /// runtime. A malformed response fails closed and reports only the module ID.
@@ -43,7 +43,7 @@ pub(crate) async fn prepare_runtime_limits(
             Ok((timeout_secs, max_in_flight))
         }
         _ => {
-            ModuleClient::report_malformed_reply("tinychannels");
+            crate::modules::report::malformed_reply("tinychannels");
             Err(anyhow::Error::new(ModuleCallError::ModuleFault)
                 .context("channel runtime returned invalid runtime limits"))
         }

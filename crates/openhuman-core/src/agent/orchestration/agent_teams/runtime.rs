@@ -49,7 +49,7 @@ use tinyagents_orchestration::teams::{
     truncate_chars, MemberOutcome, SessionTeamLedger, TeamError,
 };
 
-use crate::agent::tinyagents::observability::GraphTracingSink;
+use tinyagents_graph::GraphTracingSink;
 
 const LOG_TARGET: &str = "agent_team_runtime";
 /// Fallback archetype when a member carries no explicit `agent_id`: the

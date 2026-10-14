@@ -364,14 +364,9 @@ pub fn propagate<F: std::future::Future>(fut: F) -> impl std::future::Future<Out
 ///
 /// # What it does not carry
 ///
-/// Only the origin. A delegated agent turn usually also needs
-/// [`turn_workspace::propagate`](super::turn_workspace) and the harness fork
-/// context; those are separate wrappers and still have to be applied around the
-/// future passed in here.
-///
-/// ```ignore
-/// let join = turn_origin::spawn(turn_workspace::propagate(async move { .. }));
-/// ```
+/// Only the origin (and the ambient `CoreContext`). A delegated agent turn
+/// usually also needs the harness fork context, a separate wrapper that still
+/// has to be applied around the future passed in here.
 pub fn spawn<F>(fut: F) -> tokio::task::JoinHandle<F::Output>
 where
     F: std::future::Future + Send + 'static,

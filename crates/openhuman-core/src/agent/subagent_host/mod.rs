@@ -54,9 +54,7 @@ mod lifecycle_tests;
 mod persisted_compat_tests;
 
 // Public API — the entry point and the shapes it returns.
-pub use autonomous::{
-    autonomous_iter_cap, subagent_iter_cap_with_autonomous_lift, with_autonomous_iter_cap,
-};
+pub use autonomous::{definition_iter_cap, subagent_iter_cap_with_autonomous_lift};
 pub(crate) use lifecycle::load_subagent_checkpoint;
 pub use lifecycle::{
     continue_subagent, continue_subagent_with_parent, run_subagent, run_subagent_with_parent,

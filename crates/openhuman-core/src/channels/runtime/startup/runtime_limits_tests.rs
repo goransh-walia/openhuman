@@ -1,7 +1,6 @@
 use super::*;
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn runtime_limits_come_from_the_linked_channel_module() {
     let client = crate::channels::module_fixture::client().await;
 

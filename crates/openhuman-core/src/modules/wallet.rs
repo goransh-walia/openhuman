@@ -77,7 +77,7 @@ use tinywallet_bus::wire::{
 };
 use zeroize::Zeroize;
 
-use super::{host, ops, registry};
+use super::{ops, registry};
 use crate::config::Config;
 
 /// Registry id of the module these calls go to.
@@ -378,7 +378,7 @@ async fn attested_proxy(config: &Config) -> Result<tinybus::Proxy, WalletCallErr
 }
 
 // Embedded library checksums verified from all 17 archives in the
-// registry-pinned TinyWallet v0.22.0 release. Each library is trusted only
+// registry-pinned TinyWallet v0.23.2 release. Each library is trusted only
 // while its archive checksum remains pinned in the supplied ModuleRecord.
 const PINNED_WALLET_LIBRARIES: &[(&str, &str)] = &[
     // archlinux-arm64
@@ -497,13 +497,19 @@ pub async fn ensure_ready(config: &Config) -> Result<(), WalletCallError> {
 /// Ensure the module is serving and hand back what a call needs.
 async fn ready(
     config: &Config,
-) -> Result<(&'static host::ModuleRuntime, &'static super::ModuleRecord), WalletCallError> {
+) -> Result<
+    (
+        &'static tinybus::module::ModuleRuntime,
+        &'static super::ModuleRecord,
+    ),
+    WalletCallError,
+> {
     ops::ensure_loaded(config, MODULE_ID)
         .await
         .map_err(WalletCallError::Unavailable)?;
     let record = registry::find(MODULE_ID)
         .ok_or_else(|| WalletCallError::Unavailable(format!("unknown module '{MODULE_ID}'")))?;
-    let runtime = host::runtime()
+    let runtime = super::runtime::runtime()
         .await
         .map_err(|_| WalletCallError::Unavailable("the module bus is not running".to_string()))?;
     Ok((runtime, record))
@@ -511,7 +517,7 @@ async fn ready(
 
 /// A proxy for the module's object.
 fn proxy(
-    runtime: &'static host::ModuleRuntime,
+    runtime: &'static tinybus::module::ModuleRuntime,
     record: &super::ModuleRecord,
 ) -> Result<tinybus::Proxy, WalletCallError> {
     runtime

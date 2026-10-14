@@ -35,7 +35,7 @@ impl OpenHumanChannelBackend {
         &self,
         prepared: tinychannels_bus::module_runtime::PreparedChannelIntent,
     ) -> anyhow::Result<ChannelSendMessageResult> {
-        crate::modules::client::ModuleClient::new(self.config.clone())
+        crate::modules::client(self.config.clone())
             .call_confidential(
                 "tinychannels",
                 tinychannels_bus::methods::SEND_CHANNEL_INTENT,

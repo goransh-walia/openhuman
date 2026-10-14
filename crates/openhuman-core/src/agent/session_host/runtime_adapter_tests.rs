@@ -65,7 +65,7 @@ impl SessionDriver<OpenHumanRunContext> for RecordingDriver {
 fn codec_marks_failed_tool_rows_from_the_explicit_turn_sidecar() {
     let context = OpenHumanRunContext::new();
     context.session_sidecar.lock().unwrap().tool_outcomes.push(
-        crate::agent::tinyagents::ToolCallOutcome {
+        tinyagents_harness::turn_outcome::ToolCallOutcome {
             call_id: "call-1".into(),
             name: "dangerous_tool".into(),
             arguments: serde_json::json!({"path": "secret"}),
@@ -112,16 +112,16 @@ fn codec_attaches_only_this_agents_own_sidecar_usage_to_atomic_append() {
         sidecar.input_tokens = 13;
         sidecar.output_tokens = 8;
         sidecar.cached_input_tokens = 3;
-        sidecar.cost = crate::agent::cost::CostTally {
+        sidecar.cost = tinyagents_harness::cost::CostTally {
             known_usd: 0.004,
-            source: crate::agent::cost::CostSource::Charged,
+            source: tinyagents_harness::cost::CostSource::Charged,
         };
         sidecar.context_window = 128_000;
         sidecar.last_call_input_tokens = 9;
         sidecar.last_call_output_tokens = 2;
         sidecar
             .tool_outcomes
-            .push(crate::agent::tinyagents::ToolCallOutcome {
+            .push(tinyagents_harness::turn_outcome::ToolCallOutcome {
                 call_id: "call-usage".into(),
                 name: "read_file".into(),
                 arguments: serde_json::json!({"path": "Cargo.toml"}),
@@ -138,7 +138,7 @@ fn codec_attaches_only_this_agents_own_sidecar_usage_to_atomic_append() {
             output_tokens: 2,
             cached_input_tokens: 1,
             charged_amount_usd: 0.001,
-            cost_source: crate::agent::cost::CostSource::Charged,
+            cost_source: tinyagents_harness::cost::CostSource::Charged,
         },
     });
     // `OpenHumanRunContext` is `Clone` and its child ledger is an `Arc`, so this
@@ -203,9 +203,9 @@ fn last_turn_usage_reports_the_same_holistic_totals_as_transcript_billing() {
         input_tokens: 13,
         output_tokens: 8,
         cached_input_tokens: 3,
-        cost: crate::agent::cost::CostTally {
+        cost: tinyagents_harness::cost::CostTally {
             known_usd: 0.004,
-            source: crate::agent::cost::CostSource::Charged,
+            source: tinyagents_harness::cost::CostSource::Charged,
         },
         context_window: 128_000,
         last_call_input_tokens: 9,
@@ -222,7 +222,7 @@ fn last_turn_usage_reports_the_same_holistic_totals_as_transcript_billing() {
                 output_tokens: 2,
                 cached_input_tokens: 1,
                 charged_amount_usd: 0.001,
-                cost_source: crate::agent::cost::CostSource::Charged,
+                cost_source: tinyagents_harness::cost::CostSource::Charged,
             },
         });
 
@@ -422,6 +422,7 @@ async fn runtime_adapter_passes_host_context_commits_before_finalize_and_emits_o
                 cancellation: cancellation.clone(),
                 run_context: context
                     .into_tinyagents(tinyagents_harness::context::RunConfig::new("adapter-turn")),
+                controls: Default::default(),
             },
         )
         .await

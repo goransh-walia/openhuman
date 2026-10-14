@@ -352,8 +352,8 @@ async fn start_globe_with_client(
                 let recover = matches!(
                     error,
                     crate::modules::accessibility::AccessibilityError::Bus(
-                        crate::modules::client::ModuleCallError::TransportFailed
-                            | crate::modules::client::ModuleCallError::ModuleFault
+                        tinybus::module::ModuleCallError::TransportFailed
+                            | tinybus::module::ModuleCallError::ModuleFault
                     )
                 );
                 let _ = ready_tx.send(Err(error.to_string()));

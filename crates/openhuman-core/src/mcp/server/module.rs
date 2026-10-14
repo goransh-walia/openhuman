@@ -20,10 +20,8 @@ use tinymcp_bus::{
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{
-    config::Config,
-    modules::{client::ModuleCallError, client::ModuleClient},
-};
+use crate::config::Config;
+use tinybus::module::{ModuleCallError, ModuleClient};
 
 use super::handler;
 
@@ -184,7 +182,7 @@ impl ServerSession {
     pub(super) fn port_for_config(config: &Config) -> Arc<dyn ServerPort> {
         Self::register_shutdown_hook(config.clone());
         Arc::new(TinyMcpPort {
-            client: ModuleClient::new(config.clone()),
+            client: crate::modules::client(config.clone()),
         })
     }
 
@@ -195,7 +193,7 @@ impl ServerSession {
         crate::core::shutdown::register(move || {
             let config = config.clone();
             async move {
-                let client = ModuleClient::new(config);
+                let client = crate::modules::client(config);
                 if let Err(error) = client
                     .call::<usize>(MODULE, names::methods::SERVER_SHUTDOWN, ())
                     .await

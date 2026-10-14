@@ -108,8 +108,8 @@ async fn spawn_subagent_reports_a_stopped_child_as_a_failed_tool_result() {
         .expect("SubagentCompleted carries the child's stop");
     assert!(matches!(
         stop.kind,
-        crate::agent::turn_stop::TurnStopKind::Breaker
-            | crate::agent::turn_stop::TurnStopKind::IterationCap
+        tinyagents_harness::turn_stop::TurnStopKind::Breaker
+            | tinyagents_harness::turn_stop::TurnStopKind::IterationCap
     ));
 }
 
@@ -504,6 +504,7 @@ fn parent_context(
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     }
 }
 

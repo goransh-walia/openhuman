@@ -157,7 +157,7 @@ async fn released_runtime_scopes_callbacks_and_replays_one_final_send() {
     let first_sends = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let second_sends = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let first = ChannelRuntimeLease::open(
-        ModuleClient::new(config.clone()),
+        crate::modules::client(config.clone()),
         TransportFixture {
             sends: first_sends.clone(),
             expected_text: final_text.clone(),
@@ -166,7 +166,7 @@ async fn released_runtime_scopes_callbacks_and_replays_one_final_send() {
     .await
     .unwrap();
     let second = ChannelRuntimeLease::open(
-        ModuleClient::new(config),
+        crate::modules::client(config),
         TransportFixture {
             sends: second_sends.clone(),
             expected_text: final_text.clone(),

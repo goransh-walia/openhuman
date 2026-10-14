@@ -15,15 +15,17 @@ impl OpenHumanSessionHost {
     ) -> Result<String> {
         self.ensure_runtime_session()?;
         let staged = super::attachment_input::stage_turn(self, user_message, origin).await?;
-        let mut context = OpenHumanRunContext::new();
+        let mut context = OpenHumanRunContext::new().with_host_env(&self.host_env);
+        context.untrusted_input_turn = self.untrusted_input;
         context.origin = origin.cloned();
         context.progress = self.on_progress.clone();
         context.thread_id = self.thread_id.clone();
         context.task_recency_window = self.task_recency_window;
+        context.autonomous_iter_cap = self.autonomous_iter_cap;
         context.workspace = self.workspace_descriptor.clone();
-        // The web backstop's deadline, when this turn runs under one: the
-        // harness winds down before it instead of being dropped by it.
-        context.turn_deadline = crate::agent::turn_deadline::current();
+        // The web backstop's deadline (`host_env.turn_deadline`), when this
+        // turn runs under one, is already on the context: the harness winds
+        // down before it instead of being dropped by it.
         let cancellation = context.cancellation.clone();
         let root_config = context.root_run_config("openhuman-session");
         let mut options = TurnOptions {
@@ -39,6 +41,7 @@ impl OpenHumanSessionHost {
             resume: self.turn_resume_mode(),
             cancellation,
             run_context: context.into_tinyagents(root_config),
+            controls: Default::default(),
         };
         // Load persisted state before the normal turn lifecycle so the host
         // can read native recorded declarations for both bound sessions and

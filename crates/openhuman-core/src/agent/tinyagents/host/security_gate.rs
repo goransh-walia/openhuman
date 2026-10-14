@@ -144,19 +144,8 @@ pub struct OpenHumanSecurityGate {
     /// mismatch (2) in the module header.
     pending_audit: Mutex<HashMap<String, String>>,
     /// `false` for a host-only turn reading untrusted data
-    /// ([`with_untrusted_input_turn`]): its input is data, not instructions.
+    /// ([`Self::with_input_screening`]): its input is data, not instructions.
     screens_input: bool,
-}
-
-tokio::task_local! {
-    static UNTRUSTED_INPUT_TURN: ();
-}
-
-/// Run `fut` as a turn whose input is untrusted data: gates built for it do
-/// not screen input. Scoped only by `agent_chat_reply_for`, and only after the
-/// session accepted untrusted input, which only a host-only session does.
-pub(crate) async fn with_untrusted_input_turn<F: std::future::Future>(fut: F) -> F::Output {
-    UNTRUSTED_INPUT_TURN.scope((), Box::pin(fut)).await
 }
 
 impl OpenHumanSecurityGate {
@@ -173,9 +162,16 @@ impl OpenHumanSecurityGate {
             tool_policy: None,
             tool_sets,
             pending_audit: Mutex::new(HashMap::new()),
-            // Read here, on the turn's own task: a screen may run elsewhere.
-            screens_input: UNTRUSTED_INPUT_TURN.try_with(|_| ()).is_err(),
+            screens_input: true,
         }
+    }
+
+    /// Whether this gate screens the turn's input. A host-only turn reading
+    /// untrusted data (`OpenHumanRunContext::untrusted_input_turn`) passes
+    /// `false`: its input is data, not instructions.
+    pub fn with_input_screening(mut self, screens_input: bool) -> Self {
+        self.screens_input = screens_input;
+        self
     }
 
     /// Attaches the session's channel permission boundary.

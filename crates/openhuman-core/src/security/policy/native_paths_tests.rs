@@ -85,26 +85,6 @@ fn changed_agent_settings_produce_distinct_immutable_native_scope() {
     assert_eq!(changed.trusted_roots[0].access, PathAccess::ReadOnly);
 }
 
-#[tokio::test]
-async fn task_local_turn_root_is_included_without_leaking_into_other_scopes() {
-    let host = policy();
-    let root = PathBuf::from("/workflow-turn");
-    let outside = host.native_path_policy();
-    let inside = crate::agent::turn_workspace::with_workspace(root.clone(), async {
-        host.native_path_policy()
-    })
-    .await;
-    assert_eq!(
-        inside.trusted_roots.last().unwrap(),
-        &PathTrustedRoot {
-            path: root,
-            access: PathAccess::ReadWrite
-        }
-    );
-    assert_eq!(inside.trusted_roots.len(), outside.trusted_roots.len() + 1);
-    assert_eq!(host.native_path_policy(), outside);
-}
-
 #[test]
 fn native_transport_faults_and_malformed_permissions_fail_closed() {
     for result in [

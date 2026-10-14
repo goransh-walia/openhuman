@@ -333,6 +333,7 @@ async fn drive_subagent() {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     };
 
     let mut def = AgentDefinitionRegistry::global()

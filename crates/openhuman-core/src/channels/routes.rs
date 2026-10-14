@@ -179,7 +179,7 @@ pub(crate) async fn handle_runtime_command_if_needed(
         let close = lease.close().await;
         let response = response?;
         close?;
-        Ok::<_, crate::modules::client::ModuleCallError>(response)
+        Ok::<_, tinybus::module::ModuleCallError>(response)
     }
     .await;
     let (reply, next_route, clear_history) = match operation {
@@ -189,7 +189,7 @@ pub(crate) async fn handle_runtime_command_if_needed(
             clear_history,
         }) => (reply, next_route, clear_history),
         Ok(_) => {
-            crate::modules::client::ModuleClient::report_malformed_reply("tinychannels");
+            crate::modules::report::malformed_reply("tinychannels");
             return true;
         }
         Err(_) => {

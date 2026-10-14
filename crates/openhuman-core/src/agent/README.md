@@ -274,15 +274,14 @@ Turn execution:
 | `harness/` | Agent definitions and loader, parent/fork context task-locals, sandbox and spawn-depth context, oversized tool-result artifacts, the channel/CLI turn graph ([README](harness/README.md)) |
 | `bus.rs` | The `agent.run_turn` native request handler (`AgentTurnRequest` to `AgentTurnResponse`) |
 | `progress.rs` | `AgentProgress`, the event enum every turn streams to its observer |
-| [`progress_sink.rs`](./progress_sink.rs) | Task-local progress sink for in-process embedders driving an RPC that returns only text |
+| [`progress_sink.rs`](./progress_sink.rs) | The `ProgressSink` channel type an in-process embedder hands a turn (carried on `AgentChatEnv`) |
+| [`turn_env.rs`](./turn_env.rs) | `HostTurnEnv`: the explicit per-turn host values (budget, depth, cancellation, deadline, hooks, tool-belt authority) an entry point hands the session |
 | [`progress_tracing.rs`](./progress_tracing.rs), `progress_tracing/` | OpenTelemetry/Langfuse-style spans built from the progress stream ([README](progress_tracing/README.md)) |
 | `turn_origin.rs` | `AgentTurnOrigin` task-local, the trust and routing label the approval gate reads |
-| [`turn_workspace.rs`](./turn_workspace.rs) | Task-local per-turn filesystem root an embedder binds one turn to |
-| [`stop_hooks.rs`](./stop_hooks.rs) | `StopHook` mid-turn halts and the scoped `with_tool_call_limit` budget |
+| [`stop_hooks.rs`](./stop_hooks.rs) | `StopHook` mid-turn halts and the `tool_call_limit` budget |
 | [`tool_policy.rs`](./tool_policy.rs) | `ToolPolicy`, the pre-execution allow/deny hook installed through the builder |
 | [`hooks.rs`](./hooks.rs) | `PostTurnHook` background hooks, including ones registered by embedders |
 | [`queued_turn.rs`](./queued_turn.rs) | `QueuedTurn`, the payload for a message sent while a turn is running |
-| [`error.rs`](./error.rs) | `AgentError`, typed retryable and permanent loop errors |
 | [`cost.rs`](./cost.rs) | Per-turn token and cost accounting (`TurnCost`) |
 | [`message_convert.rs`](./message_convert.rs), [`messages.rs`](./messages.rs) | Conversions between `TranscriptMessage` rows and TinyAgents `Message`s; the `history_wire` adapter for host-owned files |
 | `attachments/`, [`multimodal.rs`](./multimodal.rs) | Durable user uploads and provider-side attachment resolution; legacy marker compatibility ([README](attachments/README.md)) |
@@ -419,11 +418,11 @@ What lives elsewhere:
   `register_agent_handlers` runs from [`channels/runtime/startup/start_channels.rs`](../channels/runtime/startup/start_channels.rs)
   and [`core/runtime/subscribers.rs`](../core/runtime/subscribers.rs); tests that replace the handler restore
   it through the guard in `bus.rs`.
-- `stop_hooks::with_tool_call_limit(Some(n), turn)` narrows the TinyAgents
-  invocation budget for one awaited turn, including parallel calls. Zero
-  permits no tool calls. Nested scopes take the smaller limit, `None` keeps
-  the enclosing one, and the limit applies per run, not as an aggregate
-  across child runs.
+- `HostTurnEnv::tool_call_limit` (`Some(n)`) narrows the TinyAgents
+  invocation budget for one turn tree, including parallel calls. Zero
+  permits no tool calls, the host can only narrow the product default, and
+  the limit applies per run, not as an aggregate across child runs. It rides
+  the explicit `OpenHumanRunContext`, which children inherit.
 - `journal.rs` is best-effort. A journal write failure logs `[journal]` and
   does not fail the turn.
 

@@ -9,13 +9,13 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
-use crate::agent::harness::artifact_offload::{new_artifact_offload, offload_oversized_result};
+use crate::agent::harness::artifact_offload::offload_run_result;
 use crate::agent::harness::fork_context::ParentExecutionContext;
 use crate::agent::harness::host_definition::{AgentDefinition, AgentDefinitionRegistry};
 use crate::agent::prompts::{
     render_subagent_system_prompt_with_format, PromptContext, SubagentRenderOptions,
 };
-use crate::agent::subagent_host::subagent_iter_cap_with_autonomous_lift;
+use crate::agent::subagent_host::definition_iter_cap;
 use crate::agent::subagent_host::tool_prep::{
     filter_tool_indices, is_subagent_spawn_tool, load_prompt_source, subagent_prompt_protocol,
 };
@@ -474,19 +474,18 @@ async fn offload_outcome_artifacts(
     let threshold =
         effective_offload_threshold(DEFAULT_OFFLOAD_THRESHOLD_BYTES, definition.max_result_chars);
 
-    // Worktree-isolated workers write inside their own checkout, but the parent
-    // that receives the pointer resolves relative paths against ITS action root.
-    // Render against that root so the handed-back path is one the parent can
-    // actually open (relative when the worktree nests inside it, absolute when
-    // it does not) rather than a bare `outputs/…` that silently misses.
-    let render_root = policy
-        .as_ref()
-        .map(|p| p.action_dir.clone())
-        .unwrap_or_else(|| action_dir.clone());
-    let offload = new_artifact_offload(action_dir, policy, outcome.agent_id.clone(), task_id)
-        .with_render_root(render_root);
-    let (output, _artifact) =
-        offload_oversized_result(std::mem::take(&mut outcome.output), &offload, threshold).await;
+    // The parent that receives the pointer resolves relative paths against ITS
+    // action root, so the stored artifact is materialised there (also for a
+    // worktree-isolated worker) and the handed-back `outputs/…` path opens.
+    let (output, _artifact) = offload_run_result(
+        std::mem::take(&mut outcome.output),
+        policy,
+        action_dir,
+        outcome.agent_id.clone(),
+        task_id,
+        threshold,
+    )
+    .await;
     outcome.output = output;
 
     // Merge: the harness pointer (if it fired) plus any worker-authored pointer
@@ -711,7 +710,7 @@ async fn run_typed_mode(
         agent_id = %definition.id,
         model = %model,
         tool_count = allowed_names.len(),
-        max_iterations = subagent_iter_cap_with_autonomous_lift(definition.effective_max_iterations()),
+        max_iterations = definition_iter_cap(&options.run_context, definition),
         iteration_policy = ?definition.iteration_policy,
         "[subagent_host:typed] resolved configuration"
     );
@@ -923,7 +922,7 @@ async fn run_typed_mode(
             Vec::new(),
             filtered_specs.clone(),
             allowed_names,
-            subagent_iter_cap_with_autonomous_lift(definition.effective_max_iterations()),
+            definition_iter_cap(&options.run_context, definition),
             options.run_queue.clone(),
             parent.on_progress.clone(),
             &definition.id,
@@ -989,7 +988,7 @@ async fn run_typed_mode(
         // result + blocker instead of treating the summary as a finished answer
         // or re-spinning the identical delegation (#4096).
         crate::agent::subagent_host::types::SubagentRunStatus::Incomplete {
-            reason: crate::agent::turn_stop::SUBAGENT_ITERATION_CAP_REASON.into(),
+            reason: tinyagents_harness::turn_stop::SUBAGENT_ITERATION_CAP_REASON.into(),
         }
     } else {
         // A clean final response. (An `ask_user_clarification` early-exit is

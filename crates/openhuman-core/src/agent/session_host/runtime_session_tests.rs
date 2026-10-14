@@ -62,7 +62,7 @@ async fn committed_progress_uses_each_turns_receipt_sender() {
 #[tokio::test]
 async fn committed_progress_carries_the_sidecar_stop_on_turn_completed() {
     use crate::agent::progress::AgentProgress;
-    use crate::agent::turn_stop::{TurnStop, TurnStopKind};
+    use tinyagents_harness::turn_stop::TurnStopKind;
     use tinyagents_runtime::{
         CommitReceipt, ResumeMode, SessionTurnOutcome, TranscriptTurnOptions,
     };
@@ -70,10 +70,11 @@ async fn committed_progress_carries_the_sidecar_stop_on_turn_completed() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(4);
     let mut context = crate::agent::tinyagents::host::OpenHumanRunContext::new();
     context.progress = Some(tx);
-    context.session_sidecar.lock().unwrap().stop = Some(TurnStop::breaker(
-        "Stopping after 2 attempt(s): failure class `uncertain_side_effect` still blocks \
+    context.session_sidecar.lock().unwrap().stop =
+        Some(crate::agent::turn_projection::breaker_stop(
+            "Stopping after 2 attempt(s): failure class `uncertain_side_effect` still blocks \
          operation `web_answer_tool` on `x`. Resolve this blocker before retrying.",
-    ));
+        ));
     let receipt = CommitReceipt {
         outcome: SessionTurnOutcome {
             history: Vec::new(),

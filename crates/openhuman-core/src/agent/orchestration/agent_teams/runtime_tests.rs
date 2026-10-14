@@ -80,6 +80,7 @@ fn mock_parent(model: Arc<dyn ChatModel<()>>) -> ParentExecutionContext {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     }
 }
 

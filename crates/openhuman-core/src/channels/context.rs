@@ -64,14 +64,12 @@ pub(crate) struct ChannelRuntimeContext {
 }
 
 /// Resolve the configured module client; unit tests use an attested bus fixture.
-pub(crate) async fn module_client(
-    ctx: &ChannelRuntimeContext,
-) -> crate::modules::client::ModuleClient {
+pub(crate) async fn module_client(ctx: &ChannelRuntimeContext) -> tinybus::module::ModuleClient {
     #[cfg(test)]
     if ctx.config.is_none() {
         return super::module_fixture::client().await;
     }
-    crate::modules::client::ModuleClient::new(ctx.config.as_deref().cloned().unwrap_or_default())
+    crate::modules::client(ctx.config.as_deref().cloned().unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -82,7 +80,7 @@ pub(crate) fn conversation_history_key(msg: &tinychannels_bus::ChannelMessage) -
 pub(crate) async fn is_context_window_overflow_error(
     ctx: &ChannelRuntimeContext,
     err: &anyhow::Error,
-) -> Result<bool, crate::modules::client::ModuleCallError> {
+) -> Result<bool, tinybus::module::ModuleCallError> {
     use tinychannels_bus::module_control::{ChannelControlRequest, ChannelControlResult};
     match module_client(ctx)
         .await
@@ -97,8 +95,8 @@ pub(crate) async fn is_context_window_overflow_error(
     {
         ChannelControlResult::Overflow(overflow) => Ok(overflow),
         _ => {
-            crate::modules::client::ModuleClient::report_malformed_reply("tinychannels");
-            Err(crate::modules::client::ModuleCallError::ModuleFault)
+            crate::modules::report::malformed_reply("tinychannels");
+            Err(tinybus::module::ModuleCallError::ModuleFault)
         }
     }
 }

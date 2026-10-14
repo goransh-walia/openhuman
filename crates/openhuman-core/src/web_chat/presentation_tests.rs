@@ -47,7 +47,7 @@ async fn chat_done_carries_timing_when_a_snapshot_is_supplied() {
         output_tokens: 40,
         cached_input_tokens: 0,
         cost_usd: Some(0.01),
-        cost_source: crate::agent::cost::CostSource::Charged,
+        cost_source: tinyagents_harness::cost::CostSource::Charged,
         context_window: 8000,
         context_tokens: 60,
         subagents: Vec::new(),

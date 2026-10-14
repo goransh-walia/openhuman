@@ -125,7 +125,7 @@ impl OpenHumanHostBundleFactory {
     /// owned by `OpenhumanEventBridge` (see below).
     pub fn build(
         inputs: OpenHumanHostBundleInputs,
-        _turn: &OpenHumanRunContext,
+        turn: &OpenHumanRunContext,
     ) -> OpenHumanHostBundle {
         let context = Arc::new(OpenHumanContextComposer::new(Arc::clone(&inputs.config)));
         let registered_tools = Arc::new(
@@ -163,7 +163,10 @@ impl OpenHumanHostBundleFactory {
             definitions_adapter = definitions_adapter.with_session_definition(definition);
         }
         let definitions = Arc::new(definitions_adapter);
-        let mut security = OpenHumanSecurityGate::new(inputs.security_policy, inputs.tool_sets);
+        // An untrusted-input turn is read from its own explicit run context:
+        // a screen may run on another task, so no ambient scope is consulted.
+        let mut security = OpenHumanSecurityGate::new(inputs.security_policy, inputs.tool_sets)
+            .with_input_screening(!turn.untrusted_input_turn);
         if let Some(policy) = inputs.tool_policy {
             security = security.with_tool_policy(policy);
         }

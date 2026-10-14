@@ -1,10 +1,10 @@
 use super::*;
-use crate::agent::error::AgentError;
 use crate::config::Config;
 use crate::security::SecurityPolicy;
 use chrono::{Duration as ChronoDuration, Timelike, Utc};
 use std::sync::Arc;
 use tempfile::TempDir;
+use tinyagents_harness::agent_error::AgentError;
 use tinyflows_schedule::types::JobType;
 use tinyflows_schedule::types::SessionTarget;
 use {

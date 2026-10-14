@@ -81,6 +81,7 @@ fn parent_context(max_parallel_tools: usize) -> ParentExecutionContext {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     }
 }
 

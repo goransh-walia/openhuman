@@ -30,7 +30,7 @@ pub(crate) async fn channel_config_connected(
     #[cfg(test)]
     let client = crate::channels::module_fixture::client().await;
     #[cfg(not(test))]
-    let client = crate::modules::client::ModuleClient::new(config.clone());
+    let client = crate::modules::client(config.clone());
     use tinychannels_bus::module_control::{ChannelControlRequest, ChannelControlResult};
     match client
         .call_confidential(
@@ -47,8 +47,8 @@ pub(crate) async fn channel_config_connected(
     {
         ChannelControlResult::Connected(connected) => Ok(connected),
         _ => {
-            crate::modules::client::ModuleClient::report_malformed_reply("tinychannels");
-            Err(crate::modules::client::ModuleCallError::ModuleFault.to_string())
+            crate::modules::report::malformed_reply("tinychannels");
+            Err(tinybus::module::ModuleCallError::ModuleFault.to_string())
         }
     }
 }

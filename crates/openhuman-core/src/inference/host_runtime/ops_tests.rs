@@ -322,6 +322,7 @@ async fn agent_chat_for_rejects_an_unknown_agent_id() {
         None,
         None,
         None,
+        crate::inference::host_runtime::ops::AgentChatEnv::default(),
     )
     .await
     .expect_err("an unknown agent id must be refused");

@@ -10,35 +10,33 @@ fn result(text: &str) -> WebChatTaskResult {
     }
 }
 
-/// The guarded turn sees the backstop it runs under, so the session turn can
-/// hand the harness the deadline it must wind down before.
-#[tokio::test]
-async fn guarded_turn_sees_the_backstop_deadline() {
+/// The guarded turn's host environment carries the backstop it runs under, so
+/// the session turn can hand the harness the deadline it must wind down before.
+#[test]
+fn guarded_turn_env_carries_the_backstop_deadline() {
     let backstop = Duration::from_secs(900);
-    let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
-    let seen_in_turn = seen.clone();
-    let res = drive_turn_with_deadline(Some(backstop), async move {
-        *seen_in_turn.lock().unwrap() = crate::agent::turn_deadline::current();
-        Ok(result("answer"))
-    })
-    .await
-    .expect("turn completes");
-    assert_eq!(res.full_response, "answer");
-    let deadline = seen.lock().unwrap().expect("deadline scoped on the turn");
+    let (env, _) = turn_host_env(Some(backstop));
+    let deadline = env.turn_deadline.expect("deadline on the turn's env");
     assert_eq!(deadline.backstop(), backstop);
     assert_eq!(deadline.wind_down_after(), Duration::from_secs(780));
     assert!(deadline.wind_down_after() < deadline.hard_stop_after());
     assert!(deadline.hard_stop_after() < backstop);
 }
 
-#[tokio::test]
-async fn disabled_backstop_scopes_no_deadline() {
-    let res = drive_turn_with_deadline(None, async {
-        assert!(crate::agent::turn_deadline::current().is_none());
-        Ok(result("ok"))
-    })
-    .await;
-    assert!(res.is_ok());
+#[test]
+fn disabled_backstop_carries_no_deadline() {
+    let (env, _) = turn_host_env(None);
+    assert!(env.turn_deadline.is_none());
+}
+
+/// The env's cancellation is the very token a Stop fires.
+#[test]
+fn guarded_turn_env_shares_its_cancellation_with_the_stop_handle() {
+    let (env, stop) = turn_host_env(None);
+    let observed = env.cancellation.expect("cancellation on the turn's env");
+    assert!(!observed.is_cancelled());
+    stop.cancel();
+    assert!(observed.is_cancelled());
 }
 
 /// If the backstop fires anyway, the caller gets the typed `turn_timeout`
@@ -67,10 +65,10 @@ async fn stop_fires_the_session_cancellation_and_lets_the_turn_unwind() {
     let cancel = CancellationToken::new();
     let unwound = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let unwound_in_turn = unwound.clone();
-    let turn = run_until_stopped(cancel.clone(), async move {
-        crate::agent::host_overrides::current_cancellation()
-            .cancelled()
-            .await;
+    let (env, session_cancellation) = turn_host_env(None);
+    let observed = env.cancellation.expect("session cancellation");
+    let turn = run_until_stopped(cancel.clone(), session_cancellation, async move {
+        observed.cancelled().await;
         unwound_in_turn.store(true, std::sync::atomic::Ordering::SeqCst);
         Ok::<_, String>(result("persisted partial"))
     });
@@ -95,7 +93,12 @@ async fn stop_drops_a_turn_that_ignores_cancellation_after_the_grace() {
     let cancel = CancellationToken::new();
     cancel.cancel();
     let started = tokio::time::Instant::now();
-    let res = run_until_stopped(cancel, std::future::pending::<()>()).await;
+    let res = run_until_stopped(
+        cancel,
+        tinyagents_harness::cancel::CancellationToken::new(),
+        std::future::pending::<()>(),
+    )
+    .await;
     assert!(res.is_none());
     assert!(started.elapsed() >= STOPPED_TURN_PERSIST_GRACE);
 }
@@ -103,9 +106,11 @@ async fn stop_drops_a_turn_that_ignores_cancellation_after_the_grace() {
 /// Without a Stop the turn's own result comes back.
 #[tokio::test]
 async fn unstopped_turn_returns_its_result() {
-    let res = run_until_stopped(CancellationToken::new(), async {
-        Ok::<_, String>(result("answer"))
-    })
+    let res = run_until_stopped(
+        CancellationToken::new(),
+        tinyagents_harness::cancel::CancellationToken::new(),
+        async { Ok::<_, String>(result("answer")) },
+    )
     .await;
     assert_eq!(res.expect("not stopped").unwrap().full_response, "answer");
 }

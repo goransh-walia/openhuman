@@ -50,7 +50,7 @@ async fn drain_to_log_returns_the_turns_stop() {
     let (tx, rx) = tokio::sync::mpsc::channel(4);
     tx.send(AgentProgress::TurnCompleted {
         iterations: 5,
-        stop: Some(crate::agent::turn_stop::TurnStop::iteration_cap()),
+        stop: Some(tinyagents_harness::turn_stop::TurnStop::iteration_cap()),
     })
     .await
     .unwrap();
@@ -58,7 +58,7 @@ async fn drain_to_log_returns_the_turns_stop() {
     let stop = drain_to_log(rx, path.clone()).await;
     assert_eq!(
         stop,
-        Some(crate::agent::turn_stop::TurnStop::iteration_cap())
+        Some(tinyagents_harness::turn_stop::TurnStop::iteration_cap())
     );
     let log = std::fs::read_to_string(&path).expect("log written");
     assert!(log.contains("stopped: iteration_cap"), "{log}");

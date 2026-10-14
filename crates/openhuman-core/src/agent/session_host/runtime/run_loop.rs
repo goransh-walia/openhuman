@@ -3,13 +3,13 @@
 //! events, and error sanitisation.
 
 use super::super::types::OpenHumanSessionHost;
-use crate::agent::error::AgentError;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
 use crate::security::prompt_injection::{
     enforce_prompt_input, PromptEnforcementAction, PromptEnforcementContext,
 };
 use anyhow::Result;
+use tinyagents_harness::agent_error::AgentError;
 
 impl OpenHumanSessionHost {
     // ─────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ impl OpenHumanSessionHost {
                 // (TAURI-RUST-4JX, "The model returned an empty response.
                 // Please try again."). Skip the Sentry funnel for both
                 // and emit a structured `log::info!` instead. The
-                // suppressed set is owned by `AgentError::skips_sentry()`
+                // suppressed set is owned by `AgentError::is_expected_outcome()`
                 // so the policy stays in one place.
                 //
                 // Other agent errors go through `report_error_or_expected`
@@ -120,7 +120,7 @@ impl OpenHumanSessionHost {
                 // downstream `recoverable=false` semantics are preserved.
                 let skips_sentry = err
                     .downcast_ref::<AgentError>()
-                    .is_some_and(AgentError::skips_sentry);
+                    .is_some_and(AgentError::is_expected_outcome);
                 if skips_sentry {
                     log::info!(
                         target: "agent",

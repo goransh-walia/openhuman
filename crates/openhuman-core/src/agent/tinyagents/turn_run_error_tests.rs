@@ -34,8 +34,8 @@ async fn the_model_call_cap_and_depth_limit_win_over_a_stale_provider_error() {
     let cap = tinyagents_harness::TinyAgentsError::LimitExceeded("model call cap".to_string());
     let mapped = map_turn_run_error(cap, "m", 7, &stale(), None).await;
     assert!(matches!(
-        mapped.downcast_ref::<crate::agent::error::AgentError>(),
-        Some(crate::agent::error::AgentError::MaxIterationsExceeded { max: 7 })
+        mapped.downcast_ref::<tinyagents_harness::agent_error::AgentError>(),
+        Some(tinyagents_harness::agent_error::AgentError::MaxIterationsExceeded { max: 7 })
     ));
 
     let depth = tinyagents_harness::TinyAgentsError::SubAgentDepth(3);

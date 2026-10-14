@@ -33,6 +33,7 @@ on:
       - ".cargo/config.toml"
       - "rust-toolchain.toml"
       - "crates/openhuman-core/src/storage/**"
+      - "crates/openhuman-core/src/modules/**"
       - "crates/openhuman-core/src/cron/**"
       - "crates/openhuman-core/src/flows/**"
       - "crates/openhuman-core/src/security/approval/**"

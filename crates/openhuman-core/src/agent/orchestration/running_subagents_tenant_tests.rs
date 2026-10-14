@@ -276,6 +276,7 @@ async fn unscoped_async_spawn_refuses_before_persisting_a_running_session() {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     };
     let run = crate::agent::tinyagents::host::OpenHumanRunContext::new()
         .with_parent(parent)

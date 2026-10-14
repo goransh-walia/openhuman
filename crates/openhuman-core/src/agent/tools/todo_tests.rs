@@ -153,6 +153,7 @@ fn every_agent_binds_to_its_own_thread() {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     };
 
     assert_eq!(
@@ -211,6 +212,7 @@ async fn a_legacy_session_keyed_list_is_migrated_forward_once() {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     };
 
     // Seed the legacy session-keyed list directly through the store, as if a

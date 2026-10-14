@@ -45,14 +45,13 @@ fn ws_and_outside() -> (tempfile::TempDir, StdPathBuf, StdPathBuf) {
     (tmp, workspace, outside)
 }
 
-// -- Per-turn workspace grant (agent::turn_workspace) ------------------------
+// -- Workspace boundary -------------------------------------------------------
 //
-// These drive the grant through the real `validate_parent_path` gate every file
-// write funnels through, so they prove the tightening/loosening lands at the
-// shared call site rather than only in the standalone predicate.
+// These drive the boundary through the real `validate_parent_path` gate every
+// file write funnels through.
 
 /// A `workspace_only` policy whose workspace is `<root>/home`, plus a separate
-/// `<root>/checkout` directory standing in for the run's own tree.
+/// `<root>/checkout` directory standing in for a tree outside it.
 fn turn_workspace_policy() -> (tempfile::TempDir, PathBuf, SecurityPolicy) {
     let root = tempfile::tempdir().expect("root tempdir");
     let workspace = root.path().join("home");

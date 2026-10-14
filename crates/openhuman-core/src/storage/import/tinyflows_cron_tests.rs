@@ -39,11 +39,8 @@ fn run_with_imports_legacy_cron_jobs_whatever_the_flows_gate() {
         other => panic!("expected the cron jobs to import, got {other:?}"),
     }
     let docs = Arc::clone(backend.for_scope(&Scope::local()).unwrap().documents());
-    let jobs = crate::storage::block_on_anyhow(async move {
-        CronDocuments::new(docs)
-            .list_jobs()
-            .await
-    })
-    .unwrap();
+    let jobs =
+        crate::storage::block_on_anyhow(async move { CronDocuments::new(docs).list_jobs().await })
+            .unwrap();
     assert!(!jobs.is_empty());
 }

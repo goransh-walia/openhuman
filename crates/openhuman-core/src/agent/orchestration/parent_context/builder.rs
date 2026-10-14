@@ -119,6 +119,7 @@ pub(crate) async fn build_root_parent(
         session_parent_prefix: agent.session_parent_prefix().map(str::to_string),
         on_progress: None,
         run_queue: None,
+        host_env: agent.host_env().clone(),
     })
 }
 

@@ -159,6 +159,10 @@ tinystoragedrivers = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers
 # `modules::storage_host` interface answers loaded modules with. Modules only.
 tinystoragedrivers-bus = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-bus", optional = true }
 tinystoragedrivers-client = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-client", optional = true }
+# The host half of the storage bus transport: registers the four `Storage`
+# objects and binds blob streams and watch signals to the calling peer
+# (`Connection::accept_stream_from` / `emit_to`).
+tinystoragedrivers-busproxy = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-busproxy", optional = true }
 # The module-side export macro, used only to wrap the host's own storage server
 # as a *linked* module (`modules/storage_host_linked.rs`): a linked module is the
 # one in-process recipient the bus attests, so it is how `Secrets` can be served.
@@ -218,6 +222,9 @@ tinyconnectors-bus = { path = "../../vendor/tinyconnectors/crates/tinyconnectors
 
 
 
+# tinymcp: pure tool-UI rules only (`tinymcp::ui`). The MCP runtime itself runs
+# as a module behind `tinymcp-bus`.
+tinymcp = { path = "../../vendor/tinymcp/crates/tinymcp", default-features = false, features = ["ui"] }
 tinymcp-bus = { path = "../../vendor/tinymcp/crates/tinymcp-bus", features = ["schemars"] }
 # The transport-free channel vocabulary: inbound envelopes, outbound intents,
 # the config schema, controller metadata and relay frames. UNCONDITIONAL — `DomainEvent` embeds
@@ -504,8 +511,9 @@ tokio-tungstenite = { version = "0.29", default-features = false, features = ["c
 # production channel execution uses the TinyBus module contract above.
 tinychannels = { path = "../../vendor/tinychannels", features = ["relay-websocket", "email", "lark", "whatsapp-web"] }
 tinychannels-runtime = { path = "../../vendor/tinychannels/crates/tinychannels-runtime" }
-# BLOCKED on tinybus 0.1.4 (tinybus epic): tinychannels-module v0.1.29 pins =0.1.4; workspace tinybus is 0.1.3.
-# tinychannels-module = { path = "../../vendor/tinychannels/crates/tinychannels-module", features = ["static-link"] }
+# The real TinyChannels module, linked into the test binary (never the product)
+# as the fixture behind `channels::module_fixture`.
+tinychannels-module = { path = "../../vendor/tinychannels/crates/tinychannels-module", features = ["static-link"] }
 tinybox-core = { path = "../../vendor/tinybox/crates/tinybox-core" }
 # The TinyMemory reference engine (an in-memory `MemoryEngine`) and the
 # behavioural suite every engine must pass. Memory unit tests bind it as the
@@ -690,6 +698,7 @@ modules = [
     "dep:tinywallet-bus",
     "dep:tinystoragedrivers-bus",
     "dep:tinystoragedrivers-client",
+    "dep:tinystoragedrivers-busproxy",
     "dep:tinybus-module",
 ]
 security-module = ["modules", "dep:tinysecurity-bus"]

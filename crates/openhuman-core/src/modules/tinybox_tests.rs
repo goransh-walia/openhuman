@@ -131,7 +131,7 @@ async fn mock_client_with_docker_control_delay(
             contract::INTERFACE,
         )
         .expect("TinyBox proxy");
-    (service, ModuleClient::fixture(proxy), calls)
+    (service, crate::modules::ops::fixture_client(proxy), calls)
 }
 
 #[test]

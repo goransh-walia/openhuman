@@ -50,6 +50,10 @@ const embedContractExports = new Map(
         // Existing embed tool injection API now names its contract directly.
         "pub use tinytools::{PermissionLevel, Tool, ToolExposure, ToolResult};",
         "pub use tinyagents_harness::middleware::{StopDecision, StopHook};",
+        // The harness cost tally is the stop-hook metrics type (#7600).
+        "pub use tinyagents_harness::cost::TurnCost;",
+        // The tool-call policy seam `HostTools::with_policy` takes (#7600).
+        "pub use tinyagents_harness::middleware::{PolicyDecision, ToolCallPolicy};",
         "pub use tinyagents_session::port::{AppendStore, InMemorySessionStores, InMemoryTranscriptLocator, InMemoryTurnStates, Store, TurnStates};",
         "pub use tinyagents_session::testkit::conformance::{session_store_conformance, session_store_isolation_conformance};",
         "pub use tinyagents_session::transcript::{SessionRef, SessionTranscript, TranscriptHistory, TranscriptLocator, TranscriptMessage, TranscriptMeta, TranscriptPartial, TranscriptRead, TranscriptTurn};",
@@ -152,6 +156,7 @@ const deletedTaskLocalModules = [
   "resolved_route",
   "run_cancellation_context",
   "thread_context",
+  "turn_workspace",
 ];
 const taskLocalAccessors = [
   "current_parent",
@@ -182,6 +187,12 @@ const taskLocalAccessors = [
   "with_origin",
   "with_inherited_origin",
   "current_request_id",
+  "with_turn_deadline",
+  "with_stop_hooks",
+  "current_stop_hooks",
+  "with_tool_call_limit",
+  "with_fresh_snapshot",
+  "with_untrusted_input_turn",
 ];
 const taskLocalStatics = [
   "PARENT_CONTEXT",
@@ -194,6 +205,14 @@ const taskLocalStatics = [
   "THREAD_ID",
   "AGENT_TURN_ORIGIN",
   "AGENT_TURN_WORKSPACE",
+  "CURRENT_TURN_DEADLINE",
+  "TURN_CANCELLATION",
+  "MODEL_BUDGET",
+  "SPAWN_DEPTH_LIMIT",
+  "CURRENT_STOP_HOOKS",
+  "CURRENT_TOOL_CALL_LIMIT",
+  "UNTRUSTED_INPUT_TURN",
+  "REGENERATE_TARGET_ID",
 ];
 
 async function filesUnder(root, predicate) {

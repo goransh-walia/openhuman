@@ -103,6 +103,19 @@ pub fn find(id: &str) -> Option<&'static ModuleRecord> {
     ALL.iter().find(|record| record.id == id)
 }
 
+/// The resolver's view of [`ALL`], built once. The tinybus resolver takes
+/// `&'static` records, and the records are compiled constants, so this is a
+/// fixed-size table for the life of the process.
+#[must_use]
+pub fn release_records() -> Vec<&'static tinybus::module::ReleaseRecord> {
+    static TABLE: std::sync::OnceLock<Vec<tinybus::module::ReleaseRecord>> =
+        std::sync::OnceLock::new();
+    TABLE
+        .get_or_init(|| ALL.iter().map(ModuleRecord::release).collect())
+        .iter()
+        .collect()
+}
+
 /// Which `[components]` switch owns each module id.
 ///
 /// Every record in [`ALL`] has an entry (`registry_tests` enforces it), so a

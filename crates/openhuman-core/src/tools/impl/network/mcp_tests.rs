@@ -19,7 +19,7 @@ fn required_mcp_identifier_rejects_empty_values() {
 
 #[test]
 fn module_failures_keep_transport_and_unavailability_categories() {
-    use crate::modules::client::ModuleCallError;
+    use tinybus::module::ModuleCallError;
 
     assert_eq!(
         input_module_error_code(ModuleCallError::Unavailable),

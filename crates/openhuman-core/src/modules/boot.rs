@@ -15,7 +15,7 @@
 //! network on something nobody has asked for yet.
 
 use super::types::LoadPolicy;
-use super::{host, ops, registry};
+use super::{ops, registry, runtime};
 use crate::config::Config;
 
 /// Load the modules that should be serving before the first request.
@@ -29,7 +29,7 @@ pub async fn load_declared_modules(config: &Config) {
         return;
     }
 
-    let runtime = match host::runtime().await {
+    let runtime = match runtime::runtime().await {
         Ok(runtime) => runtime,
         Err(err) => {
             log::warn!("[modules] boot load skipped: the module bus could not start: {err}");

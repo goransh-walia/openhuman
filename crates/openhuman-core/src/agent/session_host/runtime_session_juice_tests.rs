@@ -327,6 +327,6 @@ async fn juice_off_turn_loads_no_module_and_passes_tool_output_through() {
         let err = crate::modules::ensure_loaded_within(&config, "tinyjuice", None)
             .await
             .unwrap_err();
-        assert_eq!(err, crate::modules::LoadError::Disabled("juice"));
+        assert_eq!(err, tinybus::module::LoadError::Disabled("juice"));
     }
 }

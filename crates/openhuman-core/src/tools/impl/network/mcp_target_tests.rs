@@ -16,7 +16,7 @@ use tinymcp_bus::{
 #[derive(Clone, Default)]
 struct PreparePort {
     requests: Arc<Mutex<Vec<PrepareAgentToolsRequest>>>,
-    transform_error: Option<crate::modules::client::ModuleCallError>,
+    transform_error: Option<tinybus::module::ModuleCallError>,
 }
 
 #[async_trait]
@@ -25,24 +25,21 @@ impl McpModulePort for PreparePort {
         &self,
         _: &str,
         _: &tinymcp_bus::McpClientConfig,
-    ) -> Result<OpenConfiguredResponse, crate::modules::client::ModuleCallError> {
+    ) -> Result<OpenConfiguredResponse, tinybus::module::ModuleCallError> {
         Ok(OpenConfiguredResponse {
             object_path: "/test/mcp".to_owned(),
             transition_id: "open-test".to_owned(),
         })
     }
 
-    async fn close(
-        &self,
-        _: &str,
-    ) -> Result<Option<String>, crate::modules::client::ModuleCallError> {
+    async fn close(&self, _: &str) -> Result<Option<String>, tinybus::module::ModuleCallError> {
         Ok(None)
     }
 
     async fn transition_status(
         &self,
         _: &str,
-    ) -> Result<TransitionStatus, crate::modules::client::ModuleCallError> {
+    ) -> Result<TransitionStatus, tinybus::module::ModuleCallError> {
         Ok(TransitionStatus::Complete)
     }
 
@@ -52,14 +49,14 @@ impl McpModulePort for PreparePort {
         _: &str,
         _: Value,
         _: bool,
-    ) -> Result<Value, crate::modules::client::ModuleCallError> {
-        Err(crate::modules::client::ModuleCallError::IncompatibleContract)
+    ) -> Result<Value, tinybus::module::ModuleCallError> {
+        Err(tinybus::module::ModuleCallError::IncompatibleContract)
     }
 
     async fn prepare_agent_tools(
         &self,
         request: PrepareAgentToolsRequest,
-    ) -> Result<Vec<McpToolPresentation>, crate::modules::client::ModuleCallError> {
+    ) -> Result<Vec<McpToolPresentation>, tinybus::module::ModuleCallError> {
         self.requests.lock().unwrap().push(request.clone());
         Ok(request
             .sources
@@ -90,28 +87,25 @@ impl McpModulePort for PreparePort {
     async fn validate_server_arguments(
         &self,
         _: ValidateServerArgumentsRequest,
-    ) -> Result<ServerArgumentsValidation, crate::modules::client::ModuleCallError> {
-        std::future::ready(Err(
-            crate::modules::client::ModuleCallError::IncompatibleContract,
-        ))
-        .await
+    ) -> Result<ServerArgumentsValidation, tinybus::module::ModuleCallError> {
+        std::future::ready(Err(tinybus::module::ModuleCallError::IncompatibleContract)).await
     }
 
     async fn normalize_tool_arguments(
         &self,
         arguments: Option<Value>,
-    ) -> Result<serde_json::Map<String, Value>, crate::modules::client::ModuleCallError> {
+    ) -> Result<serde_json::Map<String, Value>, tinybus::module::ModuleCallError> {
         match arguments.unwrap_or(Value::Null) {
             Value::Null => Ok(serde_json::Map::new()),
             Value::Object(arguments) => Ok(arguments),
-            _ => Err(crate::modules::client::ModuleCallError::ModuleFault),
+            _ => Err(tinybus::module::ModuleCallError::ModuleFault),
         }
     }
 
     async fn transform_text(
         &self,
         request: tinymcp_bus::TransformTextRequest,
-    ) -> Result<String, crate::modules::client::ModuleCallError> {
+    ) -> Result<String, tinybus::module::ModuleCallError> {
         match self.transform_error {
             Some(error) => Err(error),
             None => Ok(request.text),
@@ -128,7 +122,7 @@ async fn valid_mcp_identifier_reports_module_unavailable_without_invalid_input_l
     McpConfiguredClient::install_test_port(
         &config,
         Box::new(PreparePort {
-            transform_error: Some(crate::modules::client::ModuleCallError::Unavailable),
+            transform_error: Some(tinybus::module::ModuleCallError::Unavailable),
             ..PreparePort::default()
         }),
     )

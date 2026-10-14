@@ -36,11 +36,11 @@ use super::turn_guards::{
 ///
 /// # Progress
 ///
-/// If the caller scoped a
-/// [`ProgressSink`](crate::agent::progress_sink::ProgressSink) around
-/// the awaited future (see [`crate::agent_progress`]), it is attached to the
-/// agent built here, so an in-process embedder observes the turn's tool calls
-/// and deltas live instead of only its final string.
+/// An in-process embedder hands a
+/// [`ProgressSink`](crate::agent::progress_sink::ProgressSink) through
+/// [`AgentChatEnv`] (see [`agent_chat_for`]); it is attached to the agent built
+/// here, so the embedder observes the turn's tool calls and deltas live instead
+/// of only its final string.
 ///
 /// # Per-call inference route
 ///
@@ -67,8 +67,24 @@ pub async fn agent_chat(
         thread_id,
         cwd,
         route,
+        AgentChatEnv::default(),
     )
     .await
+}
+
+/// What an in-process caller hands one [`agent_chat_for`] turn besides its
+/// request: the live progress receiver and the host environment (shared model
+/// budget, delegation depth, cancellation, deadline, hooks, tool-belt
+/// authority). Both are explicit values that travel with the call -- never an
+/// ambient scope -- so they reach exactly this turn and its child runs.
+#[derive(Clone, Default)]
+pub struct AgentChatEnv {
+    /// Live progress for the turn; `None` attaches a drain-only sink so the
+    /// model calls still stream.
+    pub progress: Option<crate::agent::progress_sink::ProgressSink>,
+    /// The host environment installed on the session
+    /// ([`OpenHumanSessionHost::set_host_env`]).
+    pub host: crate::agent::turn_env::HostTurnEnv,
 }
 
 /// The log line every successful agent chat turn carries.
@@ -168,8 +184,12 @@ pub enum AgentChatTarget<'a> {
         untrusted_input: bool,
         /// A response format and output cap for every model call of the turn,
         /// and the slot its final call is reported into.
-        shape: Option<
-            &'a std::sync::Arc<crate::agent::tinyagents::response_shape::ResponseShapeScope>,
+        shape: Option<&'a std::sync::Arc<tinyagents_harness::middleware::ResponseShapeScope>>,
+        /// The observer scoped around the caller, re-established around the
+        /// turn because the dispatch may run on a worker task that does not
+        /// inherit task locals.
+        observer: Option<
+            &'a std::sync::Arc<tinyagents_harness::observability::turn_observer::ObserverScope>,
         >,
         /// Files the host attaches to this turn as bytes, in order.
         ///
@@ -201,6 +221,7 @@ impl std::fmt::Debug for AgentChatTarget<'_> {
                 host_only,
                 untrusted_input,
                 shape,
+                observer,
                 attachments,
             } => f
                 .debug_struct("Definition")
@@ -212,6 +233,7 @@ impl std::fmt::Debug for AgentChatTarget<'_> {
                 .field("untrusted_input", untrusted_input)
                 .field("attachments", &attachments.len())
                 .field("shaped", &shape.is_some())
+                .field("observed", &observer.is_some())
                 .finish(),
         }
     }
@@ -299,6 +321,7 @@ pub fn agent_chat_for<'a>(
     thread_id: Option<String>,
     cwd: Option<String>,
     route: Option<crate::config::schema::EphemeralRoute>,
+    env: AgentChatEnv,
 ) -> futures::future::BoxFuture<'a, Result<Outcome<String>, String>> {
     Box::pin(agent_chat_for_inner(
         config,
@@ -309,6 +332,7 @@ pub fn agent_chat_for<'a>(
         thread_id,
         cwd,
         route,
+        env,
     ))
 }
 
@@ -322,6 +346,7 @@ async fn agent_chat_for_inner(
     thread_id: Option<String>,
     cwd: Option<String>,
     route: Option<crate::config::schema::EphemeralRoute>,
+    env: AgentChatEnv,
 ) -> Result<Outcome<String>, String> {
     agent_chat_reply_for(
         config,
@@ -332,6 +357,7 @@ async fn agent_chat_for_inner(
         thread_id,
         cwd,
         route,
+        env,
     )
     .await
     .map(AgentChatReply::into_outcome)
@@ -349,6 +375,7 @@ pub async fn agent_chat_reply_for(
     thread_id: Option<String>,
     cwd: Option<String>,
     route: Option<crate::config::schema::EphemeralRoute>,
+    env: AgentChatEnv,
 ) -> Result<AgentChatReply, String> {
     match target {
         AgentChatTarget::Definition {
@@ -501,12 +528,22 @@ pub async fn agent_chat_reply_for(
             seed.len()
         );
     }
+    // The response shape rides the session explicitly (no task-local): the
+    // next turn takes it into its run context.
+    if let AgentChatTarget::Definition {
+        shape: Some(scope), ..
+    } = target
+    {
+        agent.set_next_turn_response_shape(Some(std::sync::Arc::clone(scope)));
+    }
+    // The host environment of this turn (budget, cancellation, deadline, hooks,
+    // tool-belt authority) rides the session explicitly.
+    agent.set_host_env(env.host);
     // Live progress for in-process embedders. `OpenHumanSessionHost::from_config` never
     // attaches a sink itself, so there is nothing to clobber here; callers that
     // set one explicitly (web chat, platform socket, flows, skills) hold their
-    // own `Agent` and never reach this path — where both could apply, the
-    // explicitly-set sink wins because it is applied to the agent it owns.
-    if let Some(tx) = crate::agent::progress_sink::current_progress_sink() {
+    // own `Agent` and never reach this path.
+    if let Some(tx) = env.progress {
         agent.set_on_progress(Some(tx));
     } else {
         // The turn runner streams model calls only when a progress sink is
@@ -533,20 +570,19 @@ pub async fn agent_chat_reply_for(
         effective_agent_chat_origin(),
         agent.run_single(message),
     );
-    let run: futures::future::BoxFuture<'_, _> = match target {
-        AgentChatTarget::Definition {
-            untrusted_input: true,
-            ..
-        } => Box::pin(crate::agent::tinyagents::host::with_untrusted_input_turn(
-            run,
-        )),
-        _ => Box::pin(run),
-    };
+    // `untrusted_input` was set on the session above; the turn's run context
+    // carries it to the security gate, so no extra scope is needed here.
+    let run: futures::future::BoxFuture<'_, _> = Box::pin(run);
     let outcome = match target {
         AgentChatTarget::Definition {
-            shape: Some(scope), ..
+            observer: Some(observer),
+            ..
         } => {
-            crate::agent::tinyagents::response_shape::with_response_shape(scope.clone(), run).await
+            tinyagents_harness::observability::turn_observer::with_observer(
+                std::sync::Arc::clone(observer),
+                run,
+            )
+            .await
         }
         _ => run.await,
     };

@@ -373,7 +373,7 @@ fn handle_send_message(params: Map<String, Value>) -> ControllerFuture {
 
 async fn send_with_config(config: &Config, p: SendMessageParams) -> Result<Value, String> {
     let prepared = crate::modules::channel_controller::prepare_message(
-        &crate::modules::client::ModuleClient::new(config.clone()),
+        &crate::modules::client(config.clone()),
         p.channel.trim(),
         p.message,
     )

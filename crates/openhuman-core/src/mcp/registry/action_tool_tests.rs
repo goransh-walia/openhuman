@@ -15,10 +15,10 @@ impl crate::mcp::module_client::McpModulePort for RecoveringModulePort {
         &self,
         _data_dir: &str,
         _config: &tinymcp_bus::McpClientConfig,
-    ) -> Result<tinymcp_bus::OpenConfiguredResponse, crate::modules::client::ModuleCallError> {
+    ) -> Result<tinymcp_bus::OpenConfiguredResponse, tinybus::module::ModuleCallError> {
         self.opens.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if !self.available.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(crate::modules::client::ModuleCallError::Unavailable);
+            return Err(tinybus::module::ModuleCallError::Unavailable);
         }
         Ok(tinymcp_bus::OpenConfiguredResponse {
             object_path: "/test/mcp".into(),
@@ -29,14 +29,14 @@ impl crate::mcp::module_client::McpModulePort for RecoveringModulePort {
     async fn close(
         &self,
         _data_dir: &str,
-    ) -> Result<Option<String>, crate::modules::client::ModuleCallError> {
+    ) -> Result<Option<String>, tinybus::module::ModuleCallError> {
         Ok(None)
     }
 
     async fn transition_status(
         &self,
         _transition_id: &str,
-    ) -> Result<tinymcp_bus::TransitionStatus, crate::modules::client::ModuleCallError> {
+    ) -> Result<tinymcp_bus::TransitionStatus, tinybus::module::ModuleCallError> {
         Ok(tinymcp_bus::TransitionStatus::Complete)
     }
 
@@ -46,45 +46,43 @@ impl crate::mcp::module_client::McpModulePort for RecoveringModulePort {
         member: &str,
         args: serde_json::Value,
         _confidential: bool,
-    ) -> Result<serde_json::Value, crate::modules::client::ModuleCallError> {
+    ) -> Result<serde_json::Value, tinybus::module::ModuleCallError> {
         if !self.available.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(crate::modules::client::ModuleCallError::Unavailable);
+            return Err(tinybus::module::ModuleCallError::Unavailable);
         }
         self.calls.lock().unwrap().push(member.to_owned());
         match member {
             tinymcp_bus::names::methods::NORMALIZE_TOOL_ARGUMENTS => args
                 .get(0)
                 .cloned()
-                .ok_or(crate::modules::client::ModuleCallError::ModuleFault),
+                .ok_or(tinybus::module::ModuleCallError::ModuleFault),
             tinymcp_bus::names::methods::TOOL_CALL => {
                 serde_json::to_value(tinymcp_bus::ToolCallOutcome {
                     result: json!({"content":[{"type":"text","text":"loaded"}]}),
                     is_error: false,
                     rendered: tinymcp_bus::McpToolResult::success("loaded"),
                 })
-                .map_err(|_| crate::modules::client::ModuleCallError::ModuleFault)
+                .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)
             }
             tinymcp_bus::names::methods::RENDER_TOOL_OUTPUT => {
                 serde_json::to_value("lazy-loaded forecast")
-                    .map_err(|_| crate::modules::client::ModuleCallError::ModuleFault)
+                    .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)
             }
-            _ => Err(crate::modules::client::ModuleCallError::IncompatibleContract),
+            _ => Err(tinybus::module::ModuleCallError::IncompatibleContract),
         }
     }
 
     async fn prepare_agent_tools(
         &self,
         _request: tinymcp_bus::PrepareAgentToolsRequest,
-    ) -> Result<Vec<tinymcp_bus::McpToolPresentation>, crate::modules::client::ModuleCallError>
-    {
+    ) -> Result<Vec<tinymcp_bus::McpToolPresentation>, tinybus::module::ModuleCallError> {
         Ok(Vec::new())
     }
 
     async fn validate_server_arguments(
         &self,
         request: tinymcp_bus::ValidateServerArgumentsRequest,
-    ) -> Result<tinymcp_bus::ServerArgumentsValidation, crate::modules::client::ModuleCallError>
-    {
+    ) -> Result<tinymcp_bus::ServerArgumentsValidation, tinybus::module::ModuleCallError> {
         Ok(tinymcp_bus::ServerArgumentsValidation::Valid(
             request.arguments.as_object().cloned().unwrap_or_default(),
         ))

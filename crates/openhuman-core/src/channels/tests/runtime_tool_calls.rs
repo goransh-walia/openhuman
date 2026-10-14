@@ -16,7 +16,6 @@ use tinychannels_bus as traits;
 use tinyinference_llm::model::ChatModel;
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_executes_native_tool_calls() {
     let _bus_guard = super::common::use_real_agent_handler().await;
     let channel_impl = Arc::new(RecordingChannel::default());
@@ -74,7 +73,6 @@ async fn process_channel_message_executes_native_tool_calls() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_handles_models_command_without_llm_call() {
     let _bus_guard = super::common::use_real_agent_handler().await;
     let channel_impl = Arc::new(TelegramRecordingChannel::default());
@@ -156,7 +154,6 @@ async fn process_channel_message_handles_models_command_without_llm_call() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_uses_route_override_provider_and_model() {
     let _bus_guard = super::common::use_real_agent_handler().await;
     let channel_impl = Arc::new(TelegramRecordingChannel::default());
@@ -241,7 +238,6 @@ async fn process_channel_message_uses_route_override_provider_and_model() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_respects_configured_max_tool_iterations_above_default() {
     let _bus_guard = super::common::use_real_agent_handler().await;
     let channel_impl = Arc::new(RecordingChannel::default());
@@ -301,7 +297,6 @@ async fn process_channel_message_respects_configured_max_tool_iterations_above_d
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_reports_configured_max_tool_iterations_limit() {
     let _bus_guard = super::common::use_real_agent_handler().await;
     let channel_impl = Arc::new(RecordingChannel::default());

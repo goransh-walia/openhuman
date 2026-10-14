@@ -157,7 +157,7 @@ pub async fn composio_enable_trigger(
             // settings screen, so its failures are mapped to something a person can
             // act on ("reconnect GitHub") rather than the provider's own wording.
             let classified: tinyconnectors_bus::ProviderError =
-                crate::modules::client::ModuleClient::new(config.clone())
+                crate::modules::client(config.clone())
                     .call(
                         "tinyconnectors",
                         methods::CLASSIFY_ERROR,

@@ -69,37 +69,38 @@ impl HostAgent {
             host_tools = self.host_tools.is_some(),
             "[host_agents] building session for host agent"
         );
-        self.hooks.clone().sync_scope(|| {
-            CoreContext::sync_scope(Arc::clone(&self.context), || {
-                if crate::profiles::capabilities::ProfileCapabilities::current().is_some() {
-                    return OpenHumanSessionHost::from_config_host_only(
-                        config,
-                        &self.definition,
-                        self.host_tools.as_ref(),
-                        session_id,
-                    );
-                }
-                match &self.host_tools {
-                    Some(host) => OpenHumanSessionHost::from_config_with_host_tools(
-                        config,
-                        &self.definition,
-                        host,
-                        session_id,
-                    ),
-                    None => {
-                        OpenHumanSessionHost::from_config_with_definition(config, &self.definition)
-                    }
-                }
-            })
-        })
+        let mut session = CoreContext::sync_scope(Arc::clone(&self.context), || {
+            if crate::profiles::capabilities::ProfileCapabilities::current().is_some() {
+                return OpenHumanSessionHost::from_config_host_only(
+                    config,
+                    &self.definition,
+                    self.host_tools.as_ref(),
+                    session_id,
+                );
+            }
+            match &self.host_tools {
+                Some(host) => OpenHumanSessionHost::from_config_with_host_tools(
+                    config,
+                    &self.definition,
+                    host,
+                    session_id,
+                ),
+                None => OpenHumanSessionHost::from_config_with_definition(config, &self.definition),
+            }
+        })?;
+        // The agent's own callbacks ride the session explicitly: its tool and
+        // stop hooks reach every turn's run context, its post-turn hooks join
+        // the learning sink.
+        session.set_host_env(crate::agent::turn_env::HostTurnEnv {
+            hooks: self.hooks.clone(),
+            ..Default::default()
+        });
+        Ok(session)
     }
 
     /// Run `fut` with this agent's context as the ambient [`CoreContext`].
     pub async fn scope<F: std::future::Future>(&self, fut: F) -> F::Output {
-        self.hooks
-            .clone()
-            .scope(CoreContext::scope(Arc::clone(&self.context), fut))
-            .await
+        CoreContext::scope(Arc::clone(&self.context), fut).await
     }
 }
 

@@ -85,7 +85,7 @@ fn pretty(outcome: Outcome) -> anyhow::Result<ToolResult> {
 }
 
 fn unexpected() -> anyhow::Error {
-    anyhow::anyhow!(crate::modules::client::ModuleCallError::ModuleFault.to_string())
+    anyhow::anyhow!(tinybus::module::ModuleCallError::ModuleFault.to_string())
 }
 
 impl HostingTool {

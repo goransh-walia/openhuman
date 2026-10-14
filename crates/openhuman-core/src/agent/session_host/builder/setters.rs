@@ -363,13 +363,13 @@ impl SessionHostBuilder {
 
     /// Wire the model behind TinyJuice's oversized-tool-result summary into the
     /// agent. `ToolOutputMiddleware` calls
-    /// [`crate::agent::tinyagents::payload_summarizer::PayloadSummarizer::prepare`]
+    /// [`crate::agent::tinyagents::payload_summarizer::DynPayloadSummarizer::prepare`]
     /// for a large result and TinyJuice runs the call if it decides to
     /// summarize. Currently set only for the orchestrator session by
     /// [`OpenHumanSessionHost::build_session_agent_inner`].
     pub fn payload_summarizer(
         mut self,
-        summarizer: Arc<dyn crate::agent::tinyagents::payload_summarizer::PayloadSummarizer>,
+        summarizer: Arc<crate::agent::tinyagents::payload_summarizer::DynPayloadSummarizer>,
     ) -> Self {
         self.payload_summarizer = Some(summarizer);
         self
@@ -379,7 +379,7 @@ impl SessionHostBuilder {
     ///
     /// The default policy allows all calls. Custom policies can deny a call
     /// before `Tool::execute_with_options` runs.
-    pub fn tool_policy(mut self, policy: Arc<dyn crate::agent::tool_policy::ToolPolicy>) -> Self {
+    pub fn tool_policy(mut self, policy: Arc<dyn tinyagents_harness::middleware::ToolCallPolicy<crate::agent::tinyagents::host::OpenHumanRunContext>>) -> Self {
         self.tool_policy = Some(policy);
         self
     }

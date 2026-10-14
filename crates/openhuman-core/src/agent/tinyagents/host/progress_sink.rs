@@ -66,8 +66,8 @@
 //!   stream had no tool-completion milestone, so a row opened by `ToolCall`
 //!   could never be closed truthfully, and synthesising one would have asserted
 //!   `success: true` for a tool that may have failed — corrupting the timeline
-//!   and the trace exporter rather than merely leaving them incomplete. That
-//!   gap was filed as `tinyagents#88` and is now closed.
+//!   and the trace exporter rather than merely leaving them incomplete. The
+//!   crate now emits `ProgressEvent::ToolCallFinished`.
 //!
 //!   Two of the three fields `AgentProgress::ToolCallCompleted` needs still do
 //!   not travel on the closing event — the tool *name* and the *duration* — so

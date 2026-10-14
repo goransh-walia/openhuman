@@ -9,7 +9,7 @@ const FALLBACK: &str = "deterministic fallback";
 
 #[test]
 fn classified_halt_returns_partial_work_without_provider_usage() {
-    use crate::agent::tinyagents::ToolCallOutcome;
+    use tinyagents_harness::turn_outcome::ToolCallOutcome;
     let outcome = TinyagentsTurnOutcome {
         text: String::new(),
         resolved_route: None,
@@ -20,7 +20,7 @@ fn classified_halt_returns_partial_work_without_provider_usage() {
         input_tokens: 100,
         output_tokens: 20,
         cached_input_tokens: 0,
-        cost: crate::agent::cost::CostTally::default(),
+        cost: tinyagents_harness::cost::CostTally::default(),
         early_exit_tool: None,
         hit_cap: false,
         wrap_up_injected: false,
@@ -212,7 +212,7 @@ fn blank_outcome(truncated: bool) -> TinyagentsTurnOutcome {
         input_tokens: 0,
         output_tokens: 0,
         cached_input_tokens: 0,
-        cost: crate::agent::cost::CostTally::default(),
+        cost: tinyagents_harness::cost::CostTally::default(),
         early_exit_tool: None,
         hit_cap: false,
         wrap_up_injected: false,

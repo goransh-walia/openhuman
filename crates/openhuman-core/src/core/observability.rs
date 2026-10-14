@@ -2664,7 +2664,7 @@ fn all_provider_attempts_are_transient(message: &str) -> bool {
 
 /// Returns true when a Sentry event's message/exception text contains the
 /// canonical max-tool-iterations cap phrase (see
-/// `crate::agent::error::MAX_ITERATIONS_ERROR_PREFIX`).
+/// `tinyagents_harness::agent_error::MAX_ITERATIONS_ERROR_PREFIX`).
 ///
 /// Defense-in-depth filter for the Sentry `before_send` hook: the primary
 /// suppression lives at the call sites in `agent::session_host::
@@ -2688,7 +2688,7 @@ pub fn is_max_iterations_event(event: &sentry::protocol::Event<'_>) -> bool {
     [direct, from_exception]
         .into_iter()
         .flatten()
-        .any(crate::agent::error::is_max_iterations_error)
+        .any(tinyagents_harness::agent_error::is_max_iterations_error)
 }
 
 /// Tag + body classifier for the `before_send` chain — drops Sentry events

@@ -55,10 +55,13 @@ tinytools-std = { path = "vendor/tinyagents/vendor/tinytools/crates/tinytools-st
 tinytools-agent = { path = "vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
 
 [patch."https://github.com/tinyhumansai/tinybus"]
-# tinystoragedrivers-bus names tinybus by git rev. Redirect it to the in-tree
-# copy so the graph holds exactly one `tinybus` (one `Interface`, one
-# `Connection`) instead of a second one compiled only for the storage wire types.
+# tinystoragedrivers-bus (and tinywallet, which names tinybus by git rev) name
+# tinybus by git. Redirect them to the in-tree copy so the graph holds exactly
+# one `tinybus` (one `Interface`, one `Connection`) and one module SDK instead of
+# a second set compiled only for the storage wire types.
 tinybus = { path = "vendor/tinybus/crates/tinybus" }
+tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }
 
 [patch."https://github.com/tinyhumansai/tinystoragedrivers"]
 # tinyflows (tinyflows-drivers, tinyflows-import) names the storage crates by
@@ -76,6 +79,12 @@ tinystoragedrivers-sqlite = { path = "vendor/tinyagents/vendor/tinystoragedriver
 # tinyinference-providers (the OAuth pending session) names the secrets port by
 # git tag too, and the host hands it a `DocumentSecrets` from the vendored copy.
 tinystoragedrivers-secrets = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
+# The loadable modules name the bus, client and busproxy crates by git tag too
+# (v0.8.0, the version tinyagents vendors). Without these redirects every linked
+# module would carry a second copy of the wire types the host serves.
+tinystoragedrivers-bus = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-bus" }
+tinystoragedrivers-client = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-client" }
+tinystoragedrivers-busproxy = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-busproxy" }
 
 [patch."https://github.com/tinyhumansai/tinyinference"]
 # tinymemes depends on the Jev client by git; resolve it to the vendored copy.
@@ -88,6 +97,11 @@ tinyinference-providers = { path = "vendor/tinyagents/vendor/tinyinference/crate
 tinyinference-voice = { path = "vendor/tinyagents/vendor/tinyinference/crates/tinyinference-voice" }
 
 [patch.crates-io]
+# Module crates name TinyAgents by version (with a nested-path patch of their
+# own for standalone builds); resolve those names to the one copy the host uses.
+tinyagents-live = { path = "vendor/tinyagents/crates/tinyagents-live" }
+tinyagents-harness = { path = "vendor/tinyagents/crates/tinyagents-harness" }
+tinytools = { path = "vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 tinybus = { path = "vendor/tinybus/crates/tinybus" }
 tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
 tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }

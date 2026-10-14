@@ -16,9 +16,9 @@ use tinyinference_llm::message::Message;
 use tinyinference_llm::model::{ModelRequest, ModelResponse, ResolvedModelRoute};
 use tinytools::{ToolPolicy as TaToolPolicy, ToolResult as TaToolResult};
 
-use crate::agent::tinyagents::payload_summarizer::PayloadSummarizer;
-use crate::agent::tinyagents::turn_outcome::ToolCallOutcome;
+use crate::agent::tinyagents::payload_summarizer::DynPayloadSummarizer;
 use tinyagents_harness::artifacts::tool_results::ToolResultArtifactStore;
+use tinyagents_harness::turn_outcome::ToolCallOutcome;
 use tinyjuice_bus::types::AgentTokenjuiceCompression;
 
 use super::tool_output::ToolOutputMiddleware;
@@ -37,7 +37,7 @@ pub(crate) struct TurnContextMiddleware {
     /// Per-tool-result byte cap. `0` disables the cap.
     pub(crate) tool_result_budget_bytes: usize,
     /// The model behind TinyJuice's tool-output summary. `None` disables it.
-    pub(crate) payload_summarizer: Option<Arc<dyn PayloadSummarizer>>,
+    pub(crate) payload_summarizer: Option<Arc<DynPayloadSummarizer>>,
     /// Optional action-workspace artifact sink for oversized tool results.
     pub(crate) artifact_store: Option<ToolResultArtifactStore>,
     /// Whether TokenJuice content-aware compaction runs before output caps.
@@ -99,7 +99,7 @@ pub(crate) struct TranscriptSnapshot {
     /// Cost of the model calls the provider answered: each call's reported
     /// charge, else its catalog estimate, else unknown (see
     /// [`crate::agent::cost::call_cost`]).
-    pub(crate) cost: crate::agent::cost::CostTally,
+    pub(crate) cost: tinyagents_harness::cost::CostTally,
     /// The last accepted model route. A failed follow-up has no response of
     /// its own, so this remains the route that incurred the snapshot usage.
     pub(crate) resolved_route: Option<ResolvedModelRoute>,

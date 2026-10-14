@@ -13,8 +13,7 @@ use super::super::storage_grants::StorageGrant;
 use super::super::storage_host::{module_scope, CallerDirectory, Environment, StorageHost};
 use crate::storage::StorageBackend;
 
-/// The pending slot is process-wide, so tests that attach take turns.
-static TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+use super::TEST_TURN as TURN;
 
 const MODULE: &str = "tinymcp";
 

@@ -12,13 +12,15 @@ use tinyagents_session::transcript::TranscriptMessage;
 use tinyinference_llm::model::{ModelRequest, ModelStreamItem};
 use tinytools_agent::dialect::ToolDialect;
 
+use tinyagents_harness::middleware::wrap_harness_instruction;
+
 use crate::agent::{
     message_convert::dialect_response_from_provider,
     session_host::turn_checkpoint::{
         self, build_deterministic_checkpoint, build_deterministic_final_summary,
         close_repair_instruction, close_verification_prompt, final_answer_instruction,
         parse_close_verdict, quotes_harness_instruction, render_tool_results,
-        results_from_tool_outcomes, wrap_harness_instruction, CloseVerdict, CloseViolation,
+        results_from_tool_outcomes, CloseVerdict, CloseViolation,
     },
     tinyagents::{TinyagentsTurnOutcome, TurnModelSource},
 };
@@ -32,7 +34,7 @@ pub(super) struct RepairUsage {
     pub(super) output_tokens: u64,
     pub(super) cached_input_tokens: u64,
     /// Cost of these calls: reported charge, catalog estimate, or unknown.
-    pub(super) cost: crate::agent::cost::CostTally,
+    pub(super) cost: tinyagents_harness::cost::CostTally,
     /// Model the calls ran on, for pricing a call that reported no charge.
     pub(super) pricing_model: String,
     /// The newest repair call's own input/output: a repair runs after the

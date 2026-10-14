@@ -21,7 +21,7 @@ use tinyagents_harness::multimodal::BlobAttachmentStash;
 use tinyagents_session::port::{AgentStores, SessionStoreProvider, TurnStates};
 use tinyagents_session::run_ledger::{LedgerError, LedgerResult, RunLedgerStore};
 use tinyagents_session::DriverSessionStores;
-use tinystoragedrivers::{DocumentStore, MemoryStorage, StorageBackend};
+use tinystoragedrivers::{BlobStore, DocumentStore, MemoryStorage, StorageBackend};
 
 /// One fallback provider and the backend it was built over.
 struct Fallback {
@@ -164,23 +164,45 @@ pub fn default_turn_states_for(workspace_dir: &Path) -> Arc<dyn TurnStates> {
 /// references stay resolvable for as long as the conversation does.
 #[must_use]
 pub fn attachment_stash_for(workspace_dir: &Path) -> Option<BlobAttachmentStash> {
+    let (key, scoped) = tenant_scope_for(workspace_dir, "attachments")?;
+    log::debug!("[session_store] attachment stash bound agent={key}");
+    Some(BlobAttachmentStash::new(
+        Arc::clone(scoped.blobs()),
+        Arc::clone(scoped.documents()),
+        u64::MAX,
+        std::time::Duration::MAX,
+    ))
+}
+
+/// The calling tenant's blob store for worker artifacts (`outputs/`,
+/// `workspace/` keys): the blob half of its agent scope on `workspace_dir`'s
+/// storage backend. `None` for a SaaS task with no scope or a backend that
+/// refused the scope; the caller then keeps the result inline.
+#[must_use]
+pub fn artifact_blobs_for(workspace_dir: &Path) -> Option<Arc<dyn BlobStore>> {
+    let (key, scoped) = tenant_scope_for(workspace_dir, "artifacts")?;
+    log::debug!("[session_store] artifact blobs bound agent={key}");
+    Some(Arc::clone(scoped.blobs()))
+}
+
+/// The calling tenant's scoped storage on `workspace_dir`'s backend. `what`
+/// only labels the log line when the backend or scope is refused.
+fn tenant_scope_for(
+    workspace_dir: &Path,
+    what: &str,
+) -> Option<(String, tinystoragedrivers::ScopedStorage)> {
     let key = tenant_agent_key()?;
     let backend = match crate::storage::local::backend_for(workspace_dir) {
         Ok(backend) => backend,
         Err(error) => {
-            log::warn!("[session_store] no storage backend for attachments: {error:#}");
+            log::warn!("[session_store] no storage backend for {what}: {error:#}");
             return None;
         }
     };
     match backend.for_scope(&crate::storage::scope_for_agent(&key)) {
-        Ok(scoped) => Some(BlobAttachmentStash::new(
-            Arc::clone(scoped.blobs()),
-            Arc::clone(scoped.documents()),
-            u64::MAX,
-            std::time::Duration::MAX,
-        )),
+        Ok(scoped) => Some((key, scoped)),
         Err(error) => {
-            log::warn!("[session_store] attachment scope refused agent={key}: {error}");
+            log::warn!("[session_store] {what} scope refused agent={key}: {error}");
             None
         }
     }

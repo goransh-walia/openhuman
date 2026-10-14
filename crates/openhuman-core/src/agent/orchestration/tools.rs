@@ -69,6 +69,7 @@ pub(crate) fn ambient_parent_run_context(
 > {
     crate::agent::harness::current_parent().map(|parent| {
         crate::agent::tinyagents::host::OpenHumanRunContext::new()
+            .with_host_env(&parent.host_env)
             .with_parent(parent)
             .into_tinyagents(tinyagents_harness::context::RunConfig::new(kind))
     })

@@ -424,10 +424,8 @@ fn coding_hint_resolves_auto_tokenjuice_to_light() {
 }
 
 /// Pins tinyagents#441: existing definitions on disk spell an unrestricted
-/// scope as `[tools] wildcard = {}`. Needs `vendor/tinyagents` at or after
-/// tinyagents `2e706e81`; the pin stays at `7c24f3a5` until the host moves to
-/// the session-thread store that landed in tinyagents#440 (openhuman#7688),
-/// so this fails at the current pin.
+/// scope as `[tools] wildcard = {}`. Requires `vendor/tinyagents` at or after
+/// tinyagents `2e706e81`.
 #[test]
 fn a_legacy_wildcard_table_tool_scope_still_loads_from_a_user_definition() {
     let ws = fresh_workspace();

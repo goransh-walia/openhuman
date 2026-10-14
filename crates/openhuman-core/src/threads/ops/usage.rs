@@ -24,7 +24,7 @@ pub struct ThreadTokenUsageResponse {
     /// recorded charge and no catalogued price). Never a guessed rate.
     pub cost_usd: Option<f64>,
     /// `charged`, `estimated` (some turn priced from list rates) or `unknown`.
-    pub cost_source: crate::agent::cost::CostSource,
+    pub cost_source: tinyagents_harness::cost::CostSource,
     pub turn_count: usize,
     /// Spend of the most recent turn, the orchestrator's own: every model call
     /// of that turn summed, so a long tool loop reports many times its context.
@@ -162,7 +162,7 @@ fn empty_response(thread_id: &str) -> ThreadTokenUsageResponse {
         output_tokens: 0,
         cached_input_tokens: 0,
         cost_usd: Some(0.0),
-        cost_source: crate::agent::cost::CostSource::Charged,
+        cost_source: tinyagents_harness::cost::CostSource::Charged,
         turn_count: 0,
         last_turn_input_tokens: 0,
         last_turn_output_tokens: 0,
@@ -185,8 +185,8 @@ fn empty_response(thread_id: &str) -> ThreadTokenUsageResponse {
 fn recorded_cost(
     split: &tinyagents_session::transcript::spend::CostSplit,
     model: Option<&str>,
-) -> crate::agent::cost::CostTally {
-    use crate::agent::cost::{CallCost, CostSource, CostTally};
+) -> tinyagents_harness::cost::CostTally {
+    use tinyagents_harness::cost::{CallCost, CostSource, CostTally};
     use tinyagents_session::transcript::UsageCostSource;
 
     let mut cost = CostTally {

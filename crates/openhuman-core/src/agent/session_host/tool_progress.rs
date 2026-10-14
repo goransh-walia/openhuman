@@ -9,7 +9,7 @@
 
 use async_trait::async_trait;
 
-use crate::agent::cost::TurnCost;
+use tinyagents_harness::cost::TurnCost;
 use crate::agent::progress::AgentProgress;
 use crate::inference::provider::ProviderDelta;
 

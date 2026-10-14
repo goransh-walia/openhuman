@@ -131,6 +131,10 @@ impl Tool for ModuleConfiguredMcpServerTool {
             .scrub_static_tools(&client_config, &self.presentation.server_id, live)
             .await
             .map_err(|_| anyhow::anyhow!("MCP tool metadata is unavailable"))?;
+        let tool_meta = live
+            .iter()
+            .find(|tool| tool.name == self.presentation.remote_name)
+            .and_then(|tool| tool.meta.clone());
         let safe = crate::mcp::registry::tools_safe_for_agent(
             &self.presentation.server_id,
             live.into_iter()
@@ -152,6 +156,7 @@ impl Tool for ModuleConfiguredMcpServerTool {
             .normalize_tool_arguments(Some(args))
             .await
             .map_err(|error| anyhow::anyhow!(super::mcp::input_module_error_message(error)))?;
+        let tool_input = Value::Object(arguments.clone());
         let call: tinymcp_bus::ClassifiedStaticToolCall = client
             .call_confidential(
                 &client_config,
@@ -164,12 +169,14 @@ impl Tool for ModuleConfiguredMcpServerTool {
             )
             .await
             .map_err(|_| anyhow::anyhow!("MCP tool call failed"))?;
-        Ok(super::mcp::classified_result(
+        let mut result = super::mcp::classified_result(
             call,
             &self.presentation.server_id,
             &self.presentation.remote_name,
             false,
-        ))
+        );
+        crate::mcp::ui::decorate_result(tool_meta.as_ref(), &tool_input, &mut result);
+        Ok(result)
     }
 }
 

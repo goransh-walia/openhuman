@@ -4,8 +4,8 @@ use tempfile::TempDir;
 
 use super::*;
 use crate::agent::artifacts::store::{
-    create_artifact, delete_artifact, fail_artifact, finalize_artifact, list_artifacts,
-    read_artifact_bytes, save_artifact_meta, REGENERATE_TARGET_ID,
+    create_artifact, create_artifact_regenerating, delete_artifact, fail_artifact,
+    finalize_artifact, list_artifacts, read_artifact_bytes, save_artifact_meta,
 };
 use crate::agent::artifacts::types::ArtifactKind;
 
@@ -155,19 +155,17 @@ async fn regenerate_overwrites_the_file_it_owns() {
     let files_dir = tmp.path().join("Files");
     let original = create_ready(tmp.path(), &files_dir, "Deck", b"v1").await;
 
-    let (again, path) = REGENERATE_TARGET_ID
-        .scope(original.id.clone(), async {
-            create_artifact(
-                tmp.path(),
-                &files_dir,
-                ArtifactKind::Document,
-                "Deck",
-                "txt",
-            )
-            .await
-        })
-        .await
-        .unwrap();
+    let (again, path) = create_artifact_regenerating(
+        tmp.path(),
+        &files_dir,
+        ArtifactKind::Document,
+        "Deck",
+        "txt",
+        None,
+        Some(original.id.as_str()),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(again.id, original.id);
     assert_eq!(again.file, original.file);

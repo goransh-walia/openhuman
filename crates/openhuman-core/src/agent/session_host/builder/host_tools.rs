@@ -31,7 +31,6 @@ use std::sync::Arc;
 
 use tinytools::Tool;
 
-use crate::agent::tool_policy::ToolPolicy;
 use crate::agent::OpenHumanSessionHost;
 use crate::config::Config;
 use anyhow::Result;
@@ -62,7 +61,7 @@ pub struct HostTurnTools {
     /// enforce one through the session's tool policy.
     pub withheld: HashSet<String>,
     /// The session's admission gate, if the host sets one.
-    pub policy: Option<Arc<dyn ToolPolicy>>,
+    pub policy: Option<Arc<dyn tinyagents_harness::middleware::ToolCallPolicy<crate::agent::tinyagents::host::OpenHumanRunContext>>>,
 }
 
 impl HostTurnTools {
@@ -135,7 +134,7 @@ impl HostTurnTools {
             0..0,
             self.tools.into_iter().map(|tool| {
                 if permanent.contains(tool.name()) {
-                    Box::new(super::permanent_tool::PermanentTool(tool)) as Box<dyn Tool>
+                    Box::new(tinyagents_runtime::PermanentTool(tool)) as Box<dyn Tool>
                 } else {
                     tool
                 }
@@ -171,7 +170,7 @@ impl HostTurnTools {
     /// session should keep an existing policy for calls the host does not own,
     /// the host composes the two and passes the result here.
     #[must_use]
-    pub fn with_policy(mut self, policy: Arc<dyn ToolPolicy>) -> Self {
+    pub fn with_policy(mut self, policy: Arc<dyn tinyagents_harness::middleware::ToolCallPolicy<crate::agent::tinyagents::host::OpenHumanRunContext>>) -> Self {
         self.policy = Some(policy);
         self
     }
@@ -190,7 +189,7 @@ impl HostTurnTools {
 /// The parts of a host turn belt that the session builder applies after
 /// expanding the agent's static scope.
 pub(super) struct MergedHostTurnTools {
-    pub policy: Option<Arc<dyn ToolPolicy>>,
+    pub policy: Option<Arc<dyn tinyagents_harness::middleware::ToolCallPolicy<crate::agent::tinyagents::host::OpenHumanRunContext>>>,
     pub withheld: HashSet<String>,
     pub permanent: HashSet<String>,
     pub scope_additions: HashSet<String>,
@@ -360,22 +359,4 @@ impl OpenHumanSessionHost {
             session_id,
         )
     }
-}
-
-/// Binds the embedder's per-turn root as the default cwd, when it exists.
-pub(super) fn derive_turn_workspace_descriptor() -> Option<tinytools::WorkspaceDescriptor> {
-    let root = crate::agent::turn_workspace::current()?;
-    if !root.is_dir() {
-        tracing::warn!(
-            root = %root.display(),
-            "[turn_workspace] scoped root is not an existing directory — \
-             falling back to the shared action_dir cwd for this turn"
-        );
-        return None;
-    }
-    tracing::debug!(
-        root = %root.display(),
-        "[turn_workspace] turn bound to the embedder's per-turn root as default cwd"
-    );
-    Some(tinytools::WorkspaceDescriptor::new(root).with_policy_id("turn-workspace"))
 }

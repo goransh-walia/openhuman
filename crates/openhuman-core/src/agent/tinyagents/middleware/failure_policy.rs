@@ -2,8 +2,12 @@
 //! ([`recovery_policy_with_effect`]), split out of `repeated_failure.rs` so the breaker
 //! stays readable: the ladder driver lives there, the classification here.
 
-use super::call_effect::{call_effect, CallEffect};
 use super::fetched_site::fetched_site_policy;
+use tinyagents_harness::middleware::{call_effect, CallEffect};
+use tinyagents_harness::no_progress::{
+    is_argument_rejection, is_command_exit_report, is_pre_execution_failure, json_error_recovery,
+    ARGUMENT_SCHEMA_RECOVERY,
+};
 use tinyinference_llm::failure::is_recoverable_failure_text as is_recoverable_tool_failure;
 
 /// Explicit recovery policy. Only recognised failures enter the classified
@@ -23,7 +27,7 @@ pub(super) fn recovery_policy(
 }
 
 /// [`recovery_policy`] for a call whose side effect is already known
-/// ([`super::call_effect::call_effect`]). `CallEffect::Unknown` falls back to
+/// ([`tinyagents_harness::middleware::call_effect`]). `CallEffect::Unknown` falls back to
 /// reading `tool`'s name.
 pub(super) fn recovery_policy_with_effect(
     tool: &str,
@@ -66,37 +70,6 @@ pub(super) fn recovery_policy_with_effect(
     Some((class, budget))
 }
 
-/// Recovery budget for a tool rejecting its own arguments against its schema.
-///
-/// This is the most recoverable failure in the table: nothing ran, so there is
-/// no side effect to reconcile, and the refusal hands the model the complete
-/// expected schema (`tinyagents` `agent_loop/tools.rs`: "invalid arguments for
-/// tool `X`: {detail}; expected schema: {…}"). It is a typo in one call, not a
-/// broken world — unlike `not_found` or `unavailable`, which need the world to
-/// change, and unlike a remote service's 400/422, which rejects a request the
-/// model may have had every reason to send.
-///
-/// At a budget of 1 it ended terminal-bench 4.0 `vf2-speedup-networkx` at
-/// 51/60 tests: the model omitted `edits[0].path` on two consecutive
-/// `apply_patch` calls, while five others in the same run carried all three
-/// fields — one of them 16,370 characters, seventeen times the size of the one
-/// that failed. The omission was intermittent, not a size limit, so a further
-/// attempt would most likely have landed. Three keeps it bounded; a call
-/// repeated unchanged is still caught by the generic no-progress ladder.
-pub(super) const ARGUMENT_SCHEMA_RECOVERY: usize = 3;
-
-/// Prefix of `tinytools::render_command_failure`, the one renderer every
-/// shell-family tool uses for a command that ran and did not exit 0: an
-/// exit-code (or signal) line, then the program's own stdout and stderr.
-pub(super) const COMMAND_EXIT_REPORT_PREFIX: &str = "Command failed (";
-
-/// Whether `error` is a finished command's exit report rather than a failure
-/// of the tool itself (a timeout, a policy refusal, a runtime that could not
-/// be resolved), which the tools word differently.
-pub(super) fn is_command_exit_report(error: &str) -> bool {
-    error.trim_start().starts_with(COMMAND_EXIT_REPORT_PREFIX)
-}
-
 /// Tools that reach a service on the user's behalf: an external connector,
 /// the hosted backend, or the memory store. Work can go on without them.
 pub(super) fn is_optional_service(tool: &str) -> bool {
@@ -123,28 +96,6 @@ const ALWAYS_RETRYABLE_ON_TIMEOUT: &[&str] = &[
     "list_files",
     "desktop_list_windows",
 ];
-
-/// Whether `error` reports a failure from before the tool did anything: its
-/// runtime could not be resolved or built, or its process never spawned.
-/// Nothing ran, so there is nothing to reconcile, whatever the tool does.
-/// Conservative on purpose: only the tools' own pre-execution wording.
-pub(super) fn is_pre_execution_failure(error: &str) -> bool {
-    let lower = error.to_ascii_lowercase();
-    [
-        "runtime unavailable",
-        "runtime resolution",
-        "failed to build runtime command",
-        "failed to spawn",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker))
-}
-
-/// Whether `error` is the tool rejecting its arguments before running.
-fn is_argument_rejection(error: &str) -> bool {
-    let lower = error.to_ascii_lowercase();
-    lower.contains("schema validation") || lower.contains("invalid arguments")
-}
 
 /// The shell agent commands run under on this host, for a nudge that has to
 /// say which commands exist.
@@ -228,36 +179,10 @@ pub(super) fn classified_recovery_policy(
     if let Some(policy) = fetched_site_policy(tool, error) {
         return policy;
     }
-    // A tool-owned JSON error contract is less ambiguous than rendered prose.
-    // Read only explicit status/code fields; arbitrary response data is not a
-    // failure signal (this function is called only for `is_error` results).
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(error) {
-        let status = value
-            .get("status_code")
-            .or_else(|| value.get("status"))
-            .or_else(|| value.pointer("/error/status_code"))
-            .and_then(serde_json::Value::as_u64);
-        match status {
-            Some(401) => return Some(("authentication", 0)),
-            Some(403) => return Some(("permission", 0)),
-            Some(400 | 422) => return Some(("validation", 1)),
-            Some(429 | 500 | 502 | 503 | 504) => return Some(("transient", 2)),
-            _ => {}
-        }
-        let code = value
-            .get("code")
-            .or_else(|| value.pointer("/error/code"))
-            .and_then(serde_json::Value::as_str);
-        match code {
-            Some("PERMISSION_DENIED") => return Some(("permission", 0)),
-            Some("UNAUTHENTICATED") => return Some(("authentication", 0)),
-            Some("INVALID_ARGUMENT") => return Some(("validation", 1)),
-            Some("WINDOW_NOT_FOUND") => return Some(("missing_window", 1)),
-            Some("APP_NOT_FOUND") => return Some(("missing_app", 1)),
-            Some("UNIMPLEMENTED") => return Some(("unsupported", 0)),
-            Some("UNAVAILABLE" | "RESOURCE_EXHAUSTED") => return Some(("transient", 2)),
-            _ => {}
-        }
+    // A tool-owned JSON error contract is less ambiguous than rendered prose;
+    // the harness reads only its explicit status/code fields.
+    if let Some(decision) = json_error_recovery(error) {
+        return Some((decision.class, decision.budget));
     }
     let class = tinytools::status::classify(error, false).class;
     Some(match class {

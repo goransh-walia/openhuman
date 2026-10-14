@@ -5,7 +5,7 @@
 use super::*;
 
 fn artifact_mw(
-    summarizer: Option<Arc<dyn PayloadSummarizer>>,
+    summarizer: Option<Arc<DynPayloadSummarizer>>,
     storage_dir: &std::path::Path,
 ) -> ToolOutputMiddleware {
     ToolOutputMiddleware {
@@ -29,7 +29,7 @@ fn artifact_mw(
     }
 }
 
-fn summarized(summary: &str) -> Arc<dyn PayloadSummarizer> {
+fn summarized(summary: &str) -> Arc<DynPayloadSummarizer> {
     StubSummarizer::replying(Ok(summary.to_string()))
 }
 

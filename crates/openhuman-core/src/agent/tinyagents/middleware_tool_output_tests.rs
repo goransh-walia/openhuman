@@ -77,7 +77,14 @@ async fn a_summary_model_that_cannot_prepare_leaves_the_payload_intact() {
     // payload is untouched, and disclosed as unsummarized like any other
     // failed summary, so the model does not re-run the tool for one.
     struct Unpreparable;
-    impl PayloadSummarizer for Unpreparable {
+    impl
+        tinyagents_harness::summarization::payload_summarizer::PayloadSummarizer<
+            crate::agent::tinyagents::host::OpenHumanRunContext,
+        > for Unpreparable
+    {
+        type Prepared = crate::inference::tokenjuice::generate::PreparedGenerate;
+        type Error = anyhow::Error;
+
         fn prepare(
             &self,
             _parent_ctx: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
@@ -497,6 +504,13 @@ async fn tool_output_honors_a_tools_own_cap() {
         "a capped tool now takes the shared spill path, which says how much \
          is missing and how to get it: {text}"
     );
+}
+
+/// The shared tool-result byte backstop is a user-visible truncation limit;
+/// moving the ladder into the harness must not change it.
+#[test]
+fn shared_tool_result_byte_budget_stays_16_kib() {
+    assert_eq!(DEFAULT_TOOL_RESULT_BUDGET_BYTES, 16 * 1024);
 }
 
 #[path = "middleware_tool_output_compaction_tests.rs"]

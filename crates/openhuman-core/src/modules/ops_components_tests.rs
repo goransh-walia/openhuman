@@ -16,7 +16,7 @@ async fn a_disabled_component_never_reaches_download_or_dlopen() {
         .await
         .unwrap_err();
     assert_eq!(err, LoadError::Disabled("mcp"));
-    assert_eq!(err.into_message(), "COMPONENT_DISABLED:mcp");
+    assert_eq!(load_error_message(err), "COMPONENT_DISABLED:mcp");
 }
 
 #[test]
@@ -51,7 +51,7 @@ async fn a_disabled_wallet_never_loads_the_tinywallet_module() {
         .await
         .unwrap_err();
     assert_eq!(err, LoadError::Disabled("wallet"));
-    assert_eq!(err.into_message(), "COMPONENT_DISABLED:wallet");
+    assert_eq!(load_error_message(err), "COMPONENT_DISABLED:wallet");
 }
 
 #[cfg(feature = "hosting")]
@@ -62,7 +62,7 @@ async fn a_disabled_hosting_component_never_loads_the_tinyhosts_module() {
         .await
         .unwrap_err();
     assert_eq!(err, LoadError::Disabled("hosting"));
-    assert_eq!(err.into_message(), "COMPONENT_DISABLED:hosting");
+    assert_eq!(load_error_message(err), "COMPONENT_DISABLED:hosting");
     let statuses = list(&config);
     let status = statuses.iter().find(|s| s.id == "tinyhosts").unwrap();
     assert_eq!(status.state, ModuleState::Disabled);
@@ -94,7 +94,7 @@ async fn voice_off_refuses_tinyvoice_before_download_or_load() {
         .await
         .unwrap_err();
     assert_eq!(err, LoadError::Disabled("voice"));
-    assert_eq!(err.into_message(), "COMPONENT_DISABLED:voice");
+    assert_eq!(load_error_message(err), "COMPONENT_DISABLED:voice");
     let statuses = list(&config);
     let status = statuses.iter().find(|s| s.id == "tinyvoice").unwrap();
     assert_eq!(status.state, ModuleState::Disabled);
@@ -108,7 +108,7 @@ async fn a_disabled_sandbox_never_loads_the_tinybox_module() {
         .await
         .unwrap_err();
     assert_eq!(err, LoadError::Disabled("sandbox"));
-    assert_eq!(err.into_message(), "COMPONENT_DISABLED:sandbox");
+    assert_eq!(load_error_message(err), "COMPONENT_DISABLED:sandbox");
     let statuses = list(&config);
     let status = statuses.iter().find(|s| s.id == "tinybox").unwrap();
     assert_eq!(status.state, ModuleState::Disabled);

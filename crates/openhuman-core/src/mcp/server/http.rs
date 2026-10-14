@@ -17,7 +17,8 @@ use futures_util::stream;
 use serde_json::{Map, Value};
 use tinymcp_bus::{ServerHttpSessionMethod, ServerHttpSessionRequest, HEADER_SESSION_ID};
 
-use crate::{config::Config, modules::client::ModuleCallError};
+use crate::config::Config;
+use tinybus::module::ModuleCallError;
 
 use super::module::{headers_object, ServerError, ServerPort, ServerSession};
 

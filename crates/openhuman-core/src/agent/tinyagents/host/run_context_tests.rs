@@ -170,7 +170,7 @@ fn child_ledgers_are_isolated_and_parent_keeps_completed_child_totals() {
             output_tokens: 2,
             cached_input_tokens: 1,
             charged_amount_usd: 0.01,
-            cost_source: crate::agent::cost::CostSource::Charged,
+            cost_source: tinyagents_harness::cost::CostSource::Charged,
         },
     });
     assert!(right.subagent_usage_entries().is_empty());
@@ -266,6 +266,7 @@ fn stale_parent_snapshot() -> ParentExecutionContext {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     }
 }
 
@@ -448,4 +449,30 @@ fn task_recency_window_reaches_tools_as_a_host_extension_not_a_task_local() {
     );
     // Direct dispatch (no run context) is unrestricted.
     assert_eq!(task_recency_window_for_tool(None), None);
+}
+
+#[test]
+fn a_response_shape_belongs_to_the_root_turn_and_is_not_inherited() {
+    use tinyagents_harness::middleware::{ResponseShape, ResponseShapeScope};
+    let mut root = OpenHumanRunContext::new();
+    root.response_shape = Some(ResponseShapeScope::new(ResponseShape::default()));
+    assert!(root.child().response_shape.is_none());
+    assert!(root.response_shape.is_some());
+}
+
+#[test]
+fn autonomous_iter_cap_is_inherited_by_children_and_lifts_subagent_caps() {
+    use crate::agent::subagent_host::subagent_iter_cap_with_autonomous_lift as lift;
+    let mut parent = OpenHumanRunContext::new();
+    assert_eq!(parent.child().autonomous_iter_cap, None);
+    assert_eq!(lift(parent.autonomous_iter_cap, 10), 10);
+    parent.autonomous_iter_cap = Some(200);
+    let grandchild = parent.child().child();
+    assert_eq!(grandchild.autonomous_iter_cap, Some(200));
+    assert_eq!(lift(grandchild.autonomous_iter_cap, 10), 200);
+    assert_eq!(
+        lift(Some(5), 10),
+        10,
+        "a cap below the base never lowers it"
+    );
 }

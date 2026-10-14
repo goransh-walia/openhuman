@@ -21,7 +21,7 @@ impl SecurityPolicy {
     /// Registration deduplicates the complete immutable value, so changed roots
     /// or policy settings cannot reuse a stale scope from a cloned policy.
     pub(crate) fn native_path_policy(&self) -> PathPolicy {
-        let mut trusted_roots: Vec<_> = self
+        let trusted_roots: Vec<_> = self
             .trusted_roots
             .iter()
             .map(|root| PathTrustedRoot {
@@ -32,12 +32,6 @@ impl SecurityPolicy {
                 },
             })
             .collect();
-        if let Some(path) = crate::agent::turn_workspace::current() {
-            trusted_roots.push(PathTrustedRoot {
-                path,
-                access: PathAccess::ReadWrite,
-            });
-        }
         let mut reserved_paths: Vec<_> = WORKSPACE_INTERNAL_DIRS
             .iter()
             .chain(WORKSPACE_INTERNAL_FILES.iter())

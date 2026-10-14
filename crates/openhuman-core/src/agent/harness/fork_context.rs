@@ -152,6 +152,12 @@ pub struct ParentExecutionContext {
     /// boundary as web-channel queue messages.
     pub run_queue:
         Option<Arc<tinyagents_harness::run_queue::RunQueue<crate::agent::queued_turn::QueuedTurn>>>,
+
+    /// The host environment of the turn that built this snapshot (shared model
+    /// budget, delegation depth, hooks, cancellation). Runs started from the
+    /// snapshot instead of a live harness carrier (the orchestration control
+    /// plane, triage escalation) apply it so host policy follows delegation.
+    pub host_env: crate::agent::turn_env::HostTurnEnv,
 }
 
 /// A context-preparation source that already ran for the current parent turn.

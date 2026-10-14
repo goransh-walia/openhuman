@@ -76,10 +76,11 @@ impl OpenHumanTurnPrelude {
             )
         });
         collected.extend(rebuilt);
-        super::super::managed_tools::reject_synthesized_collisions(
+        tinyagents_runtime::reject_synthesized_collisions(
             &surface.permanent_tool_names,
             &collected,
-        )?;
+        )
+        .map_err(anyhow::Error::msg)?;
         let synthesized =
             super::super::builder::drop_synthesized_name_collisions(&surface.tools, collected);
         let synthesized_names = synthesized

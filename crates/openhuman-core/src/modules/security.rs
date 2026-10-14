@@ -30,7 +30,7 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(8);
 /// runtime is always started before a module is loaded.
 pub fn module_config(_config: &Config) -> ModuleConfig {
     ModuleConfig {
-        trusted_host: super::host::started()
+        trusted_host: super::runtime::started()
             .and_then(|runtime| runtime.connection().unique_name())
             .map(|name| name.to_string()),
         ..ModuleConfig::default()
@@ -90,8 +90,8 @@ async fn proxy(config: &Config, state: &mut ClientState) -> Result<tinybus::Prox
     let configuration = module_config(config);
     super::ops::ensure_loaded_within(config, MODULE_ID, Some(LOAD_TIMEOUT))
         .await
-        .map_err(super::ops::LoadError::into_message)?;
-    let runtime = super::host::runtime()
+        .map_err(super::ops::load_error_message)?;
+    let runtime = super::runtime::runtime()
         .await
         .map_err(|_| "TinySecurity bus unavailable")?;
     let record = super::registry::find(MODULE_ID).ok_or("TinySecurity registry entry missing")?;

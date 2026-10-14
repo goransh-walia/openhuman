@@ -14,11 +14,12 @@ The trade is explicit. A module shares the core's address space and crash domain
 ## Host access and contracts
 
 Hosts reach module clients through the `openhuman-rpc` facade chain. The shared
-`openhuman_rpc::embed::modules::ModuleClient` accepts explicit configuration
-and uses the process-wide lazy loader before or after core startup. Constructing
+`openhuman_rpc::embed::modules::client(config)` returns a
+`tinybus::module::ModuleClient` built from explicit configuration
+over the process-wide lazy loader before or after core startup. Constructing
 a client starts nothing and requires no signed-in session. Set bundled-artifact
-discovery before its first call. Without the loader, a call returns an explicit
-unavailable error.
+discovery before its first call. A build without the `modules` feature has no client; with modules disabled
+in configuration a call returns an explicit unavailable error.
 
 A `*-bus` crate contains serialized vocabulary, errors, identifiers, versions,
 schemas and static tool declarations. Parsing, provider dispatch, cryptography,

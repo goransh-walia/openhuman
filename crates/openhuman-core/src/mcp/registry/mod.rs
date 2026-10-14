@@ -82,7 +82,7 @@ pub mod connections {
         config: &Config,
         member: &str,
         args: impl serde::Serialize,
-    ) -> Result<R, crate::modules::client::ModuleCallError> {
+    ) -> Result<R, tinybus::module::ModuleCallError> {
         crate::mcp::module_client::McpConfiguredClient::for_config(config)?
             .call(&host::client_config(config), member, args)
             .await

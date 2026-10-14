@@ -81,7 +81,7 @@ async fn connected_owner(fixture: Fixture) -> (Arc<TriggerHistory>, tinybus::Con
         .await
         .unwrap();
     service.request_name("test.ConnectorArchive").await.unwrap();
-    let client = ModuleClient::fixture(
+    let client = crate::modules::ops::fixture_client(
         caller
             .proxy(
                 "test.ConnectorArchive",

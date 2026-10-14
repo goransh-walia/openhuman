@@ -134,7 +134,7 @@ pub(super) async fn finalize_committed_turn(
     let commit_started = std::time::Instant::now();
     let output = receipt.outcome.output.clone().unwrap_or_default();
     // Skips compaction checkpoints (user-role, not the user's words).
-    let input = crate::agent::tinyagents::last_user_message(&receipt.outcome.history)
+    let input = tinyagents_harness::summarization::last_user_message(&receipt.outcome.history)
         .map(crate::agent::message_convert::user_text_with_markers)
         .unwrap_or_default();
     let sidecar = receipt

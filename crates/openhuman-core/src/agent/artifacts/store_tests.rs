@@ -530,23 +530,21 @@ async fn create_artifact_mints_fresh_id_without_scope() {
 }
 
 #[tokio::test]
-async fn create_artifact_reuses_id_inside_regenerate_scope() {
+async fn create_artifact_reuses_id_for_an_explicit_regenerate_target() {
     let tmp = TempDir::new().unwrap();
     let workspace = tmp.path().to_path_buf();
-    let (meta, _path) = REGENERATE_TARGET_ID
-        .scope("reused-id".to_string(), async move {
-            create_artifact(
-                &workspace,
-                &workspace.join("Files"),
-                ArtifactKind::Presentation,
-                "Q3 Deck",
-                "pptx",
-            )
-            .await
-        })
-        .await
-        .unwrap();
-    // The scoped target id is reused verbatim so the card swaps in place.
+    let (meta, _path) = create_artifact_regenerating(
+        &workspace,
+        &workspace.join("Files"),
+        ArtifactKind::Presentation,
+        "Q3 Deck",
+        "pptx",
+        None,
+        Some("reused-id"),
+    )
+    .await
+    .unwrap();
+    // The explicit target id is reused verbatim so the card swaps in place.
     assert_eq!(meta.id, "reused-id");
     // And the meta is actually persisted under that id.
     let got = get_artifact(tmp.path(), "reused-id").await.unwrap();
@@ -574,19 +572,17 @@ async fn regenerate_preserves_original_created_at() {
     // artifact jumps to the top of the created_at-sorted list (#3162).
     let id = first.id.clone();
     let ws = workspace.clone();
-    let (second, _) = REGENERATE_TARGET_ID
-        .scope(id.clone(), async move {
-            create_artifact(
-                &ws,
-                &ws.join("Files"),
-                ArtifactKind::Presentation,
-                "Deck",
-                "pptx",
-            )
-            .await
-        })
-        .await
-        .unwrap();
+    let (second, _) = create_artifact_regenerating(
+        &ws,
+        &ws.join("Files"),
+        ArtifactKind::Presentation,
+        "Deck",
+        "pptx",
+        None,
+        Some(id.as_str()),
+    )
+    .await
+    .unwrap();
     assert_eq!(second.id, id);
     assert_eq!(
         second.created_at, original_created,

@@ -395,7 +395,7 @@ impl SpawnAsyncSubagentTool {
         let detached_run_context = detached_parent.data.child();
         let mut abort_report = AbortReport::arm(progress_sink.clone(), &definition.id, &task_id);
         let join = crate::core::runtime::spawn_scoped(crate::agent::turn_origin::propagate(
-            crate::agent::turn_workspace::propagate(async move {
+            async move {
                 let options = SubagentRunOptions {
                     skill_filter_override: None,
                     context,
@@ -710,7 +710,7 @@ impl SpawnAsyncSubagentTool {
                     }
                 }
                 abort_report.disarm();
-            }),
+            },
         ));
 
         // Register *after* spawn so the AbortHandle is available. The task owns

@@ -97,8 +97,8 @@ async fn proxy(config: &Config) -> Result<tinybus::Proxy, String> {
         Some(std::time::Duration::from_secs(8)),
     )
     .await
-    .map_err(crate::modules::ops::LoadError::into_message)?;
-    let runtime = crate::modules::host::runtime()
+    .map_err(crate::modules::ops::load_error_message)?;
+    let runtime = crate::modules::runtime::runtime()
         .await
         .map_err(|error| format!("search module bus unavailable: {error}"))?;
     let configuration =
@@ -121,7 +121,7 @@ async fn proxy(config: &Config) -> Result<tinybus::Proxy, String> {
 /// Reinitialize, waiting out a module that is still finishing its previous
 /// (re)initialization instead of failing the caller's search.
 async fn reinitialize(
-    runtime: &crate::modules::host::ModuleRuntime,
+    runtime: &tinybus::module::ModuleRuntime,
     configuration: serde_json::Value,
 ) -> Result<(), String> {
     const ATTEMPTS: u32 = 40;

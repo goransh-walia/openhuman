@@ -73,7 +73,7 @@ impl EventHandler<DomainEvent> for ChannelInboundSubscriber {
             }
         };
         let identity = match crate::modules::channel_controller::prepare_identity(
-            &crate::modules::client::ModuleClient::new(config.clone()),
+            &crate::modules::client(config.clone()),
             tinychannels_bus::module_inbound::PrepareChannelIdentityRequest {
                 channel: channel.clone(),
                 sender: sender.clone(),
@@ -272,7 +272,7 @@ impl EventHandler<DomainEvent> for ChannelInboundSubscriber {
 async fn flush_events(
     reply: &ModuleProgressiveReply,
     pending: &mut Vec<ProgressiveEvent>,
-) -> Result<(), crate::modules::client::ModuleCallError> {
+) -> Result<(), tinybus::module::ModuleCallError> {
     if pending.is_empty() {
         return Ok(());
     }

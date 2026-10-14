@@ -97,7 +97,7 @@ impl ChatModel<()> for SpawnAttemptProvider {
     }
 }
 
-const REFUSAL: &str = "refusing to register spawn/delegate tool";
+const REFUSAL: &str = "refused spawn tool on sub-agent";
 
 /// Runs one sub-agent turn whose parent surface carries `spawn_subagent`, with
 /// `allowed` deciding whether the allowlist readmits it. Returns

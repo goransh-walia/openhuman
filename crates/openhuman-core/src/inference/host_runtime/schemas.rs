@@ -242,6 +242,7 @@ fn handle_agent_chat(params: Map<String, Value>) -> ControllerFuture {
             p.cwd,
             crate::config::schema::EphemeralRoute::from_params(p.inference_url, p.api_key)
                 .map(|route| route.with_headers(p.inference_headers)),
+            crate::inference::host_runtime::ops::AgentChatEnv::default(),
         )
         .await?
         .into_rpc_json()

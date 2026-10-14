@@ -16,8 +16,11 @@ use crate::agent::progress::AgentProgress;
 use crate::agent::tinyagents::journal::TurnJournal;
 use crate::agent::tinyagents::observability::{self, OpenhumanEventBridge, SubagentScope};
 use crate::agent::tinyagents::tools::EarlyExitHook;
-use crate::agent::tinyagents::turn_outcome::{
-    HaltSummarySlot, TinyagentsTurnOutcome, ToolOutcomeSink,
+use crate::agent::tinyagents::turn_outcome::TinyagentsTurnOutcome;
+use tinyagents_harness::turn_outcome::{HaltSummarySlot, ToolOutcomeSink};
+use tinyagents_harness::turn_run_finalize::{
+    classify_turn_end, log_compaction_provenance, select_turn_text, system_segment_bytes, TurnEnd,
+    TurnEndInputs,
 };
 
 /// Assemble the [`TinyagentsTurnOutcome`] for a run that returned
@@ -59,35 +62,7 @@ pub(super) async fn finalize_turn_outcome(
     // grep-friendly `[context]` prefix so every compaction is auditable, not just
     // its net token saving.
     if let Some(mw) = compression_mw {
-        let records = mw.records();
-        if !records.is_empty() {
-            tracing::info!(
-                model,
-                compactions = records.len(),
-                "[context] turn performed {} context compaction(s); surfacing provenance",
-                records.len()
-            );
-            for (idx, record) in records.iter().enumerate() {
-                let provenance = &record.provenance;
-                tracing::info!(
-                    model,
-                    compaction = idx + 1,
-                    of = records.len(),
-                    source_count = provenance.source_ids.len(),
-                    source_ids = ?provenance.source_ids,
-                    from_tokens = provenance.original_token_estimate,
-                    to_tokens = provenance.summary_token_estimate,
-                    saved_tokens = provenance
-                        .original_token_estimate
-                        .saturating_sub(provenance.summary_token_estimate),
-                    reason = %provenance.reason,
-                    "[context] compaction provenance: folded {} source message(s) ({} -> {} tokens)",
-                    provenance.source_ids.len(),
-                    provenance.original_token_estimate,
-                    provenance.summary_token_estimate,
-                );
-            }
-        }
+        log_compaction_provenance(model, &mw.records());
     }
 
     // Prompt-cache layout diagnostics (issue #4249, 03.2): drain the crate
@@ -145,10 +120,10 @@ pub(super) async fn finalize_turn_outcome(
             crate::agent::tinyagents::turn_outcome::record_unobserved_turn_usage(
                 model, input, output, cached, estimate,
             );
-            let mut cost = crate::agent::cost::CostTally::default();
+            let mut cost = tinyagents_harness::cost::CostTally::default();
             cost.add(match estimate {
-                Some(usd) => crate::agent::cost::CallCost::Estimated(usd),
-                None => crate::agent::cost::CallCost::Unknown,
+                Some(usd) => tinyagents_harness::cost::CallCost::Estimated(usd),
+                None => tinyagents_harness::cost::CallCost::Unknown,
             });
             (input, output, cached, cost)
         });
@@ -159,34 +134,25 @@ pub(super) async fn finalize_turn_outcome(
     // checkpoint and prompt the user — matching the legacy `early_exit_tool`.
     let early_exit = early_exit_hook.and_then(|hook| hook.take());
 
-    // Cap detection: the harness sets `final_response` only when the loop
-    // finishes naturally (the model stopped requesting tools). When the cap
-    // pauser stops the loop mid-work, `final_response` stays `None` — that's the
-    // cap hit. An early-exit is a clean pause and takes precedence; under
-    // `pause_at_cap` the only other `Pause` source is the cap pauser, so this is
-    // unambiguous. (`run_queue` steering injects messages, never pauses.)
-    // The repeated-failure breaker halts the run with a root-cause summary instead
-    // of a final model turn; surface it as the turn's text so the no-progress cause
-    // reaches the caller/user rather than an empty reply.
+    // The repeated-failure breaker halts the run with a root-cause summary
+    // instead of a final model turn; surface it as the turn's text so the
+    // no-progress cause reaches the caller/user rather than an empty reply.
     let breaker_halt = halt_summary.lock().ok().and_then(|mut s| s.take());
-
-    // Issue #6014: the in-loop conclusion is the primary tell now. When
-    // `FinalCallWrapUpMiddleware` fired, the turn reached its cap *and* answered
-    // from inside the loop — which means it ended the way a finished turn does
-    // (text, no tool request), so `final_response` is `Some` and the original
-    // predicate below can no longer see it. The old predicate is kept as the
-    // second arm rather than replaced: it still covers every run with the
-    // middleware uninstalled, and the case where the concluding call itself came
-    // back requesting a tool (a text-protocol model ignoring an empty schema
-    // list) and the loop ran out with nothing final.
     let wrap_up_injected = wrap_up_fired
         .as_ref()
         .is_some_and(|mw| mw.fired_for(run_instance_id));
-    let hit_cap = pause_at_cap
-        && early_exit.is_none()
-        && breaker_halt.is_none()
-        && (wrap_up_injected
-            || (run.model_calls >= max_iterations && run.final_response.is_none()));
+    // Cap, wrap-up and truncation classification is the harness's
+    // (`classify_turn_end`, #6014 / #6951).
+    let TurnEnd { hit_cap, truncated } = classify_turn_end(
+        &run,
+        &TurnEndInputs {
+            max_iterations,
+            pause_at_cap,
+            early_exit: early_exit.is_some(),
+            breaker_halt: breaker_halt.as_deref(),
+            wrap_up_injected,
+        },
+    );
 
     // Terminal turn event (parity with the legacy engine's `progress::emit`): the
     // harness stream has no run-completed event, so emit `TurnCompleted` here with
@@ -198,7 +164,8 @@ pub(super) async fn finalize_turn_outcome(
     // A run the harness stopped (breaker / cap) is traced as stopped, not as a
     // clean completion. No deadline wind-down on this path: only the session
     // turn carries one, and it records the stop through its sidecar.
-    let stop = crate::agent::turn_stop::TurnStop::classify(breaker_halt.as_deref(), false, hit_cap);
+    let stop =
+        crate::agent::turn_projection::classify_stop(breaker_halt.as_deref(), false, hit_cap);
     if let Some(stop) = stop.as_ref().filter(|_| turn_completed_sink.is_some()) {
         tracing::debug!(
             model,
@@ -236,27 +203,23 @@ pub(super) async fn finalize_turn_outcome(
         }
     }
 
-    let (early_exit_tool, mut text) = match early_exit {
-        Some(exit) => (Some(exit.tool), exit.question),
-        None => (None, run.text().unwrap_or_default()),
-    };
-
+    let early_exit_tool = early_exit.as_ref().map(|exit| exit.tool.clone());
+    let text = select_turn_text(
+        &run,
+        early_exit.map(|exit| exit.question),
+        breaker_halt.as_deref(),
+    );
     // Carry the breaker halt onto the outcome so the sub-agent runner can report
-    // `Incomplete` (#4466). `text` is overridden with the same root-cause summary
-    // so callers with no breaker-awareness still surface the cause, not an empty
-    // last-model reply.
-    if let Some(summary) = &breaker_halt {
+    // `Incomplete` (#4466); `text` already carries the same summary.
+    if breaker_halt.is_some() {
         tracing::info!(
             model,
             subagent = subagent_scope.is_some(),
             "[tinyagents] run halted by circuit breaker; surfacing as breaker_halt (#4466)"
         );
-        text = summary.clone();
     }
 
-    // #6951: the run finished on a reply that spent the whole output budget
-    // reasoning. The closing call names that cause instead of "finished".
-    let truncated = super::turn_outcome::ended_out_of_output_budget(run.final_response.as_ref());
+    // #6951: the closing call names the exhausted output budget, not "finished".
     if truncated {
         tracing::warn!(
             model,
@@ -286,12 +249,7 @@ pub(super) async fn finalize_turn_outcome(
     // the frozen system prefix in bytes, per tier segment, beside the token
     // counts the provider reported. `cached_input_tokens` rising to roughly
     // the prefix on turn 2 is what a working prefix cache looks like.
-    let system_segment_bytes: Vec<usize> = run
-        .messages
-        .iter()
-        .take_while(|message| matches!(message, tinyinference_llm::Message::System(_)))
-        .map(|message| message.text().len())
-        .collect();
+    let system_segment_bytes = system_segment_bytes(&run.messages);
     tracing::info!(
         model,
         system_segments = system_segment_bytes.len(),
@@ -310,7 +268,7 @@ pub(super) async fn finalize_turn_outcome(
     let compaction = run
         .compacted_history
         .as_deref()
-        .and_then(crate::agent::tinyagents::CompactionCarry::from_compacted_history);
+        .and_then(tinyagents_harness::summarization::CompactionCarry::from_compacted_history);
     if let Some(carry) = &compaction {
         tracing::info!(
             model,

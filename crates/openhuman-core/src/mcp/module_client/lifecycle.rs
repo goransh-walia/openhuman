@@ -20,15 +20,15 @@ impl McpConfiguredClient {
     /// serialized by the client itself.
     pub(crate) fn for_config(config: &Config) -> Result<Arc<Self>, ModuleCallError> {
         if SHUTTING_DOWN.load(Ordering::Acquire) {
-            ModuleClient::report_unavailable(MODULE);
+            crate::modules::report::unavailable(MODULE);
             return Err(ModuleCallError::Unavailable);
         }
         if !config.modules.enabled {
-            ModuleClient::report_unavailable(MODULE);
+            crate::modules::report::unavailable(MODULE);
             return Err(ModuleCallError::Unavailable);
         }
         if current_agent_context_is_removed() {
-            ModuleClient::report_unavailable(MODULE);
+            crate::modules::report::unavailable(MODULE);
             return Err(ModuleCallError::Unavailable);
         }
         let data_dir = crate::core::runtime::agent_scope_dir(config);
@@ -42,7 +42,7 @@ impl McpConfiguredClient {
             .map_err(|error| match error {
                 AdmitError::Create(error) => error,
                 _ => {
-                    ModuleClient::report_unavailable(MODULE);
+                    crate::modules::report::unavailable(MODULE);
                     ModuleCallError::Unavailable
                 }
             })
@@ -116,7 +116,7 @@ impl McpConfiguredClient {
         Ok(Self::with_port(
             data_dir,
             Box::new(TinyMcpPort {
-                root: ModuleClient::new(config.clone()),
+                root: crate::modules::client(config.clone()),
             }),
         ))
     }
@@ -145,6 +145,11 @@ impl McpConfiguredClient {
             state: tokio::sync::Mutex::new(ConfiguredLifecycle::new()),
             retiring: AtomicBool::new(false),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_port(data_dir: String, port: Box<dyn McpModulePort>) -> Self {
+        Self::with_port(data_dir, port)
     }
 
     /// Close an already-open agent-scoped client without creating one. A

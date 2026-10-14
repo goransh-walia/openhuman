@@ -26,7 +26,7 @@ pub(in super::super) struct AggregatedUsage {
     pub(in super::super) output_tokens: u64,
     pub(in super::super) cached_input_tokens: u64,
     /// Cost of the run's calls: reported charge, catalog estimate, or unknown.
-    pub(in super::super) cost: crate::agent::cost::CostTally,
+    pub(in super::super) cost: tinyagents_harness::cost::CostTally,
 }
 
 /// Drive a sub-agent turn on the tinyagents harness. Returns
@@ -405,11 +405,13 @@ pub(in super::super) async fn run_subagent_via_graph(
                     .with_cache_creation_tokens(u.cache_creation_tokens)
                     .with_reasoning_tokens(u.reasoning_tokens);
                     let billed = match call_cost {
-                        crate::agent::cost::CallCost::Charged(usd) => billed.with_charged_usd(usd),
-                        crate::agent::cost::CallCost::Estimated(usd) => {
+                        tinyagents_harness::cost::CallCost::Charged(usd) => {
+                            billed.with_charged_usd(usd)
+                        }
+                        tinyagents_harness::cost::CallCost::Estimated(usd) => {
                             billed.with_estimated_usd(usd)
                         }
-                        crate::agent::cost::CallCost::Unknown => billed,
+                        tinyagents_harness::cost::CallCost::Unknown => billed,
                     };
                     crate::platform::cost::record_provider_usage_scoped(
                         model,
@@ -587,7 +589,7 @@ fn map_tinyagents_subagent_error(err: anyhow::Error) -> SubagentRunError {
 /// every call succeeded.
 fn build_cap_digest(
     conversation: &[TranscriptEntry],
-    tool_outcomes: &[crate::agent::tinyagents::ToolCallOutcome],
+    tool_outcomes: &[tinyagents_harness::turn_outcome::ToolCallOutcome],
 ) -> String {
     use std::collections::HashMap;
     use std::fmt::Write as _;

@@ -100,7 +100,8 @@ struct Rig {
 }
 
 fn rig() -> Rig {
-    let backend: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
+    let backend: Arc<dyn StorageBackend> =
+        Arc::new(super::super::storage_host_watching::WatchingStorage::new());
     let env = Arc::new(Env {
         backend: Mutex::new(Some(Arc::clone(&backend))),
         profile: Mutex::new(None),
@@ -532,10 +533,10 @@ async fn streams_and_blobs_stay_inside_their_prefixes() {
             &alpha(),
             Object::Blobs,
             "PutStream",
-            json!({"key": "files/x", "len": 1})
+            json!({"key": "elsewhere/x", "len": 1})
         )
         .await,
-        denied("unsupported-selector")
+        denied("target-not-granted")
     );
 }
 
@@ -697,6 +698,12 @@ async fn every_call_is_audited_without_its_payload() {
 
 #[path = "storage_host_bus_tests.rs"]
 mod bus;
+
+#[path = "storage_host_cdylib_tests.rs"]
+mod cdylib;
+#[cfg(test)]
+#[path = "storage_host_stream_tests.rs"]
+mod streams;
 
 async fn set_secret(rig: &Rig) -> Result<Value, HostError> {
     let who = alpha();

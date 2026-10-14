@@ -151,7 +151,7 @@ pub async fn ai_delete_artifact(
 ///    "not regenerable" error rather than a silent no-op.
 /// 3. Rebuild the producer tool + a fresh [`SecurityPolicy`] from the
 ///    live config and run it inside both:
-///    - `REGENERATE_TARGET_ID.scope(artifact_id, …)` so `create_artifact`
+///    - `PresentationTool::with_regenerate_target(artifact_id)` so `create_artifact`
 ///      reuses the id + directory instead of minting a new one, and
 ///    - `APPROVAL_CHAT_CONTEXT.scope({thread_id, client_id}, …)` so the
 ///      Pending/Ready/Failed events route back to the originating chat
@@ -206,12 +206,16 @@ async fn regenerate_presentation(
     // A fresh policy from the live config — cheap, sync, and mirrors how
     // the agent harness builds the same tool (see `tools::ops`).
     let security = std::sync::Arc::new(SecurityPolicy::from_full_config(&config));
+    // The regenerate target is an explicit constructor argument of the tool
+    // that produces the artifact: its `create_artifact_regenerating` call
+    // reuses this id instead of minting a new one.
     let tool = PresentationTool::with_config(
         config.workspace_dir.clone(),
         super::files::FileRoots::from_config(config),
         security,
         config.clone(),
-    );
+    )
+    .with_regenerate_target(artifact_id);
 
     let chat_ctx = ApprovalChatContext {
         thread_id: thread_id.to_string(),
@@ -221,11 +225,8 @@ async fn regenerate_presentation(
         request_id: None,
     };
 
-    let result = store::REGENERATE_TARGET_ID
-        .scope(
-            artifact_id.to_string(),
-            APPROVAL_CHAT_CONTEXT.scope(chat_ctx, async move { tool.execute(args).await }),
-        )
+    let result = APPROVAL_CHAT_CONTEXT
+        .scope(chat_ctx, async move { tool.execute(args).await })
         .await;
 
     match result {

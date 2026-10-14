@@ -510,19 +510,22 @@ async fn start_chat_inner(
                 task_cancel_token,
                 origin.clone(),
                 approval_ctx,
-                run_chat_task(
-                    &client_id_task,
-                    &thread_id_task,
-                    &request_id_task,
-                    &user_message,
-                    model_override,
-                    temperature,
-                    locale,
-                    turn_run_queue_task,
-                    metadata,
-                    origin.clone(),
-                    /* fork */ false,
-                ),
+                |host_env| {
+                    run_chat_task(
+                        &client_id_task,
+                        &thread_id_task,
+                        &request_id_task,
+                        &user_message,
+                        model_override,
+                        temperature,
+                        locale,
+                        turn_run_queue_task,
+                        metadata,
+                        origin.clone(),
+                        /* fork */ false,
+                        host_env,
+                    )
+                },
             )
             .await;
 

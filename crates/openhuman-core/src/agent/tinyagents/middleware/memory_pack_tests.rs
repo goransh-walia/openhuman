@@ -1,4 +1,7 @@
 use super::*;
+use tinyagents_harness::context::RunContext;
+use tinyagents_harness::middleware::Middleware;
+use tinyinference_llm::model::ModelRequest;
 
 use std::sync::Arc;
 
@@ -41,7 +44,7 @@ async fn the_pack_rides_every_request_of_the_turn() {
 
     for _ in 0..2 {
         let mut request = ModelRequest::new(history.clone());
-        MemoryPackMiddleware
+        memory_pack_middleware()
             .before_model(&mut ctx, &(), &mut request)
             .await
             .unwrap();
@@ -61,7 +64,7 @@ async fn the_pack_rides_every_request_of_the_turn() {
 async fn a_turn_without_a_pack_is_left_alone() {
     let mut ctx = context(None);
     let mut request = ModelRequest::new(vec![Message::user("hi")]);
-    MemoryPackMiddleware
+    memory_pack_middleware()
         .before_model(&mut ctx, &(), &mut request)
         .await
         .unwrap();
@@ -91,7 +94,7 @@ async fn request_for(
     let mut ctx = context(Some(pack));
     ctx.model_profile = profile;
     let mut request = ModelRequest::new(history.to_vec());
-    MemoryPackMiddleware
+    memory_pack_middleware()
         .before_model(&mut ctx, &(), &mut request)
         .await
         .unwrap();

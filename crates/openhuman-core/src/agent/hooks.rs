@@ -6,7 +6,7 @@
 
 #[path = "hooks_scope.rs"]
 mod scope;
-pub use scope::{turn_post_turn_hooks, turn_tool_hooks, HookScope};
+pub use scope::HookScope;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

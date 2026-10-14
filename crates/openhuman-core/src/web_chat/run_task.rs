@@ -41,6 +41,9 @@ pub(crate) async fn run_chat_task(
     // cache, so a concurrent same-thread (parallel) turn cannot clobber — or be
     // clobbered by — the primary turn's cached agent. See `QueueMode::Parallel`.
     fork: bool,
+    // This turn's host environment (its Stop cancellation, the wall-clock
+    // backstop's deadline), handed to the session so the whole run tree sees it.
+    host_env: crate::agent::turn_env::HostTurnEnv,
 ) -> Result<WebChatTaskResult, String> {
     // One turn at a time per profile: wait behind its relay and cron turns.
     let _turn = crate::profiles::turn_gate::acquire().await;
@@ -157,6 +160,7 @@ pub(crate) async fn run_chat_task(
     agent.set_on_progress(Some(progress_tx));
     agent.set_run_queue(Some(run_queue));
     agent.set_thread_id(Some(thread_id));
+    agent.set_host_env(host_env);
     // Also the turn's workspace, so attachment reads and delegated sub-agents
     // (which load a fresh config) use the folder its uploads were staged in
     // (#7714). Same pattern as `agent_chat`'s per-turn cwd.

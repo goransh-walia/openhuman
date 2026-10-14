@@ -6,7 +6,6 @@
 
 use super::runtime::hydrate_channel_credentials;
 use crate::config::Config;
-use crate::modules::client::ModuleClient;
 use anyhow::Result;
 use std::time::Duration;
 use tinychannels_bus::{ChannelHealthState, HttpProxyPolicy};
@@ -50,7 +49,7 @@ pub async fn doctor_channels(config: Config) -> Result<()> {
             service_selectors: selectors,
         }
     };
-    let client = ModuleClient::new(config.clone())
+    let client = crate::modules::client(config.clone())
         .with_timeout(Duration::from_secs(configured.len() as u64 * 10 + 5));
     let channels =
         crate::modules::channel_health::check(&client, hydrate_channel_credentials(&config), proxy)

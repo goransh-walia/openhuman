@@ -22,7 +22,7 @@ pub(super) struct BridgeState {
     pub(super) output_tokens: u64,
     pub(super) cached_input_tokens: u64,
     /// Every call's cost: reported charge, catalog estimate, or unknown.
-    pub(super) cost: crate::agent::cost::CostTally,
+    pub(super) cost: tinyagents_harness::cost::CostTally,
     /// Local response-cache hits observed on this turn (issue #4249, 03.2). A hit
     /// means the harness served a model call from its [`ResponseCache`] without
     /// invoking the provider. Additive counters — a follow-up (coordinated with
@@ -223,7 +223,7 @@ impl OpenhumanEventBridge {
     /// Cumulative `(input_tokens, output_tokens, cached_input_tokens, cost)`
     /// observed so far — the full accounting the turn persists (transcript cost /
     /// session meters). `cost` says whether every call was priced.
-    pub(crate) fn totals_with_cost(&self) -> (u64, u64, u64, crate::agent::cost::CostTally) {
+    pub(crate) fn totals_with_cost(&self) -> (u64, u64, u64, tinyagents_harness::cost::CostTally) {
         let s = self.state.lock().unwrap();
         (
             s.input_tokens,
@@ -309,10 +309,10 @@ impl OpenhumanEventBridge {
             .map(|u| u.charged_amount_usd)
             .filter(|c| c.is_finite() && *c >= 0.0);
         let cost = match provider_cost {
-            Some(charged) => crate::agent::cost::CallCost::Charged(charged),
+            Some(charged) => tinyagents_harness::cost::CallCost::Charged(charged),
             None => match Self::estimate_call_cost(&self.model, usage) {
-                Some(estimate) => crate::agent::cost::CallCost::Estimated(estimate),
-                None => crate::agent::cost::CallCost::Unknown,
+                Some(estimate) => tinyagents_harness::cost::CallCost::Estimated(estimate),
+                None => tinyagents_harness::cost::CallCost::Unknown,
             },
         };
         let call_cost = cost.usd();
@@ -382,9 +382,11 @@ impl OpenhumanEventBridge {
             .with_cache_creation_tokens(cache_creation_tokens)
             .with_reasoning_tokens(reasoning_tokens);
         let usage_info = match cost {
-            crate::agent::cost::CallCost::Charged(usd) => usage_info.with_charged_usd(usd),
-            crate::agent::cost::CallCost::Estimated(usd) => usage_info.with_estimated_usd(usd),
-            crate::agent::cost::CallCost::Unknown => usage_info,
+            tinyagents_harness::cost::CallCost::Charged(usd) => usage_info.with_charged_usd(usd),
+            tinyagents_harness::cost::CallCost::Estimated(usd) => {
+                usage_info.with_estimated_usd(usd)
+            }
+            tinyagents_harness::cost::CallCost::Unknown => usage_info,
         };
         if reasoning_tokens > 0 || cache_creation_tokens > 0 {
             log::debug!(

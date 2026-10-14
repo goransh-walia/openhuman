@@ -1,5 +1,5 @@
 use super::*;
-use crate::agent::tinyagents::turn_outcome::ToolCallOutcome;
+use tinyagents_harness::turn_outcome::ToolCallOutcome;
 
 #[test]
 fn outcome_source_returns_captured_content_by_call_id() {

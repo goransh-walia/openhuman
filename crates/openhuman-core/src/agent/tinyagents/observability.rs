@@ -11,7 +11,6 @@
 mod bridge_types;
 mod event_bridge;
 mod event_projection;
-mod graph_tracing;
 
 #[cfg(test)]
 use std::sync::Arc;
@@ -27,7 +26,6 @@ use crate::agent::progress::AgentProgress;
 pub(crate) use bridge_types::{ProviderUsageCarry, SubagentScope, ToolFailureMap, ToolNameMap};
 pub(crate) use event_bridge::OpenhumanEventBridge;
 pub(crate) use event_projection::surface_cache_layout_events;
-pub(crate) use graph_tracing::GraphTracingSink;
 
 #[cfg(test)]
 #[path = "observability_tests.rs"]

@@ -365,7 +365,8 @@ impl AgentOrchestrationSession {
         // only its route/usage observations are isolated by `child()` in the
         // subagent runner.
         let cancellation = CancellationToken::new();
-        let mut run_context = crate::agent::tinyagents::host::OpenHumanRunContext::new();
+        let mut run_context = crate::agent::tinyagents::host::OpenHumanRunContext::new()
+            .with_host_env(&parent.host_env);
         run_context.parent = Some(parent.clone());
         run_context.progress = parent.on_progress.clone().or(run_context.progress);
         run_context.workspace = parent_workspace_descriptor
@@ -412,24 +413,22 @@ impl AgentOrchestrationSession {
         // carried across the same boundary the parent execution context
         // already is. Without the origin the spawned agent's external-effect
         // tools reach the approval gate unlabelled and are refused.
-        let handle = tokio::spawn(crate::agent::turn_origin::propagate(
-            crate::agent::turn_workspace::propagate(async move {
-                mark_running(&task_status_tx);
-                let result = with_parent_context(parent, async move {
-                    run_subagent(&definition, &prompt, options).await
-                })
+        let handle = tokio::spawn(crate::agent::turn_origin::propagate(async move {
+            mark_running(&task_status_tx);
+            let result = with_parent_context(parent, async move {
+                run_subagent(&definition, &prompt, options).await
+            })
+            .await;
+            session
+                .finish_agent(
+                    &task_id,
+                    &task_agent_id,
+                    &task_status_tx,
+                    progress_sink,
+                    result,
+                )
                 .await;
-                session
-                    .finish_agent(
-                        &task_id,
-                        &task_agent_id,
-                        &task_status_tx,
-                        progress_sink,
-                        result,
-                    )
-                    .await;
-            }),
-        ));
+        }));
 
         self.registry
             .register(

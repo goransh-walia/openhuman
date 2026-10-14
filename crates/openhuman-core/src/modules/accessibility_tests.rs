@@ -110,7 +110,7 @@ async fn fixture(
         .unwrap();
     (
         AccessibilityClient {
-            client: ModuleClient::fixture(proxy),
+            client: crate::modules::ops::fixture_client(proxy),
             computer_enabled: true,
         },
         fixture,

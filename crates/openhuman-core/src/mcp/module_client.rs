@@ -26,10 +26,8 @@ use tinymcp_bus::{
     ValidateServerArgumentsRequest,
 };
 
-use crate::{
-    config::Config,
-    modules::{client::ModuleCallError, client::ModuleClient},
-};
+use crate::config::Config;
+use tinybus::module::{ModuleCallError, ModuleClient};
 
 const MODULE: &str = "tinymcp";
 const TRANSITION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -413,7 +411,7 @@ impl McpConfiguredClient {
             .call_object(&object.object_path, member, args, confidential)
             .await?;
         serde_json::from_value(reply).map_err(|_| {
-            ModuleClient::report_malformed_reply(MODULE);
+            crate::modules::report::malformed_reply(MODULE);
             ModuleCallError::ModuleFault
         })
     }

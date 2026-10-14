@@ -37,6 +37,7 @@ fn test_parent_ctx(workspace_dir: PathBuf) -> ParentExecutionContext {
         run_queue: None,
         agent_config: crate::config::AgentConfig::default(),
         tool_call_format: tinytools_agent::dialect::ToolCallFormat::Native,
+        host_env: Default::default(),
     }
 }
 

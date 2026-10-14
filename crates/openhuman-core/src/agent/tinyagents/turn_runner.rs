@@ -10,9 +10,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures::StreamExt;
 use tinyagents_harness::agent_loop::AgentStreamItem;
-use tinyagents_harness::events::EventSink;
 use tinyagents_harness::runtime::{AgentInvocation, AgentTurnRequest, InvocationRuntime};
 use tinyagents_harness::store::StoreRegistry;
+use tinyagents_harness::turn_policy::effective_max_iterations;
 use tinyagents_registry::DiagnosticSeverity;
 
 use crate::agent::harness::tool_result_artifacts::TINYAGENTS_TOOL_RESULT_ARTIFACT_STORE;
@@ -23,11 +23,10 @@ use crate::agent::tinyagents::middleware::TurnContextMiddleware;
 use crate::agent::tinyagents::observability::{OpenhumanEventBridge, SubagentScope};
 use crate::agent::tinyagents::turn_models::TurnModels;
 use crate::agent::tinyagents::turn_outcome::TinyagentsTurnOutcome;
-use crate::agent::tinyagents::turn_policy::effective_max_iterations;
 use crate::agent::tinyagents::turn_run_error::map_turn_run_error;
 use crate::agent::tinyagents::turn_run_finalize::finalize_turn_outcome;
 use crate::agent::tinyagents::{journal, routes, steering_forwarder};
-use tinyagents_harness::events::{CapPauser, PauseRecorder};
+use tinyagents_harness::events::{CapPauser, EventSink, PauseRecorder};
 use tinyagents_harness::ids::TaskId;
 use tinyagents_harness::observability::turn_observer;
 use tinyagents_harness::run_queue::RunQueue;
@@ -277,7 +276,7 @@ pub(super) async fn run_turn_via_tinyagents_body(
         context_window,
         early_exit_tools,
         context_mw,
-        run_context.stop_hooks.clone(),
+        run_context.harness_host_policy(),
         tool_policy.clone(),
         routes::turn_required_capabilities(model),
         deterministic_cacheable,
@@ -298,7 +297,9 @@ pub(super) async fn run_turn_via_tinyagents_body(
         run_context.memory_turn.clone(),
         run_context.tool_rules.clone(),
     );
-    super::response_shape::install(&mut harness, hosted_root.is_some());
+    if let Some(scope) = run_context.response_shape.clone() {
+        tinyagents_harness::middleware::install_response_shape(&mut harness, scope);
+    }
     super::budget::install_depth(&mut harness, &run_context);
     super::deadline_wind_down::install(&mut harness, &handle, &run_context, &subagent_scope);
     // Fail-closed registry validation gate (issue #4249, Workstream 10 — registry).
@@ -336,7 +337,7 @@ pub(super) async fn run_turn_via_tinyagents_body(
                 "[registry] aborting turn before model dispatch: capability registry validation failed"
             );
             return Err(anyhow::Error::new(
-                crate::agent::error::AgentError::RegistryValidationFailed {
+                tinyagents_harness::agent_error::AgentError::RegistryValidationFailed {
                     diagnostics: messages,
                 },
             ));
@@ -357,7 +358,7 @@ pub(super) async fn run_turn_via_tinyagents_body(
             "openhuman-agent-turn"
         })
         .with_max_model_calls(max_iterations)
-        .with_max_tool_calls(crate::agent::stop_hooks::tool_call_limit(max_iterations))
+        .with_max_tool_calls(run_context.tool_call_limit_for(max_iterations))
         .with_max_depth(super::budget::depth(&run_context))
         .with_tag("openhuman")
         .with_tag(if subagent_scope.is_some() {

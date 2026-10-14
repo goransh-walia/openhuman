@@ -286,7 +286,6 @@ async fn disconnect_imessage_clears_runtime_config() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn channel_status_reports_managed_dm_credential_as_connected() {
     let (_tmp, config) = isolated_test_config();
 
@@ -372,7 +371,6 @@ fn merge_listener_health_starting_keeps_presence() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn channel_status_surfaces_live_listener_error() {
     let (_tmp, mut config) = isolated_test_config();
 

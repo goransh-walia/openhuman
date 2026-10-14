@@ -12,6 +12,9 @@ use tinyagents_harness::tool::ToolDispatch;
 use tinyagents_registry::{
     CapabilityRegistry, ComponentKind, RegistryDiagnostic, RegistrySnapshot,
 };
+use tinyagents_runtime::{
+    project_descriptors, register_admitted_projected, ToolAdmission, ToolRegistration,
+};
 
 use crate::agent::orchestration::tools::{
     CloseSubagentDispatch, ContinueSubagentDispatch, DelegateGraphDispatch, DelegationDispatch,
@@ -65,6 +68,16 @@ pub(crate) fn typed_dispatch_for(
     Some(dispatch)
 }
 
+/// Names among the candidate tools that spawn or delegate to a sub-agent.
+fn candidate_spawn_tools(tool_sets: &[Arc<Vec<Box<dyn tinytools::Tool>>>]) -> HashSet<String> {
+    tool_sets
+        .iter()
+        .flat_map(|set| set.iter())
+        .map(|tool| tool.name().to_string())
+        .filter(|name| is_subagent_spawn_or_delegate_tool(name))
+        .collect()
+}
+
 /// Whether `name` is one of the model-facing per-thread goal tools
 /// (`goal_get` / `goal_set` / `goal_complete`), named by their owner.
 pub(crate) fn is_thread_goal_tool(name: &str) -> bool {
@@ -114,99 +127,73 @@ pub(super) fn register_turn_tools_and_agents(
             );
         }
     }
-    let mut seen_candidates: HashSet<String> = HashSet::new();
-    let candidate_names: Vec<String> = tool_sets
+    let admission = ToolAdmission {
+        allowed: allowed.clone(),
+        is_subagent_run,
+        has_thread,
+        // The per-thread goal tools resolve their target from the run's thread
+        // and refuse every call without one, so a thread-less turn is not
+        // offered them (issue #6956).
+        thread_scoped: GoalToolKind::MODEL_FACING
+            .iter()
+            .map(|kind| kind.name().to_string())
+            .collect(),
+        spawn_tools: candidate_spawn_tools(tool_sets),
+    };
+    let names: Vec<String> = tool_sets
         .iter()
         .flat_map(|set| set.iter())
-        .map(|tool| tool.name())
-        .filter(|&name| seen_candidates.insert(name.to_string()))
-        // The per-thread goal tools resolve their target from the run's thread
-        // and refuse every call without one ("thread goal tools require an
-        // active chat thread"), so a thread-less turn is not offered them
-        // (issue #6956). Dropped as candidates, not just at registration, so
-        // the shadow exposure layer's reference matches what registers.
-        .filter(|&name| {
-            let keep = has_thread || !is_thread_goal_tool(name);
-            if !keep {
-                tracing::debug!(
-                    tool = name,
-                    "[goals] not registering thread goal tool on a turn without a chat thread"
-                );
-            }
-            keep
-        })
-        .map(|name| name.to_string())
+        .map(|tool| tool.name().to_string())
         .collect();
-    let mut registered: HashSet<String> = HashSet::new();
-    for name in candidate_names.iter().map(String::as_str) {
-        // Fail-closed allowlist: `None` admits everything, `Some(set)` admits only
-        // its members (empty set → nothing).
-        let admitted = match allowed {
-            None => true,
-            Some(set) => set.contains(name),
-        };
-        // Defense-in-depth (issue #4452): a sub-agent must NEVER be handed a
-        // spawn/delegate tool whatever the allowlist says — re-assert it here at
-        // registration, not just on the caller's `allowed_indices`. Warn only when
-        // the allowlist actually readmitted one (issue #6157); the caller strips
-        // them first, so a bare `spawn_stripped` warn fired on every healthy run.
-        let spawn_stripped = is_subagent_run && is_subagent_spawn_or_delegate_tool(name);
-        if spawn_stripped && admitted {
-            tracing::warn!(
-                tool = name,
-                "[subagent] refusing to register spawn/delegate tool on sub-agent run"
-            );
-        }
-        if !registered.contains(name) && admitted && !spawn_stripped {
-            if let Some(mut adapter) =
-                CanonicalSharedToolAdapter::for_name(tool_sets.to_vec(), name)
-            {
-                if early_exit_set.contains(name) {
-                    if let Some(hook) = early_exit_hook {
-                        adapter = adapter.with_early_exit(hook.clone());
-                    }
-                }
-                if session_deferred.contains(name) {
-                    adapter = adapter.deferred();
-                }
-                registered.insert(name.to_string());
-                let adapter = Arc::new(adapter);
-                capability_registry.replace_tool(adapter.clone());
-                if name == USE_SKILL {
-                    // `use_skill` needs its own typed dispatch (regression
-                    // R3): it is the proxy every packed archetype delegation
-                    // (`create_image`, `do_crypto`, `make_presentation`, …)
-                    // is reached through, and it must resolve the SAME live
-                    // parent `typed_dispatch_for` gives a natively advertised
-                    // delegate tool. The pack-registry handle comes off the
-                    // raw registered tool (not this adapter, which has no
-                    // erased host extension of its own).
-                    let handle = tool_sets
-                        .iter()
-                        .flat_map(|set| set.iter())
-                        .find(|tool| tool.name() == name)
-                        .and_then(|tool| {
-                            crate::tools::host_extensions::pack_registry_handle(tool.as_ref())
-                        })
-                        .cloned();
-                    match handle {
-                        Some(handle) => harness.register_tool_dispatch(Arc::new(
-                            UseSkillDispatch::new(adapter, handle),
-                        )),
-                        None => harness.register_tool(adapter),
-                    };
-                } else if let Some(dispatch) = typed_dispatch_for(name, adapter.clone()) {
-                    harness.register_tool_dispatch(dispatch);
-                } else {
-                    harness.register_tool(adapter);
+    let (tool_count, plan) =
+        register_admitted_projected(harness, capability_registry, names, &admission, |name| {
+            let mut adapter = CanonicalSharedToolAdapter::for_name(tool_sets.to_vec(), name)?;
+            if early_exit_set.contains(name) {
+                if let Some(hook) = early_exit_hook {
+                    adapter = adapter.with_early_exit(hook.clone());
                 }
             }
-        }
-    }
-    let tool_count = registered.len();
-    for report in crate::agent::tinyagents::topology::all_graph_topologies() {
-        let _ = capability_registry.register_descriptor(ComponentKind::Graph, report.name);
-    }
+            if session_deferred.contains(name) {
+                adapter = adapter.deferred();
+            }
+            let adapter = Arc::new(adapter);
+            let view: Arc<dyn tinytools::Tool> = adapter.clone();
+            let registration = if name == USE_SKILL {
+                // `use_skill` needs its own typed dispatch (regression R3): it
+                // is the proxy every packed archetype delegation is reached
+                // through, and it must resolve the SAME live parent
+                // `typed_dispatch_for` gives a natively advertised delegate
+                // tool. The pack-registry handle comes off the raw registered
+                // tool, not this adapter.
+                let handle = tool_sets
+                    .iter()
+                    .flat_map(|set| set.iter())
+                    .find(|tool| tool.name() == name)
+                    .and_then(|tool| {
+                        crate::tools::host_extensions::pack_registry_handle(tool.as_ref())
+                    })
+                    .cloned();
+                match handle {
+                    Some(handle) => {
+                        ToolRegistration::Dispatch(Arc::new(UseSkillDispatch::new(adapter, handle)))
+                    }
+                    None => ToolRegistration::Tool(adapter),
+                }
+            } else if let Some(dispatch) = typed_dispatch_for(name, adapter.clone()) {
+                ToolRegistration::Dispatch(dispatch)
+            } else {
+                ToolRegistration::Tool(adapter)
+            };
+            Some((view, registration))
+        });
+    let candidate_names = plan.candidates;
+    project_descriptors(
+        capability_registry,
+        ComponentKind::Graph,
+        tinyagents_orchestration::topology::all_graph_topologies()
+            .into_iter()
+            .map(|report| report.name),
+    );
 
     // Project the agents visible to this turn into the registry as name-only
     // `ComponentKind::Agent` descriptors (issue #4249, Workstream 10.1). This is
@@ -231,41 +218,29 @@ pub(super) fn register_turn_tools_and_agents(
     // only the ids are projected. The runtime-registry → executable-agent
     // projection (so `register_agent`/`.rag` sub-agent resolution can bind these)
     // remains the deferred follow-up.
-    let mut registered_agents: HashSet<String> = HashSet::new();
-    let mut runtime_agent_count = 0usize;
-    if let Some(runtime) =
+    // Runtime registry first: it wins, carrying the override-aware definitions.
+    let runtime_ids: Vec<String> =
         crate::agent::harness::host_definition::AgentDefinitionRegistry::current()
-    {
-        for def in runtime.list() {
-            if registered_agents.insert(def.id.clone()) {
-                let _ =
-                    capability_registry.register_descriptor(ComponentKind::Agent, def.id.clone());
-                runtime_agent_count += 1;
-            }
-        }
-    }
-    // agent_registry built-ins as a supplement/fallback (deduped by id). When the
-    // runtime global is uninitialised this is the sole source; otherwise it only
-    // contributes ids the runtime registry did not already cover.
-    let mut builtin_supplement_count = 0usize;
-    match crate::agent::registry::agents::load_builtins() {
-        Ok(builtins) => {
-            for def in builtins {
-                if registered_agents.insert(def.id.clone()) {
-                    let _ = capability_registry
-                        .register_descriptor(ComponentKind::Agent, def.id.clone());
-                    builtin_supplement_count += 1;
-                }
-            }
-        }
+            .map(|runtime| runtime.list().iter().map(|def| def.id.clone()).collect())
+            .unwrap_or_default();
+    let runtime_agent_count =
+        project_descriptors(capability_registry, ComponentKind::Agent, runtime_ids);
+    // agent_registry built-ins as a supplement/fallback (deduped by id).
+    let builtin_supplement_count = match crate::agent::registry::agents::load_builtins() {
+        Ok(builtins) => project_descriptors(
+            capability_registry,
+            ComponentKind::Agent,
+            builtins.into_iter().map(|def| def.id),
+        ),
         Err(err) => {
             tracing::debug!(
                 %err,
                 "[registry] agent_registry builtin load failed; \
                  registered runtime-registry agents only"
             );
+            0
         }
-    }
+    };
 
     let registry_diagnostics = capability_registry.diagnostics();
     let registry_snapshot = capability_registry.snapshot();
@@ -287,7 +262,7 @@ pub(super) fn register_turn_tools_and_agents(
         models = projected_models.names().len(),
         tools = projected_tools.names().len(),
         graphs = capability_registry.names(ComponentKind::Graph).len(),
-        agents = registered_agents.len(),
+        agents = runtime_agent_count + builtin_supplement_count,
         runtime_agents = runtime_agent_count,
         builtin_supplement_agents = builtin_supplement_count,
         diagnostics = registry_diagnostics.len(),

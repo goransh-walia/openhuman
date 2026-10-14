@@ -85,7 +85,6 @@ fn approval(thread_id: Option<&str>, client_id: Option<&str>) -> DomainEvent {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn approval_prompts_reach_every_chat_channel() {
     let ws = PathBuf::from("/tmp");
     for (channel, thread_ts, key) in [
@@ -133,12 +132,10 @@ async fn approvals_for_web_email_or_unrouted_requests_are_ignored() {
     assert!(discord.sent.lock().unwrap().is_empty());
 }
 
-// Busy flags now live in the module's own storage scope and are written by the
-// module, so this needs the linked-module fixture, which is blocked on the
-// tinybus epic (see `channels::module_fixture`). It failed the same way before
-// the storage contract, on the fixture panic.
+// Busy flags live in the module's own storage scope and are written by the
+// module, so this runs against the linked-module fixture
+// (`channels::module_fixture`).
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic)"]
 async fn turn_state_marks_busy_for_every_remote_control_channel() {
     let dir = tempdir().unwrap();
     let ws = dir.path().to_path_buf();

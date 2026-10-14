@@ -1,11 +1,11 @@
 //! Identity-scoped channel objects and cancellation-safe callback ownership.
 
-use super::client::{ModuleCallError, ModuleClient, ModuleObjectClient};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
 use std::time::Duration;
+use tinybus::module::{ModuleCallError, ModuleClient, ModuleObjectClient};
 use tinybus::{Connection, ObjectPath, Proxy};
 use tinychannels_bus::{
     methods, ChannelRuntimeReservation, HOST_BUS_NAME, HOST_OBJECT_PATH, OBJECT_PATH,
@@ -22,7 +22,7 @@ struct LeaseState {
     object: ModuleObjectClient,
     cleanup: Cleanup,
     closing: Mutex<Option<tokio::task::JoinHandle<Result<(), ModuleCallError>>>>,
-    runtime: &'static super::host::ModuleRuntime,
+    runtime: &'static tinybus::module::ModuleRuntime,
 }
 
 #[derive(Clone)]
@@ -49,7 +49,7 @@ impl Cleanup {
         result.map_err(|error| {
             let record = super::registry::find("tinychannels").expect("registered channel module");
             if !self.reported.swap(true, Ordering::AcqRel) {
-                super::client::report_proxy_failure(record, &error)
+                super::report::proxy_failure(record, &error)
             } else {
                 ModuleCallError::TransportFailed
             }
@@ -95,7 +95,7 @@ impl ChannelRuntimeLease {
             .call_confidential("tinychannels", methods::RESERVE_RUNTIME, ())
             .await?;
         validate_reservation(&reservation)?;
-        let runtime = super::host::runtime()
+        let runtime = super::runtime::runtime()
             .await
             .map_err(|_| ModuleCallError::TransportFailed)?;
         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -114,7 +114,7 @@ impl ChannelRuntimeLease {
         client: ModuleClient,
         reservation: ChannelRuntimeReservation,
         callback: impl tinybus::service::Interface,
-        runtime: &'static super::host::ModuleRuntime,
+        runtime: &'static tinybus::module::ModuleRuntime,
     ) -> Result<Self, ModuleCallError> {
         let callback_path = ObjectPath::new(&reservation.host_object_path)
             .map_err(|_| ModuleCallError::ModuleFault)?;
@@ -200,7 +200,7 @@ async fn join_cleanup(
 
 fn runtime_transport(
     client: &ModuleClient,
-    runtime: &'static super::host::ModuleRuntime,
+    runtime: &'static tinybus::module::ModuleRuntime,
 ) -> Result<(Connection, Proxy), ModuleCallError> {
     #[cfg(test)]
     if let Some(proxy) = client.fixture_proxy() {
@@ -225,7 +225,7 @@ fn validate_reservation(reservation: &ChannelRuntimeReservation) -> Result<(), M
         || reservation.host_object_path
             != format!("{HOST_OBJECT_PATH}/runtime_{}", reservation.handle)
     {
-        ModuleClient::report_malformed_reply("tinychannels");
+        crate::modules::report::malformed_reply("tinychannels");
         return Err(ModuleCallError::ModuleFault);
     }
     Ok(())

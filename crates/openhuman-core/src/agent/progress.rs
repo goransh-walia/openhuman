@@ -181,7 +181,7 @@ pub enum AgentProgress {
         /// breaker or iteration cap) and handed back as incomplete. The trace
         /// collector closes the subagent span at `WARNING` with it. `None` for
         /// a sub-agent that finished normally.
-        stop: Option<crate::agent::turn_stop::TurnStop>,
+        stop: Option<tinyagents_harness::turn_stop::TurnStop>,
     },
 
     /// A sub-agent failed.
@@ -355,7 +355,7 @@ pub enum AgentProgress {
     /// `total_usd` prefers backend-reported `charged_amount_usd`
     /// (sum of authoritative figures) and falls back to a tier-based
     /// token-rate estimate for calls that didn't carry one — see
-    /// [`crate::agent::cost::TurnCost::total_usd`].
+    /// [`tinyagents_harness::cost::TurnCost::total_usd`].
     TurnCostUpdated {
         /// Last model that contributed to this update.
         model: String,
@@ -422,7 +422,7 @@ pub enum AgentProgress {
         /// completion path. Content-free; the trace collector closes the turn
         /// span at `WARNING` with it. `None` for a turn that finished on its
         /// own.
-        stop: Option<crate::agent::turn_stop::TurnStop>,
+        stop: Option<tinyagents_harness::turn_stop::TurnStop>,
     },
 
     /// The turn's content: the user's prompt and the model's final reply.

@@ -32,6 +32,10 @@ Applies to every release, all platforms.
 - [ ] **A failed chat turn does not offer an invalid regenerate action** — Trigger a provider failure in a test profile and inspect its error card. Expected: the diagnostic text remains visible, with no Retry or Refresh button on that failed message. A completed assistant reply still offers Refresh (#6613).
 - [ ] **A failed turn leaves its thread usable** — In a test profile, get one successful reply, trigger a streamed provider failure on the next turn, then send another message in the same thread. Expected: the error card appears, the composer re-enables, the next reply streams normally, and the agent still has the first turn's context. If a queued follow-up starts as the failed turn ends, its stream and composer state stay active.
 
+### Tool UI widgets in chat
+
+- [ ] **An MCP tool widget renders and works inline** — Connect an MCP server that declares a `ui://` widget (for example a food-ordering server) in a staging test profile and ask for something that returns one. Expected: the widget appears after the activity group and above the answer, its buttons work, a non-read-only action asks for confirmation, and with no widget a link result shows an Open in browser action and a phone QR.
+
 ### Memory latency and queued writes (coverage 8.1 / 8.2)
 
 Use a disposable staging account/workspace and synthetic facts. Keep inference reachable while delaying or blocking only the memory endpoint.

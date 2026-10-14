@@ -122,7 +122,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
         }
         let sidecar = request.run_context.data.session_sidecar.clone();
         let started = Instant::now();
-        let user_message = crate::agent::tinyagents::last_user_message(&request.history)
+        let user_message = tinyagents_harness::summarization::last_user_message(&request.history)
             .map(crate::agent::message_convert::user_text_with_markers)
             .unwrap_or_default();
         let context_window = self
@@ -236,7 +236,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
 
         if outcome.text.trim().is_empty() && outcome.tool_outcomes.is_empty() {
             return Err(driver_error(
-                crate::agent::error::AgentError::EmptyProviderResponse {
+                tinyagents_harness::agent_error::AgentError::EmptyProviderResponse {
                     iteration: outcome.model_calls,
                 },
             ));
@@ -267,7 +267,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
         // done by, so the turn commits before the backstop drops it.
         let close_by = request.run_context.data.turn_deadline.map(|deadline| {
             let now = Instant::now();
-            now + crate::agent::turn_deadline::close_budget(&deadline, now)
+            now + deadline.close_budget(now)
         });
         // A Stop during the close or the repair after it hands back the
         // accepted rounds like a Stop during the loop, instead of letting the
@@ -468,7 +468,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
             observed.wrap_up_injected = outcome.wrap_up_injected;
             // How the harness stopped the turn, if it did. The wind-down
             // middleware marked the sidecar during the run.
-            observed.stop = crate::agent::turn_stop::TurnStop::classify(
+            observed.stop = crate::agent::turn_projection::classify_stop(
                 outcome.breaker_halt.as_deref(),
                 observed.wind_down,
                 outcome.hit_cap,

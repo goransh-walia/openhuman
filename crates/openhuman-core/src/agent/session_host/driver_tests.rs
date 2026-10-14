@@ -46,7 +46,7 @@ fn stalled_model_stream_reports_completed_evidence_instead_of_its_narration() {
             messages: vec![Message::user("Find information about Jev")],
             accepted_len: 1,
             request_base_len: 1,
-            tool_outcomes: vec![crate::agent::tinyagents::ToolCallOutcome {
+            tool_outcomes: vec![tinyagents_harness::turn_outcome::ToolCallOutcome {
                 call_id: "search-1".into(),
                 name: "web_search_tool".into(),
                 arguments: serde_json::json!({"query": "Jev TypeSafe"}),
@@ -91,9 +91,9 @@ fn graph_failure_copies_snapshot_usage_and_failed_tool_outcome_to_sidecar() {
             cached_input_tokens: 3,
             last_call_input_tokens: 13,
             last_call_output_tokens: 5,
-            cost: crate::agent::cost::CostTally {
+            cost: tinyagents_harness::cost::CostTally {
                 known_usd: 0.004,
-                source: crate::agent::cost::CostSource::Charged,
+                source: tinyagents_harness::cost::CostSource::Charged,
             },
             resolved_route: Some(tinyinference_llm::model::ResolvedModelRoute::new(
                 "openhuman",
@@ -102,7 +102,7 @@ fn graph_failure_copies_snapshot_usage_and_failed_tool_outcome_to_sidecar() {
             )),
             pricing_model: None,
             model_calls: 2,
-            tool_outcomes: vec![crate::agent::tinyagents::ToolCallOutcome {
+            tool_outcomes: vec![tinyagents_harness::turn_outcome::ToolCallOutcome {
                 call_id: "call-1".into(),
                 name: "write_file".into(),
                 arguments: serde_json::json!({"path": "blocked.txt"}),
@@ -142,7 +142,7 @@ fn graph_failure_copies_snapshot_usage_and_failed_tool_outcome_to_sidecar() {
     assert!((observed.cost.known_usd - 0.004).abs() < f64::EPSILON);
     assert_eq!(
         observed.cost.source,
-        crate::agent::cost::CostSource::Charged
+        tinyagents_harness::cost::CostSource::Charged
     );
     let route = observed
         .resolved_route

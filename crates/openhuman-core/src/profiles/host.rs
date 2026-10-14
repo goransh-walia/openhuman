@@ -433,6 +433,18 @@ impl ProfileHost {
         self.lock().len()
     }
 
+    /// The id of every provisioned profile, open here or not, sorted. Cheaper
+    /// than [`list`](Self::list): no per-profile credential probe.
+    pub async fn ids(&self) -> Result<Vec<String>, String> {
+        Ok(self
+            .registry
+            .list()
+            .await?
+            .into_iter()
+            .map(|meta| meta.profile_id.to_string())
+            .collect())
+    }
+
     /// Every provisioned profile, open here or not.
     pub async fn list(&self) -> Result<Vec<ProfileSummary>, String> {
         let mut summaries = Vec::new();

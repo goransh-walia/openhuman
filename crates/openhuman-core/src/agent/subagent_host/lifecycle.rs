@@ -1239,9 +1239,9 @@ fn map_lifecycle_error(error: SubagentError) -> SubagentRunError {
 /// A child run's cost as it comes back across the orchestration boundary.
 /// That `Usage` can only say whether a charge is present, so a present one is
 /// read as charged and an absent one as unknown (it was sent as absent).
-fn cost_source_of(charged: Option<&ChargedAmount>) -> crate::agent::cost::CostSource {
+fn cost_source_of(charged: Option<&ChargedAmount>) -> tinyagents_harness::cost::CostSource {
     match charged {
-        Some(_) => crate::agent::cost::CostSource::Charged,
-        None => crate::agent::cost::CostSource::Unknown,
+        Some(_) => tinyagents_harness::cost::CostSource::Charged,
+        None => tinyagents_harness::cost::CostSource::Unknown,
     }
 }

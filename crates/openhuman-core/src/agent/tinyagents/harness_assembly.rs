@@ -7,8 +7,9 @@ use std::sync::Arc;
 use tinyagents_harness::cache::InMemoryResponseCache;
 use tinyagents_harness::middleware::{
     plan_mode_middleware, ApprovalGateMiddleware, ArgRecoveryMiddleware, BudgetLimits,
-    BudgetMiddleware, ContextCompressionMiddleware, PromptCacheGuardMiddleware,
-    RepeatProgressMiddleware, RunModeHandle, ToolPolicyMiddleware as TaToolPolicyMiddleware,
+    BudgetMiddleware, BudgetParityObserver, ContextCompressionMiddleware,
+    PromptCacheGuardMiddleware, RepeatProgressMiddleware, RunModeHandle,
+    ToolPolicyMiddleware as TaToolPolicyMiddleware,
 };
 use tinyagents_harness::runtime::AgentHarness;
 use tinyagents_harness::steering::SteeringHandle;
@@ -30,12 +31,15 @@ use crate::agent::tinyagents::routes;
 use crate::agent::tinyagents::stop_hooks;
 use crate::agent::tinyagents::tools::EarlyExitHook;
 use crate::agent::tinyagents::turn_models::TurnModels;
-use crate::agent::tinyagents::turn_outcome::{HaltSummarySlot, ToolOutcomeSink};
-use crate::agent::tinyagents::turn_policy::{
-    run_policy_for_provider, REPEATED_TOOL_FAILURE_THRESHOLD,
-};
+use crate::agent::tinyagents::turn_policy::run_policy_for_provider;
 use crate::agent::tinyagents::verify_before_finish;
+use tinyagents_harness::middleware::{
+    install_unmet_deliverable, is_repeat_call_exempt, tool_sets_lookup, ResearchBudgetMiddleware,
+    ShellTurnBudget, TurnClockMiddleware, DIRECT_WEB_READ_LIMIT,
+};
 use tinyagents_harness::store::InMemoryStore as ToolResultArtifactIndexStore;
+use tinyagents_harness::turn_outcome::{HaltSummarySlot, ToolOutcomeSink};
+use tinyagents_harness::turn_policy::REPEATED_TOOL_FAILURE_THRESHOLD;
 use tinyinference_llm::model::ErrorSlotModel;
 
 use super::ToolPolicyEnforcement;
@@ -60,9 +64,9 @@ pub(super) fn assemble_turn_harness(
     context_window: Option<u64>,
     early_exit_tools: &[&str],
     context_mw: TurnContextMiddleware,
-    stop_hooks: Vec<
-        Arc<dyn tinyagents_harness::middleware::StopHook<crate::agent::cost::TurnCost>>,
-    >,
+    // Stop policies, scoped tool callbacks (registered after the runtime's
+    // global ones) and the host's tool-call cap, from the explicit run context.
+    host_policy: super::host::HarnessHostPolicy,
     tool_policy: Option<ToolPolicyEnforcement>,
     required_capabilities: Option<CapabilitySet>,
     deterministic_cacheable: bool,
@@ -102,6 +106,11 @@ pub(super) fn assemble_turn_harness(
     memory_turn: Option<Arc<crate::memory::lifecycle::hooks::MemoryTurn>>,
     tool_rules: Option<Arc<tinyagents_harness::tool::ToolRulePolicy>>, // `OpenHumanRunContext::tool_rules`
 ) -> AssembledTurnHarness {
+    let super::host::HarnessHostPolicy {
+        stop_hooks,
+        tool_hooks: scoped_tool_hooks,
+        tool_call_cap,
+    } = host_policy;
     let mut harness: AgentHarness<(), OpenHumanRunContext> = AgentHarness::new();
     // Cross-route fallback ownership (issue #4249, Workstream 02.2): populate the
     // SDK `RunPolicy.fallback` with the ordered same-family route chain for this
@@ -114,6 +123,7 @@ pub(super) fn assemble_turn_harness(
         max_iterations,
         deterministic_cacheable,
         turn_models.is_local(),
+        tool_call_cap,
     );
     let route_fallback = routes::route_fallback_policy(model);
     policy.fallback = route_fallback.clone();
@@ -301,14 +311,22 @@ pub(super) fn assemble_turn_harness(
             RepeatProgressMiddleware::new(
                 handle.clone(),
                 halt_summary.clone(),
-                Arc::new(middleware::is_repeat_call_exempt),
+                Arc::new(is_repeat_call_exempt),
             )
             .with_read_only(Arc::new(move |name: &str| read_only_tools.contains(name)))
             .with_cleared_placeholder(crate::agent::context::CLEARED_PLACEHOLDER),
         )
     });
     // Time awareness (#6953); before the repeat guard so its notes land last.
-    let shell_turn_budget = middleware::install_time_notes(&mut harness);
+    let turn_budget = harness
+        .policy()
+        .limits
+        .max_wall_clock_ms
+        .map(std::time::Duration::from_millis);
+    harness.push_middleware(Arc::new(TurnClockMiddleware::new(turn_budget)));
+    let shell_turn_budget =
+        ShellTurnBudget::with_max_timeout(turn_budget, tinytools_std::timeout::MAX_TIMEOUT_SECS);
+    harness.push_middleware(Arc::new(shell_turn_budget.notes()));
     if let Some(mw) = &repeat_progress {
         harness.push_middleware(mw.clone());
     }
@@ -317,7 +335,7 @@ pub(super) fn assemble_turn_harness(
     let repeated_failure = handle.as_ref().map(|handle| {
         let (t, halt) = (REPEATED_TOOL_FAILURE_THRESHOLD, halt_summary.clone());
         let mw = middleware::RepeatedToolFailureMiddleware::new(handle.clone(), t, halt);
-        Arc::new(mw.with_tool_facts(middleware::tool_sets_lookup(tool_sets.clone())))
+        Arc::new(mw.with_tool_facts(tool_sets_lookup(tool_sets.clone())))
     });
     if let Some(mw) = &repeated_failure {
         harness.push_middleware(mw.clone());
@@ -461,51 +479,16 @@ pub(super) fn assemble_turn_harness(
         ));
     }
 
-    // Observe-only crate `BudgetMiddleware` (W2-budget-dedupe / workstream 06).
-    // Installed with empty `BudgetLimits` so it NEVER enforces or halts: its
-    // `before_model` preflight has no configured limit to trip, and its
-    // `after_model` only folds each call's usage into its shared `BudgetTracker`.
-    // It also re-emits `AgentEvent::UsageRecorded` per call (on top of the
-    // runtime's own emit); the event bridge dedupes those by model-call iteration
-    // so the global cost tracker still records each call exactly once (see
-    // `observability::OpenhumanEventBridge::record_usage`). Enforcement STAYS with
-    // the local `CostBudgetMiddleware` below (authoritative: reads the global
-    // daily/monthly `CostTracker`).
-    //
-    // FLIP CRITERIA — what must hold before the crate `BudgetMiddleware` becomes
-    // the enforcing owner and the local `CostBudgetMiddleware` + the
-    // `OpenHumanRunContext` explicit carrier owns the per-turn roll-up (deletion
-    // ledger row: "crate-internal CostBudgetMiddleware + explicit run context
-    // task-local", `docs/tinyagents-full-migration-plan/99-deletion-ledger.md`):
-    //   1. ≥ 500 production turns across BOTH parent and sub-agent runs with
-    //      ZERO `[budget_shadow]` divergence log lines — proving the crate
-    //      tracker's per-run token accounting matches the authoritative runtime
-    //      `AgentRun.usage` on every model call.
-    //   2. A pricing table wired via `BudgetMiddleware::with_pricing(..)` at
-    //      parity with `tinyagents_registry::pricing::estimate_cost_usd`, so the crate can own
-    //      MONEY (USD) budgets. Today the shadow compares TOKENS only (the
-    //      observe-only crate middleware has no pricing, so its cost stays $0)
-    //      and the local gate is the sole money-budget authority.
-    //   3. Run-tree rollup wired: the same shared `BudgetTracker` handed to every
-    //      sub-agent harness so a parent budget halts a recursive run pre-spend —
-    //      replacing the former task-local parent-turn rollup (06-cost step 3
-    //      / 07.2 TaskStore rollup).
-    // Until all three hold, this middleware is observe-only and the local gate
-    // enforces.
+    // Observe-only crate `BudgetMiddleware`, installed with empty limits so it
+    // never enforces: it only folds each call's usage into a shared tracker.
+    // The spend cap is gone; `BudgetParityObserver` below compares that tracker
+    // against the authoritative `AgentRun.usage` at end of run and logs
+    // `[budget_parity]` parity or divergence.
     let shadow_budget = Arc::new(BudgetMiddleware::new(BudgetLimits::default()));
     let shadow_budget_tracker = shadow_budget.tracker();
     harness.push_middleware(shadow_budget);
 
-    // Pre-call cost budget gate (issue #4249, Phase 5) — AUTHORITATIVE
-    // enforcement: fail before a model call when OpenHuman's daily/monthly cost
-    // budget is already exceeded. Self-gating — a no-op unless cost budgets are
-    // configured. Demoted to a divergence-logging shadow owner (W2-budget-dedupe):
-    // it keeps enforcing exactly as before, but ALSO compares its per-run token
-    // accounting against the observe-only crate `BudgetMiddleware` above at end of
-    // run and logs `[budget_shadow]` parity/divergence.
-    harness.push_middleware(Arc::new(middleware::CostBudgetMiddleware::with_shadow(
-        shadow_budget_tracker,
-    )));
+    harness.push_middleware(Arc::new(BudgetParityObserver::new(shadow_budget_tracker)));
     // The context ladder (compression, microcompact, final-call wrap-up,
     // artifact contents list, trim), registered here so each step keeps its
     // place in the middleware order. See `context_wiring.rs`.
@@ -534,14 +517,24 @@ pub(super) fn assemble_turn_harness(
     );
     // The rungs above all *tell* the turn to produce its deliverable; this one
     // looks, on the same scope as the requirements check.
-    middleware::install_unmet_deliverable(&mut harness, is_subagent, agent_id);
+    if verify_before_finish::applies(is_subagent, agent_id) {
+        install_unmet_deliverable(&mut harness);
+    } else {
+        tracing::debug!(
+            is_subagent,
+            agent = agent_id.unwrap_or("<none>"),
+            "[unmet_deliverable] not installed for this turn"
+        );
+    }
 
     // Direct web lookup is bounded. Once enough search/fetch results have
     // returned, the web tools leave the request so the run works with what it
     // has; a run with nothing but web tools answers instead. Sub-agent runs
     // keep their own budgets and are not narrowed here.
     if subagent_scope.is_none() {
-        harness.push_middleware(Arc::new(middleware::ResearchBudgetMiddleware::new()));
+        harness.push_middleware(Arc::new(ResearchBudgetMiddleware::with_limit(
+            DIRECT_WEB_READ_LIMIT,
+        )));
     }
     // SDK-owned tool-policy projection (issue #4249 / tinyagents-full-migration
     // 01.1). Keep this narrow for now: enforce sandbox requirements declared by
@@ -590,9 +583,7 @@ pub(super) fn assemble_turn_harness(
             enforcement.policy,
             enforcement.session,
             tool_sets.clone(),
-            enforcement.session_id,
             enforcement.channel,
-            enforcement.agent_definition_id,
         )));
     }
 
@@ -626,7 +617,7 @@ pub(super) fn assemble_turn_harness(
     // `ArgRecoveryMiddleware` so it wraps recovered arguments; before the
     // embedder hooks so they observe the call that actually runs.
     let registered_tools = harness.tools().names();
-    harness.push_middleware(Arc::new(middleware::PackedToolRouteMiddleware::new(
+    harness.push_middleware(Arc::new(middleware::packed_tool_route_middleware(
         registered_tools,
         route_session,
     )));
@@ -640,7 +631,8 @@ pub(super) fn assemble_turn_harness(
     // observation-only (never mutates the result), so running first in the
     // reverse-order `after_tool` chain is safe — it cannot perturb the
     // summarization/cap or tool-outcome capture layers.
-    let embedder_tool_hooks = crate::agent::hooks::turn_tool_hooks();
+    let mut embedder_tool_hooks = crate::agent::hooks::embedder_tool_hooks();
+    embedder_tool_hooks.extend(scoped_tool_hooks);
     if !embedder_tool_hooks.is_empty() {
         harness.push_middleware(Arc::new(middleware::EmbedderToolHooksMiddleware::new(
             embedder_tool_hooks,
@@ -663,7 +655,7 @@ pub(super) fn assemble_turn_harness(
     // The turn's memory pack rides every request of the turn, after every
     // reduction step and after the transcript snapshot, so it is never
     // compacted, trimmed or persisted (`memory::lifecycle::hooks::pre_turn`).
-    harness.push_middleware(Arc::new(middleware::MemoryPackMiddleware));
+    harness.push_middleware(Arc::new(middleware::memory_pack_middleware()));
 
     AssembledTurnHarness {
         harness,

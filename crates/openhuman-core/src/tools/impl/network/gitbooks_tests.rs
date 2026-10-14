@@ -1,7 +1,7 @@
 use super::*;
 
 #[cfg(feature = "modules")]
-use crate::modules::client::ModuleClient;
+use tinybus::module::ModuleClient;
 
 #[cfg(feature = "modules")]
 #[derive(Clone, Default)]
@@ -89,7 +89,11 @@ async fn mock_module_client(
             tinymcp_bus::names::INTERFACE,
         )
         .expect("TinyMCP proxy");
-    (ModuleClient::fixture(proxy), service, provider_state)
+    (
+        crate::modules::ops::fixture_client(proxy),
+        service,
+        provider_state,
+    )
 }
 
 #[cfg(feature = "modules")]

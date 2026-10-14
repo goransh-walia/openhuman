@@ -118,8 +118,12 @@ pub(crate) async fn start_selected_services(
     }
     if services.cron {
         tasks.track("cron", spawn_cron_service(std::sync::Arc::clone(ctx)));
-        // Storage housekeeping rides the same switch as the other periodic
-        // maintenance: lapsed blobs stay in the backend until swept.
+        // Storage housekeeping rides the same `ServiceSet` switch as the other
+        // periodic maintenance: lapsed blobs stay in the backend until swept.
+        // It is deliberately not gated on `config.cron.enabled`: that setting
+        // turns the user's scheduled jobs off, whereas the sweep reclaims
+        // storage and must keep running (an expired blob is already invisible,
+        // so skipping it would only leak bytes).
         tasks.track(
             "blob_sweep",
             crate::storage::blob_sweep::spawn(

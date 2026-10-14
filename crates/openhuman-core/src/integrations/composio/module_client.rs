@@ -166,7 +166,7 @@ where
     Request: serde::Serialize + Send,
     Reply: serde::de::DeserializeOwned,
 {
-    crate::modules::client::ModuleClient::new(_config.clone())
+    crate::modules::client(_config.clone())
         .call::<Reply>("tinyconnectors", member, (_request,))
         .await
         .map_err(|error| format!("{member}: {error}; {WITHOUT_MODULES}"))
@@ -227,7 +227,7 @@ where
     Request: serde::Serialize + Send,
     Reply: serde::de::DeserializeOwned,
 {
-    crate::modules::client::ModuleClient::new(_config.clone())
+    crate::modules::client(_config.clone())
         .call::<Reply>("tinyconnectors", member, (_request,))
         .await
         .map_err(|error| format!("{member}: {error}; {WITHOUT_MODULES}"))
@@ -286,7 +286,7 @@ pub async fn call_bare<Reply: serde::de::DeserializeOwned>(
     _config: &crate::config::Config,
     member: &str,
 ) -> Result<Reply, String> {
-    crate::modules::client::ModuleClient::new(_config.clone())
+    crate::modules::client(_config.clone())
         .call::<Reply>("tinyconnectors", member, ())
         .await
         .map_err(|error| format!("{member}: {error}; {WITHOUT_MODULES}"))

@@ -57,13 +57,7 @@ pub async fn init(config: &crate::config::schema::Config) {
 }
 
 fn workspace_roots(config: &crate::config::schema::Config) -> Vec<PathBuf> {
-    let mut roots = vec![config.action_dir.clone()];
-    if let Some(turn_root) = crate::agent::turn_workspace::current() {
-        if !roots.contains(&turn_root) {
-            roots.push(turn_root);
-        }
-    }
-    roots
+    vec![config.action_dir.clone()]
 }
 
 /// Fire `sessionStart`, returning context the caller should append to the
