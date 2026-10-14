@@ -29,7 +29,7 @@ recipient, a timeout, or a malformed response denies access without a local
 fallback. Synchronous lexical checks remain host preflights during this phase;
 they do not substitute for the asynchronous I/O authorization.
 
-Production admission pins TinySecurity v0.4.0 and its published archive checksums
+Production admission pins TinySecurity v0.6.1 and its published archive checksums
 in the module registry. `scripts/ci/security-native-fixture.sh` loads those
 released archives and invokes their admission, path, and latency tests. Explicit
 local fixtures remain available for development; their digests never become
@@ -315,3 +315,24 @@ Each file has a sibling `<module>_tests.rs`; the policy suites live in
 - [Privacy and security](../../../../docs/gitbooks/en/features/privacy-and-security.md)
 - [Approval gate](../../../../docs/gitbooks/en/features/approval-gate.md)
 - [OS keyring and secret storage](../../../../docs/gitbooks/en/features/os-keyring-and-secret-storage.md)
+
+## Audit ownership
+
+- `security/audit.rs` is the host's JSONL logger (`[audit]` config: enabled,
+  path, max size). Its file is created owner-only (0600) on Unix. The module's
+  single ordered stream (`Audit2`, `EvaluateAudited2`, `CheckAudited2` in
+  tinysecurity v0.6.x) is the target for policy, approval, judge, shell and
+  sandbox rows; routing those through a host `AuditSink` callback lands with
+  the phase 2/4/5/6 migrations. The legacy plain `Audit` method is not served
+  by the module (pinned by a tinysecurity test); use `Audit2`.
+- MCP protocol telemetry (`mcp/audit`, the `mcp_audit` stream and `AuditStore`)
+  stays tinymcp-owned: see `vendor/tinymcp/docs/adr/0002-mcp-audit-ownership.md`.
+  Host policy events go through tinysecurity and are joined with MCP rows at
+  read time. `mcp/audit` is not made a facade.
+- `pii::scan` and the `security/secrets.rs` alias no longer exist; the former
+  `security/core.rs` (only `redact`) is now `security/redact.rs`.
+- Tinycomputer consequence/payment gates: tinycomputer v0.14.0 (contract 2.19)
+  asks the host via `ConsequenceHost.Review`; the host adapter serving it
+  through the tinysecurity approval path is pending the phase 4 approval
+  migration. Tinyskills `ScanReport::verdict()` (`Block`/`Warn`/`Pass`) is
+  likewise to be mapped by a host adapter then; no tinyskills change is needed.
