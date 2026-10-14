@@ -12,7 +12,13 @@ fn config() -> Config {
 fn initialization_does_not_treat_bootstrap_policy_as_an_agents_enabled_policy() {
     let mut config = config();
     config.autonomy.enabled = true;
-    assert_eq!(module_config(&config), ModuleConfig::default());
+    // `trusted_host` names the host's own bus connection, present only once
+    // some other test has started the shared runtime; the policy is the claim.
+    let actual = ModuleConfig {
+        trusted_host: None,
+        ..module_config(&config)
+    };
+    assert_eq!(actual, ModuleConfig::default());
 }
 
 #[test]
