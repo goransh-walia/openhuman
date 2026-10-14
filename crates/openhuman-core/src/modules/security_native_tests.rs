@@ -258,9 +258,10 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
         let turn_started = std::time::Instant::now();
         for (path, parent) in TURN {
             let started = std::time::Instant::now();
-            let outcome = call_host_path(&mut operation_state, &proxy, policy.clone(), path, parent)
-                .await
-                .unwrap();
+            let outcome =
+                call_host_path(&mut operation_state, &proxy, policy.clone(), path, parent)
+                    .await
+                    .unwrap();
             per_call.push(started.elapsed());
             calls += 1;
             assert_eq!(

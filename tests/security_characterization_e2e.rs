@@ -310,16 +310,8 @@ fn shared_redaction_corpus_records_existing_catches_and_gaps() {
         // the separate sensitive-field blanket replacement.
         let approval =
             openhuman_core::security::approval::redact::redact_args(&json!({"payload":input}));
-        tinytools::registry::denials::record(
-            "characterization",
-            "test",
-            "blocked",
-            input,
-        );
-        let denial = tinytools::registry::denials::list(1)
-            .pop()
-            .unwrap()
-            .reason;
+        tinytools::registry::denials::record("characterization", "test", "blocked", input);
+        let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
         let outputs = [
             ("denials", denial),
             ("prefix", openhuman_core::security::redact(input)),
