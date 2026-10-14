@@ -99,7 +99,6 @@ fn prompt_routes_result_gating_tasks_to_synchronous_delegation() {
         );
     }
 }
-
 #[test]
 fn render_installed_skills_flattens_and_caps_long_descriptions() {
     // Third-party skill descriptions are untrusted, potentially huge
