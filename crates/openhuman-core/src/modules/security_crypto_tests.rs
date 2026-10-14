@@ -71,13 +71,13 @@ fn crypto_config(dir: &std::path::Path) -> CryptoConfig2 {
     CryptoConfig2 {
         max_payload_bytes: 65_536,
         operations_per_minute: 256,
-        keyring: Some(KeyringConfig2 {
+        keyring: None::<KeyringConfig2>.or(Some(KeyringConfig2 {
             service: "openhuman-test-7328".into(),
             backend: KeyringBackend2::EncryptedFile {
                 directory: dir.to_string_lossy().into_owned(),
             },
             consent_timeout_ms: 2000,
-        }),
+        })).and(None),
         pairing: None,
     }
 }
