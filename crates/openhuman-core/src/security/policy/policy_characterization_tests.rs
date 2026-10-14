@@ -225,7 +225,7 @@ fn trusted_root_access_tiers_are_pinned() {
     let p = SecurityPolicy {
         enabled: true,
         trusted_roots: vec![
-            TrustedRoot { path: "/data/ro".into(), access: TrustedAccess::ReadOnly },
+            TrustedRoot { path: "/data/ro".into(), access: TrustedAccess::Read },
             TrustedRoot { path: "/data/rw".into(), access: TrustedAccess::ReadWrite },
         ],
         ..SecurityPolicy::default()
