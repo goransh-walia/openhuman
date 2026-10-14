@@ -50,7 +50,7 @@ fn legacy_host_payload_shape_is_the_bus_payload_shape() {
     let legacy: crate::security::encryption::EncryptedPayload =
         serde_json::from_str(LEGACY_PAYLOAD).unwrap();
     assert_eq!(legacy.ciphertext, payload.ciphertext);
-    assert_eq!(serde_json::to_string(&payload).unwrap().len() > 0, true);
+    assert_eq!(legacy.salt, payload.salt);
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn crypto_config(dir: &std::path::Path) -> CryptoConfig2 {
         keyring: Some(KeyringConfig2 {
             service: "openhuman-test-7328".into(),
             backend: KeyringBackend2::EncryptedFile {
-                directory: dir.to_path_buf(),
+                directory: dir.to_string_lossy().into_owned(),
             },
             consent_timeout_ms: 2000,
         }),
@@ -87,10 +87,8 @@ fn crypto_config(dir: &std::path::Path) -> CryptoConfig2 {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn password_crypt_opens_legacy_host_payloads_and_interoperates() {
-    let fx = super::super::native_tests::native_fixture_with(Some(crypto_config(
-        fx_dir().path(),
-    )))
-    .await;
+    let fx =
+        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
     let payload: LegacyPayload = serde_json::from_str(LEGACY_PAYLOAD).unwrap();
     let opened = password_decrypt(&fx.proxy, FIXTURE_PASSWORD.into(), payload)
         .await
