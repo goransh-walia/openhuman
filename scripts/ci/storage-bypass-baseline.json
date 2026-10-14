@@ -346,7 +346,7 @@
     "rule": "json-write",
     "path": "crates/openhuman-core/src/security/credentials/profiles.rs",
     "line": 284,
-    "text": "let mut opts = OpenOptions::new();",
+    "text": "let mut file = OpenOptions::new()",
     "occurrence": 1
   },
   {
