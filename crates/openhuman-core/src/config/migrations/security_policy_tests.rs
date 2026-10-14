@@ -8,7 +8,7 @@ fn doc(text: &str) -> Value {
 fn untouched_document_keeps_policy_off() {
     let mut d = doc("schema_version = 14\n");
     assert!(rewrite_document(&mut d).is_empty());
-    let config = crate::config::schema::load::config_from_toml_str("schema_version = 14\n").unwrap();
+    let config = crate::config::schema::config_from_toml_str("schema_version = 14\n").unwrap();
     assert!(!config.autonomy.enabled);
 }
 
@@ -29,7 +29,7 @@ backend = "landlock"
 [security.privacy]
 mode = "sensitive"
 "#;
-    let config = crate::config::schema::load::config_from_toml_str(text).unwrap();
+    let config = crate::config::schema::config_from_toml_str(text).unwrap();
     assert!(config.autonomy.enabled);
     assert_eq!(config.autonomy.level, crate::security::AutonomyLevel::Full);
     assert_eq!(config.autonomy.max_actions_per_hour, 7);
@@ -42,7 +42,7 @@ mode = "sensitive"
 
 #[test]
 fn security_only_spelling_decodes_without_legacy_tables() {
-    let config = crate::config::schema::load::config_from_toml_str(
+    let config = crate::config::schema::config_from_toml_str(
         "[security.autonomy]\nenabled = true\n[security.audit]\nenabled = false\n[security.approval]\nttl_secs = 30\n",
     )
     .unwrap();
@@ -65,9 +65,9 @@ fn max_cost_is_deleted_with_a_notice_everywhere_it_appears() {
 #[test]
 fn rewritten_document_round_trips_through_save_shape() {
     let text = "[autonomy]\nenabled = true\nmax_cost_per_day_cents = 5\n";
-    let config = crate::config::schema::load::config_from_toml_str(text).unwrap();
+    let config = crate::config::schema::config_from_toml_str(text).unwrap();
     let saved = toml::to_string(&config).unwrap();
     assert!(!saved.contains("max_cost_per_day_cents"));
-    let again = crate::config::schema::load::config_from_toml_str(&saved).unwrap();
+    let again = crate::config::schema::config_from_toml_str(&saved).unwrap();
     assert!(again.autonomy.enabled);
 }
