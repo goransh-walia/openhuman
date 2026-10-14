@@ -236,7 +236,7 @@ async fn validate_parent_path_blocks_forbidden_path() {
 /// evaluator names the escape. Both deny, so assert whichever the build uses.
 fn denied_outside_workspace(err: &str, legacy_text: &str) -> bool {
     if cfg!(feature = "security-module") {
-        err.contains(POLICY_BLOCKED_MARKER)
+        err.contains(tinytools::status::POLICY_BLOCKED_MARKER)
     } else {
         err.contains(legacy_text)
     }
