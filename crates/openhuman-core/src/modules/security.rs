@@ -22,8 +22,19 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(8);
 /// policy is bound separately to immutable scopes, never the process-global
 /// bootstrap configuration. No OpenHuman enabled-policy settings are dropped
 /// into this configuration as if the bootstrap engine could enforce them.
+///
+/// `trusted_host` is this host's own unique bus connection. The module accepts
+/// privileged members (`RegisterPathPolicy`, `RegisterPolicy`, ...) only from
+/// that exact peer, and the binding cannot be added by a later reinit, so it
+/// must be present in the configuration the module is first loaded with. The
+/// runtime is always started before a module is loaded.
 pub fn module_config(_config: &Config) -> ModuleConfig {
-    ModuleConfig::default()
+    ModuleConfig {
+        trusted_host: super::host::started()
+            .and_then(|runtime| runtime.connection().unique_name())
+            .map(|name| name.to_string()),
+        ..ModuleConfig::default()
+    }
 }
 
 /// Caller identity supplied exclusively by trusted host dispatch. This wrapper
@@ -457,7 +468,7 @@ async fn call_register_path_policy(
     let id: tinysecurity_bus::PathPolicyId = proxy
         .call_confidential(names::methods::REGISTER_PATH_POLICY, (policy,))
         .await
-        .map_err(|e| { eprintln!("DEBUGERR {e:?}"); "TinySecurity RegisterPathPolicy failed" })?;
+        .map_err(|_| "TinySecurity RegisterPathPolicy failed")?;
     if id.0.is_empty() {
         return Err("TinySecurity returned an empty path scope".into());
     }

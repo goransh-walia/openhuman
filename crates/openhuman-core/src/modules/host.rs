@@ -221,6 +221,11 @@ async fn build_runtime() -> tinybus::Result<ModuleRuntime> {
 /// Lets status reporting answer without starting a broker as a side effect of
 /// being asked a question.
 #[must_use]
+/// The running module runtime, without starting it.
+pub(crate) fn started() -> Option<&'static ModuleRuntime> {
+    RUNTIME.get()
+}
+
 pub fn is_started() -> bool {
     RUNTIME.get().is_some()
 }
