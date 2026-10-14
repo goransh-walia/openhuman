@@ -203,3 +203,21 @@ fn registered_policy_carries_no_credentials() {
     let wire = serde_json::to_string(&policy).unwrap();
     assert!(!wire.contains("sk-super-secret-value"));
 }
+
+#[test]
+fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
+    let mut config = Config::default();
+    config.autonomy.forbidden_paths = vec!["~/.ssh".into(), "secrets".into(), "/etc".into()];
+    assert_eq!(
+        settings(&config).policy.forbidden_paths,
+        vec!["~/.ssh".to_string(), "secrets".to_string(), "/etc".to_string()]
+    );
+    assert!(
+        !Config::default().autonomy.forbidden_paths.is_empty(),
+        "the default list must reach the module"
+    );
+    assert_eq!(
+        settings(&Config::default()).policy.forbidden_paths,
+        Config::default().autonomy.forbidden_paths
+    );
+}

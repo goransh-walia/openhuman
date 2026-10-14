@@ -125,3 +125,16 @@ fn shared_corpus_host_scrub_cases_lose_their_needle() {
     }
     assert!(checked > 0, "corpus lost its host_scrub cases");
 }
+
+#[test]
+fn floor_never_removes_ordinary_corpus_text() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vendor/tinysecurity/crates/tinysecurity-redact/tests/fixtures/security-redaction-corpus.json");
+    let corpus: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    for case in corpus["text"].as_array().unwrap() {
+        if case["case"] == "ordinary_text" {
+            let input = case["input"].as_str().unwrap();
+            assert_eq!(scrub_secrets(input), input);
+        }
+    }
+}

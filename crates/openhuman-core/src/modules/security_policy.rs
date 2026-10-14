@@ -175,11 +175,10 @@ pub(crate) fn settings(config: &Config) -> PolicySettings {
             action_dir: config.action_dir.to_string_lossy().into_owned(),
             workspace_dir: config.workspace_dir.to_string_lossy().into_owned(),
             allowed_commands: config.autonomy.allowed_commands.clone(),
-            // The registered path scope enforces `forbidden_paths` (it expands
-            // `~/`). The module rejects relative, tilde and floor-covered entries in
-            // these base settings, and the default list has all three, so they are
-            // not repeated here.
-            forbidden_paths: Vec::new(),
+            // tinysecurity >= 0.5.0 (contract 1.13) folds `~`, relative
+            // (against `action_dir`) and floor-covered entries, so the real
+            // operator list is registered rather than an empty one.
+            forbidden_paths: config.autonomy.forbidden_paths.clone(),
         },
         privacy: privacy_mode(config.privacy.mode),
         egress_hosts: Vec::new(),

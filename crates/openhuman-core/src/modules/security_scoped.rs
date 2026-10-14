@@ -436,6 +436,110 @@ pub(crate) async fn flush_all() {
     scoped.cache.entries.clear();
 }
 
+/// Audit correlation the trusted host allocates once per audited operation.
+pub(crate) use tinysecurity_bus::AuditCorrelation2 as AuditCorrelation;
+use tinysecurity_bus::{AuditedRequest2, AuditedResponse2};
+
+/// Audited counterpart of [`evaluate_on`] for deployments where audit is
+/// required: the plain scoped call denies under required audit. The decision is
+/// never cached (every use needs its own durable event) and the module's audit
+/// evidence is returned alongside it.
+pub(crate) async fn evaluate_audited_on(
+    proxy: &tinybus::Proxy,
+    active: &ActivePolicy,
+    caller: VerifiedCaller,
+    call: ToolCall,
+    audit: AuditCorrelation,
+) -> Result<AuditedResponse2<ScopedDecision>, String> {
+    let response: AuditedResponse2<ScopedDecision> = proxy
+        .call_confidential(
+            names::methods::EVALUATE_SCOPED_AUDITED,
+            (AuditedRequest2 {
+                request: ScopedEvaluateRequest {
+                    policy_id: active.policy_id.clone(),
+                    caller: caller.0,
+                    call,
+                },
+                audit,
+            },),
+        )
+        .await
+        .map_err(|_| "TinySecurity EvaluateScopedAudited failed")?;
+    let d = &response.decision;
+    validate_scoped(
+        d.decision.generation,
+        d.policy_generation,
+        &d.fingerprint,
+        active,
+    )?;
+    if d.decision.cacheable {
+        return Err("TinySecurity audited decision claimed to be cacheable".into());
+    }
+    Ok(response)
+}
+
+/// Audited counterpart of [`check_on`]; see [`evaluate_audited_on`].
+pub(crate) async fn check_audited_on(
+    proxy: &tinybus::Proxy,
+    active: &ActivePolicy,
+    caller: VerifiedCaller,
+    checks: Vec<tinysecurity_bus::Check>,
+    audit: AuditCorrelation,
+) -> Result<AuditedResponse2<ScopedCheckResponse>, String> {
+    let count = checks.len();
+    let response: AuditedResponse2<ScopedCheckResponse> = proxy
+        .call_confidential(
+            names::methods::CHECK_SCOPED_AUDITED,
+            (AuditedRequest2 {
+                request: ScopedCheckRequest {
+                    policy_id: active.policy_id.clone(),
+                    caller: caller.0,
+                    checks,
+                },
+                audit,
+            },),
+        )
+        .await
+        .map_err(|_| "TinySecurity CheckScopedAudited failed")?;
+    let d = &response.decision;
+    let generation = d.decisions.first().map_or(0, |x| x.generation);
+    validate_scoped(generation, d.policy_generation, &d.fingerprint, active)?;
+    if d.decisions.len() != count
+        || d.decisions
+            .iter()
+            .any(|x| x.generation != generation || x.cacheable)
+    {
+        return Err("TinySecurity audited batch response mismatch".into());
+    }
+    Ok(response)
+}
+
+/// Audited evaluation through the live module client.
+pub(crate) async fn evaluate_scoped_audited(
+    config: &Config,
+    active: &ActivePolicy,
+    caller: VerifiedCaller,
+    call: ToolCall,
+    audit: AuditCorrelation,
+) -> Result<AuditedResponse2<ScopedDecision>, String> {
+    super::require_enabled(config)?;
+    let proxy = module_proxy(config).await?;
+    evaluate_audited_on(&proxy, active, caller, call, audit).await
+}
+
+/// Audited ordered checks through the live module client.
+pub(crate) async fn check_scoped_audited(
+    config: &Config,
+    active: &ActivePolicy,
+    caller: VerifiedCaller,
+    checks: Vec<tinysecurity_bus::Check>,
+    audit: AuditCorrelation,
+) -> Result<AuditedResponse2<ScopedCheckResponse>, String> {
+    super::require_enabled(config)?;
+    let proxy = module_proxy(config).await?;
+    check_audited_on(&proxy, active, caller, checks, audit).await
+}
+
 #[cfg(test)]
 #[path = "security_scoped_tests.rs"]
 mod tests;
