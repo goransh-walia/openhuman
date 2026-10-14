@@ -15,6 +15,9 @@ use tinysecurity_bus::{
 use crate::security::keyring_consent::types::PolicyDecision;
 
 const LOG_PREFIX: &str = "[security-crypto]";
+/// Argon2id derivation (64 MiB, 3 passes) can queue behind two other
+/// derivations and a cold start, so password calls outlive the 2 s policy budget.
+const PASSWORD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// Legacy `EncryptedPayload` shape accepted by `encryption.*` RPC callers.
 pub(crate) type LegacyPayload = PasswordPayload2;
@@ -60,6 +63,8 @@ async fn password_call(
 ) -> Result<PasswordResponse2, String> {
     log::debug!("{LOG_PREFIX} PasswordCrypt2 call");
     proxy
+        .clone()
+        .with_timeout(PASSWORD_TIMEOUT)
         .call_confidential(
             names::methods::PASSWORD_CRYPT2,
             (PasswordRequest2 { operation },),
