@@ -325,6 +325,9 @@ Each file has a sibling `<module>_tests.rs`; the policy suites live in
   sandbox rows; routing those through a host `AuditSink` callback lands with
   the phase 2/4/5/6 migrations. The legacy plain `Audit` method is not served
   by the module (pinned by a tinysecurity test); use `Audit2`.
+- The approval gate writes a `policy_decision` row (`policy_decision` =
+  `auto_approve_all`, `approvals_disabled` or `auto_approve_allowlist`) for every
+  call it lets through without a prompt, so a bypass is never silent.
 - MCP protocol telemetry (`mcp/audit`, the `mcp_audit` stream and `AuditStore`)
   stays tinymcp-owned: see `vendor/tinymcp/docs/adr/0002-mcp-audit-ownership.md`.
   Host policy events go through tinysecurity and are joined with MCP rows at
