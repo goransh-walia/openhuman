@@ -48,7 +48,7 @@ const AutoVerdict = ({ entry }: { entry: ApprovalAuditEntry }) => {
   const judge = entry.judge;
   return (
     <div className="mt-1 flex flex-col items-end gap-0.5" data-testid="approval-history-auto">
-      <Badge variant="info" data-testid="approval-history-auto-badge">
+      <Badge variant="primary" data-testid="approval-history-auto-badge">
         {t(jev ? 'settings.approvalHistory.autoJev' : 'settings.approvalHistory.autoPolicy')}
       </Badge>
       {jev && judge && (
