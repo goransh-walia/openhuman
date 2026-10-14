@@ -37,11 +37,14 @@ async fn native_path_validation_never_falls_back_when_module_is_unavailable() {
         action_dir: action,
         ..SecurityPolicy::default()
     };
-    let error = policy.validate_path("readme.txt").await.unwrap_err();
+    let error = policy
+        .validate_native_path("readme.txt", false)
+        .await
+        .unwrap_err();
     assert!(error.contains(POLICY_BLOCKED_MARKER), "{error}");
     assert!(error.contains("TinySecurity"), "{error}");
     let error = policy
-        .validate_parent_path("new-file.txt")
+        .validate_native_path("new-file.txt", true)
         .await
         .unwrap_err();
     assert!(error.contains(POLICY_BLOCKED_MARKER), "{error}");
