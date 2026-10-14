@@ -227,26 +227,21 @@ pub(crate) async fn activate_on(
     let registration = registration_fingerprint(&path, &command, config, &subject)?;
     let key = subject_key(&subject);
     {
-        let state = scoped().lock().await;
+        let state = state.lock().await;
         if let Some(active) = state.active.get(&key) {
             if active.registration == registration {
                 return Ok(Activation::Active(active.clone()));
             }
         }
     }
-    let proxy = module_proxy(config).await?;
-    let path_id: PathPolicyId = super::register_path_policy(config, path).await?;
+    let path_id: PathPolicyId = super::call_register_path_policy(proxy, path).await?;
     let command_key = serde_json::to_string(&command).map_err(|_| "command encoding failed")?;
-    let cached_command = scoped().lock().await.commands.get(&command_key).cloned();
+    let cached_command = state.lock().await.commands.get(&command_key).cloned();
     let command_id = match cached_command {
         Some(id) => id,
         None => {
-            let id = register_command_policy(&proxy, command).await?;
-            scoped()
-                .lock()
-                .await
-                .commands
-                .insert(command_key, id.clone());
+            let id = register_command_policy(proxy, command).await?;
+            state.lock().await.commands.insert(command_key, id.clone());
             id
         }
     };
