@@ -9,11 +9,18 @@ filesystem authorization into the separately loaded TinySecurity native module.
 
 ## Native filesystem policy
 
+`security-module` is a default feature of the core, embed, CLI and TUI. Unit
+tests (`cfg(test)`) keep `validate_path` on the in-process evaluator so they
+need no downloaded module; the native route is covered by
+`path_checks_native_tests.rs` and the released-archive fixtures
+(`OPENHUMAN_TEST_SECURITY_RELEASE_HOST`). The scoped decision cache is flushed
+by the module generation on every response and by the `PolicyChanged` signal
+(`modules/security_watch.rs`).
+
 With `security-module`, `SecurityPolicy::validate_path` and
 `validate_parent_path` use the typed host client in `modules/security.rs`.
 `policy/native_paths.rs` translates trusted roots, the acting directory,
-internal-state reservations, and the current turn's workspace grant into an
-immutable scope. Scope registration deduplicates the whole policy; one agent
+internal-state reservations into an immutable scope. Scope registration deduplicates the whole policy; one agent
 cannot replace another agent's settings through global module reinitialization.
 
 The host links only `tinysecurity-bus`. The engine canonicalizes paths and
@@ -22,7 +29,7 @@ recipient, a timeout, or a malformed response denies access without a local
 fallback. Synchronous lexical checks remain host preflights during this phase;
 they do not substitute for the asynchronous I/O authorization.
 
-Production admission pins TinySecurity v0.2.2 and its published archive checksums
+Production admission pins TinySecurity v0.4.0 and its published archive checksums
 in the module registry. `scripts/ci/security-native-fixture.sh` loads those
 released archives and invokes their admission, path, and latency tests. Explicit
 local fixtures remain available for development; their digests never become
