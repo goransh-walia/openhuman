@@ -122,3 +122,12 @@ fn empty_plaintext_round_trips() {
 // fixed-input tests above (round-trip, tamper, KDF determinism); the
 // property-based *fuzzing* value lives in the fast, panic-focused
 // `security::policy::proptest_tests` instead.
+
+#[test]
+fn zz_gen_fixture() {
+    let salt: Vec<u8> = (1u8..=16).collect();
+    let k = EncryptionKey::derive("fixture-password-7328", &salt).unwrap();
+    let mut p = k.encrypt(b"legacy host payload 7328").unwrap();
+    p.salt = salt;
+    println!("FIXTURE {}", serde_json::to_string(&p).unwrap());
+}
