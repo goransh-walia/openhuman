@@ -181,22 +181,3 @@ fn ordinary_text_is_never_redacted_by_the_log_scrubber() {
         }
     }
 }
-
-#[test]
-#[ignore = "temporary generator"]
-fn zz_print_actuals() {
-    let corpus: Value = serde_json::from_str(EXTENDED).unwrap();
-    let mut cases = vec![];
-    for case in corpus["text"].as_array().unwrap() {
-        cases.push(json!({"case": case["case"], "removed_by": removed_by(&input_of(case), case["needle"].as_str().unwrap())}));
-    }
-    let mut urls = vec![];
-    for case in corpus["urls"].as_array().unwrap() {
-        let input = case["input"].as_str().unwrap();
-        urls.push(json!({"case": case["case"],
-          "util": openhuman_core::util::redact::redact_url_for_log(input),
-          "storage": openhuman_core::config::schema::storage::redact_url(input)}));
-    }
-    let gaps: Vec<_> = known_gaps().into_iter().collect();
-    println!("ACTUALS {}", json!({"cases": cases, "urls": urls, "gaps": gaps}));
-}
