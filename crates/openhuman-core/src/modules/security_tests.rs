@@ -201,3 +201,12 @@ async fn absent_module_fails_closed_instead_of_allowing() {
     let record = *super::super::registry::find(MODULE_ID).unwrap();
     assert!(require_attestation(&proxy, &record).await.is_err());
 }
+
+#[test]
+fn production_config_enables_password_crypt_and_keeps_keyring_and_pairing_denied() {
+    let crypto = module_config(&config()).crypto.expect("crypto surface");
+    assert!(crypto.keyring.is_none(), "keyring stays host-owned until rerouted");
+    assert!(crypto.pairing.is_none(), "pairing stays host-owned until rerouted");
+    assert!((1..=4096).contains(&crypto.operations_per_minute));
+    assert!((1..=tinysecurity_bus::MAX_CRYPTO_PAYLOAD_BYTES).contains(&crypto.max_payload_bytes));
+}
