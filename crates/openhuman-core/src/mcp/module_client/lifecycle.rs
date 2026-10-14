@@ -32,10 +32,11 @@ impl McpConfiguredClient {
             return Err(ModuleCallError::Unavailable);
         }
         let data_dir = crate::core::runtime::agent_scope_dir(config);
+        let key = client_key(&data_dir);
         // The table rechecks removal and pending cleanup under its lock, so a
         // reservation installed after the first check cannot be bypassed.
         table()
-            .admit(&data_dir, current_agent_context_is_removed, || {
+            .admit(&key, current_agent_context_is_removed, || {
                 Self::new(&data_dir, config).map(Arc::new)
             })
             .map_err(|error| match error {
@@ -133,7 +134,7 @@ impl McpConfiguredClient {
                 .to_owned(),
             port,
         ));
-        table().insert(data_dir, Arc::clone(&client));
+        table().insert(client_key(&data_dir), Arc::clone(&client));
         Ok(client)
     }
 
@@ -150,7 +151,7 @@ impl McpConfiguredClient {
     /// failed close remains in the cache, marked unavailable, so shutdown or
     /// a later cleanup attempt can retry the module's retained transition.
     pub(crate) async fn close_agent_data_dir(data_dir: &std::path::Path) -> bool {
-        let key = data_dir.to_path_buf();
+        let key = client_key(data_dir);
         let reservation = table().reservation_for(&key);
         let Some(client) = table().retire(&key) else {
             return table().finish_cleanup(&key, None, &reservation);
@@ -165,7 +166,7 @@ impl McpConfiguredClient {
     /// If no Tokio runtime is active, the retired client remains cached for the
     /// registered shutdown hook to close later.
     pub(crate) fn schedule_agent_close_data_dir(data_dir: &std::path::Path) {
-        let key = data_dir.to_path_buf();
+        let key = client_key(data_dir);
         let reservation = table().reservation_for(&key);
         let Some(client) = table().retire(&key) else {
             table().finish_cleanup(&key, None, &reservation);
@@ -184,7 +185,7 @@ impl McpConfiguredClient {
         data_dir: &std::path::Path,
         after_close: CleanupAction,
     ) {
-        let key = data_dir.to_path_buf();
+        let key = client_key(data_dir);
         let reservation = table().reservation_with_action(&key, after_close);
         let Some(client) = table().retire(&key) else {
             if !table().finish_cleanup(&key, None, &reservation) {
@@ -215,7 +216,7 @@ impl McpConfiguredClient {
     }
 
     pub(crate) fn agent_close_pending(data_dir: &std::path::Path) -> bool {
-        table().close_pending(data_dir)
+        table().close_pending(&client_key(data_dir))
     }
 
     fn finish_if_closed(
@@ -239,6 +240,30 @@ impl McpConfiguredClient {
                 tracing::warn!(?error, "[mcp] agent client close remains pending");
                 false
             }
+        }
+    }
+}
+
+/// The table key for an agent data directory, stable across spellings of the
+/// same folder (symlinks, `..`, case on case-insensitive volumes). The longest
+/// existing ancestor is canonicalized and the rest re-appended, so a directory
+/// that a purge has already removed keeps the key it was admitted under.
+fn client_key(data_dir: &std::path::Path) -> PathBuf {
+    let mut missing = Vec::new();
+    let mut ancestor = data_dir;
+    loop {
+        if let Ok(real) = ancestor.canonicalize() {
+            return missing
+                .iter()
+                .rev()
+                .fold(real, |path, part| path.join(part));
+        }
+        match (ancestor.parent(), ancestor.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name.to_owned());
+                ancestor = parent;
+            }
+            _ => return data_dir.to_path_buf(),
         }
     }
 }

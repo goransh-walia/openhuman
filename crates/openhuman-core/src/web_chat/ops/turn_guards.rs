@@ -113,7 +113,7 @@ where
 ///
 /// Returns `None` when the turn was cancelled cooperatively before producing a
 /// result — the cancelling side already emitted the user-facing `chat_error`,
-/// so the caller just unwinds quietly. Otherwise `Some(res)` carries the turn's
+/// so the caller just unwinds quietly (see [`run_until_stopped`]). Otherwise `Some(res)` carries the turn's
 /// `Result`. Extracted so `start_chat` and `spawn_parallel_turn` share one copy
 /// of this wiring and can't drift apart (issue #4746 review); the only per-site
 /// differences are the `fork` flag and run-queue handle passed to
@@ -127,18 +127,57 @@ pub(crate) async fn run_turn_under_cancel_and_deadline<F>(
 where
     F: std::future::Future<Output = Result<WebChatTaskResult, String>>,
 {
-    tokio::select! {
-        biased;
-        _ = cancel_token.cancelled() => None,
-        res = drive_turn_with_deadline(
-            resolve_web_turn_deadline().await,
+    let deadline = resolve_web_turn_deadline().await;
+    run_until_stopped(
+        cancel_token,
+        drive_turn_with_deadline(
+            deadline,
             crate::agent::turn_origin::with_origin(
                 origin,
                 crate::security::approval::APPROVAL_CHAT_CONTEXT.scope(approval_ctx, fut),
             ),
-        ) => Some(res),
+        ),
+    )
+    .await
+}
+
+/// Drive `turn` until it finishes or `cancel_token` fires.
+///
+/// The turn runs under its own session cancellation, which its run tree reads
+/// through `host_overrides::current_cancellation`. A Stop fires it rather than
+/// only dropping the turn, so the session driver can hand back the rounds it
+/// already completed and the runtime persists them (#7715). The turn then gets
+/// [`STOPPED_TURN_PERSIST_GRACE`] to finish before it is dropped; its result is
+/// discarded either way.
+async fn run_until_stopped<T>(
+    cancel_token: CancellationToken,
+    turn: impl std::future::Future<Output = T>,
+) -> Option<T> {
+    let turn_cancellation = tinyagents_harness::cancel::CancellationToken::new();
+    // Boxed rather than stack-pinned: a chat turn's future is very large.
+    let mut turn = Box::pin(crate::agent::host_overrides::with_cancellation(
+        turn_cancellation.clone(),
+        turn,
+    ));
+    tokio::select! {
+        biased;
+        _ = cancel_token.cancelled() => {
+            turn_cancellation.cancel();
+            let persisted = tokio::time::timeout(STOPPED_TURN_PERSIST_GRACE, &mut turn).await;
+            log::debug!(
+                "[web-channel] stopped turn unwound within grace={}",
+                persisted.is_ok()
+            );
+            None
+        }
+        res = &mut turn => Some(res),
     }
 }
+
+/// How long a cancelled turn may keep running so the session runtime can
+/// persist its completed rounds. Just above the runtime's own 2 s driver
+/// grace; the user-facing `chat_cancelled` has already been sent.
+const STOPPED_TURN_PERSIST_GRACE: Duration = Duration::from_secs(3);
 
 /// Reason a terminal `run_chat_task` error should be kept OUT of Sentry, or
 /// `None` when it is a genuine defect that must page.

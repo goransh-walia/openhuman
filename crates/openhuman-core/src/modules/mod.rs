@@ -300,6 +300,16 @@ pub async fn import_legacy_tinybox(workspace_dir: &std::path::Path) {
 /// module's blob storage, once per directory. `ttl` is the configured original
 /// lifetime. Never fails the caller: an error is logged and the import is
 /// retried at the next install.
+/// Scopes, under the current tenant, that hold expiring blobs written by
+/// modules (today TinyJuice's CCR originals), for the blob sweeper. A module
+/// whose scope cannot be resolved here is skipped.
+pub(crate) fn expiring_blob_module_scopes() -> Vec<crate::storage::Scope> {
+    [storage_grant_tinyjuice::MODULE_ID]
+        .into_iter()
+        .filter_map(|id| storage_host::current_module_scope(id).ok())
+        .collect()
+}
+
 pub async fn import_legacy_tinyjuice(root: &std::path::Path, ttl: Option<std::time::Duration>) {
     #[cfg(feature = "modules")]
     import_once(

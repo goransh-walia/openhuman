@@ -54,9 +54,16 @@ const DERIVED_TRANSCRIPT_PAGE_LIMIT = 500;
  */
 const DERIVED_TRANSCRIPT_MAX_PAGES = 20;
 
-/** A projected item the core still rewrites in place: a running sub-agent or tool call. */
+/**
+ * A projected item the core can still rewrite in place: a running tool call, or
+ * a sub-agent that is running or can be continued (`incomplete`/`interrupted`)
+ * and so changes status and contents without moving the thread's total (#7777).
+ */
 const isUnsettled = (item: DerivedDisplayItem) =>
-  (item.kind === 'subagent' || item.kind === 'toolCall') && item.status === 'running';
+  item.kind === 'toolCall'
+    ? item.status === 'running'
+    : item.kind === 'subagent' &&
+      (item.status === 'running' || item.status === 'incomplete' || item.status === 'interrupted');
 
 /**
  * Everything the assistant-ui surface needs about the *currently running* turn

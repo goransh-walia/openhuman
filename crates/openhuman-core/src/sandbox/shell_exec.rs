@@ -108,9 +108,18 @@ pub(crate) async fn run(config: &Config, run: NativeShellRun) -> anyhow::Result<
             timeout_ms = run.timeout.as_millis() as u64,
             "[sandbox:shell] starting native shell through TinyBox"
         );
-        crate::core::runtime::spawn_scoped(async move { run_owned(&config, run).await })
-            .await
-            .map_err(|_| anyhow::anyhow!("TinyBox shell worker did not finish"))?
+        // A cancelled turn drops this wait mid-command. The worker then cancels
+        // the command (`_caller` closes `abandoned`) and holds the turn's
+        // cleanup open until TinyBox has stopped it, so an awaited turn
+        // cancellation is acknowledged only after the command is gone.
+        let hold = tinytools_std::timeout::ProcessCleanup::hold();
+        let (_caller, abandoned) = tokio::sync::oneshot::channel::<std::convert::Infallible>();
+        crate::core::runtime::spawn_scoped(async move {
+            let _hold = hold;
+            run_owned(&config, run, abandoned).await
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("TinyBox shell worker did not finish"))?
     }
     #[cfg(not(feature = "modules"))]
     {
@@ -120,7 +129,11 @@ pub(crate) async fn run(config: &Config, run: NativeShellRun) -> anyhow::Result<
 }
 
 #[cfg(feature = "modules")]
-async fn run_owned(config: &Config, run: NativeShellRun) -> anyhow::Result<SandboxExecResult> {
+async fn run_owned(
+    config: &Config,
+    run: NativeShellRun,
+    abandoned: tokio::sync::oneshot::Receiver<std::convert::Infallible>,
+) -> anyhow::Result<SandboxExecResult> {
     let resource = tinybox::reserve(config, contract::ReserveRequest::Resource)
         .await
         .map_err(|_| anyhow::anyhow!("TinyBox could not reserve a command resource"))?;
@@ -155,7 +168,7 @@ async fn run_owned(config: &Config, run: NativeShellRun) -> anyhow::Result<Sandb
         let process = tinybox::start_native_shell_exec(config, request)
             .await
             .map_err(|_| anyhow::anyhow!("TinyBox could not start the command process"))?;
-        collect_process(config, process, timeout).await
+        collect_process(config, process, timeout, abandoned).await
     }
     .await;
     let close = tinybox::close(config, resource).await;
@@ -204,8 +217,10 @@ async fn collect_process(
     config: &Config,
     process: contract::ProcessRef,
     timeout: Duration,
+    mut abandoned: tokio::sync::oneshot::Receiver<std::convert::Infallible>,
 ) -> anyhow::Result<SandboxExecResult> {
     use contract::{ExecutionFailure, ExecutionState, OutputStream};
+    use tokio::sync::oneshot::error::TryRecvError;
 
     let deadline = tokio::time::Instant::now() + timeout;
     let mut cursor = 0;
@@ -213,7 +228,11 @@ async fn collect_process(
     let mut stderr = Vec::new();
     let mut requested_cancel = false;
     let timed_out = loop {
-        if !requested_cancel && tokio::time::Instant::now() >= deadline {
+        let caller_gone = matches!(abandoned.try_recv(), Err(TryRecvError::Closed));
+        if !requested_cancel && (caller_gone || tokio::time::Instant::now() >= deadline) {
+            if caller_gone {
+                tracing::debug!("[sandbox:shell] caller dropped its wait; cancelling the command");
+            }
             tinybox::cancel(config, process.clone())
                 .await
                 .map_err(|_| {

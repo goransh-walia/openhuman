@@ -73,6 +73,9 @@ record deleted afterwards is not resurrected from the untouched legacy file.
   that driver is atomic across processes (MongoDB, SQLite), which a
   clustered node's leases need. Memory and file drivers coordinate only
   within one process.
+- `blob_sweep`: reclaims expired blobs (`StorageBackend::sweep_expired_blobs`)
+  for `local` and each known agent scope every hour, spawned with the cron
+  service (`core::runtime::services`). SaaS profile scopes are not swept yet.
 - `fence` / `fenced_backend`: lease-epoch write fencing (see
   [Write fencing](#write-fencing)).
 - `scope_for_profile(profile_id)`: the scope a SaaS profile's records live

@@ -19,7 +19,9 @@ function turn(requestId: string, callId: string): DerivedDisplayItem[] {
 }
 
 /** A sub-agent card attached to turn `a`, which the core updates in place. */
-function subagent(status: 'running' | 'completed'): DerivedDisplayItem {
+function subagent(
+  status: 'running' | 'completed' | 'incomplete' | 'interrupted'
+): DerivedDisplayItem {
   return { kind: 'subagent', id: 'sub-1', status, requestId: 'a', items: [] };
 }
 
@@ -182,6 +184,28 @@ describe('useCoreTranscriptProjection incremental refresh', () => {
       // A detached sub-agent finishes in place, outside the newest page.
       name: 'a held older item still running walks the full history',
       older: [subagent('running'), ...turn('a', 'a-call')],
+      pages: [
+        page({ items: turn('c', 'c-call'), total: 10, hasMore: true, nextCursor: 'c2' }),
+        page({ items: turn('b', 'b-call'), total: 10, hasMore: true, nextCursor: 'c3' }),
+        page({ items: [subagent('completed'), ...turn('a', 'a-call')], total: 10 }),
+      ],
+      turns: ['a', 'b', 'c'],
+    },
+    {
+      // A continuable sub-agent can be resumed later, which rewrites its card
+      // in place without growing the history (#7777).
+      name: 'a held older incomplete sub-agent walks the full history',
+      older: [subagent('incomplete'), ...turn('a', 'a-call')],
+      pages: [
+        page({ items: turn('c', 'c-call'), total: 10, hasMore: true, nextCursor: 'c2' }),
+        page({ items: turn('b', 'b-call'), total: 10, hasMore: true, nextCursor: 'c3' }),
+        page({ items: [subagent('completed'), ...turn('a', 'a-call')], total: 10 }),
+      ],
+      turns: ['a', 'b', 'c'],
+    },
+    {
+      name: 'a held older interrupted sub-agent walks the full history',
+      older: [subagent('interrupted'), ...turn('a', 'a-call')],
       pages: [
         page({ items: turn('c', 'c-call'), total: 10, hasMore: true, nextCursor: 'c2' }),
         page({ items: turn('b', 'b-call'), total: 10, hasMore: true, nextCursor: 'c3' }),

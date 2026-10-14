@@ -234,3 +234,53 @@ async fn a_removed_agent_context_cannot_reopen_its_evicted_client() {
     })
     .await;
 }
+
+/// A pending close fences the folder whatever path spells it: a runtime that
+/// reopens the workspace through a symlink must not slip past the reservation
+/// and have its agent home purged by the old runtime's deferred cleanup.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_pending_close_fences_the_folder_under_another_spelling() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let agent_dir = workspace.path().join("agents").join("alpha");
+    std::fs::create_dir_all(&agent_dir).expect("agent home");
+    let links = tempfile::tempdir().expect("links");
+    let alias = links.path().join("alias");
+    std::os::unix::fs::symlink(workspace.path(), &alias).expect("symlink");
+    let aliased_dir = alias.join("agents").join("alpha");
+
+    let mut config = Config::default();
+    config.workspace_dir = agent_dir.clone();
+    config.modules.enabled = true;
+    let port = FakePort::default();
+    port.block_first_close
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let close_started = Arc::clone(&port.close_started);
+    let release_close = Arc::clone(&port.release_close);
+    let client = McpConfiguredClient::install_test_port(&config, Box::new(port))
+        .expect("install module client");
+    client
+        .call::<bool>(&configured("agent"), "ConnectedOverview", ())
+        .await
+        .unwrap();
+
+    McpConfiguredClient::schedule_agent_close_and_cleanup(&agent_dir, Arc::new(|| true));
+    close_started.notified().await;
+
+    assert!(McpConfiguredClient::agent_close_pending(&aliased_dir));
+    let mut aliased = config.clone();
+    aliased.workspace_dir = aliased_dir.clone();
+    assert!(matches!(
+        McpConfiguredClient::for_config(&aliased),
+        Err(ModuleCallError::Unavailable)
+    ));
+
+    release_close.notify_one();
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while McpConfiguredClient::agent_close_pending(&aliased_dir) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("close finishes");
+}

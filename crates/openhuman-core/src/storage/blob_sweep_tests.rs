@@ -1,0 +1,86 @@
+use super::*;
+use std::sync::atomic::{AtomicU64, Ordering};
+use tinystoragedrivers::MemoryStorage;
+
+/// A memory backend on a clock the test advances by hand.
+fn backend_with_clock() -> (Arc<AtomicU64>, Arc<dyn StorageBackend>) {
+    let now = Arc::new(AtomicU64::new(1_000));
+    let clock = Arc::clone(&now);
+    let backend: Arc<dyn StorageBackend> =
+        Arc::new(MemoryStorage::with_clock(Arc::new(move || {
+            clock.load(Ordering::SeqCst)
+        })));
+    (now, backend)
+}
+
+async fn put_expiring(backend: &Arc<dyn StorageBackend>, scope: &Scope, key: &str, ms: u64) {
+    backend
+        .for_scope(scope)
+        .unwrap()
+        .blobs()
+        .put_expiring(key, b"x".to_vec(), None, Duration::from_millis(ms))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn sweep_scope_reclaims_only_lapsed_blobs_of_that_scope() {
+    let (now, backend) = backend_with_clock();
+    let local = Scope::local();
+    let other = crate::storage::scope_for_agent("blob-sweep-other");
+    put_expiring(&backend, &local, "short", 10).await;
+    put_expiring(&backend, &local, "long", 10_000).await;
+    put_expiring(&backend, &other, "short", 10).await;
+
+    now.store(2_000, Ordering::SeqCst);
+    assert_eq!(sweep_scope(backend.as_ref(), &local).await, 1);
+    assert_eq!(sweep_scope(backend.as_ref(), &local).await, 0, "idempotent");
+    assert_eq!(
+        sweep_scope(backend.as_ref(), &other).await,
+        1,
+        "the other scope's lapsed blob was untouched until its own sweep"
+    );
+    let still = backend.for_scope(&local).unwrap().blobs().get("long").await;
+    assert!(still.unwrap().is_some(), "an unexpired blob survives");
+}
+
+#[tokio::test]
+async fn sweep_all_visits_the_local_scope() {
+    let (now, backend) = backend_with_clock();
+    put_expiring(&backend, &Scope::local(), "gone", 10).await;
+    now.store(2_000, Ordering::SeqCst);
+    assert_eq!(sweep_all(Arc::clone(&backend)).await, 1);
+    assert_eq!(sweep_all(backend).await, 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn spawned_sweeper_waits_for_its_first_delay_then_keeps_ticking() {
+    let handle = spawn(Duration::from_secs(10), Duration::from_secs(20));
+    tokio::time::sleep(Duration::from_secs(65)).await;
+    assert!(!handle.is_finished(), "the sweeper keeps running");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn sweeping_through_the_fenced_backend_reaches_the_driver() {
+    let (now, inner) = backend_with_clock();
+    let scope = Scope::local();
+    put_expiring(&inner, &scope, "gone", 10).await;
+    now.store(2_000, Ordering::SeqCst);
+    let fenced: Arc<dyn StorageBackend> =
+        Arc::new(super::super::fenced_backend::FencedBackend::new(
+            inner,
+            Arc::new(crate::storage::fence::FenceRegistry::new(|| 0)),
+        ));
+    assert_eq!(sweep_scope(fenced.as_ref(), &scope).await, 1);
+}
+
+#[tokio::test]
+async fn module_blob_scopes_are_swept_alongside_the_acting_scope() {
+    let (now, backend) = backend_with_clock();
+    let module_scopes = crate::modules::expiring_blob_module_scopes();
+    assert!(!module_scopes.is_empty(), "TinyJuice owns expiring blobs");
+    put_expiring(&backend, &module_scopes[0], "tinyjuice_ccr/t", 10).await;
+    now.store(2_000, Ordering::SeqCst);
+    assert_eq!(sweep_all(backend).await, 1);
+}

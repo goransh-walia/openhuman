@@ -118,6 +118,15 @@ pub(crate) async fn start_selected_services(
     }
     if services.cron {
         tasks.track("cron", spawn_cron_service(std::sync::Arc::clone(ctx)));
+        // Storage housekeeping rides the same switch as the other periodic
+        // maintenance: lapsed blobs stay in the backend until swept.
+        tasks.track(
+            "blob_sweep",
+            crate::storage::blob_sweep::spawn(
+                crate::storage::blob_sweep::FIRST_SWEEP_DELAY,
+                crate::storage::blob_sweep::SWEEP_INTERVAL,
+            ),
+        );
     }
     // Flow-run boot reconciliation is selected by the flows *domain*, not by
     // a background service — runs can be started without cron in the

@@ -25,6 +25,7 @@
 //! misconfigured deployment stops at boot instead of at its first write.
 
 pub mod agents;
+pub mod blob_sweep;
 pub mod config;
 pub mod documents;
 pub mod fence;

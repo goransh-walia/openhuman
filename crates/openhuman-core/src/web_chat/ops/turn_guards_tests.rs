@@ -58,3 +58,54 @@ async fn backstop_firing_yields_a_classified_turn_timeout_error() {
     assert_eq!(classified.error_type, "turn_timeout");
     assert!(!classified.message.trim().is_empty());
 }
+
+/// A Stop fires the turn's own session cancellation and lets the turn finish,
+/// so the session runtime can persist the stopped turn's rounds (#7715). The
+/// turn's result is still discarded: the caller unwinds as a cancel.
+#[tokio::test]
+async fn stop_fires_the_session_cancellation_and_lets_the_turn_unwind() {
+    let cancel = CancellationToken::new();
+    let unwound = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let unwound_in_turn = unwound.clone();
+    let turn = run_until_stopped(cancel.clone(), async move {
+        crate::agent::host_overrides::current_cancellation()
+            .cancelled()
+            .await;
+        unwound_in_turn.store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok::<_, String>(result("persisted partial"))
+    });
+    let stop = async {
+        tokio::task::yield_now().await;
+        cancel.cancel();
+        // A double Stop is a no-op, not a second unwind.
+        cancel.cancel();
+    };
+    let (res, ()) = tokio::join!(turn, stop);
+    assert!(res.is_none(), "a stopped turn reports a cancel");
+    assert!(
+        unwound.load(std::sync::atomic::Ordering::SeqCst),
+        "the turn observed its session cancellation and ran to completion"
+    );
+}
+
+/// A turn that ignores its session cancellation is dropped once the grace
+/// runs out, so a Stop can never hang on a stuck turn.
+#[tokio::test(start_paused = true)]
+async fn stop_drops_a_turn_that_ignores_cancellation_after_the_grace() {
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    let started = tokio::time::Instant::now();
+    let res = run_until_stopped(cancel, std::future::pending::<()>()).await;
+    assert!(res.is_none());
+    assert!(started.elapsed() >= STOPPED_TURN_PERSIST_GRACE);
+}
+
+/// Without a Stop the turn's own result comes back.
+#[tokio::test]
+async fn unstopped_turn_returns_its_result() {
+    let res = run_until_stopped(CancellationToken::new(), async {
+        Ok::<_, String>(result("answer"))
+    })
+    .await;
+    assert_eq!(res.expect("not stopped").unwrap().full_response, "answer");
+}
