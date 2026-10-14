@@ -11,10 +11,12 @@ mod env_guard;
 
 use std::path::Path;
 
+use tinybox_bus::CommandClass;
+
 use openhuman_core::{
     config::AutonomyConfig,
     security::{
-        policy::{CommandClass, GateDecision},
+        policy::GateDecision,
         AutonomyLevel, SecurityPolicy, ToolOperation, TrustedAccess, TrustedRoot,
     },
 };

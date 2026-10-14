@@ -259,7 +259,8 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
 
 #[tokio::test]
 async fn in_process_policy_latency_baseline() {
-    use openhuman_core::security::policy::{CommandClass, GateDecision};
+    use openhuman_core::security::policy::GateDecision;
+    use tinybox_bus::CommandClass;
     // Measure the host-owned gate and path checks, with policy enforcement on.
     // Shell parsing now belongs to TinyBox; this baseline does not time its
     // module call. No time threshold: record host work before choosing a bus budget.
