@@ -78,8 +78,14 @@ fn gate_decision_matrix_is_pinned() {
     let supervised = [Allow, Prompt, Prompt, Prompt, Prompt];
     let full = [Allow, Allow, Prompt, Prompt, Prompt];
     for (i, class) in classes.iter().enumerate() {
-        assert_eq!(policy(AutonomyLevel::ReadOnly).gate_decision(*class), read_only[i]);
-        assert_eq!(policy(AutonomyLevel::Supervised).gate_decision(*class), supervised[i]);
+        assert_eq!(
+            policy(AutonomyLevel::ReadOnly).gate_decision(*class),
+            read_only[i]
+        );
+        assert_eq!(
+            policy(AutonomyLevel::Supervised).gate_decision(*class),
+            supervised[i]
+        );
         assert_eq!(policy(AutonomyLevel::Full).gate_decision(*class), full[i]);
         // Disabled policy never gates, whatever the tier says.
         let off = SecurityPolicy {
@@ -99,7 +105,12 @@ fn check_gated_command_read_only_and_hidden_execution() {
     assert!(err.contains(POLICY_BLOCKED_MARKER), "{err}");
 
     let sup = policy(AutonomyLevel::Supervised);
-    for hidden in ["echo $(whoami)", "echo `date`", "cat <(ls)", "sleep 1 & echo done"] {
+    for hidden in [
+        "echo $(whoami)",
+        "echo `date`",
+        "cat <(ls)",
+        "sleep 1 & echo done",
+    ] {
         let err = sup.check_gated_command(hidden).unwrap_err();
         assert!(err.contains(POLICY_BLOCKED_MARKER), "{hidden}: {err}");
     }
@@ -118,7 +129,10 @@ fn allowlist_per_tier_is_pinned() {
     assert!(sup.is_command_allowed("git status && ls"));
     assert!(!sup.is_command_allowed("python3 x.py"));
     assert!(!sup.is_command_allowed("ls && python3 x.py"));
-    assert!(!sup.is_command_allowed("ls > out.txt"), "redirects are structural");
+    assert!(
+        !sup.is_command_allowed("ls > out.txt"),
+        "redirects are structural"
+    );
     assert!(!sup.is_command_allowed("echo $(id)"));
     // Read-only allows nothing to execute; Full bypasses the allowlist.
     let mut ro = policy(AutonomyLevel::ReadOnly);
@@ -134,26 +148,44 @@ fn risk_levels_and_approval_requirements_are_pinned() {
     let mut p = policy(AutonomyLevel::Supervised);
     p.allowed_commands = vec!["ls".into(), "curl".into(), "rm".into(), "mkfs".into()];
     assert_eq!(p.command_risk_level("ls"), CommandRiskLevel::Low);
-    assert_eq!(p.command_risk_level("curl https://x.test"), CommandRiskLevel::Medium);
-    assert_eq!(p.command_risk_level("ls; mkfs /dev/sda"), CommandRiskLevel::High);
+    assert_eq!(
+        p.command_risk_level("curl https://x.test"),
+        CommandRiskLevel::Medium
+    );
+    assert_eq!(
+        p.command_risk_level("ls; mkfs /dev/sda"),
+        CommandRiskLevel::High
+    );
 
     p.require_approval_for_medium_risk = true;
     p.block_high_risk_commands = false;
     assert!(p.validate_command_execution("ls", false).is_ok());
-    let medium = p.validate_command_execution("curl https://x.test", false).unwrap_err();
+    let medium = p
+        .validate_command_execution("curl https://x.test", false)
+        .unwrap_err();
     assert!(medium.contains("medium-risk"), "{medium}");
-    assert!(p.validate_command_execution("curl https://x.test", true).is_ok());
-    let high = p.validate_command_execution("mkfs /dev/sda", false).unwrap_err();
+    assert!(p
+        .validate_command_execution("curl https://x.test", true)
+        .is_ok());
+    let high = p
+        .validate_command_execution("mkfs /dev/sda", false)
+        .unwrap_err();
     assert!(high.contains("high-risk"), "{high}");
     assert!(p.validate_command_execution("mkfs /dev/sda", true).is_ok());
 
     p.block_high_risk_commands = true;
-    let blocked = p.validate_command_execution("mkfs /dev/sda", true).unwrap_err();
+    let blocked = p
+        .validate_command_execution("mkfs /dev/sda", true)
+        .unwrap_err();
     assert!(blocked.contains(POLICY_BLOCKED_MARKER), "{blocked}");
 
     let long = format!("zzz {}", "a".repeat(400));
     let err = p.validate_command_execution(&long, true).unwrap_err();
-    assert!(err.len() < 300, "denial text must truncate the command: {}", err.len());
+    assert!(
+        err.len() < 300,
+        "denial text must truncate the command: {}",
+        err.len()
+    );
 }
 
 #[test]
@@ -205,7 +237,9 @@ fn floor_holds_with_policy_disabled_and_through_trusted_roots() {
     assert!(!off.is_resolved_path_allowed(Path::new("/home/u/.ssh/id_rsa")));
     assert!(!off.is_resolved_path_allowed(Path::new("/etc/passwd")));
     assert!(off.is_resolved_path_allowed(Path::new("/anywhere/else/file")));
-    assert!(off.check_protected_path_literals("cat ~/.ssh/id_rsa").is_err());
+    assert!(off
+        .check_protected_path_literals("cat ~/.ssh/id_rsa")
+        .is_err());
     assert!(off.check_protected_path_literals("cat notes.txt").is_ok());
 
     let on = SecurityPolicy {
@@ -226,8 +260,14 @@ fn trusted_root_access_tiers_are_pinned() {
     let p = SecurityPolicy {
         enabled: true,
         trusted_roots: vec![
-            TrustedRoot { path: "/data/ro".into(), access: TrustedAccess::Read },
-            TrustedRoot { path: "/data/rw".into(), access: TrustedAccess::ReadWrite },
+            TrustedRoot {
+                path: "/data/ro".into(),
+                access: TrustedAccess::Read,
+            },
+            TrustedRoot {
+                path: "/data/rw".into(),
+                access: TrustedAccess::ReadWrite,
+            },
         ],
         ..SecurityPolicy::default()
     };
@@ -246,15 +286,22 @@ fn hourly_rate_limiter_counts_acts_only_and_is_inert_when_disabled() {
         ..SecurityPolicy::default()
     };
     for _ in 0..10 {
-        assert!(p.enforce_tool_operation(ToolOperation::Read, "read").is_ok());
+        assert!(p
+            .enforce_tool_operation(ToolOperation::Read, "read")
+            .is_ok());
     }
     assert_eq!(p.tracker.count(), 0, "reads never consume the budget");
     assert!(!p.is_rate_limited());
     for n in 1..=3 {
-        assert!(p.enforce_tool_operation(ToolOperation::Act, "act").is_ok(), "act {n}");
+        assert!(
+            p.enforce_tool_operation(ToolOperation::Act, "act").is_ok(),
+            "act {n}"
+        );
     }
     assert!(p.is_rate_limited());
-    let err = p.enforce_tool_operation(ToolOperation::Act, "act").unwrap_err();
+    let err = p
+        .enforce_tool_operation(ToolOperation::Act, "act")
+        .unwrap_err();
     assert!(err.contains("Rate limit exceeded"), "{err}");
     assert!(err.contains("3 actions/hour"), "{err}");
 
@@ -264,7 +311,9 @@ fn hourly_rate_limiter_counts_acts_only_and_is_inert_when_disabled() {
         ..SecurityPolicy::default()
     };
     for _ in 0..5 {
-        assert!(off.enforce_tool_operation(ToolOperation::Act, "act").is_ok());
+        assert!(off
+            .enforce_tool_operation(ToolOperation::Act, "act")
+            .is_ok());
     }
     assert!(!off.is_rate_limited());
 }
@@ -278,7 +327,9 @@ fn read_only_tier_blocks_acts_before_the_budget() {
         ..SecurityPolicy::default()
     };
     assert!(!p.can_act());
-    let err = p.enforce_tool_operation(ToolOperation::Act, "write").unwrap_err();
+    let err = p
+        .enforce_tool_operation(ToolOperation::Act, "write")
+        .unwrap_err();
     assert!(err.contains(POLICY_BLOCKED_MARKER), "{err}");
     assert_eq!(p.tracker.count(), 0);
     assert!(p.enforce_write_tier("memory").is_err());

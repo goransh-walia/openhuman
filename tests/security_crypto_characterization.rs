@@ -57,7 +57,10 @@ fn argon2id_aes_gcm_rejects_wrong_password_tamper_and_bad_nonce() {
     let a = &c["argon2_aes_gcm"];
     let salt = unhex(&a["salt"]);
     let wrong = EncryptionKey::derive("not-the-password", &salt).unwrap();
-    assert!(wrong.decrypt(&payload(a)).unwrap_err().contains("Decryption failed"));
+    assert!(wrong
+        .decrypt(&payload(a))
+        .unwrap_err()
+        .contains("Decryption failed"));
 
     let key = EncryptionKey::derive(a["password"].as_str().unwrap(), &salt).unwrap();
     let mut flipped = payload(a);
@@ -69,7 +72,10 @@ fn argon2id_aes_gcm_rejects_wrong_password_tamper_and_bad_nonce() {
     let mut other_salt = salt.clone();
     other_salt[0] ^= 1;
     let rederived = EncryptionKey::derive(a["password"].as_str().unwrap(), &other_salt).unwrap();
-    assert!(rederived.decrypt(&payload(a)).is_err(), "different salt derives a different key");
+    assert!(
+        rederived.decrypt(&payload(a)).is_err(),
+        "different salt derives a different key"
+    );
 }
 
 #[test]
@@ -83,8 +89,15 @@ fn argon2id_aes_gcm_round_trips_and_never_reuses_a_nonce() {
     assert_ne!(a.nonce, b.nonce);
     assert_ne!(a.ciphertext, b.ciphertext);
     assert_eq!(key.decrypt(&a).unwrap(), b"same plaintext");
-    assert!(a.salt.is_empty(), "the salt lives beside the payload, not inside it");
-    assert_eq!(a.ciphertext.len(), "same plaintext".len() + 16, "GCM tag is 16 bytes");
+    assert!(
+        a.salt.is_empty(),
+        "the salt lives beside the payload, not inside it"
+    );
+    assert_eq!(
+        a.ciphertext.len(),
+        "same plaintext".len() + 16,
+        "GCM tag is 16 bytes"
+    );
 }
 
 #[test]
@@ -124,13 +137,19 @@ fn committed_tunnel_frames_open_once_and_replays_are_rejected() {
     let mut client = TunnelCipher::for_role(TunnelRole::Client, &fixture_keys());
     assert_eq!(
         client.open(&frame).unwrap(),
-        c["devices"]["server_frame_plaintext"].as_str().unwrap().as_bytes()
+        c["devices"]["server_frame_plaintext"]
+            .as_str()
+            .unwrap()
+            .as_bytes()
     );
     assert!(client.open(&frame).unwrap_err().contains("replayed nonce"));
 
     // The sealing side cannot open its own direction.
     let mut server = TunnelCipher::for_role(TunnelRole::Server, &fixture_keys());
-    assert!(server.open(&frame).unwrap_err().contains("authentication failed"));
+    assert!(server
+        .open(&frame)
+        .unwrap_err()
+        .contains("authentication failed"));
 }
 
 #[test]
@@ -141,15 +160,24 @@ fn malformed_tunnel_frames_are_rejected_with_distinct_errors() {
     assert!(client.open(&[]).unwrap_err().contains("empty frame"));
     let mut legacy = good.clone();
     legacy[0] = 0x01;
-    assert!(client.open(&legacy).unwrap_err().contains("UnsupportedFrameVersion"));
+    assert!(client
+        .open(&legacy)
+        .unwrap_err()
+        .contains("UnsupportedFrameVersion"));
     let mut unknown = good.clone();
     unknown[0] = 0x7f;
-    assert!(client.open(&unknown).unwrap_err().contains("unsupported frame version"));
+    assert!(client
+        .open(&unknown)
+        .unwrap_err()
+        .contains("unsupported frame version"));
     assert!(client.open(&good[..10]).unwrap_err().contains("too short"));
     let mut tampered = good.clone();
     let last = tampered.len() - 1;
     tampered[last] ^= 1;
-    assert!(client.open(&tampered).unwrap_err().contains("authentication failed"));
+    assert!(client
+        .open(&tampered)
+        .unwrap_err()
+        .contains("authentication failed"));
     // None of the failures consumed the nonce: the intact frame still opens.
     assert!(client.open(&good).is_ok());
 }
@@ -168,7 +196,9 @@ fn x25519_agreement_matches_and_rejects_bad_peers() {
         .unwrap_err()
         .contains("32 bytes"));
     // A low-order point yields an all-zero secret, which must be refused.
-    assert!(a.derive_shared_secret(&base64url_encode(&[0u8; 32])).is_err());
+    assert!(a
+        .derive_shared_secret(&base64url_encode(&[0u8; 32]))
+        .is_err());
     let raw = base64url_decode(&a.pubkey_b64).unwrap();
     assert_eq!(raw.len(), 32);
     assert!(!a.pubkey_b64.contains('='), "unpadded base64url");
@@ -180,8 +210,14 @@ fn encrypted_file_keyring_fixture_bytes_are_unchanged() {
     // seam is test-only). Pinning the digests stops a silent regeneration.
     let c = corpus();
     let digest = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
-    assert_eq!(digest(SECRETS_ENC), c["keyring"]["secrets_enc_sha256"].as_str().unwrap());
-    assert_eq!(digest(ENC2_VALUES), c["keyring"]["enc2_values_sha256"].as_str().unwrap());
+    assert_eq!(
+        digest(SECRETS_ENC),
+        c["keyring"]["secrets_enc_sha256"].as_str().unwrap()
+    );
+    assert_eq!(
+        digest(ENC2_VALUES),
+        c["keyring"]["enc2_values_sha256"].as_str().unwrap()
+    );
     for line in std::str::from_utf8(ENC2_VALUES).unwrap().lines() {
         assert!(line.starts_with("enc2:"));
     }

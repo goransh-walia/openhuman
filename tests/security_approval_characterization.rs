@@ -24,8 +24,7 @@ use openhuman_core::{
     security::{
         approval::{
             gate::ApprovalGate,
-            is_unanswered_approval_reason,
-            store,
+            is_unanswered_approval_reason, store,
             types::{ApprovalDecision, GateOutcome, PendingApproval},
             ApprovalChatContext, FlowRunContext, APPROVAL_CHAT_CONTEXT,
             APPROVAL_COPILOT_STREAM_CONTEXT, APPROVAL_FLOW_RUN_CONTEXT,
@@ -117,7 +116,12 @@ fn assert_window(p: &PendingApproval, expected: i64) {
     );
 }
 
-async fn park_and_approve(tool: &'static str, origin: AgentTurnOrigin, copilot: bool, with_ctx: bool) -> PendingApproval {
+async fn park_and_approve(
+    tool: &'static str,
+    origin: AgentTurnOrigin,
+    copilot: bool,
+    with_ctx: bool,
+) -> PendingApproval {
     let fx = fixture();
     let gate = fx.gate.clone();
     let g = gate.clone();
@@ -148,7 +152,10 @@ async fn main_chat_park_uses_the_600s_window_and_approve_once_allows() {
     let _lock = env_guard::env_lock_async().await;
     let pending = park_and_approve("char_ttl_default", web_origin(), false, true).await;
     assert_window(&pending, 600);
-    assert!(pending.source_context.is_none(), "chat parks carry no flow context");
+    assert!(
+        pending.source_context.is_none(),
+        "chat parks carry no flow context"
+    );
     // A decided row leaves the pending list and lands in the audit list.
     assert!(fixture()
         .gate
@@ -179,12 +186,17 @@ async fn detached_subagent_park_is_clamped_to_180s_and_marked_detached() {
     let gate = fx.gate.clone();
     let g = gate.clone();
     let handle = tokio::spawn(async move {
-        turn_origin::with_origin(web_origin(), g.intercept("char_ttl_subagent", "child", json!({}))).await
+        turn_origin::with_origin(
+            web_origin(),
+            g.intercept("char_ttl_subagent", "child", json!({})),
+        )
+        .await
     });
     let pending = wait_pending(&gate, "char_ttl_subagent").await;
     assert_window(&pending, 180);
     assert!(gate.request_is_detached(&pending.request_id));
-    gate.decide(&pending.request_id, ApprovalDecision::Deny).unwrap();
+    gate.decide(&pending.request_id, ApprovalDecision::Deny)
+        .unwrap();
     assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
 }
 
@@ -196,7 +208,10 @@ async fn unanswered_park_expires_fail_closed_with_the_unanswered_reason() {
     std::env::set_var("OPENHUMAN_APPROVAL_TTL_SECS", "1");
     let outcome = turn_origin::with_origin(
         web_origin(),
-        APPROVAL_CHAT_CONTEXT.scope(chat_ctx(), fx.gate.intercept("char_expiry", "wait", json!({}))),
+        APPROVAL_CHAT_CONTEXT.scope(
+            chat_ctx(),
+            fx.gate.intercept("char_expiry", "wait", json!({})),
+        ),
     )
     .await;
     std::env::remove_var("OPENHUMAN_APPROVAL_TTL_SECS");
@@ -208,7 +223,11 @@ async fn unanswered_park_expires_fail_closed_with_the_unanswered_reason() {
         other => panic!("an unanswered park must deny, got {other:?}"),
     }
     assert!(
-        fx.gate.list_pending().unwrap().iter().all(|p| p.tool_name != "char_expiry"),
+        fx.gate
+            .list_pending()
+            .unwrap()
+            .iter()
+            .all(|p| p.tool_name != "char_expiry"),
         "an expired park is no longer actionable"
     );
 }
@@ -243,9 +262,13 @@ async fn pending_rows_survive_restart_and_expired_rows_fail_closed() {
         "rows past their expiry never reappear as actionable"
     );
     assert!(
-        store::decide(&restarted, "char-restart-stale", ApprovalDecision::ApproveOnce)
-            .unwrap()
-            .is_none(),
+        store::decide(
+            &restarted,
+            "char-restart-stale",
+            ApprovalDecision::ApproveOnce
+        )
+        .unwrap()
+        .is_none(),
         "deciding an expired row must not approve it"
     );
     let decided = store::decide(&restarted, "char-restart-live", ApprovalDecision::Deny)
@@ -262,7 +285,8 @@ async fn cron_and_unknown_origins_deny_external_effects_without_a_row() {
         job_id: "cron-char".into(),
         source: TrustedAutomationSource::Cron,
     };
-    let outcome = turn_origin::with_origin(cron, fx.gate.intercept("char_cron", "post", json!({}))).await;
+    let outcome =
+        turn_origin::with_origin(cron, fx.gate.intercept("char_cron", "post", json!({}))).await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
     let outcome = turn_origin::with_origin(
         AgentTurnOrigin::Unknown,
@@ -270,12 +294,18 @@ async fn cron_and_unknown_origins_deny_external_effects_without_a_row() {
     )
     .await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
-    assert!(fx.gate.list_pending().unwrap().iter().all(|p| p.tool_name != "char_cron"));
+    assert!(fx
+        .gate
+        .list_pending()
+        .unwrap()
+        .iter()
+        .all(|p| p.tool_name != "char_cron"));
 
     // Local, user-driven origins pass without a prompt.
     for origin in [AgentTurnOrigin::Cli] {
         let outcome =
-            turn_origin::with_origin(origin, fx.gate.intercept("char_cron", "local", json!({}))).await;
+            turn_origin::with_origin(origin, fx.gate.intercept("char_cron", "local", json!({})))
+                .await;
         assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
     }
 }
@@ -284,8 +314,11 @@ async fn cron_and_unknown_origins_deny_external_effects_without_a_row() {
 async fn forced_intercept_fails_closed_without_a_routable_web_origin() {
     let _lock = env_guard::env_lock_async().await;
     let fx = fixture();
-    let outcome =
-        turn_origin::with_origin(AgentTurnOrigin::Cli, fx.gate.intercept_forced("char_forced", "x", json!({}))).await;
+    let outcome = turn_origin::with_origin(
+        AgentTurnOrigin::Cli,
+        fx.gate.intercept_forced("char_forced", "x", json!({})),
+    )
+    .await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
 }
 
@@ -312,7 +345,12 @@ async fn auto_approve_all_allows_without_parking_and_writes_no_audit_row_today()
     let fx = fixture();
     let outcome = bypass_outcome_with_auto_approve_all("char_auto_all").await;
     assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
-    assert!(fx.gate.list_pending().unwrap().iter().all(|p| p.tool_name != "char_auto_all"));
+    assert!(fx
+        .gate
+        .list_pending()
+        .unwrap()
+        .iter()
+        .all(|p| p.tool_name != "char_auto_all"));
     let audit = store::list_recent_decisions(&fx.config, 500).unwrap();
     assert!(
         audit.iter().all(|e| e.tool_name != "char_auto_all"),
@@ -321,7 +359,10 @@ async fn auto_approve_all_allows_without_parking_and_writes_no_audit_row_today()
     // The unknown-origin exclusion still holds with the bypass on.
     let ws = fx.config.workspace_dir.clone();
     live_policy::install(
-        Arc::new(SecurityPolicy { auto_approve_all: true, ..SecurityPolicy::default() }),
+        Arc::new(SecurityPolicy {
+            auto_approve_all: true,
+            ..SecurityPolicy::default()
+        }),
         ws.clone(),
         ws.clone(),
     );
@@ -357,7 +398,8 @@ async fn flow_trust_is_scoped_to_the_exact_flow_and_tool() {
     // A trust root (require_approval false) runs without a prompt or a row.
     let outcome = turn_origin::with_origin(
         flow_origin("flow-root", false),
-        fx.gate.intercept("char_flow_tool", "pre-declared", json!({})),
+        fx.gate
+            .intercept("char_flow_tool", "pre-declared", json!({})),
     )
     .await;
     assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
@@ -377,24 +419,40 @@ async fn flow_trust_is_scoped_to_the_exact_flow_and_tool() {
     };
     let allowed = turn_origin::with_origin(
         flow_origin("flow-trusted", true),
-        APPROVAL_FLOW_RUN_CONTEXT.scope(ctx(), fx.gate.intercept("char_flow_tool", "trusted", json!({}))),
+        APPROVAL_FLOW_RUN_CONTEXT.scope(
+            ctx(),
+            fx.gate.intercept("char_flow_tool", "trusted", json!({})),
+        ),
     )
     .await;
     assert!(matches!(allowed, GateOutcome::Allow), "{allowed:?}");
-    assert!(fx.gate.list_pending().unwrap().iter().all(|p| p.tool_name != "char_flow_tool"));
+    assert!(fx
+        .gate
+        .list_pending()
+        .unwrap()
+        .iter()
+        .all(|p| p.tool_name != "char_flow_tool"));
 
     // A different tool on the trusted flow still parks (and here is denied).
     let g = fx.gate.clone();
     let handle = tokio::spawn(async move {
         turn_origin::with_origin(
             flow_origin("flow-trusted", true),
-            APPROVAL_FLOW_RUN_CONTEXT.scope(ctx(), g.intercept("char_flow_other", "untrusted", json!({}))),
+            APPROVAL_FLOW_RUN_CONTEXT.scope(
+                ctx(),
+                g.intercept("char_flow_other", "untrusted", json!({})),
+            ),
         )
         .await
     });
     let pending = wait_pending(&fx.gate, "char_flow_other").await;
-    assert!(pending.source_context.is_some(), "flow parks carry flow/run context");
-    fx.gate.decide(&pending.request_id, ApprovalDecision::Deny).unwrap();
+    assert!(
+        pending.source_context.is_some(),
+        "flow parks carry flow/run context"
+    );
+    fx.gate
+        .decide(&pending.request_id, ApprovalDecision::Deny)
+        .unwrap();
     assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
 
     // Revocation removes the grant.
@@ -406,9 +464,23 @@ async fn flow_trust_is_scoped_to_the_exact_flow_and_tool() {
 async fn flow_preauthorization_lands_in_the_audit_list_not_pending() {
     let _lock = env_guard::env_lock_async().await;
     let fx = fixture();
-    store::record_flow_preauthorization(&fx.config, "flow-pre", "char_pre_tool", "session-approval-characterization").unwrap();
-    assert!(fx.gate.list_pending().unwrap().iter().all(|p| p.tool_name != "char_pre_tool"));
+    store::record_flow_preauthorization(
+        &fx.config,
+        "flow-pre",
+        "char_pre_tool",
+        "session-approval-characterization",
+    )
+    .unwrap();
+    assert!(fx
+        .gate
+        .list_pending()
+        .unwrap()
+        .iter()
+        .all(|p| p.tool_name != "char_pre_tool"));
     let audit = store::list_recent_decisions(&fx.config, 500).unwrap();
-    let row = audit.iter().find(|e| e.tool_name == "char_pre_tool").expect("audited");
+    let row = audit
+        .iter()
+        .find(|e| e.tool_name == "char_pre_tool")
+        .expect("audited");
     assert_eq!(row.decision, ApprovalDecision::ApproveAlwaysForFlow);
 }

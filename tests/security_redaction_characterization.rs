@@ -25,16 +25,26 @@ fn outputs(input: &str) -> Vec<(&'static str, String)> {
     // The denial log is process-global and read back as "the latest entry".
     static DENIAL_LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _serial = DENIAL_LOG.lock().unwrap_or_else(|e| e.into_inner());
-    let approval = openhuman_core::security::approval::redact::redact_args(&json!({"payload": input}));
+    let approval =
+        openhuman_core::security::approval::redact::redact_args(&json!({"payload": input}));
     tinytools::registry::denials::record("characterization", "test", "blocked", input);
     let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
     vec![
         ("denials", denial),
         ("prefix", openhuman_core::security::redact(input)),
         ("identity_hash", openhuman_core::util::redact::redact(input)),
-        ("log", openhuman_core::core::log_redaction::scrub_secrets(input)),
-        ("host_scrub", openhuman_core::security::scrub::sanitize_text(input).value),
-        ("approval", approval["payload"].as_str().unwrap().to_string()),
+        (
+            "log",
+            openhuman_core::core::log_redaction::scrub_secrets(input),
+        ),
+        (
+            "host_scrub",
+            openhuman_core::security::scrub::sanitize_text(input).value,
+        ),
+        (
+            "approval",
+            approval["payload"].as_str().unwrap().to_string(),
+        ),
         ("pii", tinymemory_api::safety::redact_identifiers(input)),
     ]
 }
@@ -156,7 +166,11 @@ fn known_missed_secret_gaps_are_recorded_exactly() {
 #[should_panic(expected = "DESIRED-RED")]
 fn desired_every_required_sink_removes_every_secret_and_pii_shape() {
     let gaps = known_gaps();
-    assert!(gaps.is_empty(), "DESIRED-RED: {} missed-secret cases: {gaps:?}", gaps.len());
+    assert!(
+        gaps.is_empty(),
+        "DESIRED-RED: {} missed-secret cases: {gaps:?}",
+        gaps.len()
+    );
 }
 
 /// DESIRED: URL helpers drop secret query values, not just userinfo.
@@ -180,7 +194,10 @@ fn ordinary_text_is_never_redacted_by_the_log_scrubber() {
     let outs = outputs("hello world");
     for (name, out) in outs {
         if matches!(name, "log" | "host_scrub" | "denials") {
-            assert!(out.contains("hello world"), "{name} mangled ordinary text: {out}");
+            assert!(
+                out.contains("hello world"),
+                "{name} mangled ordinary text: {out}"
+            );
         }
     }
 }

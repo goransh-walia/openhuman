@@ -25,11 +25,18 @@ use openhuman_core::{
 const ACTION: &str = "/work/action";
 const STATE: &str = "/work/state";
 
-fn resolve(mode: SandboxMode, runtime: &RuntimeConfig, remote: bool) -> openhuman_core::sandbox::SandboxPolicy {
+fn resolve(
+    mode: SandboxMode,
+    runtime: &RuntimeConfig,
+    remote: bool,
+) -> openhuman_core::sandbox::SandboxPolicy {
     resolve_sandbox_policy(mode, Path::new(ACTION), Path::new(STATE), runtime, remote)
 }
 
-async fn scratch_config(backend: SandboxBackend, enabled: Option<bool>) -> (tempfile::TempDir, Config) {
+async fn scratch_config(
+    backend: SandboxBackend,
+    enabled: Option<bool>,
+) -> (tempfile::TempDir, Config) {
     let dir = tempfile::tempdir().unwrap();
     let mut config = Config::default();
     config.workspace_dir = dir.path().to_path_buf();
@@ -52,13 +59,62 @@ fn policy_matrix_without_host_override() {
     };
     // (mode, runtime, remote) -> (backend, allow_network, docker overrides present)
     let cases = [
-        (SandboxMode::None, &local, false, SandboxBackendKind::None, true, false),
-        (SandboxMode::None, &local, true, SandboxBackendKind::None, true, false),
-        (SandboxMode::ReadOnly, &local, false, SandboxBackendKind::None, true, false),
-        (SandboxMode::Sandboxed, &local, false, SandboxBackendKind::Local, true, false),
-        (SandboxMode::Sandboxed, &local, true, SandboxBackendKind::Docker, false, true),
-        (SandboxMode::Sandboxed, &docker, false, SandboxBackendKind::Docker, true, true),
-        (SandboxMode::Sandboxed, &docker, true, SandboxBackendKind::Docker, false, true),
+        (
+            SandboxMode::None,
+            &local,
+            false,
+            SandboxBackendKind::None,
+            true,
+            false,
+        ),
+        (
+            SandboxMode::None,
+            &local,
+            true,
+            SandboxBackendKind::None,
+            true,
+            false,
+        ),
+        (
+            SandboxMode::ReadOnly,
+            &local,
+            false,
+            SandboxBackendKind::None,
+            true,
+            false,
+        ),
+        (
+            SandboxMode::Sandboxed,
+            &local,
+            false,
+            SandboxBackendKind::Local,
+            true,
+            false,
+        ),
+        (
+            SandboxMode::Sandboxed,
+            &local,
+            true,
+            SandboxBackendKind::Docker,
+            false,
+            true,
+        ),
+        (
+            SandboxMode::Sandboxed,
+            &docker,
+            false,
+            SandboxBackendKind::Docker,
+            true,
+            true,
+        ),
+        (
+            SandboxMode::Sandboxed,
+            &docker,
+            true,
+            SandboxBackendKind::Docker,
+            false,
+            true,
+        ),
     ];
     for (mode, runtime, remote, backend, network, overrides) in cases {
         let policy = resolve(mode, runtime, remote);
@@ -68,7 +124,10 @@ fn policy_matrix_without_host_override() {
         assert_eq!(policy.docker_overrides.is_some(), overrides, "{label}");
         assert_eq!(policy.workspace_root, Path::new(ACTION), "{label}");
         assert_eq!(policy.state_dir, Path::new(STATE), "{label}");
-        assert!(policy.read_only_mounts.is_empty() && policy.read_write_mounts.is_empty(), "{label}");
+        assert!(
+            policy.read_only_mounts.is_empty() && policy.read_write_mounts.is_empty(),
+            "{label}"
+        );
     }
 }
 
@@ -79,8 +138,15 @@ fn env_passthrough_is_the_pinned_safe_allowlist() {
         policy.env_passthrough,
         ["PATH", "HOME", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "USER", "SHELL", "TMPDIR"]
     );
-    for secret in ["AWS_SECRET_ACCESS_KEY", "OPENHUMAN_CORE_TOKEN", "GITHUB_TOKEN"] {
-        assert!(!policy.env_passthrough.iter().any(|v| v == secret), "{secret}");
+    for secret in [
+        "AWS_SECRET_ACCESS_KEY",
+        "OPENHUMAN_CORE_TOKEN",
+        "GITHUB_TOKEN",
+    ] {
+        assert!(
+            !policy.env_passthrough.iter().any(|v| v == secret),
+            "{secret}"
+        );
     }
 }
 
@@ -112,26 +178,44 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
     {
         let _off = env_guard::EnvVarGuard::unset("OPENHUMAN_SANDBOX");
         assert!(!command_requires_sandbox(None).await.unwrap());
-        assert!(!command_requires_sandbox(Some(SandboxMode::None)).await.unwrap());
-        assert!(!command_requires_sandbox(Some(SandboxMode::ReadOnly)).await.unwrap());
-        assert!(command_requires_sandbox(Some(SandboxMode::Sandboxed)).await.unwrap());
+        assert!(!command_requires_sandbox(Some(SandboxMode::None))
+            .await
+            .unwrap());
+        assert!(!command_requires_sandbox(Some(SandboxMode::ReadOnly))
+            .await
+            .unwrap());
+        assert!(command_requires_sandbox(Some(SandboxMode::Sandboxed))
+            .await
+            .unwrap());
     }
     // The host off switch beats the agent's own request.
     {
         let _off = env_guard::EnvVarGuard::set("OPENHUMAN_SANDBOX", "off");
-        assert!(!command_requires_sandbox(Some(SandboxMode::Sandboxed)).await.unwrap());
+        assert!(!command_requires_sandbox(Some(SandboxMode::Sandboxed))
+            .await
+            .unwrap());
     }
     drop(_ws);
     drop(dir);
 
     // An explicit operator backend requires a sandbox even for a default agent...
-    for backend in [SandboxBackend::Landlock, SandboxBackend::Firejail, SandboxBackend::Bubblewrap, SandboxBackend::Docker] {
+    for backend in [
+        SandboxBackend::Landlock,
+        SandboxBackend::Firejail,
+        SandboxBackend::Bubblewrap,
+        SandboxBackend::Docker,
+    ] {
         let label = format!("{backend:?}");
         let (dir, _config) = scratch_config(backend, None).await;
         let _ws = env_guard::EnvVarGuard::set_path("OPENHUMAN_WORKSPACE", dir.path());
         let _off = env_guard::EnvVarGuard::unset("OPENHUMAN_SANDBOX");
         assert!(command_requires_sandbox(None).await.unwrap(), "{label}");
-        assert!(command_requires_sandbox(Some(SandboxMode::None)).await.unwrap(), "{label}");
+        assert!(
+            command_requires_sandbox(Some(SandboxMode::None))
+                .await
+                .unwrap(),
+            "{label}"
+        );
     }
 
     // ...unless the legacy `enabled = false` flag turns isolation off.
@@ -144,7 +228,12 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
 #[tokio::test]
 async fn backend_handles_report_a_defined_status() {
     let _lock = env_guard::env_lock_async().await;
-    let none = create_sandbox_backend(&resolve(SandboxMode::None, &RuntimeConfig::default(), false)).await;
+    let none = create_sandbox_backend(&resolve(
+        SandboxMode::None,
+        &RuntimeConfig::default(),
+        false,
+    ))
+    .await;
     assert_eq!(none.kind, SandboxBackendKind::None);
     assert_eq!(none.status, SandboxStatus::Ready);
     assert!(none.backend_id.is_none());
@@ -152,7 +241,12 @@ async fn backend_handles_report_a_defined_status() {
     // The local jail is Ready where the OS provides one that is suitable for
     // untrusted code and Inactive otherwise (the Noop floor); never Error and
     // never silently Ready without a jail.
-    let local = create_sandbox_backend(&resolve(SandboxMode::Sandboxed, &RuntimeConfig::default(), false)).await;
+    let local = create_sandbox_backend(&resolve(
+        SandboxMode::Sandboxed,
+        &RuntimeConfig::default(),
+        false,
+    ))
+    .await;
     assert_eq!(local.kind, SandboxBackendKind::Local);
     assert!(
         matches!(local.status, SandboxStatus::Ready | SandboxStatus::Inactive),
