@@ -84,7 +84,7 @@ pub fn build_runtime_tools(config: &Config) -> Result<Vec<Box<dyn Tool>>, String
     ));
     // Phase 1 of #1401: see comment in channels/runtime/startup.rs.
     let audit = crate::security::get_or_create_workspace_audit_logger(
-        crate::config::AuditConfig::default(),
+        config.security.audit.clone(),
         config.workspace_dir.clone(),
     )
     .map_err(|e| e.to_string())?;

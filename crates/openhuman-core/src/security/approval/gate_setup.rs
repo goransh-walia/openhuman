@@ -13,7 +13,14 @@ impl ApprovalGate {
         if let Some(existing) = GLOBAL_GATE.get() {
             return existing.clone();
         }
-        let gate = Arc::new(ApprovalGate::new(config, session_id, DEFAULT_APPROVAL_TTL));
+        let ttl = config
+            .security
+            .approval
+            .ttl_secs
+            .filter(|secs| *secs > 0)
+            .map(Duration::from_secs)
+            .unwrap_or(DEFAULT_APPROVAL_TTL);
+        let gate = Arc::new(ApprovalGate::new(config, session_id, ttl));
         let _ = GLOBAL_GATE.set(gate.clone());
         GLOBAL_GATE.get().cloned().unwrap_or(gate)
     }
