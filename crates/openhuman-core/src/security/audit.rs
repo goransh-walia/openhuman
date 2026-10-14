@@ -281,10 +281,15 @@ impl AuditLogger {
         // race on rotation renames.
         let _guard = self.write_lock.lock();
         self.rotate_if_needed()?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.log_path)?;
+        let mut opts = OpenOptions::new();
+        opts.create(true).append(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            // Owner-only: audit rows name commands and paths.
+            opts.mode(0o600);
+        }
+        let mut file = opts.open(&self.log_path)?;
 
         writeln!(file, "{}", line)?;
         file.sync_all()?;

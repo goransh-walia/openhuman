@@ -196,6 +196,10 @@ fn audit_log_file_is_owner_only() -> Result<()> {
     let mode = std::fs::metadata(tmp.path().join("audit.log"))?
         .permissions()
         .mode();
-    assert_eq!(mode & 0o077, 0, "audit log must not be group/world accessible, mode={mode:o}");
+    assert_eq!(
+        mode & 0o077,
+        0,
+        "audit log must not be group/world accessible, mode={mode:o}"
+    );
     Ok(())
 }
