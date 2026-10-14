@@ -8,7 +8,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tinybus::{Message, MessageKind, ModuleRuntime};
+use tinybus::module::ModuleRuntime;
+use tinybus::{Message, MessageKind};
 use tinysecurity_bus::{names, PolicyChanged};
 
 static WATCHING: AtomicBool = AtomicBool::new(false);

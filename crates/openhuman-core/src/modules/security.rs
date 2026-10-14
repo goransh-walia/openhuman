@@ -128,6 +128,7 @@ async fn proxy(config: &Config, state: &mut ClientState) -> Result<tinybus::Prox
     state.generation = Some(info.generation);
     state.info = Some(info);
     state.proxy = Some(proxy.clone());
+    super::security_watch::ensure_watching(runtime, record.bus_name);
     Ok(proxy)
 }
 
@@ -517,3 +518,4 @@ pub(crate) mod policy_translation;
 
 #[path = "security_scoped.rs"]
 pub(crate) mod scoped_client;
+

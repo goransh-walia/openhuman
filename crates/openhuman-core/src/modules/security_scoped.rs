@@ -427,6 +427,13 @@ pub(crate) async fn policy_changed(event: &PolicyChanged) {
     scoped().lock().await.cache.invalidate(event);
 }
 
+/// A lagged or lost signal stream cannot say what it missed: drop everything.
+pub(crate) async fn flush_all() {
+    let mut scoped = scoped().lock().await;
+    scoped.cache.observe(0);
+    scoped.cache.entries.clear();
+}
+
 #[cfg(test)]
 #[path = "security_scoped_tests.rs"]
 mod tests;
