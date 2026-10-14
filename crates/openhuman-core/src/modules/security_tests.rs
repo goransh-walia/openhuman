@@ -40,6 +40,9 @@ fn effective_policy_must_match_config_and_supply_all_required_capabilities() {
         generation: 1,
         policy: config.policy.clone(),
         capabilities: names::METHODS.iter().map(|s| (*s).into()).collect(),
+        judge: None,
+        callbacks: Default::default(),
+        scoped_policies: 0,
     };
     assert!(validate_info(&info, &config).is_ok());
     info.policy.enabled = true;
