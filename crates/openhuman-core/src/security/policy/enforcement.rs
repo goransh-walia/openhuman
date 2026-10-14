@@ -274,6 +274,16 @@ impl SecurityPolicy {
         }
     }
 
+    /// Build the policy from the whole [`Config`]: autonomy, workspace roots and
+    /// the `[privacy]` mode together, so the egress posture is never silently
+    /// `Standard`. Prefer this over [`from_config`](Self::from_config) wherever a
+    /// `Config` is in hand.
+    #[must_use]
+    pub fn from_full_config(config: &crate::config::Config) -> Self {
+        Self::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
+            .with_privacy_mode(config.privacy.mode)
+    }
+
     /// Return a copy of this policy with `privacy_mode` set. Used by the live-
     /// policy install / reload chokepoints to layer `config.privacy.mode` onto a
     /// policy that [`from_config`](Self::from_config) built with the `Standard`

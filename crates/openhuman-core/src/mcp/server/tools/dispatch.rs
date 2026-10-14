@@ -178,7 +178,7 @@ async fn enforce_read_policy(tool_name: &str) -> Result<(), ToolCallError> {
         }
     };
     let policy =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_full_config(&config);
     // A policy denial *is* something the caller can act on (toggle autonomy,
     // approve the tool) — keep that as `InvalidParams` so clients surface the
     // reason text instead of a generic internal-error banner.
@@ -200,7 +200,7 @@ async fn enforce_act_policy(tool_name: &str) -> Result<(), ToolCallError> {
         }
     };
     let policy =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_full_config(&config);
     policy
         .enforce_tool_operation(ToolOperation::Act, tool_name)
         .map_err(ToolCallError::InvalidParams)
