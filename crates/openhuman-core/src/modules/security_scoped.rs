@@ -116,13 +116,15 @@ struct ScopedState {
 }
 
 fn scoped() -> &'static tokio::sync::Mutex<ScopedState> {
-    static STATE: std::sync::OnceLock<tokio::sync::Mutex<ScopedState>> =
-        std::sync::OnceLock::new();
+    static STATE: std::sync::OnceLock<tokio::sync::Mutex<ScopedState>> = std::sync::OnceLock::new();
     STATE.get_or_init(|| tokio::sync::Mutex::new(ScopedState::default()))
 }
 
 fn subject_key(subject: &SubjectScope) -> String {
-    format!("{}\u{1f}{}\u{1f}{}", subject.user, subject.workspace, subject.agent)
+    format!(
+        "{}\u{1f}{}\u{1f}{}",
+        subject.user, subject.workspace, subject.agent
+    )
 }
 
 fn digest(parts: &[&[u8]]) -> String {
@@ -166,10 +168,7 @@ fn validate_scoped(
     fingerprint: &str,
     active: &ActivePolicy,
 ) -> Result<(), String> {
-    if generation == 0
-        || policy_generation != active.policy_generation
-        || fingerprint.len() != 64
-    {
+    if generation == 0 || policy_generation != active.policy_generation || fingerprint.len() != 64 {
         return Err("TinySecurity scoped response generation or fingerprint mismatch".into());
     }
     Ok(())
@@ -229,7 +228,11 @@ pub(crate) async fn activate(
         Some(id) => id,
         None => {
             let id = register_command_policy(&proxy, command).await?;
-            scoped().lock().await.commands.insert(command_key, id.clone());
+            scoped()
+                .lock()
+                .await
+                .commands
+                .insert(command_key, id.clone());
             id
         }
     };
@@ -365,7 +368,12 @@ pub(crate) async fn check_scoped(
         &response.fingerprint,
         active,
     )?;
-    if response.decisions.len() != count || response.decisions.iter().any(|d| d.generation != generation) {
+    if response.decisions.len() != count
+        || response
+            .decisions
+            .iter()
+            .any(|d| d.generation != generation)
+    {
         return Err("TinySecurity scoped batch response mismatch".into());
     }
     Ok(response)

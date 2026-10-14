@@ -29,7 +29,9 @@ pub(crate) fn subject_scope(
 ) -> Result<SubjectScope, String> {
     let user = match (&tenant.profile, saas) {
         (Some(profile), _) if !profile.trim().is_empty() => profile.clone(),
-        (_, true) => return Err("TinySecurity SaaS policy requires an authenticated profile".into()),
+        (_, true) => {
+            return Err("TinySecurity SaaS policy requires an authenticated profile".into())
+        }
         _ => "local".to_owned(),
     };
     Ok(SubjectScope {
@@ -153,12 +155,12 @@ pub(crate) fn tool_rules(config: &Config) -> ToolRuleTranslation {
             _ => None,
         };
         match (effect, exact_names(rule)) {
-            (Some(effect), Some(names)) => out.rules.extend(names.into_iter().map(|tool| {
-                ToolRule {
+            (Some(effect), Some(names)) => {
+                out.rules.extend(names.into_iter().map(|tool| ToolRule {
                     tool: tool.to_owned(),
                     effect,
-                }
-            })),
+                }))
+            }
             _ => out.host_only += 1,
         }
     }
