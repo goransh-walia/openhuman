@@ -313,12 +313,12 @@ impl SecurityPolicy {
     /// Validate a path for file I/O: string checks, canonicalize, workspace containment,
     /// and forbidden-path check on the resolved path.
     /// Returns the canonical `PathBuf` on success.
-    #[cfg(all(feature = "security-module", not(test)))]
+    #[cfg(feature = "security-module")]
     pub async fn validate_path(&self, path: &str) -> Result<PathBuf, String> {
         self.validate_native_path(path, false).await
     }
 
-    #[cfg(any(test, not(feature = "security-module")))]
+    #[cfg(not(feature = "security-module"))]
     pub async fn validate_path(&self, path: &str) -> Result<PathBuf, String> {
         if !self.is_path_string_allowed(path) {
             return Err(format!(
@@ -356,12 +356,12 @@ impl SecurityPolicy {
     /// Does NOT require the parent directory to exist — walks up to the deepest
     /// existing ancestor and checks that for symlink escapes.
     /// Returns the canonical full path (parent resolved + filename appended).
-    #[cfg(all(feature = "security-module", not(test)))]
+    #[cfg(feature = "security-module")]
     pub async fn validate_parent_path(&self, path: &str) -> Result<PathBuf, String> {
         self.validate_native_path(path, true).await
     }
 
-    #[cfg(any(test, not(feature = "security-module")))]
+    #[cfg(not(feature = "security-module"))]
     pub async fn validate_parent_path(&self, path: &str) -> Result<PathBuf, String> {
         if !self.is_path_string_allowed(path) {
             return Err(format!(
@@ -576,7 +576,7 @@ impl SecurityPolicy {
     /// Check `resolved` against every entry in `forbidden_paths`, resolving relative
     /// entries against `workspace_root`. Absolute entries whose prefix IS the workspace
     /// root are skipped — the workspace containment check already covers them.
-    #[cfg(any(test, not(feature = "security-module")))]
+    #[cfg(not(feature = "security-module"))]
     pub(super) fn check_resolved_against_forbidden(
         &self,
         resolved: &Path,

@@ -232,6 +232,16 @@ async fn validate_parent_path_blocks_forbidden_path() {
 
 // ── tilde expansion in validate_path / validate_parent_path ──────────────────
 
+/// The native module reports one uniform `policy-blocked` denial; the legacy
+/// evaluator names the escape. Both deny, so assert whichever the build uses.
+fn denied_outside_workspace(err: &str, legacy_text: &str) -> bool {
+    if cfg!(feature = "security-module") {
+        err.contains(tinytools::status::POLICY_BLOCKED_MARKER)
+    } else {
+        err.contains(legacy_text)
+    }
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn validate_path_expands_tilde_before_workspace_join() {
@@ -257,7 +267,7 @@ async fn validate_path_expands_tilde_before_workspace_join() {
         .unwrap_err();
     let _ = std::fs::remove_file(&target);
     assert!(
-        err.contains("Resolved path escapes workspace"),
+        denied_outside_workspace(&err, "Resolved path escapes workspace"),
         "expected workspace-escape error (tilde correctly expanded); got: {err}"
     );
 }
@@ -281,7 +291,7 @@ async fn validate_parent_path_expands_tilde_before_workspace_join() {
         .await
         .unwrap_err();
     assert!(
-        err.contains("Resolved parent path escapes workspace"),
+        denied_outside_workspace(&err, "Resolved parent path escapes workspace"),
         "expected workspace-escape error (tilde correctly expanded); got: {err}"
     );
 }
@@ -320,7 +330,10 @@ async fn trusted_read_root_blocks_write() {
         .validate_parent_path(target.to_str().unwrap())
         .await
         .expect_err("write into a read-only trusted root must be rejected");
-    assert!(err.contains("escapes workspace"), "got: {err}");
+    assert!(
+        denied_outside_workspace(&err, "escapes workspace"),
+        "got: {err}"
+    );
 }
 
 #[tokio::test]
@@ -538,7 +551,7 @@ fn from_config_does_not_duplicate_user_granted_projects_root() {
 /// that result. This test pins the contract: the cell starts empty, is
 /// populated after the first `validate_path` call, and stays populated (same
 /// value) across subsequent calls — i.e. only one canonicalize per policy.
-#[cfg(any(test, not(feature = "security-module")))]
+#[cfg(not(feature = "security-module"))]
 #[tokio::test]
 async fn validate_path_caches_canonical_workspace_root() {
     let tmp = tempfile::tempdir().unwrap();
@@ -658,7 +671,7 @@ async fn workspace_root_sync_hydrates_and_shares_the_async_cache() {
 /// `validate_parent_path` shares the same cache as `validate_path` — both go
 /// through `workspace_root()`. Hydrating via either entry point must be
 /// observable from the other.
-#[cfg(any(test, not(feature = "security-module")))]
+#[cfg(not(feature = "security-module"))]
 #[tokio::test]
 async fn validate_parent_path_uses_same_cache_as_validate_path() {
     let tmp = tempfile::tempdir().unwrap();
