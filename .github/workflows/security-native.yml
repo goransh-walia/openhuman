@@ -1,6 +1,5 @@
 # Released-artifact integration checks: the fixture loads the published
 # archive through the compiled registry digest (see security-native-fixture.sh).
-# separate requirement before the dependent migration is ready to ship.
 name: Security Native
 
 on:
