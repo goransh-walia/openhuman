@@ -24,6 +24,13 @@ pub(super) struct NativeFixture {
 }
 
 pub(super) async fn native_fixture() -> NativeFixture {
+    native_fixture_with(None).await
+}
+
+/// As [`native_fixture`], with the init-only confidential crypto surface.
+pub(super) async fn native_fixture_with(
+    crypto: Option<tinysecurity_bus::CryptoConfig2>,
+) -> NativeFixture {
     let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
     std::fs::create_dir_all(&target).unwrap();
     let fixture_root = std::env::var_os("OPENHUMAN_TEST_SECURITY_FIXTURE_DIR")
@@ -48,6 +55,7 @@ pub(super) async fn native_fixture() -> NativeFixture {
         .unwrap();
     let configuration = serde_json::to_value(ModuleConfig {
         trusted_host: client.unique_name().map(|name| name.to_string()),
+        crypto,
         ..ModuleConfig::default()
     })
     .unwrap();
