@@ -119,7 +119,7 @@ pub use runtime::{
 pub use runtime_local_jail::LocalJailConfig;
 pub use scheduler_gate::{PauseReason, Policy, SchedulerGateConfig, SchedulerGateMode};
 pub use security::{
-    ApprovalSettings, AuditConfig, ResourceLimitsConfig, SandboxBackend, SandboxConfig,
+    ApprovalSettings, AuditConfig, AutoApproveSettings, JudgeSettings, ResourceLimitsConfig, SandboxBackend, SandboxConfig,
     SecurityConfig,
 };
 pub use task_sources::TaskSourcesConfig;
