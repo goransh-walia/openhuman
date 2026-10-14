@@ -232,6 +232,16 @@ async fn validate_parent_path_blocks_forbidden_path() {
 
 // ── tilde expansion in validate_path / validate_parent_path ──────────────────
 
+/// The native module reports one uniform `policy-blocked` denial; the legacy
+/// evaluator names the escape. Both deny, so assert whichever the build uses.
+fn denied_outside_workspace(err: &str, legacy_text: &str) -> bool {
+    if cfg!(feature = "security-module") {
+        err.contains(POLICY_BLOCKED_MARKER)
+    } else {
+        err.contains(legacy_text)
+    }
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn validate_path_expands_tilde_before_workspace_join() {
@@ -257,7 +267,7 @@ async fn validate_path_expands_tilde_before_workspace_join() {
         .unwrap_err();
     let _ = std::fs::remove_file(&target);
     assert!(
-        err.contains("Resolved path escapes workspace"),
+        denied_outside_workspace(&err, "Resolved path escapes workspace"),
         "expected workspace-escape error (tilde correctly expanded); got: {err}"
     );
 }
@@ -281,7 +291,7 @@ async fn validate_parent_path_expands_tilde_before_workspace_join() {
         .await
         .unwrap_err();
     assert!(
-        err.contains("Resolved parent path escapes workspace"),
+        denied_outside_workspace(&err, "Resolved parent path escapes workspace"),
         "expected workspace-escape error (tilde correctly expanded); got: {err}"
     );
 }
@@ -320,7 +330,7 @@ async fn trusted_read_root_blocks_write() {
         .validate_parent_path(target.to_str().unwrap())
         .await
         .expect_err("write into a read-only trusted root must be rejected");
-    assert!(err.contains("escapes workspace"), "got: {err}");
+    assert!(denied_outside_workspace(&err, "escapes workspace"), "got: {err}");
 }
 
 #[tokio::test]
