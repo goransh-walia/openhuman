@@ -13,8 +13,9 @@ mod tinyhumans_boot;
 
 use std::path::Path;
 
+use tinyagents_definition::SandboxMode;
+
 use openhuman_core::{
-    agent::harness::definition::SandboxMode,
     config::{Config, RuntimeConfig, SandboxBackend},
     sandbox::{
         command_requires_sandbox, create_sandbox_backend, resolve_sandbox_policy,
