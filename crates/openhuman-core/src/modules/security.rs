@@ -28,11 +28,12 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(8);
 /// that exact peer, and the binding cannot be added by a later reinit, so it
 /// must be present in the configuration the module is first loaded with. The
 /// runtime is always started before a module is loaded.
-pub fn module_config(_config: &Config) -> ModuleConfig {
+pub fn module_config(config: &Config) -> ModuleConfig {
     ModuleConfig {
         trusted_host: super::runtime::started()
             .and_then(|runtime| runtime.connection().unique_name())
             .map(|name| name.to_string()),
+        judge: super::security_policy::judge_config(config),
         ..ModuleConfig::default()
     }
 }
@@ -518,7 +519,6 @@ pub(crate) mod policy_translation;
 
 #[path = "security_scoped.rs"]
 pub(crate) mod scoped_client;
-
 
 #[path = "security_text.rs"]
 pub(crate) mod text;

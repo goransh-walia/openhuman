@@ -10,9 +10,9 @@
 use std::path::Path;
 
 use tinysecurity_bus::{
-    CommandAutonomy, CommandExecutionMode, CommandPolicy, CommandPolicyId, Origin, PathPolicy,
-    PathPolicyId, PolicyConfig, PolicySettings, PrivacyMode, RegisteredPolicy, ShellDialect,
-    SubjectScope, ToolRule, ToolRuleEffect,
+    CommandAutonomy, CommandExecutionMode, CommandPolicy, CommandPolicyId, JudgeConfig, Origin,
+    PathPolicy, PathPolicyId, PolicyConfig, PolicySettings, PrivacyMode, RegisteredPolicy, Secret,
+    ShellDialect, SubjectScope, ToolRule, ToolRuleEffect,
 };
 use tinytools::rules::{DefaultEffect, RuleEffect, Surface, ToolRule as HostRule};
 
@@ -105,6 +105,61 @@ fn auto_origins(config: &Config) -> Vec<Origin> {
     }
 }
 
+/// Origins opted in to the judge, or `None` when the judge is off. Unknown
+/// origin names are dropped; an empty result also leaves the judge off, so a
+/// typo never widens automatic approval.
+fn judge_origins(config: &Config) -> Option<Vec<Origin>> {
+    let judge = &config.security.auto_approve.judge;
+    if !judge.enabled {
+        return None;
+    }
+    let origins: Vec<Origin> = judge
+        .origins
+        .iter()
+        .filter_map(|name| {
+            serde_json::from_value::<Origin>(serde_json::Value::String(name.trim().to_lowercase()))
+                .map_err(|_| log::warn!("[security][judge] ignoring unknown origin"))
+                .ok()
+        })
+        .collect();
+    (!origins.is_empty()).then_some(origins)
+}
+
+/// Init-only judge configuration for the module. The credential comes from
+/// `resolve_backend_credential`; without one (or with the judge off) there is
+/// no judge and every decision falls to a human.
+pub(crate) fn judge_config(config: &Config) -> Option<JudgeConfig> {
+    let origins = judge_origins(config)?;
+    let credential = match crate::security::credentials::resolve_backend_credential(config) {
+        Ok(credential) => credential,
+        Err(_) => {
+            log::warn!("[security][judge] enabled but no backend credential; judge disabled");
+            return None;
+        }
+    };
+    let judge = &config.security.auto_approve.judge;
+    log::debug!(
+        "[security][judge] configured origins={} threshold={} timeout_ms={}",
+        origins.len(),
+        judge.threshold_millis,
+        judge.timeout_ms
+    );
+    Some(JudgeConfig {
+        credential: Secret(credential.into_secret()),
+        endpoint: judge.endpoint.clone(),
+        provider: Default::default(),
+        threshold_millis: judge.threshold_millis,
+        exfiltrate_millis: judge.exfiltrate_millis,
+        thresholds: Vec::new(),
+        timeout_ms: judge.timeout_ms,
+        origins,
+        max_requests: judge.max_requests,
+        budget_window_ms: judge.budget_window_ms,
+        cache_entries: 0,
+        cache_ttl_ms: 0,
+    })
+}
+
 /// Result of translating the operator's `[tool_rules]` layer.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct ToolRuleTranslation {
@@ -184,7 +239,7 @@ pub(crate) fn settings(config: &Config) -> PolicySettings {
         egress_hosts: Vec::new(),
         command_classes: Vec::new(),
         auto_origins: auto_origins(config),
-        judge_enabled: false,
+        judge_enabled: judge_origins(config).is_some(),
     }
 }
 

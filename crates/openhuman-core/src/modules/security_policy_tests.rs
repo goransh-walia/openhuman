@@ -225,3 +225,21 @@ fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
         Config::default().autonomy.forbidden_paths
     );
 }
+
+#[test]
+fn judge_is_absent_unless_enabled_with_a_known_origin() {
+    let mut config = Config::default();
+    assert!(judge_config(&config).is_none());
+    assert!(!settings(&config).judge_enabled);
+    config.security.auto_approve.judge.enabled = true;
+    // Enabled but no origin opted in: still off, never a blanket opt-in.
+    assert!(judge_origins(&config).is_none());
+    config.security.auto_approve.judge.origins = vec!["nonsense".into()];
+    assert!(judge_origins(&config).is_none());
+    config.security.auto_approve.judge.origins = vec!["Copilot".into(), "saas".into()];
+    assert_eq!(
+        judge_origins(&config),
+        Some(vec![Origin::Copilot, Origin::Saas])
+    );
+    assert!(settings(&config).judge_enabled);
+}
