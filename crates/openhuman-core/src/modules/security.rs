@@ -151,6 +151,61 @@ fn validate_info(info: &PolicyInfo, config: &ModuleConfig) -> Result<(), String>
     Ok(())
 }
 
+/// Make the module's active policy for the current tenant match `config`. The
+/// subject comes from the authenticated tenant, never from the environment, and
+/// SaaS work without a profile is refused.
+pub(crate) async fn activate_for_config(
+    config: &Config,
+    mode: tinysecurity_bus::CommandExecutionMode,
+    reason: &str,
+) -> Result<scoped_client::Activation, String> {
+    let tenant = crate::core::runtime::tenant::current_tenant()
+        .map_err(|_| "TinySecurity policy requires an authenticated tenant scope")?;
+    let subject = policy_translation::subject_scope(
+        &tenant,
+        &config.workspace_dir,
+        crate::core::runtime::is_saas(),
+    )?;
+    let caller = VerifiedCaller::from_host(CallerContext {
+        agent: subject.agent.clone(),
+        thread: None,
+        flow: None,
+        call_id: format!("policy-activate:{reason}"),
+        origin: tinysecurity_bus::Origin::Operator,
+        tier: tinysecurity_bus::AccessTier::Full,
+    })?;
+    scoped_client::activate(config, caller, subject, mode).await
+}
+
+/// Fire-and-forget activation used by the live-policy reinit driver. A refused
+/// or review-pending activation leaves the previous module policy in force and
+/// is logged; it never changes what the host itself enforces.
+pub(crate) fn spawn_activation(config: Config, generation: u64) {
+    if !config.modules.enabled {
+        return;
+    }
+    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        log::debug!("[security][policy] no runtime; skipping activation generation={generation}");
+        return;
+    };
+    handle.spawn(async move {
+        let reason = format!("generation-{generation}");
+        match activate_for_config(&config, tinysecurity_bus::CommandExecutionMode::HarnessGated, &reason).await {
+            Ok(scoped_client::Activation::Active(active)) => log::debug!(
+                "[security][policy] module policy_generation={} active for host generation={generation}",
+                active.policy_generation
+            ),
+            Ok(scoped_client::Activation::ReviewRequired { widenings, .. }) => log::warn!(
+                "[security][policy] host generation={generation} widens authority ({} change(s)); module keeps the previous policy until a human approves",
+                widenings.len()
+            ),
+            Err(error) => log::warn!(
+                "[security][policy] activation for host generation={generation} failed: {error}"
+            ),
+        }
+    });
+}
+
 /// Read effective policy from the attested module, for authenticated host UI.
 pub async fn policy_info(config: &Config) -> Result<PolicyInfo, String> {
     require_enabled(config)?;
