@@ -23,8 +23,8 @@ const EXTENDED: &str = include_str!("fixtures/security-redaction-extended-corpus
 /// Every redactor, as (name, function). Names match `removed_by` entries.
 fn outputs(input: &str) -> Vec<(&'static str, String)> {
     let approval = openhuman_core::security::approval::redact::redact_args(&json!({"payload": input}));
-    openhuman_core::tools::registry::denials::record("characterization", "test", "blocked", input);
-    let denial = openhuman_core::tools::registry::denials::list(1).pop().unwrap().reason;
+    tinytools::registry::denials::record("characterization", "test", "blocked", input);
+    let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
     vec![
         ("denials", denial),
         ("prefix", openhuman_core::security::redact(input)),
