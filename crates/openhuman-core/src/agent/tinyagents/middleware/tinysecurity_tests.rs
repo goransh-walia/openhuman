@@ -55,3 +55,51 @@ fn require_approval_beats_allow() {
 fn empty_combination_allows() {
     assert!(matches!(combine_decisions(vec![]), PolicyDecision::Allow));
 }
+
+fn test_ctx() -> RunContext<OpenHumanRunContext> {
+    RunContext::new(
+        tinyagents_harness::context::RunConfig::new("tinysecurity-test"),
+        OpenHumanRunContext::new(),
+    )
+}
+
+fn test_call() -> TaToolCall {
+    TaToolCall {
+        id: "c1".into(),
+        name: "shell".into(),
+        arguments: serde_json::json!({}),
+        invalid: None,
+    }
+}
+
+#[tokio::test]
+async fn module_fault_denies_without_retry() {
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = calls.clone();
+    let policy = TinySecurityPolicy::new(Arc::new(move |_| {
+        counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async { Err("module crashed".to_string()) })
+    }));
+    let decision = policy.check(&test_ctx(), &test_call()).await;
+    assert!(is_deny(&decision), "a module fault must never allow");
+    assert_eq!(
+        calls.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "no retry"
+    );
+}
+
+#[tokio::test]
+async fn policy_maps_require_approval_verdict() {
+    let policy = TinySecurityPolicy::new(Arc::new(|_| {
+        Box::pin(async {
+            Ok(Verdict::RequireApproval {
+                request_id: "req-9".into(),
+            })
+        })
+    }));
+    match policy.check(&test_ctx(), &test_call()).await {
+        PolicyDecision::RequireApproval { reason } => assert!(reason.contains("req-9")),
+        other => panic!("expected RequireApproval, got {other:?}"),
+    }
+}
