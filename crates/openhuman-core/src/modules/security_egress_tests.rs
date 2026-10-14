@@ -171,3 +171,27 @@ async fn module_denies_loopback_for_generic_agent_urls() {
     // Unregistered policy ids are refused outright; both are denials.
     assert!(!matches!(outcome, Ok(EgressOutcome::Authorized(_))));
 }
+
+/// DNS rebinding: the name resolves (system resolver) to a live local listener
+/// after validation, but the grant approved a different address. The pinned
+/// client must connect only to the approved address and never re-resolve.
+#[tokio::test]
+async fn rebinding_resolver_answer_after_validation_is_never_used() {
+    let rebound = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = rebound.local_addr().unwrap().port();
+    // `localhost` is what a rebinding resolver would now answer with.
+    let approved: std::net::SocketAddr = format!("127.0.0.3:{port}").parse().unwrap();
+    let url = format!("http://localhost:{port}/");
+    let auth = grant(&url, "localhost", port, approved);
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        send_pinned(&auth, &request(&url)),
+    )
+    .await;
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(150), rebound.accept())
+            .await
+            .is_err(),
+        "the rebound address received a connection"
+    );
+}

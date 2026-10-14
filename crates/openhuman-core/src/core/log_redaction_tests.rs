@@ -142,11 +142,17 @@ fn floor_never_removes_ordinary_corpus_text() {
 #[test]
 fn module_pass_sees_only_floor_output_and_may_tighten_it() {
     fn tighten(text: &str) -> Option<String> {
-        assert!(!text.contains("hunter2"), "module saw unfloored text: {text}");
+        assert!(
+            !text.contains("hunter2"),
+            "module saw unfloored text: {text}"
+        );
         Some(text.replace("alice@example.com", "[REDACTED]"))
     }
     let out = scrub_with("password=hunter2 mail alice@example.com", Some(tighten));
-    assert!(!out.contains("hunter2") && !out.contains("alice@example.com"), "{out}");
+    assert!(
+        !out.contains("hunter2") && !out.contains("alice@example.com"),
+        "{out}"
+    );
 }
 
 #[test]

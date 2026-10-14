@@ -245,7 +245,11 @@ pub(crate) fn arm_log_scrubber(config: &Config) {
 /// the caller with the floor result.
 fn bridge_scrub(text: &str) -> Option<String> {
     let bridge = LOG_BRIDGE.get()?;
-    if let Some(hit) = cache().lock().ok().and_then(|c| c.get(&RedactMode::Text, text)) {
+    if let Some(hit) = cache()
+        .lock()
+        .ok()
+        .and_then(|c| c.get(&RedactMode::Text, text))
+    {
         return Some(hit);
     }
     // The module call may itself log; never recurse into the bridge.
@@ -260,8 +264,11 @@ fn bridge_scrub(text: &str) -> Option<String> {
     }
     let _reset = Reset;
     let call = async {
-        tokio::time::timeout(LOG_BRIDGE_TIMEOUT, redact(&bridge.config, RedactMode::Text, text))
-            .await
+        tokio::time::timeout(
+            LOG_BRIDGE_TIMEOUT,
+            redact(&bridge.config, RedactMode::Text, text),
+        )
+        .await
     };
     let outcome = match tokio::runtime::Handle::try_current() {
         Ok(current) if current.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {

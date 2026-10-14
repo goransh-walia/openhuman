@@ -133,3 +133,12 @@ async fn shared_corpus_text_cases_are_redacted_by_the_module() {
     .unwrap();
     assert_ne!(scan.verdict, ScanVerdict::Clean);
 }
+
+#[test]
+fn bridge_without_a_ready_module_leaves_the_floor_result() {
+    // Never armed in this process: the sync bridge answers None, so
+    // `scrub_secrets` returns the floor output and not the original text.
+    assert!(bridge_scrub("Bearer abcdefghijklmnop").is_none());
+    let out = crate::core::log_redaction::scrub_secrets("Bearer abcdefghijklmnop");
+    assert!(!out.contains("abcdefghijklmnop"), "{out}");
+}
