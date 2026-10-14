@@ -183,6 +183,26 @@ name = "security_characterization_e2e"
 path = "../../tests/security_characterization_e2e.rs"
 
 [[test]]
+name = "security_policy_characterization"
+path = "../../tests/security_policy_characterization.rs"
+
+[[test]]
+name = "security_approval_characterization"
+path = "../../tests/security_approval_characterization.rs"
+
+[[test]]
+name = "security_redaction_characterization"
+path = "../../tests/security_redaction_characterization.rs"
+
+[[test]]
+name = "security_sandbox_characterization"
+path = "../../tests/security_sandbox_characterization.rs"
+
+[[test]]
+name = "security_crypto_characterization"
+path = "../../tests/security_crypto_characterization.rs"
+
+[[test]]
 name = "json_rpc_e2e"
 path = "../../tests/json_rpc_e2e.rs"
 # `voice::reply_speech::{test_seam, TEST_SEAM_ENV}` — the reply-speech seam
