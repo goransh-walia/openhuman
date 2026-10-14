@@ -37,8 +37,8 @@ const repoRoot =
 const inventoryPath = resolve(repoRoot, "scripts/ci/spawner-inventory.json");
 const write = process.argv.includes("--write");
 
-const SPAWN = /\bCommand::new\s*\(/g;
-const PROCESS_CMD = /\b(?:std|tokio)::process\b|\bprocess::\{?[^;]*\bCommand\b/;
+const SPAWN = /\b[A-Za-z]*Command::new\s*\(/g;
+const PROCESS_CMD = /process::(?:Command\b|\{[^}]*\bCommand\b)/;
 const TRUSTS = new Set(["operator", "untrusted", "host-probe", "unclassified"]);
 
 async function* walk(dir) {

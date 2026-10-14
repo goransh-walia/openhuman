@@ -169,6 +169,14 @@
       "test": ""
     },
     {
+      "file": "crates/openhuman-core/src/tools/impl/system/install_tool.rs",
+      "spawns": 1,
+      "trust": "unclassified",
+      "plan": "",
+      "executor": "n/a",
+      "test": ""
+    },
+    {
       "file": "crates/openhuman-core/src/voice/always_on/transcribe.rs",
       "spawns": 1,
       "trust": "unclassified",
