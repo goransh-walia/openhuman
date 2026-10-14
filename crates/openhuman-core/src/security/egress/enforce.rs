@@ -99,7 +99,7 @@ pub fn sensitive_blocks(mode: PrivacyMode, desc: &EgressDescriptor) -> bool {
 /// Whether `mode` refuses the transfer described by `desc` (either restrictive
 /// mode).
 pub fn egress_blocks(mode: PrivacyMode, desc: &EgressDescriptor) -> bool {
-    egress_blocks(mode, desc) || sensitive_blocks(mode, desc)
+    local_only_blocks(mode, desc) || sensitive_blocks(mode, desc)
 }
 
 /// Is `desc` a backend **control-plane** round-trip that must keep flowing even
