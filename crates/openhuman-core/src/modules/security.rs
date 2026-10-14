@@ -441,3 +441,9 @@ mod native_tests;
 
 #[path = "security_config.rs"]
 mod config;
+
+#[path = "security_policy.rs"]
+pub(crate) mod policy_translation;
+
+#[path = "security_scoped.rs"]
+pub(crate) mod scoped_client;
