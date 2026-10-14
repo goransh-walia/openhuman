@@ -23,6 +23,7 @@ use crate::config::Config;
 /// DNS resolution inside the module waits up to two seconds; allow the bus call
 /// to outlast it so a slow resolver denies with `Resolver`, not a bus timeout.
 const EGRESS_CALL_TIMEOUT: Duration = Duration::from_secs(5);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const SEND_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Result of a scoped destination check.
@@ -152,6 +153,7 @@ pub(crate) fn pinned_client(auth: &TransportAuthorization) -> Result<reqwest::Cl
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
         .pool_max_idle_per_host(0)
+        .connect_timeout(CONNECT_TIMEOUT)
         .timeout(SEND_TIMEOUT)
         .resolve_to_addrs(&auth.hostname, &auth.addresses)
         .build()

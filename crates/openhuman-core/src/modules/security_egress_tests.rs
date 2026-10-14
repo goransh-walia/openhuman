@@ -148,7 +148,18 @@ async fn unreachable_pinned_address_fails_closed_without_falling_back_to_dns() {
     let url = format!("http://localhost:{live_port}/");
     let req = request(&url);
     let auth = grant(&url, "localhost", live_port, dead);
-    assert!(send_pinned(&auth, &req).await.is_err());
+    let sent =
+        tokio::time::timeout(std::time::Duration::from_secs(2), send_pinned(&auth, &req)).await;
+    assert!(
+        !matches!(sent, Ok(Ok(_))),
+        "must not reach the resolvable host"
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), live.accept())
+            .await
+            .is_err(),
+        "system DNS fallback reached the listener"
+    );
 }
 
 /// The released module refuses loopback for a generic agent URL before any DNS.
