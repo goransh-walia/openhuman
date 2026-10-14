@@ -36,7 +36,6 @@ pub use ops::{
 pub use store::init_workspace;
 
 #[cfg(test)]
-#[allow(unused_imports)]
 pub(crate) use ops::force_backend_for_test;
 
 #[cfg(test)]
