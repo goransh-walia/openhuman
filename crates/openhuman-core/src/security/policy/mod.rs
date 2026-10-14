@@ -33,4 +33,8 @@ mod tests;
 mod policy_disabled_tests;
 
 #[cfg(test)]
+#[path = "policy_characterization_tests.rs"]
+mod policy_characterization_tests;
+
+#[cfg(test)]
 mod proptest_tests;
