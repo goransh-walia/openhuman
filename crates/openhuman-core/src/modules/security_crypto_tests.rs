@@ -120,7 +120,7 @@ fn fx_dir() -> tempfile::TempDir {
 /// declined mapping), the secret is stored, read and deleted.
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn keyring_round_trip_requires_host_consent_for_every_operation() {
+async fn keyring_round_trip_through_the_served_consent_callback() {
     let fx =
         super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
     crate::modules::security_host::install(&fx.client)
