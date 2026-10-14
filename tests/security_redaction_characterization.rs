@@ -22,6 +22,9 @@ const EXTENDED: &str = include_str!("fixtures/security-redaction-extended-corpus
 
 /// Every redactor, as (name, function). Names match `removed_by` entries.
 fn outputs(input: &str) -> Vec<(&'static str, String)> {
+    // The denial log is process-global and read back as "the latest entry".
+    static DENIAL_LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _serial = DENIAL_LOG.lock().unwrap_or_else(|e| e.into_inner());
     let approval = openhuman_core::security::approval::redact::redact_args(&json!({"payload": input}));
     tinytools::registry::denials::record("characterization", "test", "blocked", input);
     let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
