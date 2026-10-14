@@ -524,3 +524,7 @@ pub(crate) async fn tools_safe_for_agent_scanned(
 mod stub;
 #[cfg(not(feature = "mcp"))]
 pub use stub::*;
+
+#[cfg(all(test, feature = "mcp"))]
+#[path = "mod_tests.rs"]
+mod tests;
