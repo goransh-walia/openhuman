@@ -34,7 +34,20 @@ pub fn module_config(config: &Config) -> ModuleConfig {
             .and_then(|runtime| runtime.connection().unique_name())
             .map(|name| name.to_string()),
         judge: policy_translation::judge_config(config),
+        crypto: Some(production_crypto_config()),
         ..ModuleConfig::default()
+    }
+}
+
+/// Production confidential crypto surface. Password crypt is on; keyring and
+/// pairing stay unset (denied) until the production callers are rerouted onto
+/// the module, because the host `secret_storage` still owns those stores.
+pub(crate) fn production_crypto_config() -> tinysecurity_bus::CryptoConfig2 {
+    tinysecurity_bus::CryptoConfig2 {
+        max_payload_bytes: tinysecurity_bus::MAX_CRYPTO_PAYLOAD_BYTES,
+        operations_per_minute: 600,
+        keyring: None,
+        pairing: None,
     }
 }
 
