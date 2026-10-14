@@ -10,6 +10,7 @@ mod agent;
 mod autonomy;
 mod capability_providers;
 mod channels;
+mod security;
 mod cli_overrides;
 #[doc(hidden)]
 pub use cli_overrides::AppliedInferenceOverride;
@@ -80,11 +81,14 @@ pub use agent::{
 };
 pub use autonomy::AutonomyConfig;
 pub use capability_providers::{CapabilityProviderConfig, CapabilityProviderTrustState};
+pub use security::{
+    ApprovalSettings, AuditConfig, ResourceLimitsConfig, SandboxBackend, SandboxConfig,
+    SecurityConfig,
+};
 pub use channels::{
-    AuditConfig, ChannelsConfig, DingTalkConfig, DiscordConfig, EmailConfig, IMessageConfig,
+    ChannelsConfig, DingTalkConfig, DiscordConfig, EmailConfig, IMessageConfig,
     IrcConfig, LarkConfig, LarkReceiveMode, LinqConfig, MatrixConfig, MattermostConfig, QQConfig,
-    ResourceLimitsConfig, SandboxBackend, SandboxConfig, SecurityConfig, SignalConfig, SlackConfig,
-    StreamMode, TelegramConfig, WebhookConfig, WhatsAppConfig, YuanbaoConfig,
+    SignalConfig, SlackConfig, StreamMode, TelegramConfig, WebhookConfig, WhatsAppConfig, YuanbaoConfig,
 };
 pub(crate) use cli_overrides::set_cli_inference_overrides;
 pub use context::{CompactionSettings, CompactionStrategy, ContextConfig};
