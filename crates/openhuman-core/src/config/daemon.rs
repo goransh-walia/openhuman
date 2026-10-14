@@ -1,8 +1,6 @@
 //! Tauri-focused daemon configuration wrapper for openhuman.
 
-use crate::config::{
-    AuditConfig, AutonomyConfig, ReliabilityConfig, SecretsConfig,
-};
+use crate::config::{AuditConfig, AutonomyConfig, ReliabilityConfig, SecretsConfig};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

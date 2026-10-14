@@ -73,7 +73,9 @@ impl Agent {
                 .map(|entry| entry.name),
         );
         let config = &self.inner.config;
-        let security = Arc::new(openhuman_core::security::SecurityPolicy::from_full_config(&config));
+        let security = Arc::new(openhuman_core::security::SecurityPolicy::from_full_config(
+            &config,
+        ));
         occupied.extend(
             openhuman_core::tools::ops::all_tools(
                 Arc::new(config.clone()),

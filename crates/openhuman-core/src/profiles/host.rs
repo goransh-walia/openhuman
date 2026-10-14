@@ -632,7 +632,7 @@ pub(super) fn create_dirs(layout: &ProfileLayout) -> Result<(), String> {
 fn profile_policy(config: &Config) -> Arc<crate::security::SecurityPolicy> {
     Arc::new(
         crate::security::SecurityPolicy::from_full_config(config)
-        .with_privacy_mode(config.privacy.mode),
+            .with_privacy_mode(config.privacy.mode),
     )
 }
 
