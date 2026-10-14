@@ -6,12 +6,18 @@
 //! `Blocked` adds friction (the prompt is refused). An unavailable module yields
 //! `None` — the host detector remains in force and nothing is granted.
 
-use tinysecurity_bus::ScanVerdict;
+/// Module verdict, mirrored so callers compile without the module feature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleVerdict {
+    Clean,
+    Suspicious,
+    Blocked,
+}
 
 /// What the module said about a prompt, content-free.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleScan {
-    pub verdict: ScanVerdict,
+    pub verdict: ModuleVerdict,
     pub rule_ids: Vec<String>,
 }
 
@@ -19,7 +25,7 @@ impl ModuleScan {
     /// Only a `Blocked` verdict refuses the prompt.
     #[must_use]
     pub fn blocks(&self) -> bool {
-        self.verdict == ScanVerdict::Blocked
+        self.verdict == ModuleVerdict::Blocked
     }
 }
 
@@ -38,8 +44,13 @@ pub async fn module_scan(text: &str) -> Option<ModuleScan> {
                 response.verdict,
                 response.rule_ids.join(",")
             );
+            use crate::modules::security::text::ScanVerdict;
             Some(ModuleScan {
-                verdict: response.verdict,
+                verdict: match response.verdict {
+                    ScanVerdict::Clean => ModuleVerdict::Clean,
+                    ScanVerdict::Suspicious => ModuleVerdict::Suspicious,
+                    ScanVerdict::Blocked => ModuleVerdict::Blocked,
+                },
                 rule_ids: response.rule_ids,
             })
         }

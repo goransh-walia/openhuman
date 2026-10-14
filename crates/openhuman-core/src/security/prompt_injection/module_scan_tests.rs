@@ -1,8 +1,6 @@
 use super::*;
-#[cfg(not(feature = "security-module"))]
-use tinysecurity_bus::ScanVerdict;
 
-fn scan(verdict: ScanVerdict) -> ModuleScan {
+fn scan(verdict: ModuleVerdict) -> ModuleScan {
     ModuleScan {
         verdict,
         rule_ids: vec![],
@@ -11,9 +9,9 @@ fn scan(verdict: ScanVerdict) -> ModuleScan {
 
 #[test]
 fn only_a_blocked_verdict_refuses_the_prompt() {
-    assert!(scan(ScanVerdict::Blocked).blocks());
-    assert!(!scan(ScanVerdict::Suspicious).blocks());
-    assert!(!scan(ScanVerdict::Clean).blocks());
+    assert!(scan(ModuleVerdict::Blocked).blocks());
+    assert!(!scan(ModuleVerdict::Suspicious).blocks());
+    assert!(!scan(ModuleVerdict::Clean).blocks());
 }
 
 #[tokio::test]
