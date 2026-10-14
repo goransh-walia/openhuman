@@ -109,13 +109,13 @@ pub(crate) enum Activation {
 }
 
 #[derive(Default)]
-struct ScopedState {
+pub(crate) struct ScopedState {
     active: HashMap<String, ActivePolicy>,
     commands: HashMap<String, CommandPolicyId>,
     cache: DecisionCache,
 }
 
-fn scoped() -> &'static tokio::sync::Mutex<ScopedState> {
+pub(crate) fn scoped() -> &'static tokio::sync::Mutex<ScopedState> {
     static STATE: std::sync::OnceLock<tokio::sync::Mutex<ScopedState>> = std::sync::OnceLock::new();
     STATE.get_or_init(|| tokio::sync::Mutex::new(ScopedState::default()))
 }
@@ -208,6 +208,20 @@ pub(crate) async fn activate(
     mode: CommandExecutionMode,
 ) -> Result<Activation, String> {
     super::require_enabled(config)?;
+    let proxy = module_proxy(config).await?;
+    activate_on(&proxy, scoped(), config, caller, subject, mode).await
+}
+
+/// [`activate`] against an explicit proxy and state, for the host runtime and
+/// for tests that stand up their own broker.
+pub(crate) async fn activate_on(
+    proxy: &tinybus::Proxy,
+    state: &tokio::sync::Mutex<ScopedState>,
+    config: &Config,
+    caller: VerifiedCaller,
+    subject: SubjectScope,
+    mode: CommandExecutionMode,
+) -> Result<Activation, String> {
     let path = translate::path_policy(config);
     let command = translate::command_policy(config, mode, dirs::home_dir());
     let registration = registration_fingerprint(&path, &command, config, &subject)?;
@@ -238,7 +252,7 @@ pub(crate) async fn activate(
     };
     let next: RegisteredPolicy =
         translate::registered_policy(config, subject.clone(), path_id, command_id);
-    let previous = scoped().lock().await.active.get(&key).cloned();
+    let previous = state.lock().await.active.get(&key).cloned();
     let (policy_id, policy_generation) = match previous {
         None => {
             let id: PolicyId = proxy
@@ -284,7 +298,7 @@ pub(crate) async fn activate(
         subject,
         registration,
     };
-    let mut state = scoped().lock().await;
+    let mut state = state.lock().await;
     state.cache = DecisionCache::default();
     state.active.insert(key, active.clone());
     log::debug!(
@@ -304,20 +318,31 @@ pub(crate) async fn evaluate_scoped(
     call: ToolCall,
 ) -> Result<ScopedDecision, String> {
     super::require_enabled(config)?;
+    let proxy = module_proxy(config).await?;
+    evaluate_on(&proxy, scoped(), active, caller, call).await
+}
+
+/// [`evaluate_scoped`] against an explicit proxy and state.
+pub(crate) async fn evaluate_on(
+    proxy: &tinybus::Proxy,
+    state: &tokio::sync::Mutex<ScopedState>,
+    active: &ActivePolicy,
+    caller: VerifiedCaller,
+    call: ToolCall,
+) -> Result<ScopedDecision, String> {
     let fingerprint = call_fingerprint(&active.policy_id, &caller.0, &call)?;
     let key = CacheKey {
         policy_generation: active.policy_generation,
         fingerprint: fingerprint.clone(),
         scope: subject_key(&active.subject),
     };
-    if let Some(decision) = scoped().lock().await.cache.get(&key) {
+    if let Some(decision) = state.lock().await.cache.get(&key) {
         return Ok(ScopedDecision {
             decision,
             policy_generation: active.policy_generation,
             fingerprint,
         });
     }
-    let proxy = module_proxy(config).await?;
     let response: ScopedDecision = proxy
         .call_confidential(
             names::methods::EVALUATE_SCOPED,
@@ -335,7 +360,7 @@ pub(crate) async fn evaluate_scoped(
         &response.fingerprint,
         active,
     )?;
-    scoped().lock().await.cache.put(key, &response.decision);
+    state.lock().await.cache.put(key, &response.decision);
     Ok(response)
 }
 
@@ -348,8 +373,18 @@ pub(crate) async fn check_scoped(
     checks: Vec<tinysecurity_bus::Check>,
 ) -> Result<ScopedCheckResponse, String> {
     super::require_enabled(config)?;
-    let count = checks.len();
     let proxy = module_proxy(config).await?;
+    check_on(&proxy, active, caller, checks).await
+}
+
+/// [`check_scoped`] against an explicit proxy.
+pub(crate) async fn check_on(
+    proxy: &tinybus::Proxy,
+    active: &ActivePolicy,
+    caller: VerifiedCaller,
+    checks: Vec<tinysecurity_bus::Check>,
+) -> Result<ScopedCheckResponse, String> {
+    let count = checks.len();
     let response: ScopedCheckResponse = proxy
         .call_confidential(
             names::methods::CHECK_SCOPED,

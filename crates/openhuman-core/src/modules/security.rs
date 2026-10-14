@@ -461,7 +461,7 @@ async fn call_host_path(
     call_validate_path(proxy, id, path.to_owned(), member).await
 }
 
-async fn call_register_path_policy(
+pub(super) async fn call_register_path_policy(
     proxy: &tinybus::Proxy,
     policy: tinysecurity_bus::PathPolicy,
 ) -> Result<tinysecurity_bus::PathPolicyId, String> {

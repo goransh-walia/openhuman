@@ -34,7 +34,16 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
     let broker = Broker::new();
     let broker_task = broker.spawn(transport.clone());
     let host = ModuleHost::new(broker);
-    let configuration = serde_json::to_value(ModuleConfig::default()).unwrap();
+    // The module accepts privileged members only from the peer named at its
+    // first initialization, so the host connection must exist before the load.
+    let client = Connection::connect(transport.connect().await.unwrap())
+        .await
+        .unwrap();
+    let configuration = serde_json::to_value(ModuleConfig {
+        trusted_host: client.unique_name().map(|name| name.to_string()),
+        ..ModuleConfig::default()
+    })
+    .unwrap();
     let record = if let Ok(host_key) = std::env::var("OPENHUMAN_TEST_SECURITY_RELEASE_HOST") {
         let record = *super::super::registry::find(MODULE_ID).unwrap();
         let asset = record
@@ -89,9 +98,6 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
             },
         }
     };
-    let client = Connection::connect(transport.connect().await.unwrap())
-        .await
-        .unwrap();
     let proxy = client
         .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
         .unwrap()
