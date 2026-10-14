@@ -166,18 +166,26 @@ async fn corpus_payload_decrypts_and_tampering_is_refused_through_the_module() {
         .unwrap();
     assert_eq!(opened, plaintext.as_bytes());
 
-    assert!(password_decrypt(&fx.proxy, "not-the-password".into(), payload.clone())
-        .await
-        .is_err());
+    assert!(
+        password_decrypt(&fx.proxy, "not-the-password".into(), payload.clone())
+            .await
+            .is_err()
+    );
     let mut flipped = payload.clone();
     flipped.ciphertext[0] ^= 1;
-    assert!(password_decrypt(&fx.proxy, password.clone(), flipped).await.is_err());
+    assert!(password_decrypt(&fx.proxy, password.clone(), flipped)
+        .await
+        .is_err());
     let mut truncated = payload.clone();
     truncated.ciphertext.pop();
-    assert!(password_decrypt(&fx.proxy, password.clone(), truncated).await.is_err());
+    assert!(password_decrypt(&fx.proxy, password.clone(), truncated)
+        .await
+        .is_err());
     let mut salt = payload.clone();
     salt.salt[0] ^= 1;
-    assert!(password_decrypt(&fx.proxy, password.clone(), salt).await.is_err());
+    assert!(password_decrypt(&fx.proxy, password.clone(), salt)
+        .await
+        .is_err());
     let mut nonce = payload;
     nonce.nonce[0] ^= 1;
     assert!(password_decrypt(&fx.proxy, password, nonce).await.is_err());

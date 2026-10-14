@@ -34,14 +34,6 @@ fn arr32(v: &Value) -> [u8; 32] {
     unhex(v).try_into().unwrap()
 }
 
-fn payload(c: &Value) -> EncryptedPayload {
-    EncryptedPayload {
-        ciphertext: unhex(&c["ciphertext"]),
-        nonce: unhex(&c["nonce"]),
-        salt: Vec::new(),
-    }
-}
-
 #[test]
 fn hkdf_bootstrap_and_session_key_vectors_are_pinned() {
     let c = corpus();

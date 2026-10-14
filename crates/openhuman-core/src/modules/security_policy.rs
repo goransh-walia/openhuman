@@ -130,13 +130,14 @@ fn judge_origins(config: &Config) -> Option<Vec<Origin>> {
 /// no judge and every decision falls to a human.
 pub(crate) fn judge_config(config: &Config) -> Option<JudgeConfig> {
     let origins = judge_origins(config)?;
-    let credential = match crate::security::credentials::session_support::resolve_backend_credential(config) {
-        Ok(credential) => credential,
-        Err(_) => {
-            log::warn!("[security][judge] enabled but no backend credential; judge disabled");
-            return None;
-        }
-    };
+    let credential =
+        match crate::security::credentials::session_support::resolve_backend_credential(config) {
+            Ok(credential) => credential,
+            Err(_) => {
+                log::warn!("[security][judge] enabled but no backend credential; judge disabled");
+                return None;
+            }
+        };
     let judge = &config.security.auto_approve.judge;
     log::debug!(
         "[security][judge] configured origins={} threshold={} timeout_ms={}",
