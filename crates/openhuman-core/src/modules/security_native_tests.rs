@@ -705,9 +705,13 @@ async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
         tenant_caller("someone-else", "x-1"),
         tool("file_read"),
     )
-    .await;
-    assert!(
-        wrong_agent.is_err(),
+    .await
+    .unwrap();
+    assert_eq!(
+        wrong_agent.decision.verdict,
+        Verdict::Deny {
+            reason: tinysecurity_bus::DenialReason::InvalidContext
+        },
         "the caller must be the registered subject"
     );
 
@@ -768,9 +772,13 @@ async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
         tenant_caller("orchestrator", "a-6"),
         tool("file_read"),
     )
-    .await;
-    assert!(
-        old.map(|d| denied(&d)).unwrap_or(true),
+    .await
+    .unwrap();
+    assert_eq!(
+        old.decision.verdict,
+        Verdict::Deny {
+            reason: tinysecurity_bus::DenialReason::InvalidContext
+        },
         "the superseded policy must deny"
     );
     let shell = evaluate_on(
