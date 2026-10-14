@@ -67,14 +67,28 @@ pub fn sensitive_blocks(mode: PrivacyMode, desc: &EgressDescriptor) -> bool {
     if mode != PrivacyMode::Sensitive || !desc.is_external || is_control_plane(desc) {
         return false;
     }
-    if desc.data_kinds.iter().all(|kind| *kind == DataKind::Metadata) {
+    if desc
+        .data_kinds
+        .iter()
+        .all(|kind| *kind == DataKind::Metadata)
+    {
         return false;
     }
     let identifying_category = desc.risk_categories.iter().any(|category| {
         let category = category.to_ascii_lowercase();
-        ["credential", "secret", "token", "password", "identifier", "email", "phone", "ssn", "card"]
-            .iter()
-            .any(|needle| category.contains(needle))
+        [
+            "credential",
+            "secret",
+            "token",
+            "password",
+            "identifier",
+            "email",
+            "phone",
+            "ssn",
+            "card",
+        ]
+        .iter()
+        .any(|needle| category.contains(needle))
     });
     match desc.risk_level {
         IdentificationRisk::None | IdentificationRisk::Low => identifying_category,
@@ -195,7 +209,8 @@ pub fn enforce_egress(desc: &EgressDescriptor) -> anyhow::Result<()> {
     let mode = current_privacy_mode();
     if egress_blocks(mode, desc) {
         log::warn!(
-            "[privacy][egress-enforce] LocalOnly BLOCK provider={} service={} reason={:?} — refused",
+            "[privacy][egress-enforce] {:?} BLOCK provider={} service={} reason={:?} — refused",
+            mode,
             desc.provider_slug,
             desc.service,
             desc.reason,
@@ -222,12 +237,16 @@ pub fn local_only_tool_block(desc: &EgressDescriptor) -> Option<String> {
     let mode = current_privacy_mode();
     if egress_blocks(mode, desc) {
         log::warn!(
-            "[privacy][egress-enforce] LocalOnly BLOCK (tool) provider={} service={} reason={:?} — refused",
+            "[privacy][egress-enforce] {:?} BLOCK (tool) provider={} service={} reason={:?} — refused",
+            mode,
             desc.provider_slug,
             desc.service,
             desc.reason,
         );
-        Some(format!("{POLICY_BLOCKED_MARKER} {}", block_message(mode, desc)))
+        Some(format!(
+            "{POLICY_BLOCKED_MARKER} {}",
+            block_message(mode, desc)
+        ))
     } else {
         log::debug!(
             "[privacy][egress-enforce] privacy_mode={:?} (tool) provider={} service={} reason={:?} — permitted",
