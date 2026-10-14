@@ -185,6 +185,8 @@ pub(super) async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, Stri
     let result = super::proxy(config, &mut state).await;
     if result.is_err() {
         state.faulted = true;
+    } else {
+        super::text::arm_log_scrubber(config);
     }
     result
 }

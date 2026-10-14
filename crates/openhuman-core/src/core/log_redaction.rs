@@ -99,6 +99,39 @@ static SECRET_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
 /// it redacts the secret-looking span in place and leaves the rest of the
 /// diagnostic message intact (unlike a whole-value prefix redaction).
 pub fn scrub_secrets(input: &str) -> String {
+    scrub_with(input, MODULE_SCRUBBER.get().copied())
+}
+
+/// A synchronous view of the TinySecurity `Redact` module. It receives text the
+/// floor already redacted and returns the module's stricter answer, or `None`
+/// when the module cannot answer in time (the floor result then stands).
+pub type ModuleScrubber = fn(&str) -> Option<String>;
+
+static MODULE_SCRUBBER: std::sync::OnceLock<ModuleScrubber> = std::sync::OnceLock::new();
+
+/// Arm the module-backed second pass once the module is ready. Idempotent; the
+/// first installer wins.
+pub fn install_module_scrubber(scrubber: ModuleScrubber) {
+    if MODULE_SCRUBBER.set(scrubber).is_ok() {
+        log::debug!("[security][floor] module scrubber armed");
+    }
+}
+
+/// The floor, then the module pass when one is supplied. The module only ever
+/// sees floor output, and a module that cannot answer leaves the floor result,
+/// never the original text.
+pub(crate) fn scrub_with(input: &str, module: Option<ModuleScrubber>) -> String {
+    let floored = floor_scrub(input);
+    if floored == SUPPRESSED {
+        return floored;
+    }
+    match module.and_then(|scrub| scrub(&floored)) {
+        Some(stronger) => stronger,
+        None => floored,
+    }
+}
+
+fn floor_scrub(input: &str) -> String {
     if input.len() > FLOOR_MAX_INPUT_BYTES {
         log::debug!(
             "[security][floor] suppressed oversized input bytes={}",

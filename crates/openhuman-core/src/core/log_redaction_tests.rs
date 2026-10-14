@@ -138,3 +138,31 @@ fn floor_never_removes_ordinary_corpus_text() {
         }
     }
 }
+
+#[test]
+fn module_pass_sees_only_floor_output_and_may_tighten_it() {
+    fn tighten(text: &str) -> Option<String> {
+        assert!(!text.contains("hunter2"), "module saw unfloored text: {text}");
+        Some(text.replace("alice@example.com", "[REDACTED]"))
+    }
+    let out = scrub_with("password=hunter2 mail alice@example.com", Some(tighten));
+    assert!(!out.contains("hunter2") && !out.contains("alice@example.com"), "{out}");
+}
+
+#[test]
+fn unavailable_module_leaves_the_floor_result_never_the_original() {
+    fn down(_: &str) -> Option<String> {
+        None
+    }
+    let out = scrub_with("Bearer abcdefghijklmnop", Some(down));
+    assert!(!out.contains("abcdefghijklmnop"), "{out}");
+}
+
+#[test]
+fn oversized_input_is_suppressed_without_calling_the_module() {
+    fn never(_: &str) -> Option<String> {
+        panic!("module must not see suppressed input");
+    }
+    let big = "a".repeat(FLOOR_MAX_INPUT_BYTES + 1);
+    assert_eq!(scrub_with(&big, Some(never)), SUPPRESSED);
+}
