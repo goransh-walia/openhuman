@@ -519,3 +519,9 @@ pub(crate) mod policy_translation;
 #[path = "security_scoped.rs"]
 pub(crate) mod scoped_client;
 
+
+#[path = "security_text.rs"]
+pub(crate) mod text;
+
+#[path = "security_egress.rs"]
+pub(crate) mod egress;

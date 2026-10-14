@@ -174,7 +174,7 @@ fn validate_scoped(
     Ok(())
 }
 
-async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, String> {
+pub(super) async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, String> {
     let mut state = state().lock().await;
     let result = super::proxy(config, &mut state).await;
     if result.is_err() {
