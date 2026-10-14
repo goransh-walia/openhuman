@@ -525,3 +525,6 @@ pub(crate) mod text;
 
 #[path = "security_egress.rs"]
 pub(crate) mod egress;
+
+#[path = "security_crypto.rs"]
+pub(crate) mod crypto;
