@@ -114,3 +114,44 @@ fn fx_dir() -> tempfile::TempDir {
     let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
     tempfile::tempdir_in(target.canonicalize().unwrap()).unwrap()
 }
+
+/// Keyring round trip through the module's encrypted-file backend, with the
+/// host consent callback served for real: a declined consent never reaches the
+/// backend, and an accepted one stores, reads and deletes the secret.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn keyring_round_trip_requires_host_consent_for_every_operation() {
+    use crate::security::keyring_consent::policy;
+    let fx = super::super::native_tests::native_fixture_with(Some(crypto_config(
+        fx_dir().path(),
+    )))
+    .await;
+    super::super::host::install(&fx.client).await.unwrap();
+    let name = "user:token-7328";
+
+    policy::apply_consent(&policy::build_consent_preference("declined"));
+    assert!(keyring_set(&fx.proxy, caller(), "store a token", name, b"v".to_vec())
+        .await
+        .is_err());
+
+    policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
+    keyring_set(&fx.proxy, caller(), "store a token", name, b"value-1".to_vec())
+        .await
+        .unwrap();
+    assert_eq!(
+        keyring_get(&fx.proxy, caller(), "read a token", name)
+            .await
+            .unwrap(),
+        Some(b"value-1".to_vec())
+    );
+    assert!(keyring_delete(&fx.proxy, caller(), "remove a token", name)
+        .await
+        .unwrap());
+    assert_eq!(
+        keyring_get(&fx.proxy, caller(), "read a token", name)
+            .await
+            .unwrap(),
+        None
+    );
+    policy::initialize(None);
+}

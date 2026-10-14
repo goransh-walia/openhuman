@@ -20,6 +20,7 @@ pub(super) struct NativeFixture {
     pub(super) host: ModuleHost,
     pub(super) _broker_task: tokio::task::JoinHandle<tinybus::Result<()>>,
     pub(super) proxy: tinybus::Proxy,
+    pub(super) client: Connection,
     pub(super) record: super::super::ModuleRecord,
 }
 
@@ -139,6 +140,7 @@ pub(super) async fn native_fixture_with(
         host,
         _broker_task: broker_task,
         proxy,
+        client,
         record,
     }
 }
@@ -155,6 +157,7 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
         _broker_task: broker_task,
         proxy,
         record: _,
+        ..
     } = native_fixture().await;
     let root = acting.path().canonicalize().unwrap();
     let action = root.join("action");
