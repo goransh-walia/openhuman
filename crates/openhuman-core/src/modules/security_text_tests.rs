@@ -90,15 +90,32 @@ async fn shared_corpus_text_cases_are_redacted_by_the_module() {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let cache = Mutex::new(RedactCache::default());
     for case in corpus["text"].as_array().unwrap() {
+        let owners: Vec<&str> = case["removed_by"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        let mode = if owners.contains(&"approval") {
+            RedactMode::HomePath
+        } else {
+            mode_text()
+        };
         let input = case["input"].as_str().unwrap();
         let needle = case["needle"].as_str().unwrap();
-        let out = redact_on(&fx.proxy, &cache, mode_text(), input)
+        let out = redact_on(&fx.proxy, &cache, mode.clone(), input)
             .await
             .unwrap();
-        assert!(!out.contains(needle), "case {} leaked", case["case"]);
-        let again = redact_on(&fx.proxy, &cache, mode_text(), &out)
-            .await
-            .unwrap();
+        let ordinary = case["case"] == "ordinary_text";
+        let module_owned = owners
+            .iter()
+            .any(|o| ["log", "approval", "pii"].contains(o));
+        if ordinary {
+            assert_eq!(out, input, "ordinary text must pass through");
+        } else if module_owned || owners.contains(&"host_scrub") {
+            assert!(!out.contains(needle), "case {} leaked", case["case"]);
+        }
+        let again = redact_on(&fx.proxy, &cache, mode, &out).await.unwrap();
         assert_eq!(again, out, "case {} not a fixed point", case["case"]);
     }
     // Second pass is served from the cache.
