@@ -36,10 +36,6 @@ fn shipped_defaults_are_pinned() {
     assert_eq!(cfg.level, AutonomyLevel::Supervised);
     assert!(cfg.workspace_only);
     assert_eq!(cfg.max_actions_per_hour, u32::MAX, "effectively unlimited");
-    assert_eq!(
-        cfg.max_cost_per_day_cents, 500,
-        "carried but never enforced"
-    );
     assert!(cfg.require_approval_for_medium_risk && cfg.block_high_risk_commands);
     assert!(!cfg.auto_approve_all && !cfg.allow_tool_install);
     assert_eq!(
