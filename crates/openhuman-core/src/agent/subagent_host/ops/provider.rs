@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 pub(crate) fn resolve_subagent_source(
-    spec: &crate::agent::harness::definition::ModelSpec,
+    spec: &tinyagents_definition::ModelSpec,
     agent_id: &str,
     config: Option<&crate::config::Config>,
     parent_source: crate::agent::tinyagents::TurnModelSource,
@@ -15,7 +15,7 @@ pub(crate) fn resolve_subagent_source(
     model_override: Option<&str>,
     temperature: f64,
 ) -> (crate::agent::tinyagents::TurnModelSource, String) {
-    use crate::agent::harness::definition::ModelSpec;
+    use tinyagents_definition::ModelSpec;
     if let Some(model) = model_override
         .map(str::trim)
         .filter(|model| !model.is_empty())

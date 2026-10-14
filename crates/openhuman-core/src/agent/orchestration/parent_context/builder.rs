@@ -63,16 +63,18 @@ pub(crate) async fn build_root_parent(
     // engines can also be reached from contexts that only built the HTTP router
     // (e.g. the JSON-RPC e2e harness) — so init defensively here. `OnceLock`
     // makes this idempotent: a no-op when the registry is already loaded.
-    if crate::agent::harness::AgentDefinitionRegistry::global().is_none() {
+    if crate::agent::harness::host_definition::AgentDefinitionRegistry::global().is_none() {
         if let Err(err) =
-            crate::agent::harness::AgentDefinitionRegistry::init_global(&config.workspace_dir)
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+                &config.workspace_dir,
+            )
         {
             // A concurrent init may have won the race and populated the registry,
             // in which case the `AlreadyInitialized`-style error is benign. But if
             // the registry is *still* `None`, init genuinely failed — fail fast
             // here rather than letting every downstream `spawn_agent` fail later
             // with `NoParentContext` after orchestration state has advanced.
-            if crate::agent::harness::AgentDefinitionRegistry::global().is_none() {
+            if crate::agent::harness::host_definition::AgentDefinitionRegistry::global().is_none() {
                 return Err(err)
                     .context("initialize AgentDefinitionRegistry for orchestration root parent");
             }
@@ -112,7 +114,7 @@ pub(crate) async fn build_root_parent(
         session_id: format!("{session_prefix}-{}", uuid::Uuid::new_v4()),
         channel: channel.to_string(),
         connected_integrations: agent.connected_integrations().to_vec(),
-        tool_call_format: crate::agent::prompts::ToolCallFormat::PFormat,
+        tool_call_format: tinytools_agent::dialect::ToolCallFormat::PFormat,
         session_key: agent.session_key().to_string(),
         session_parent_prefix: agent.session_parent_prefix().map(str::to_string),
         on_progress: None,

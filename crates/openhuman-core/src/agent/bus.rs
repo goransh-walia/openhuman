@@ -30,8 +30,9 @@ use crate::security::prompt_injection::{
 use tinyagents_session::transcript::TranscriptMessage;
 use tinytools::Tool;
 
-use super::harness::definition::{AgentDefinitionRegistry, SandboxMode};
+use super::harness::host_definition::AgentDefinitionRegistry;
 use super::harness::run_channel_turn_via_graph;
+use tinyagents_definition::SandboxMode;
 use tinytools_std::file_state::with_file_state_agent_id;
 
 /// Method name used to dispatch an agentic turn through the native bus.

@@ -335,7 +335,7 @@ impl SessionHostBuilder {
     /// [`OpenHumanDefinitionRegistry::with_session_definition`]: crate::agent::tinyagents::host::OpenHumanDefinitionRegistry::with_session_definition
     pub fn agent_definition(
         mut self,
-        definition: Arc<crate::agent::harness::definition::AgentDefinition>,
+        definition: Arc<crate::agent::harness::host_definition::AgentDefinition>,
     ) -> Self {
         self.session_definition = Some(definition);
         self

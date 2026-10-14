@@ -29,7 +29,7 @@
 
 use std::sync::{Arc, LazyLock, PoisonError, RwLock};
 
-use crate::agent::harness::definition::AgentDefinition;
+use crate::agent::harness::host_definition::AgentDefinition;
 use crate::agent::{HostTools, OpenHumanSessionHost};
 use crate::config::Config;
 use crate::core::runtime::CoreContext;

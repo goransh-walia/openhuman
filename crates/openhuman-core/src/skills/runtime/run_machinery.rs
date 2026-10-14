@@ -126,7 +126,7 @@ pub async fn spawn_workflow_run_background(
     // the task prompt as guidelines + the resolved inputs; the
     // orchestrator's own system prompt and full tool access are kept.
     let guidelines = match &skill.definition.system_prompt {
-        crate::agent::harness::definition::PromptSource::Inline(s) => s.clone(),
+        tinyagents_definition::PromptSource::Inline(s) => s.clone(),
         _ => String::new(),
     };
     let inputs_block = registry::render_inputs_block(&skill.inputs, &inputs);

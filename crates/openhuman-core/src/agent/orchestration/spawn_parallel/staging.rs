@@ -13,15 +13,17 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use tinyagents_graph::parallel::{
-    parse_relative_claim_paths, plan_shared_workspace_dispatch, ClaimConflict, ClaimPathError,
-    DispatchMode, WorkspaceClaim,
+use std::cell::RefCell;
+
+use tinyagents_graph::parallel::{parse_relative_claim_paths, ClaimConflict, ClaimPathError};
+use tinyagents_orchestration::parallel::WorkerDispatchMode;
+use tinyagents_orchestration::parallel::{
+    AdmissionPolicy, AdmissionVerdict, Plan, Preflight, Rejection, RejectionKind, Task,
 };
 
-use crate::agent::harness::definition::{
-    AgentDefinition, AgentDefinitionRegistry, SandboxMode, ToolScope,
-};
 use crate::agent::harness::fork_context::ParentExecutionContext;
+use crate::agent::harness::host_definition::{AgentDefinition, AgentDefinitionRegistry};
+use tinyagents_definition::{SandboxMode, ToolScope};
 use tinyagents_harness::workspace::GitWorktreeBaseRef;
 use tinytools::PermissionLevel;
 
@@ -66,12 +68,6 @@ pub(crate) struct ParallelTaskRejection {
 pub(crate) enum SpawnParallelTaskPreflight {
     Prepared(PreparedParallelTask),
     Rejected(ParallelTaskRejection),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WorkerDispatchMode {
-    Parallel,
-    SerialSharedWorkspaceWrite,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -223,15 +219,78 @@ pub(crate) fn snapshot_agent_definitions(
         .collect()
 }
 
-/// One task that cleared every OpenHuman policy gate and is awaiting the
-/// shared-workspace arbitration verdict.
-struct AdmittedParallelTask {
-    definition: AgentDefinition,
-    prompt: String,
+/// Host payload carried through the module's [`Plan`]: the decoded request and,
+/// once the agent id resolved, its definition.
+struct AdmitPayload {
     task: ParallelAgentTask,
-    task_id: String,
-    /// What this worker needs from the shared workspace, in the crate's terms.
-    claim: WorkspaceClaim,
+    /// Trimmed requested id, or the resolved definition id.
+    agent_id: String,
+    definition: Option<AgentDefinition>,
+}
+
+/// OpenHuman policy over the module's admission seam: identity, the parent's
+/// subagent allowlist, and whether a worker can write the shared workspace at
+/// all. The module owns arbitration and prompt framing.
+struct SpawnParallelPolicy<'a> {
+    parent: &'a ParentExecutionContext,
+    /// Rejection kind per input index (the module carries only the sentence).
+    kinds: RefCell<HashMap<usize, ParallelTaskRejectionKind>>,
+}
+
+impl SpawnParallelPolicy<'_> {
+    fn reject(
+        &self,
+        index: usize,
+        kind: ParallelTaskRejectionKind,
+        message: String,
+    ) -> AdmissionVerdict {
+        self.kinds.borrow_mut().insert(index, kind);
+        AdmissionVerdict::Reject(message)
+    }
+}
+
+impl AdmissionPolicy<AdmitPayload> for SpawnParallelPolicy<'_> {
+    fn admit(&self, index: usize, task: &Task<AdmitPayload>) -> AdmissionVerdict {
+        let payload = &task.payload;
+        if payload.agent_id.is_empty() || task.prompt.is_empty() {
+            return self.reject(
+                index,
+                ParallelTaskRejectionKind::MissingAgentOrPrompt,
+                "agent_id and prompt are required".to_string(),
+            );
+        }
+        let Some(definition) = payload.definition.as_ref() else {
+            return self.reject(
+                index,
+                ParallelTaskRejectionKind::UnknownAgent,
+                format!("unknown agent_id '{}'", payload.agent_id),
+            );
+        };
+        if !self.parent.allowed_subagent_ids.contains(&definition.id) {
+            return self.reject(
+                index,
+                ParallelTaskRejectionKind::OutsideAllowlist,
+                format!(
+                    "agent '{}' is not in parent agent '{}' subagents.allowlist",
+                    definition.id, self.parent.agent_definition_id
+                ),
+            );
+        }
+        match shared_workspace_write_claim(&payload.task, definition, self.parent) {
+            Ok(Some(paths)) => AdmissionVerdict::Writes(paths),
+            Ok(None) => {
+                if matches!(
+                    worktree_request_for_task(&payload.task),
+                    ParallelWorktreeRequest::Isolated { .. }
+                ) {
+                    AdmissionVerdict::Isolated
+                } else {
+                    AdmissionVerdict::ReadOnly
+                }
+            }
+            Err(error) => self.reject(index, ParallelTaskRejectionKind::RequiresIsolation, error),
+        }
+    }
 }
 
 pub(crate) fn prepare_spawn_parallel_tasks_from_defs(
@@ -239,158 +298,76 @@ pub(crate) fn prepare_spawn_parallel_tasks_from_defs(
     definitions: &HashMap<String, AgentDefinition>,
     parent: &ParentExecutionContext,
 ) -> Vec<SpawnParallelTaskPreflight> {
-    // Pass 1 — OpenHuman policy. Identity, the parent's subagent allowlist, and
-    // whether a worker can write the shared workspace at all are all product
-    // decisions, so they are settled here and rejected in their own vocabulary. What survives carries a
-    // `WorkspaceClaim` describing only what the arbiter needs to know.
-    enum Admission {
-        Admitted(Box<AdmittedParallelTask>),
-        Rejected(ParallelTaskRejection),
-    }
-
-    let admissions: Vec<Admission> = tasks
-        .into_iter()
-        .map(|task| {
-            let agent_id = task.agent_id.trim().to_string();
-            let prompt = task.prompt.trim().to_string();
-            let task_id = format!("sub-{}", uuid::Uuid::new_v4());
-
-            if agent_id.is_empty() || prompt.is_empty() {
-                return Admission::Rejected(ParallelTaskRejection {
-                    task_id,
-                    agent_id,
-                    error: "agent_id and prompt are required".to_string(),
-                    ownership: task.ownership,
-                    kind: ParallelTaskRejectionKind::MissingAgentOrPrompt,
-                });
-            }
-
-            let Some(definition) = definitions.get(&agent_id).cloned() else {
-                return Admission::Rejected(ParallelTaskRejection {
-                    task_id,
-                    agent_id: agent_id.clone(),
-                    error: format!("unknown agent_id '{agent_id}'"),
-                    ownership: task.ownership,
-                    kind: ParallelTaskRejectionKind::UnknownAgent,
-                });
-            };
-
-            if !parent.allowed_subagent_ids.contains(&definition.id) {
-                return Admission::Rejected(ParallelTaskRejection {
-                    task_id,
-                    agent_id: definition.id.clone(),
-                    error: format!(
-                        "agent '{}' is not in parent agent '{}' subagents.allowlist",
-                        definition.id, parent.agent_definition_id
-                    ),
-                    ownership: task.ownership,
-                    kind: ParallelTaskRejectionKind::OutsideAllowlist,
-                });
-            }
-
-            let claim = match shared_workspace_write_claim(&task, &definition, parent) {
-                // Needs the shared workspace and declares what it owns.
-                Ok(Some(paths)) => WorkspaceClaim::writing(task_id.clone(), paths),
-                // Cannot collide. Both arms plan as parallel, but they say so
-                // for different reasons and the claim should carry the real one:
-                // an isolated worker has its own root, a shared one simply never
-                // writes.
-                Ok(None) => {
-                    if matches!(
-                        worktree_request_for_task(&task),
-                        ParallelWorktreeRequest::Isolated { .. }
-                    ) {
-                        WorkspaceClaim::isolated(task_id.clone())
-                    } else {
-                        WorkspaceClaim::read_only(task_id.clone())
-                    }
+    let plan = Plan::new(
+        tasks
+            .into_iter()
+            .map(|task| {
+                let requested = task.agent_id.trim().to_string();
+                let definition = definitions.get(&requested).cloned();
+                Task {
+                    id: format!("sub-{}", uuid::Uuid::new_v4()),
+                    prompt: task.prompt.trim().to_string(),
+                    ownership: task.ownership.clone(),
+                    payload: AdmitPayload {
+                        agent_id: requested,
+                        definition,
+                        task,
+                    },
                 }
-                Err(error) => {
-                    return Admission::Rejected(ParallelTaskRejection {
-                        task_id,
-                        agent_id: definition.id.clone(),
-                        error,
-                        ownership: task.ownership,
-                        kind: ParallelTaskRejectionKind::RequiresIsolation,
-                    });
-                }
-            };
-
-            Admission::Admitted(Box::new(AdmittedParallelTask {
-                definition,
-                prompt,
-                task,
-                task_id,
-                claim,
-            }))
-        })
-        .collect();
-
-    // Pass 2 — arbitration. One planner call over every admitted claim, in input
-    // order, so the verdict is a pure function of the request rather than of
-    // which worker happened to be considered first. `shared_workspace_write_claim`
-    // has already ruled out the unbounded-write case, so the only conflict the
-    // planner can report here is an overlap.
-    let claims: Vec<WorkspaceClaim> = admissions
-        .iter()
-        .filter_map(|admission| match admission {
-            Admission::Admitted(admitted) => Some(admitted.claim.clone()),
-            Admission::Rejected(_) => None,
-        })
-        .collect();
-    let plan = plan_shared_workspace_dispatch(&claims);
-    let conflicts: HashMap<usize, &ClaimConflict> = plan
-        .conflicts
-        .iter()
-        .map(|(index, conflict)| (*index, conflict))
-        .collect();
-
-    let mut admitted_index = 0usize;
-    admissions
-        .into_iter()
-        .map(|admission| {
-            let admitted = match admission {
-                Admission::Rejected(rejection) => {
-                    return SpawnParallelTaskPreflight::Rejected(rejection);
-                }
-                Admission::Admitted(admitted) => admitted,
-            };
-            let index = admitted_index;
-            admitted_index += 1;
-
-            let AdmittedParallelTask {
-                definition,
-                prompt,
-                task,
-                task_id,
-                claim: _,
-            } = *admitted;
-
-            if let Some(conflict) = conflicts.get(&index) {
-                return SpawnParallelTaskPreflight::Rejected(ParallelTaskRejection {
-                    task_id,
-                    agent_id: definition.id.clone(),
-                    error: shared_workspace_conflict_message(&definition.id, conflict),
-                    ownership: task.ownership,
-                    kind: ParallelTaskRejectionKind::RequiresIsolation,
-                });
-            }
-
-            let dispatch_mode = match plan.modes.get(index).copied().flatten() {
-                Some(DispatchMode::Serial) => WorkerDispatchMode::SerialSharedWorkspaceWrite,
-                // A claim the planner neither serialized nor rejected cannot
-                // collide, so it is safe to fan out.
-                Some(DispatchMode::Parallel) | None => WorkerDispatchMode::Parallel,
-            };
-
-            let prompt = with_ownership_boundary(&prompt, task.ownership.as_deref());
-            SpawnParallelTaskPreflight::Prepared(PreparedParallelTask {
-                definition,
-                prompt,
-                task,
-                task_id,
-                dispatch_mode,
             })
+            .collect(),
+    );
+    let policy = SpawnParallelPolicy {
+        parent,
+        kinds: RefCell::new(HashMap::new()),
+    };
+    let staged = plan.stage(&policy);
+    let kinds = policy.kinds.into_inner();
+    staged
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| match item {
+            Preflight::Prepared(worker) => {
+                let AdmitPayload {
+                    task, definition, ..
+                } = worker.payload;
+                SpawnParallelTaskPreflight::Prepared(PreparedParallelTask {
+                    definition: definition.expect("admitted task has a definition"),
+                    prompt: worker.prompt,
+                    task,
+                    task_id: worker.id,
+                    dispatch_mode: worker.dispatch_mode,
+                })
+            }
+            Preflight::Rejected(rejection) => {
+                let Rejection { task, kind } = rejection;
+                let agent_id = task
+                    .payload
+                    .definition
+                    .as_ref()
+                    .map(|d| d.id.clone())
+                    .unwrap_or_else(|| task.payload.agent_id.clone());
+                let (error, kind) = match kind {
+                    RejectionKind::Policy(message) => (
+                        message,
+                        kinds
+                            .get(&index)
+                            .copied()
+                            .unwrap_or(ParallelTaskRejectionKind::RequiresIsolation),
+                    ),
+                    RejectionKind::Conflict(conflict) => (
+                        shared_workspace_conflict_message(&agent_id, &conflict),
+                        ParallelTaskRejectionKind::RequiresIsolation,
+                    ),
+                };
+                SpawnParallelTaskPreflight::Rejected(ParallelTaskRejection {
+                    task_id: task.id,
+                    agent_id,
+                    error,
+                    ownership: task.ownership,
+                    kind,
+                })
+            }
         })
         .collect()
 }
@@ -413,14 +390,5 @@ fn shared_workspace_conflict_message(agent_id: &str, conflict: &ClaimConflict) -
         ClaimConflict::UnboundedWrite { .. } => format!(
             "agent '{agent_id}' can write the shared workspace without declaring which files it owns; set isolation=\"worktree\" or provide disjoint files: ownership"
         ),
-    }
-}
-
-pub(crate) fn with_ownership_boundary(prompt: &str, ownership: Option<&str>) -> String {
-    match ownership.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(boundary) => format!(
-            "[Ownership Boundary]\n{boundary}\n\n[Task]\n{prompt}\n\nDo not work outside the ownership boundary unless the parent explicitly asks you to."
-        ),
-        None => prompt.to_string(),
     }
 }

@@ -31,7 +31,7 @@ async fn resumed_orphaned_tool_head_is_repaired_before_the_request() {
     // definitions (core/jsonrpc.rs), which routes a root turn through the
     // hosted harness. Without this the result depended on whether another test
     // in the process had installed them first.
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
     let root = tempfile::tempdir().expect("tempdir");
     // The native dialect resolves from the model's profile (`Native` means
     // "native if the model supports it"); a profile-less scripted model would

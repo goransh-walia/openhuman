@@ -46,7 +46,7 @@ async fn update_applies_and_persists_a_change() {
 }
 
 #[tokio::test]
-async fn a_legacy_state_file_is_imported_once_and_retired() {
+async fn a_legacy_state_file_is_imported_once_and_left_byte_identical() {
     let dir = tempfile::tempdir().unwrap();
     let config = config_in(&dir);
     let legacy_dir = dir.path().join("integrations");
@@ -55,8 +55,12 @@ async fn a_legacy_state_file_is_imported_once_and_retired() {
 
     let loaded: BTreeMap<String, u32> = load(&config, USER_SCOPES_FILE).await.unwrap();
     assert_eq!(loaded["gmail"], 7);
-    assert!(!legacy_dir.join(USER_SCOPES_FILE).exists());
-    assert!(legacy_dir
+    // The legacy file is read only: same name, same bytes, no `.migrated`.
+    assert_eq!(
+        std::fs::read(legacy_dir.join(USER_SCOPES_FILE)).unwrap(),
+        br#"{"gmail":7}"#
+    );
+    assert!(!legacy_dir
         .join(format!("{USER_SCOPES_FILE}.migrated"))
         .exists());
 
@@ -73,4 +77,8 @@ async fn a_legacy_state_file_is_imported_once_and_retired() {
     .unwrap();
     let again: BTreeMap<String, u32> = load(&config, USER_SCOPES_FILE).await.unwrap();
     assert_eq!(again["gmail"], 9);
+    assert_eq!(
+        std::fs::read(legacy_dir.join(USER_SCOPES_FILE)).unwrap(),
+        br#"{"gmail":7}"#
+    );
 }

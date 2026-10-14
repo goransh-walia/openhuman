@@ -77,7 +77,8 @@ fn tools_are_ranked_by_cost_not_registration_order() {
 /// ~200 tools, so every `tool_bytes` budget described a belt no agent carries.
 #[test]
 fn session_report_measures_the_visible_belt_not_the_registry() {
-    crate::agent::harness::AgentDefinitionRegistry::init_global_builtins().unwrap();
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins()
+        .unwrap();
     let tmp = tempfile::TempDir::new().unwrap();
     let config = crate::config::Config {
         workspace_dir: tmp.path().join("workspace"),

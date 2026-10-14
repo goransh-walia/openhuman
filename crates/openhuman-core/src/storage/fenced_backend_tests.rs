@@ -544,3 +544,42 @@ async fn expiring_blob_writes_are_fenced() {
         .unwrap()
         .is_none());
 }
+
+/// The wrapper must pass a conditional append through to a driver that has it:
+/// the trait default answers `Unsupported(ConditionalStreamAppend)`, which
+/// refused every conversation append on the default (SQLite) backend.
+async fn conditional_append_passes_through(inner: Arc<dyn StorageBackend>) {
+    let wrapped = wrap(inner);
+    let scoped = wrapped.for_scope(&Scope::local()).unwrap();
+    let streams = scoped.streams();
+    assert_eq!(
+        streams
+            .append_batch_if_offset("log", 0, vec![json!(1)])
+            .await
+            .unwrap(),
+        0
+    );
+    let stale = streams
+        .append_batch_if_offset("log", 0, vec![json!(2)])
+        .await
+        .unwrap_err();
+    assert_eq!(stale.kind(), tinystoragedrivers::ErrorKind::Conflict);
+    assert_eq!(streams.len("log").await.unwrap(), 1);
+}
+
+#[tokio::test]
+async fn fenced_memory_backend_passes_conditional_appends_through() {
+    conditional_append_passes_through(shared()).await;
+}
+
+#[cfg(feature = "storage-sqlite")]
+#[tokio::test]
+async fn fenced_sqlite_backend_passes_conditional_appends_through() {
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("sqlite:{}", dir.path().join("cond.db").display());
+    let backend =
+        tinystoragedrivers::open(&tinystoragedrivers::StorageConfig::parse(&url).unwrap())
+            .await
+            .unwrap();
+    conditional_append_passes_through(backend).await;
+}

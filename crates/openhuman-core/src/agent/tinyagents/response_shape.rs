@@ -28,7 +28,7 @@ use crate::agent::tinyagents::host::OpenHumanRunContext;
 #[derive(Clone, Default)]
 pub struct ResponseShape {
     /// Observer captured before the host dispatches to the core worker.
-    pub observer: Option<Arc<super::turn_observer::ObserverScope>>,
+    pub observer: Option<Arc<tinyagents_harness::observability::turn_observer::ObserverScope>>,
     /// Host validation of the original terminal text, before any repair.
     pub validator: Option<Arc<dyn ResponseValidator>>,
     /// Bounded number of output repair attempts.
@@ -161,7 +161,9 @@ pub async fn with_response_shape<F: std::future::Future>(
     let observer = scope.shape.observer.clone();
     let run = RESPONSE_SHAPE.scope(scope, Box::pin(fut));
     match observer {
-        Some(observer) => super::turn_observer::with_observer(observer, run).await,
+        Some(observer) => {
+            tinyagents_harness::observability::turn_observer::with_observer(observer, run).await
+        }
         None => run.await,
     }
 }

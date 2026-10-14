@@ -9,7 +9,7 @@ pub(in crate::agent::tinyagents) struct AssembledTurnHarness {
     pub(in crate::agent::tinyagents) harness: AgentHarness<(), OpenHumanRunContext>,
     /// Shared 1-based model-call cursor (event bridge advances, model adapter
     /// reads for out-of-band thinking attribution).
-    pub(in crate::agent::tinyagents) cursor: IterationCursor,
+    pub(in crate::agent::tinyagents) cursor: tinyagents_harness::events::IterationCursor,
     /// Shared `call_id → tool_name` map used by the event bridge to label
     /// tool-argument fragments projected off the crate stream.
     pub(in crate::agent::tinyagents) tool_names: ToolNameMap,

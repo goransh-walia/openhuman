@@ -396,9 +396,11 @@ fn agent_node_runtime_resolves_to_the_definitions_effective_iteration_cap() {
     let config = resolver_test_config(&tmp);
     assert_eq!(config.agent.max_tool_iterations, 10);
 
-    crate::agent::harness::definition::AgentDefinitionRegistry::init_global(&config.workspace_dir)
-        .expect("agent registry init");
-    let def = crate::agent::harness::definition::AgentDefinitionRegistry::global()
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        &config.workspace_dir,
+    )
+    .expect("agent registry init");
+    let def = crate::agent::harness::host_definition::AgentDefinitionRegistry::global()
         .expect("registry initialised")
         .get("planner")
         .expect("planner definition registered")

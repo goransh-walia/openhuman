@@ -5,7 +5,6 @@
 use super::super::types::{OpenHumanSessionHost, SessionHostBuilder};
 use std::collections::HashSet;
 use std::sync::Arc;
-use tinytools::ToolPolicyEngine;
 use tinytools::{Tool, ToolSpec};
 use tinytools_agent::dialect::TranscriptEntry;
 
@@ -145,9 +144,9 @@ impl OpenHumanSessionHost {
     /// them replaced by a same-id registry entry.
     pub(crate) fn resolved_definition(
         &self,
-    ) -> Option<Arc<crate::agent::harness::definition::AgentDefinition>> {
+    ) -> Option<Arc<crate::agent::harness::host_definition::AgentDefinition>> {
         self.definition.clone().or_else(|| {
-            crate::agent::harness::definition::AgentDefinitionRegistry::current()
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::current()
                 .and_then(|registry| registry.get(&self.agent_definition_id).cloned())
                 .map(Arc::new)
         })
@@ -248,6 +247,12 @@ impl OpenHumanSessionHost {
                 crate::agent::message_convert::messages_to_history_projection(session.history())
             })
             .unwrap_or_default()
+    }
+
+    /// Restricts integration task-fetch tools to tasks touched within `window`
+    /// on every later turn of this agent; `None` clears the restriction.
+    pub fn set_task_recency_window(&mut self, window: Option<std::time::Duration>) {
+        self.task_recency_window = window;
     }
 
     pub fn set_event_context(&mut self, session_id: impl Into<String>, channel: impl Into<String>) {
@@ -500,7 +505,7 @@ impl OpenHumanSessionHost {
         // at all.
         let all_tools = self.all_tool_refs();
         let reachable = self.reachable_tool_names();
-        let mut session = ToolPolicyEngine::build_session_from_refs(
+        let mut session = crate::tools::policy_session::build_policy_session(
             &self.agent_definition_name,
             &self.event_channel,
             "session",

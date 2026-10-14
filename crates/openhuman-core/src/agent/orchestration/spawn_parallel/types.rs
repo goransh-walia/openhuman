@@ -6,9 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tinytools::WorkspaceDescriptor;
 
-use crate::agent::harness::definition::AgentDefinition;
-
-use super::staging::WorkerDispatchMode;
+use crate::agent::harness::host_definition::AgentDefinition;
 
 /// One worker admitted by the `spawn_parallel_agents` tool.
 ///
@@ -31,18 +29,16 @@ pub(crate) struct ParallelAgentTask {
     pub(crate) base_ref: Option<String>,
 }
 
-/// A staged worker with everything the fanout needs: resolved definition,
-/// prompt (with any ownership boundary applied), and worktree placement.
+/// Host payload of a module `Worker`: resolved definition, lineage and worktree
+/// placement. Id, prompt (ownership boundary applied) and dispatch mode live on
+/// the module's `Worker`.
 #[derive(Clone)]
 pub(crate) struct SpawnParallelWorker {
     pub(crate) definition: AgentDefinition,
-    pub(crate) prompt: String,
     pub(crate) task: ParallelAgentTask,
-    pub(crate) task_id: String,
     pub(crate) lineage: ParallelAgentLineage,
     pub(crate) worktree_path: Option<PathBuf>,
     pub(crate) workspace_descriptor: Option<WorkspaceDescriptor>,
-    pub(crate) dispatch_mode: WorkerDispatchMode,
 }
 
 /// Terminal or suspended lifecycle state projected by one parallel worker.

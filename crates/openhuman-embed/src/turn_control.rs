@@ -348,7 +348,7 @@ impl Turn {
                     structured_retries: self.structured_retries,
                     provider_options: self.provider_options.clone(),
                     require_tool_call: self.require_tool_call,
-                    observer: openhuman_core::agent::tinyagents::turn_observer::current_scope(),
+                    observer: tinyagents_harness::observability::turn_observer::current_scope(),
                 },
             ),
             untrusted_input: self.untrusted_input,

@@ -43,7 +43,6 @@ fn run_with_imports_legacy_cron_jobs_whatever_the_flows_gate() {
         CronDocuments::new(docs)
             .list_jobs()
             .await
-            .map_err(Into::into)
     })
     .unwrap();
     assert!(!jobs.is_empty());

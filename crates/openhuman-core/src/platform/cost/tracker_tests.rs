@@ -1,7 +1,7 @@
 use super::*;
+use chrono::{Datelike, Duration};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use chrono::{Datelike, Duration};
 use tempfile::TempDir;
 
 fn enabled_config() -> CostConfig {

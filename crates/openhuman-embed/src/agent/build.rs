@@ -7,12 +7,11 @@
 
 use std::path::Path;
 
-use openhuman_core::agent::harness::definition::{
-    AgentDefinition, AgentDefinitionRegistry, SubagentEntry,
-};
+use openhuman_core::agent::harness::host_definition::{AgentDefinition, AgentDefinitionRegistry};
 use openhuman_core::core::all::DomainGroup;
 use openhuman_core::core::runtime::{ContextOverlay, DomainSet};
 use openhuman_core::tools::toolpacks::{GroupMode, ToolGroups};
+use tinyagents_definition::SubagentEntry;
 
 use super::{AgentError, AgentInner, AgentLayout, AgentSpec};
 use crate::harness::Access;
@@ -247,10 +246,8 @@ pub(crate) fn instantiate(runtime: &Runtime, spec: AgentSpec) -> Result<AgentInn
     // delegates only to the sub-agents its host declares, never to the
     // inherited built-in roster (which would otherwise come back as
     // `delegate_*` tools the scope never listed).
-    if matches!(
-        definition.tools,
-        openhuman_core::agent::harness::definition::ToolScope::Named(_)
-    ) && !definition.tools.names_a_spawn_tool()
+    if matches!(definition.tools, tinyagents_definition::ToolScope::Named(_))
+        && !definition.tools.names_a_spawn_tool()
         && !definition.subagents.is_empty()
     {
         log::debug!(
@@ -293,7 +290,7 @@ pub(crate) fn instantiate(runtime: &Runtime, spec: AgentSpec) -> Result<AgentInn
     overrides.model = provider.custom_model();
     overrides.role_models = provider.role_models().clone();
     overrides.session_store = parts.session_store;
-    if let openhuman_core::agent::harness::definition::ToolScope::Named(names) = &definition.tools {
+    if let tinyagents_definition::ToolScope::Named(names) = &definition.tools {
         overrides.named_tools = Some(std::sync::Arc::new(names.iter().cloned().collect()));
     }
     let overrides = std::sync::Arc::new(overrides);
@@ -416,10 +413,8 @@ fn own_catalogue(
 /// Adds `tool_search` to a named belt that lacks it. A wildcard belt already
 /// has discovery.
 #[cfg(feature = "mcp")]
-fn opt_named_belt_into_discovery(
-    scope: &mut openhuman_core::agent::harness::definition::ToolScope,
-) {
-    use openhuman_core::agent::harness::definition::ToolScope;
+fn opt_named_belt_into_discovery(scope: &mut tinyagents_definition::ToolScope) {
+    use tinyagents_definition::ToolScope;
     const TOOL_SEARCH: &str = "tool_search";
     if let ToolScope::Named(names) = scope {
         if !names.iter().any(|name| name == TOOL_SEARCH) {

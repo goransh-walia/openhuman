@@ -244,7 +244,7 @@ async fn unscoped_async_spawn_refuses_before_persisting_a_running_session() {
     use crate::agent::orchestration::subagent_sessions::SubagentSessionStore;
     use crate::agent::orchestration::tools::{SpawnAsyncSubagentDispatch, SpawnAsyncSubagentTool};
     use tinyagents_harness::tool::ToolDispatch;
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
     let workspace = tempfile::tempdir().unwrap();
     assert!(
         crate::storage::installed().is_none(),
@@ -271,7 +271,7 @@ async fn unscoped_async_spawn_refuses_before_persisting_a_running_session() {
         session_id: PARENT.into(),
         channel: "test".into(),
         connected_integrations: Vec::new(),
-        tool_call_format: crate::agent::prompts::ToolCallFormat::Native,
+        tool_call_format: tinytools_agent::dialect::ToolCallFormat::Native,
         session_key: "scope-refusal-parent".into(),
         session_parent_prefix: None,
         on_progress: None,

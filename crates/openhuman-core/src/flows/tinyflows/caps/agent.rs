@@ -24,7 +24,7 @@ use crate::inference::provider::{is_raw_passthrough_model, role_for_model_tier};
 /// agent kind by one of two paths, chosen by [`route_for_agent_ref`]:
 ///
 /// 1. **Full harness turn** (the common case, Phase A). When `agent_ref` names a
-///    harness [`AgentDefinition`](crate::agent::harness::definition::AgentDefinition),
+///    harness [`AgentDefinition`](crate::agent::harness::host_definition::AgentDefinition),
 ///    the node builds a real session agent
 ///    ([`OpenHumanSessionHost::from_config_for_agent`](crate::agent::OpenHumanSessionHost::from_config_for_agent)
 ///    + `set_agent_definition_name`) and drives one full turn via
@@ -133,7 +133,7 @@ pub(crate) fn route_for_agent_ref(agent_ref: &str) -> AgentRoute {
     if crate::agent::host_agents::resolve(agent_ref).is_some() {
         return AgentRoute::HostAgent;
     }
-    let has_definition = crate::agent::harness::definition::AgentDefinitionRegistry::current()
+    let has_definition = crate::agent::harness::host_definition::AgentDefinitionRegistry::current()
         .map(|reg| reg.get(agent_ref).is_some())
         .unwrap_or(false);
     if has_definition {
@@ -176,7 +176,7 @@ impl AgentRunner for OpenHumanAgentRunner {
         // build a named agent. Idempotent: a booted core already did this at
         // startup; a bare flow run (tests, standalone) has not. A failure here
         // is non-fatal — we log and fall through to the registry-entry route.
-        if let Err(e) = crate::agent::harness::definition::AgentDefinitionRegistry::init_global(
+        if let Err(e) = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
             &self.config.workspace_dir,
         ) {
             tracing::warn!(

@@ -8,8 +8,9 @@
 //! `tinyagents::turn_policy`) was later than the backstop, so the harness
 //! never got the chance to stop the turn itself.
 //!
-//! This module is the single source of truth for the backstop and for the two
-//! points the harness derives from it:
+//! The deadline value (`tinyagents_harness::turn_deadline::TurnDeadline`)
+//! owns the two points the harness derives from the backstop; this module
+//! keeps the host side (env override, task-local scope):
 //!
 //! * **wind-down** (`backstop - min(120s, backstop/5)`, 780s by default): the
 //!   harness pauses the run at the next safe point, after a model call or a
@@ -30,115 +31,30 @@
 //! `None` and keep their previous behaviour.
 
 use std::future::Future;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-/// Default outer wall-clock backstop for one web-chat turn, in seconds.
-pub const DEFAULT_TURN_BACKSTOP_SECS: u64 = 900;
+use tinyagents_harness::turn_deadline::{parse_backstop, TurnDeadline};
 
 /// Environment override for the backstop, in seconds; `0` disables it.
 pub const TURN_BACKSTOP_ENV: &str = "OPENHUMAN_WEB_TURN_TIMEOUT_SECS";
-
-/// Upper bound on the gap between wind-down and the backstop. It has to cover
-/// the tool round already in flight plus the grounded close (one model call,
-/// its verification, and at most one repair).
-const WIND_DOWN_MARGIN: Duration = Duration::from_secs(120);
-
-/// Upper bound on the gap between the harness hard stop and the backstop.
-const HARD_STOP_MARGIN: Duration = Duration::from_secs(60);
 
 /// Time kept back from the post-loop grounded close so the turn can commit and
 /// emit its reply before the backstop drops it.
 const CLOSE_RESERVE: Duration = Duration::from_secs(10);
 
-/// Pure core of [`configured_backstop`]: an absent or unparseable value falls
-/// back to [`DEFAULT_TURN_BACKSTOP_SECS`]. `0` disables the backstop (`None`).
-pub fn parse_backstop(env_value: Option<&str>) -> Option<Duration> {
-    let secs = env_value
-        .and_then(|v| v.trim().parse::<u64>().ok())
-        .unwrap_or(DEFAULT_TURN_BACKSTOP_SECS);
-    (secs > 0).then(|| Duration::from_secs(secs))
+/// How long the post-loop grounded close may run as of `now`: the backstop
+/// remainder minus [`CLOSE_RESERVE`], zero once that has passed (#7716).
+/// Host-side until the harness `TurnDeadline` grows the same accessor.
+pub fn close_budget(deadline: &TurnDeadline, now: std::time::Instant) -> Duration {
+    deadline
+        .backstop()
+        .saturating_sub(deadline.elapsed_at(now))
+        .saturating_sub(CLOSE_RESERVE)
 }
 
 /// The backstop in force for this process (env [`TURN_BACKSTOP_ENV`]).
 pub fn configured_backstop() -> Option<Duration> {
     parse_backstop(std::env::var(TURN_BACKSTOP_ENV).ok().as_deref())
-}
-
-/// One turn's backstop, anchored at the instant the backstop started counting.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TurnDeadline {
-    started: Instant,
-    backstop: Duration,
-}
-
-impl TurnDeadline {
-    /// A deadline whose backstop started at `started`.
-    pub fn new(started: Instant, backstop: Duration) -> Self {
-        Self { started, backstop }
-    }
-
-    /// A deadline whose backstop starts counting now.
-    pub fn starting_now(backstop: Duration) -> Self {
-        Self::new(Instant::now(), backstop)
-    }
-
-    /// The outer backstop, measured from [`Self::started`].
-    pub fn backstop(&self) -> Duration {
-        self.backstop
-    }
-
-    /// When the backstop started counting.
-    pub fn started(&self) -> Instant {
-        self.started
-    }
-
-    /// Elapsed budget after which the harness winds the turn down.
-    pub fn wind_down_after(&self) -> Duration {
-        self.backstop
-            .saturating_sub(WIND_DOWN_MARGIN.min(self.backstop / 5))
-    }
-
-    /// Elapsed budget at which the harness stops the turn itself.
-    pub fn hard_stop_after(&self) -> Duration {
-        self.backstop
-            .saturating_sub(HARD_STOP_MARGIN.min(self.backstop / 10))
-    }
-
-    /// Time spent since the backstop started, as of `now`.
-    pub fn elapsed_at(&self, now: Instant) -> Duration {
-        now.saturating_duration_since(self.started)
-    }
-
-    /// Whether the wind-down point has passed as of `now`.
-    pub fn should_wind_down(&self, now: Instant) -> bool {
-        self.elapsed_at(now) >= self.wind_down_after()
-    }
-
-    /// How long the post-loop grounded close may run as of `now`: the backstop
-    /// remainder minus [`CLOSE_RESERVE`], zero once that has passed (#7716).
-    pub fn close_budget(&self, now: Instant) -> Duration {
-        self.backstop
-            .saturating_sub(self.elapsed_at(now))
-            .saturating_sub(CLOSE_RESERVE)
-    }
-
-    /// Time left until the hard stop as of `now` (zero once it has passed).
-    pub fn hard_stop_remaining(&self, now: Instant) -> Duration {
-        self.hard_stop_after().saturating_sub(self.elapsed_at(now))
-    }
-
-    /// Clamp a configured harness wall-clock ceiling (`None` means unbounded)
-    /// so it ends at the hard stop, never later. Never returns `None`: a turn
-    /// under a backstop is bounded whether or not the ceiling is configured.
-    /// Floors at 1 ms because a zero ceiling would read as "no time at all".
-    pub fn clamp_wall_clock_ms(&self, configured_ms: Option<u64>, now: Instant) -> Option<u64> {
-        let remaining_ms = self
-            .hard_stop_remaining(now)
-            .as_millis()
-            .min(u128::from(u64::MAX)) as u64;
-        let remaining_ms = remaining_ms.max(1);
-        Some(configured_ms.map_or(remaining_ms, |ms| ms.min(remaining_ms)))
-    }
 }
 
 tokio::task_local! {

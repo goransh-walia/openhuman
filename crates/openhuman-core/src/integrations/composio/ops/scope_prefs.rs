@@ -90,11 +90,12 @@ async fn migrate_legacy(config: &Config) {
         }
     }
     if !rows.is_empty() {
-        let cleared = file_store::update(config, USER_SCOPES_FILE, |prefs: &mut LegacyScopeFile| {
-            prefs.clear();
-            ((), true)
-        })
-        .await;
+        let cleared =
+            file_store::update(config, USER_SCOPES_FILE, |prefs: &mut LegacyScopeFile| {
+                prefs.clear();
+                ((), true)
+            })
+            .await;
         if let Err(error) = cleared {
             tracing::warn!(%error, "{LOG} legacy pref file could not be emptied");
             return;

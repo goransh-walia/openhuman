@@ -158,7 +158,7 @@ Published from `ops/` via `crate::core::bus::BUS.publish` (`crate::core::events:
 - `tinyconnectors_bus`: the wire contract (member names, payload types) for the `tinyconnectors` module call surface; a plain dependency, not feature-gated.
 - `crate::agent::tinyagents::host::run_context`: explicit sandbox mode projected
   from the typed tool execution context for per-action and dispatcher gating.
-- [`task_recency_context.rs`](./task_recency_context.rs): Composio-owned morning briefing recency scope; `tools/execute.rs` forwards its window through the connector bus.
+- Task recency window: carried as `OpenHumanRunExt::task_recency_window` (`agent/tinyagents/host/run_context.rs`); `tools/execute.rs` reads it from the tool execution context and forwards it through the connector bus.
 - `tinytools`: `Tool`, `ToolResult`, `ToolCategory`, `PermissionLevel`, `ToolCallOptions`.
 - `crate::security`: `SecurityPolicy` / `ToolOperation` for direct-tool gating.
 - `crate::security::credentials`: encrypted store for the direct-mode API key.

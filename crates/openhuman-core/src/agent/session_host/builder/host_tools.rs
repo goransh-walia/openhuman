@@ -197,9 +197,9 @@ pub(super) struct MergedHostTurnTools {
 }
 
 pub(super) fn add_permanent_tools(
-    mut definition: crate::agent::harness::definition::AgentDefinition,
+    mut definition: crate::agent::harness::host_definition::AgentDefinition,
     permanent: &HashSet<String>,
-) -> crate::agent::harness::definition::AgentDefinition {
+) -> crate::agent::harness::host_definition::AgentDefinition {
     definition.extra_tools.extend(permanent.iter().cloned());
     definition.extra_tools.sort();
     definition.extra_tools.dedup();
@@ -207,11 +207,11 @@ pub(super) fn add_permanent_tools(
 }
 
 pub(super) fn scope_def(
-    definition: Option<&crate::agent::harness::definition::AgentDefinition>,
+    definition: Option<&crate::agent::harness::host_definition::AgentDefinition>,
     host_tools: &MergedHostTurnTools,
-) -> Option<crate::agent::harness::definition::AgentDefinition> {
+) -> Option<crate::agent::harness::host_definition::AgentDefinition> {
     let mut definition = definition.cloned()?;
-    if let crate::agent::harness::definition::ToolScope::Named(names) = &mut definition.tools {
+    if let tinyagents_definition::ToolScope::Named(names) = &mut definition.tools {
         names.retain(|name| !host_tools.withheld.contains(name));
         definition
             .extra_tools
@@ -347,7 +347,7 @@ impl OpenHumanSessionHost {
     /// factory as [`TurnContext::session_id`]; `None` when none is named yet.
     pub fn from_config_with_host_tools(
         config: &Config,
-        definition: &crate::agent::harness::definition::AgentDefinition,
+        definition: &crate::agent::harness::host_definition::AgentDefinition,
         host: &super::HostTools,
         session_id: Option<&str>,
     ) -> Result<Self> {

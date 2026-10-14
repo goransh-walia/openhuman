@@ -134,7 +134,7 @@ async fn dispatch_on_worker(
         with_response_shape, ResponseShape, ResponseShapeScope,
     };
     let shape = ResponseShapeScope::new(ResponseShape {
-        observer: openhuman_core::agent::tinyagents::turn_observer::current_scope(),
+        observer: tinyagents_harness::observability::turn_observer::current_scope(),
         ..ResponseShape::default()
     });
     tokio::spawn(with_response_shape(shape, turn.send()))

@@ -12,7 +12,7 @@ sandbox_mode = "sandboxed"
 # Spawn hierarchy: this is the user-facing tier. It can complete ordinary work
 # itself and delegates only when that is the better execution shape.
 # Loader enforces: a `chat` agent must NOT list any other `chat` agent
-# in `subagents` below — handoff goes directly to `worker` specialists. See `AgentTier` in `crates/openhuman-core/src/agent/harness/definition.rs`.
+# in `subagents` below — handoff goes directly to `worker` specialists. See `AgentTier` in `vendor/tinyagents/crates/tinyagents-definition/src/tier.rs`.
 agent_tier = "chat"
 # Connected MCP servers' tools join this agent's deferred catalogue.
 searches_connected_mcp = true

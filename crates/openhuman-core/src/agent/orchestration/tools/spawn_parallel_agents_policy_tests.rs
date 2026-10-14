@@ -12,14 +12,6 @@ fn metadata_methods_expose_execute_permission_and_schema() {
 }
 
 #[test]
-fn ownership_boundary_is_prepended_when_present() {
-    let prompt = with_ownership_boundary("implement tests", Some("files: src/foo.rs"));
-    assert!(prompt.starts_with("[Ownership Boundary]"));
-    assert!(prompt.contains("files: src/foo.rs"));
-    assert!(prompt.contains("[Task]\nimplement tests"));
-}
-
-#[test]
 fn schema_advertises_isolation_and_base_ref() {
     let tool = SpawnParallelAgentsTool;
     let schema = tool.parameters_schema();
@@ -61,7 +53,7 @@ fn result_omits_worktree_fields_when_absent() {
         agent_id: "a".into(),
         lineage: test_lineage("t1"),
         success: true,
-        status: crate::agent::orchestration::spawn_parallel_graph::ParallelAgentStatus::Completed,
+        status: crate::agent::orchestration::spawn_parallel::ParallelAgentStatus::Completed,
         output: Some("ok".into()),
         error: None,
         awaiting_question: None,
@@ -88,7 +80,7 @@ fn result_serializes_worktree_fields_when_present() {
         agent_id: "coder".into(),
         lineage: test_lineage("t2"),
         success: true,
-        status: crate::agent::orchestration::spawn_parallel_graph::ParallelAgentStatus::Completed,
+        status: crate::agent::orchestration::spawn_parallel::ParallelAgentStatus::Completed,
         output: None,
         error: None,
         awaiting_question: None,

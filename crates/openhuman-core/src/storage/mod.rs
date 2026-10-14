@@ -50,7 +50,8 @@ use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
 /// foreign file, and its `run_blocking` hands the closure a `rusqlite`
 /// connection anyway. The core has no `rusqlite` dependency of its own,
 /// tinystoragedrivers owns the one copy; the re-export goes when the importers
-/// do (the one-time legacy import window closes).
+/// do (the one-time legacy import window closes). Re-checked for #7768: both
+/// consumers are still present, so it stays.
 pub use tinystoragedrivers::sqlite::rusqlite;
 pub use tinystoragedrivers::{
     Blocking, CollectionSpec, DocumentStore, DocumentStoreExt, MemoryStorage, Precondition, Scope,
@@ -336,6 +337,16 @@ pub fn scope_for_profile(profile_id: &str) -> Scope {
     let digest = sha2::Sha256::digest(profile_id.as_bytes());
     Scope::new(format!("profile-sha256:{}", hex::encode(digest)))
         .unwrap_or_else(|_| unreachable!("a sha256 hex scope is always valid"))
+}
+
+/// A stable key for a legacy import source (a workspace directory), for the
+/// marker document and once-per-process key of an importer. Two workspaces
+/// that share one explicit backend and scope must each import their own legacy
+/// files, so a marker names its source.
+pub fn source_key(source: &std::path::Path) -> String {
+    use sha2::Digest;
+    let digest = sha2::Sha256::digest(source.to_string_lossy().as_bytes());
+    hex::encode(&digest[..8])
 }
 
 #[cfg(test)]

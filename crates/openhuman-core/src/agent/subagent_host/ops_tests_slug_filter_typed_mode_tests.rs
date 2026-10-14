@@ -337,7 +337,7 @@ async fn typed_mode_includes_memory_context_when_definition_allows_it() {
         "[Memory context]\n- prior fact: branch X failed\n".into(),
     ));
     let mut def = make_def_named_tools(&[]);
-    def.omit_memory_context = false;
+    def.extensions.omit_memory_context = false;
 
     let _ = with_parent_context(parent, async {
         run_subagent(

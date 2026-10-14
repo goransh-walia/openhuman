@@ -10,11 +10,8 @@ use std::collections::HashSet;
 use std::time::Instant;
 
 use crate::agent::harness::artifact_offload::{new_artifact_offload, offload_oversized_result};
-use crate::agent::harness::definition::{
-    validate_tier_transition, AgentDefinition, AgentDefinitionRegistry, AgentTier, IterationPolicy,
-    PromptSource, SandboxMode as AgentSandboxMode,
-};
 use crate::agent::harness::fork_context::ParentExecutionContext;
+use crate::agent::harness::host_definition::{AgentDefinition, AgentDefinitionRegistry};
 use crate::agent::prompts::{
     render_subagent_system_prompt_with_format, PromptContext, SubagentRenderOptions,
 };
@@ -27,6 +24,10 @@ use crate::agent::subagent_host::types::{
 };
 use crate::agent::tinyagents::budget::MAX_SPAWN_DEPTH;
 use crate::inference::provider::AGENT_TURN_MAX_OUTPUT_TOKENS;
+use tinyagents_definition::{
+    validate_tier_transition, AgentTier, IterationPolicy, PromptSource,
+    SandboxMode as AgentSandboxMode,
+};
 use tinyagents_harness::artifacts::{
     effective_offload_threshold, extract_artifact_paths, note_artifact_handoff,
     DEFAULT_OFFLOAD_THRESHOLD_BYTES, HANDOFF_STAGE_RECORDED,
@@ -717,8 +718,8 @@ async fn run_typed_mode(
 
     // ── Build the narrow system prompt ─────────────────────────────────
     let render_options = SubagentRenderOptions::from_definition_flags(
-        definition.omit_identity,
-        definition.omit_safety_preamble,
+        definition.extensions.omit_identity,
+        definition.extensions.omit_safety_preamble,
     );
 
     let connected_integrations_for_prompt: Vec<crate::agent::prompts::ConnectedIntegration> =
@@ -782,10 +783,10 @@ async fn run_typed_mode(
     let system_prompt = match &definition.system_prompt {
         // The whole prompt, with no sub-agent sections around it.
         PromptSource::Dynamic(_) | PromptSource::Verbatim(_) => {
-            load_prompt_source(&definition.system_prompt, &prompt_ctx)?
+            load_prompt_source(definition, &prompt_ctx)?
         }
         PromptSource::Inline(_) | PromptSource::File { .. } => {
-            let archetype_prompt_body = load_prompt_source(&definition.system_prompt, &prompt_ctx)?;
+            let archetype_prompt_body = load_prompt_source(definition, &prompt_ctx)?;
             render_subagent_system_prompt_with_format(
                 &parent.workspace_dir,
                 &model,
@@ -816,7 +817,7 @@ async fn run_typed_mode(
     let now_str = crate::agent::prompts::current_datetime_line(zone.as_deref());
 
     let mut context_parts: Vec<&str> = Vec::new();
-    if !definition.omit_memory_context {
+    if !definition.extensions.omit_memory_context {
         if let Some(ref mem_ctx) = *parent.memory_context {
             context_parts.push(mem_ctx);
         }
@@ -943,9 +944,8 @@ async fn run_typed_mode(
             // provenance), distinguishing delegated spend from the parent's
             // own channel in per-thread usage reads.
             "subagent",
-            // Agent-level TokenJuice profile → sub-agent context middleware
-            // (#4466), so sub-agent tool outputs compact like the chat path.
-            definition.effective_tokenjuice_compression(),
+            // Agent TokenJuice profile → sub-agent context middleware (#4466).
+            definition.extensions.tokenjuice_for(&definition.model),
             // The spawn-wide config snapshot supplies the `[context]`
             // knobs the graph used to load for itself.
             config.as_ref().ok().map(|c| c.as_ref()),

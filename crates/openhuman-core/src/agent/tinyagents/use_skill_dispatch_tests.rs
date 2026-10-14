@@ -14,9 +14,8 @@
 //! that failure and is the fastest way to see these tests fail red.
 
 use super::*;
-use crate::agent::harness::definition::AgentDefinitionRegistry;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::agent::harness::ParentExecutionContext;
-use crate::agent::prompts::ToolCallFormat;
 use crate::agent::tinyagents::tools::CanonicalSharedToolAdapter;
 use async_trait::async_trait;
 use serde_json::json;
@@ -28,6 +27,7 @@ use tinyagents_harness::CallId;
 use tinyinference_llm::message::Message;
 use tinyinference_llm::model::{ChatModel, ModelProfile, ModelRequest, ModelResponse};
 use tinytools::{Tool, ToolCallOptions, ToolResult};
+use tinytools_agent::dialect::ToolCallFormat;
 
 /// A stub archetype-delegate tool: only its name has to match `image_agent`'s
 /// `delegate_name` ("create_image", set in

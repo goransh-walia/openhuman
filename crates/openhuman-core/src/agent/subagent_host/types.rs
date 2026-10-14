@@ -8,7 +8,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tinytools::WorkspaceDescriptor;
 
-use crate::agent::harness::definition::AgentTier;
+use tinyagents_definition::AgentTier;
 use tinyagents_session::transcript::TranscriptMessage;
 
 /// Per-spawn options that override or augment what the

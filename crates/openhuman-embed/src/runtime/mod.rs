@@ -41,7 +41,7 @@
 //! [`ServiceSet`], the compiled-and-registered [`DomainSet`] and the API key.
 //! An agent owns everything the core reads through its ambient context:
 //! its `Config` (provider route and model, MCP servers, autonomy tier,
-//! `action_dir`), its [`AgentDefinition`](openhuman_core::agent::harness::definition::AgentDefinition)
+//! `action_dir`), its [`AgentDefinition`](openhuman_core::agent::harness::host_definition::AgentDefinition)
 //! (system prompt, tool scope, sandbox mode), its profile (allowlists,
 //! dedicated memory and transcripts), its skills root, its narrowed
 //! `DomainSet` and [`ToolGroups`], its approval settings, sub-agents, MCP

@@ -32,17 +32,15 @@ impl tinytools::Tool for Marker {
     }
 }
 
-fn definition() -> crate::agent::harness::definition::AgentDefinition {
+fn definition() -> crate::agent::harness::host_definition::AgentDefinition {
     super::wildcard_probe_def()
 }
 
 #[test]
 fn host_scope_additions_respect_named_and_withheld_tools() {
     let mut definition = definition();
-    definition.tools = crate::agent::harness::definition::ToolScope::Named(vec![
-        "base".into(),
-        "already_withheld".into(),
-    ]);
+    definition.tools =
+        tinyagents_definition::ToolScope::Named(vec!["base".into(), "already_withheld".into()]);
     definition.extra_tools = vec!["already_withheld".into(), "base".into()];
     let host_tools = super::super::host_tools::MergedHostTurnTools {
         policy: None,
@@ -54,7 +52,7 @@ fn host_scope_additions_respect_named_and_withheld_tools() {
     let resolved = super::super::host_tools::scope_def(Some(&definition), &host_tools).unwrap();
     assert!(matches!(
         &resolved.tools,
-        crate::agent::harness::definition::ToolScope::Named(names)
+        tinyagents_definition::ToolScope::Named(names)
             if names.len() == 1 && names[0] == "base"
     ));
     assert_eq!(resolved.extra_tools, vec!["base", "host_visible"]);
@@ -75,7 +73,7 @@ fn host_scope_additions_leave_wildcard_definitions_unchanged() {
     assert_eq!(resolved.extra_tools, vec!["existing"]);
     assert!(matches!(
         resolved.tools,
-        crate::agent::harness::definition::ToolScope::Wildcard
+        tinyagents_definition::ToolScope::Wildcard
     ));
 }
 

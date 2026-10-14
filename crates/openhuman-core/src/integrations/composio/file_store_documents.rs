@@ -11,6 +11,7 @@
 //! | Collection | Document id | Holds |
 //! | --- | --- | --- |
 //! | `composio_state` | the value name (`composio_identities.json`, ...) | `value`: the serde value |
+//! | `composio_state_import` | the value name | marker: the legacy `integrations/<name>` file was imported (the file is left byte-identical) |
 
 use std::path::Path;
 
@@ -23,10 +24,13 @@ use tinystoragedrivers::{CollectionSpec, ErrorKind, Precondition, StorageError};
 use crate::storage::documents::Repo;
 
 const STATE: &str = "composio_state";
+/// One marker document per legacy file whose one-time import finished, so the
+/// file itself is never touched.
+const IMPORTED: &str = "composio_state_import";
 const DOMAIN: &str = "composio::file_store";
 
 fn collections() -> Vec<CollectionSpec> {
-    vec![CollectionSpec::new(STATE)]
+    vec![CollectionSpec::new(STATE), CollectionSpec::new(IMPORTED)]
 }
 
 /// The document store for this call: the installed backend, else the
@@ -119,19 +123,45 @@ impl Docs {
         })
     }
 
+    /// Whether the one-time import of the legacy `integrations/<name>` file
+    /// finished in this scope.
+    pub(super) fn legacy_imported(&self, name: &str) -> Result<bool> {
+        let id = name.to_string();
+        let found = self
+            .0
+            .run(|docs| async move { docs.get(IMPORTED, &id).await })?;
+        Ok(found.is_some())
+    }
+
     /// Stores `value` under `name` only when no value is stored there yet
-    /// (the one-time import of a pre-documents state file). Returns whether it
-    /// wrote.
+    /// (the one-time import of a pre-documents state file), then records the
+    /// import in a marker document so it never runs again. The legacy file is
+    /// not modified. Returns whether the value was written.
     pub(super) fn import_if_absent(&self, name: &str, value: serde_json::Value) -> Result<bool> {
         let id = name.to_string();
         let doc = json!({ "value": value });
         log::debug!("[composio:store] document import id={id}");
         self.0.run(|docs| async move {
-            match docs.put(STATE, &id, doc, Precondition::Absent).await {
-                Ok(_) => Ok(true),
-                Err(error) if error.kind() == ErrorKind::Conflict => Ok(false),
-                Err(error) => Err(error),
+            let wrote = match docs.put(STATE, &id, doc, Precondition::Absent).await {
+                Ok(_) => true,
+                Err(error) if error.kind() == ErrorKind::Conflict => false,
+                Err(error) => return Err(error),
+            };
+            match docs
+                .put(
+                    IMPORTED,
+                    &id,
+                    json!({ "imported": true }),
+                    Precondition::Absent,
+                )
+                .await
+            {
+                Ok(_) => {}
+                // Another core finished first.
+                Err(error) if error.kind() == ErrorKind::Conflict => {}
+                Err(error) => return Err(error),
             }
+            Ok(wrote)
         })
     }
 

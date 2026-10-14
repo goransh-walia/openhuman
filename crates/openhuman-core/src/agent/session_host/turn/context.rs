@@ -1,7 +1,7 @@
 //! History, context, and system prompt management.
 
 use super::super::types::OpenHumanSessionHost;
-use crate::agent::prompts::{tool_call_format_from_dialect, PromptContext, PromptTool};
+use crate::agent::prompts::{PromptContext, PromptTool};
 use tinytools::render_tool_policy_boundary;
 
 use anyhow::Result;
@@ -56,9 +56,7 @@ impl OpenHumanSessionHost {
             workflows: &self.workflows,
             dispatcher_instructions: &instructions,
             visible_tool_names: &prompt_visible_tool_names,
-            tool_call_format: tool_call_format_from_dialect(
-                self.tool_dispatcher.tool_call_format(),
-            ),
+            tool_call_format: self.tool_dispatcher.tool_call_format(),
             connected_integrations: &self.connected_integrations,
             connected_identities_md: crate::agent::prompts::render_connected_identities(),
             user_identity: crate::security::credentials::identity::peek_credential_user_identity(),

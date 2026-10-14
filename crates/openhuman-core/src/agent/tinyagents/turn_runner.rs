@@ -20,14 +20,16 @@ use crate::agent::tinyagents::harness_assembly::{assemble_turn_harness, Assemble
 use crate::agent::tinyagents::host::steering::shared_steering_registry;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::middleware::TurnContextMiddleware;
-use crate::agent::tinyagents::observability::{CapPauser, OpenhumanEventBridge, SubagentScope};
+use crate::agent::tinyagents::observability::{OpenhumanEventBridge, SubagentScope};
 use crate::agent::tinyagents::turn_models::TurnModels;
 use crate::agent::tinyagents::turn_outcome::TinyagentsTurnOutcome;
 use crate::agent::tinyagents::turn_policy::effective_max_iterations;
 use crate::agent::tinyagents::turn_run_error::map_turn_run_error;
 use crate::agent::tinyagents::turn_run_finalize::finalize_turn_outcome;
 use crate::agent::tinyagents::{journal, routes, steering_forwarder};
+use tinyagents_harness::events::{CapPauser, PauseRecorder};
 use tinyagents_harness::ids::TaskId;
+use tinyagents_harness::observability::turn_observer;
 use tinyagents_harness::run_queue::RunQueue;
 use tinyagents_session::transcript::TranscriptMessage;
 
@@ -442,12 +444,9 @@ pub(super) async fn run_turn_via_tinyagents_body(
     let turn_completed_sink = (subagent_scope.is_none() && !defer_turn_completed_to_caller)
         .then(|| on_progress.clone())
         .flatten();
-    // A sink is needed to mirror progress (bridge), to observe model-call
-    // completions for the cap pauser, or to persist a durable event journal
-    // (issue #4249, 05.1). The journal must attach even for an unobserved
-    // (`on_progress = None`) turn so the run stays reconstructable, so the
-    // EventSink is now created unconditionally — cheap (an empty sink) and, if
-    // no consumer subscribes, inert.
+    // The EventSink is created unconditionally (bridge, cap pauser and the
+    // durable journal of issue #4249, 05.1 all subscribe; it is inert when
+    // nothing does), so an unobserved turn stays reconstructable.
     //
     // Mint the durable run id *before* the sink and seed the sink stream prefix
     // with it (`with_stream_id`), so every persisted observation's `event_id` is
@@ -463,7 +462,7 @@ pub(super) async fn run_turn_via_tinyagents_body(
         }
     }
     let sink = EventSink::with_stream_id(journal_run_id.as_str());
-    super::turn_observer::install(&mut harness, &sink, hosted_root.is_some());
+    turn_observer::install(&mut harness, &sink, hosted_root.is_some());
     let events = Some(sink);
     // Attach the event bridge for EVERY turn — including an unobserved
     // (`on_progress = None`) background/cron turn (#4467, item 3). The bridge's
@@ -491,36 +490,37 @@ pub(super) async fn run_turn_via_tinyagents_body(
         bridge
     });
 
-    // Cap pauser: stop gracefully at the model-call budget (returning the partial
-    // transcript) so the caller can summarize a checkpoint instead of erroring.
-    //
-    // It is also handed the turn's dispatch guard, so the pause is *recorded* and
-    // not merely requested. `SteeringCommand::Pause` is advisory — honoured at the
-    // loop boundary — and nothing consulted it before dispatching a new sub-agent,
-    // so a dispatch issued in the same instant raced it and took the whole turn
-    // down with the run's remaining wall-clock budget (#5804). The guard is
-    // resolved here rather than inside the listener because this future runs on
-    // the turn's task, where the task-local is in scope; the listener need not.
+    // Cap pauser: stop gracefully at the model-call budget so the caller can
+    // summarize a checkpoint instead of erroring. `Pause` is advisory, so the
+    // pause is also recorded on the turn's dispatch guard (resolved here, on
+    // the turn's task where the task-local is in scope) to stop a racing
+    // sub-agent dispatch (#5804).
     if pause_at_cap {
         if let (Some(events), Some(handle)) = (&events, &handle) {
-            // Only the TOP-LEVEL turn's cap pause is binding on dispatch. A
-            // sub-agent reaching its own model-call cap is a routine outcome —
-            // it summarises and hands its result back (`hit_cap`) — and the
-            // parent may legitimately keep delegating afterwards. Recording a
-            // child's cap here would stop the whole turn's fan-out on a signal
-            // that says nothing about the parent's budget, so `subagent_scope`
-            // gates it: `None` is the chat turn, `Some` is a delegated child.
-            // The child still gets its advisory `Pause` either way.
+            // Only the top-level turn's cap pause is binding on dispatch; a
+            // delegated child reaching its own cap is routine and must not
+            // stop the parent's fan-out (it still gets its advisory `Pause`).
             let dispatch_guard = subagent_scope
                 .is_none()
                 .then(|| run_context.dispatch.clone())
                 .flatten();
-            events.subscribe(CapPauser::new(
+            let recorder = dispatch_guard.map(|guard| {
+                Arc::new(move |completed: u64, cap: u64| {
+                    guard.record_pause_requested(completed, cap)
+                }) as PauseRecorder
+            });
+            match CapPauser::with_recorder(
                 handle.clone(),
                 max_iterations,
                 ctx.run_id().as_str(),
-                dispatch_guard,
-            ));
+                recorder,
+            ) {
+                Ok(pauser) => events.subscribe(pauser),
+                Err(err) => tracing::warn!(
+                    error = %err,
+                    "[tinyagents] model-call cap pauser not installed"
+                ),
+            }
         }
     }
 

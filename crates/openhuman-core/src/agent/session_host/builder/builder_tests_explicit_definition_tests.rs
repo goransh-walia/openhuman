@@ -4,12 +4,11 @@
 //! registry.
 
 use super::*;
-use crate::agent::harness::definition::{
-    AgentDefinitionRegistry, PromptSource, SandboxMode, ToolScope,
-};
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::agent::session_host::types::OpenHumanSessionHost;
+use tinyagents_definition::{PromptSource, SandboxMode, ToolScope};
 
-fn explicit_definition(id: &str) -> crate::agent::harness::definition::AgentDefinition {
+fn explicit_definition(id: &str) -> crate::agent::harness::host_definition::AgentDefinition {
     let mut def = AgentDefinitionRegistry::builtins_only()
         .get("orchestrator")
         .cloned()

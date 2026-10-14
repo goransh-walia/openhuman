@@ -1,15 +1,16 @@
 use super::*;
 
 fn visible_names(agent_id: &str) -> std::collections::HashSet<String> {
-    let definition = crate::agent::harness::AgentDefinitionRegistry::builtins_only()
-        .get(agent_id)
-        .cloned()
-        .unwrap_or_else(|| panic!("built-in agent definition not found: {agent_id}"));
+    let definition =
+        crate::agent::harness::host_definition::AgentDefinitionRegistry::builtins_only()
+            .get(agent_id)
+            .cloned()
+            .unwrap_or_else(|| panic!("built-in agent definition not found: {agent_id}"));
     visible_names_for(&definition)
 }
 
 fn visible_names_for(
-    definition: &crate::agent::harness::definition::AgentDefinition,
+    definition: &crate::agent::harness::host_definition::AgentDefinition,
 ) -> std::collections::HashSet<String> {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -217,10 +218,11 @@ fn named_belt_keeps_its_listed_members() {
 fn orchestrator_reaches_the_replaced_specialists_tools_through_discovery() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let definition = crate::agent::harness::AgentDefinitionRegistry::builtins_only()
-        .get("orchestrator")
-        .cloned()
-        .expect("orchestrator built-in definition");
+    let definition =
+        crate::agent::harness::host_definition::AgentDefinitionRegistry::builtins_only()
+            .get("orchestrator")
+            .cloned()
+            .expect("orchestrator built-in definition");
     let agent =
         crate::agent::OpenHumanSessionHost::from_config_with_definition(&config, &definition)
             .expect("orchestrator session build");

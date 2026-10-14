@@ -51,8 +51,10 @@ pub async fn flows_discover(
     // The registry must be initialised before building a named builtin agent
     // (mirrors `agent_registry::ops::available_tools`); it is idempotent, so a
     // second call from an already-booted core is a cheap no-op.
-    crate::agent::harness::AgentDefinitionRegistry::init_global(&config.workspace_dir)
-        .map_err(|e| format!("failed to initialise agent registry: {e}"))?;
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        &config.workspace_dir,
+    )
+    .map_err(|e| format!("failed to initialise agent registry: {e}"))?;
 
     let mut agent = OpenHumanSessionHost::from_config_for_agent(config, "flow_discovery")
         .map_err(|e| format!("failed to build flow_discovery agent: {e:#}"))?;

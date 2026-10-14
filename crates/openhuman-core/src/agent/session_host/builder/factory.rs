@@ -1,10 +1,9 @@
 //! `OpenHumanSessionHost::from_config` factory methods and internal `build_session_agent_inner` constructor.
 
-use super::dispatcher::{resolve_dispatcher_kind, DispatcherKind};
 use super::host_tools::derive_turn_workspace_descriptor;
 use super::should_synthesize_delegation_tools;
-use crate::agent::harness::definition::{
-    AgentDefinitionRegistry, PromptSource, ToolScope, NO_TOOLS_SENTINEL,
+use crate::agent::harness::host_definition::{
+    AgentDefinitionExt, AgentDefinitionRegistry, NO_TOOLS_SENTINEL,
 };
 use crate::agent::host_runtime;
 use crate::agent::prompts::SystemPromptBuilder;
@@ -14,9 +13,10 @@ use crate::security::SecurityPolicy;
 use crate::tools;
 use anyhow::Result;
 use std::sync::Arc;
+use tinyagents_definition::{PromptSource, ToolScope};
 use tinytools::Tool;
 use tinytools_agent::dialect::{
-    CodeDialect, NativeDialect, PFormatDialect, ToolDialect, XmlDialect,
+    CodeDialect, CodeStyle, NativeDialect, PFormatDialect, ToolCallFormat, ToolDialect, XmlDialect,
 };
 
 #[path = "factory_workflows.rs"]
@@ -99,12 +99,10 @@ impl OpenHumanSessionHost {
                 .unwrap_or_else(|| "legacy".to_string()),
             target_def
                 .as_ref()
-                .map(|d| d.omit_identity)
-                .unwrap_or(false),
+                .is_some_and(|d| d.extensions.omit_identity),
             target_def
                 .as_ref()
-                .map(|d| d.omit_memory_context)
-                .unwrap_or(false),
+                .is_some_and(|d| d.extensions.omit_memory_context),
             target_def
                 .as_ref()
                 .map(|d| d.temperature)
@@ -126,7 +124,7 @@ impl OpenHumanSessionHost {
     /// booted core.
     pub fn from_config_with_definition(
         config: &Config,
-        definition: &crate::agent::harness::definition::AgentDefinition,
+        definition: &crate::agent::harness::host_definition::AgentDefinition,
     ) -> Result<Self> {
         log::debug!(
             "[agent] from_config_with_definition id={} sandbox={:?}",
@@ -149,7 +147,7 @@ impl OpenHumanSessionHost {
     pub(crate) fn build_session_agent_inner(
         config: &Config,
         agent_id: &str,
-        target_def: Option<&crate::agent::harness::definition::AgentDefinition>,
+        target_def: Option<&crate::agent::harness::host_definition::AgentDefinition>,
         host_only: bool,
         host: Option<&super::HostTools>,
         session_id: Option<&str>,
@@ -338,19 +336,18 @@ impl OpenHumanSessionHost {
         // `with_defaults()` branch only fires when the registry is
         // unavailable (pre-startup, tests). `PromptSource::Dynamic`
         // agents install a [`DynamicPromptSection`] that re-runs the
-        // builder against the live [`PromptContext`] at
-        // `build_system_prompt` time, so `connected_integrations`
-        // fetched asynchronously on session start land in the prompt.
+        // builder against the live [`PromptContext`] at `build_system_prompt`
+        // time, so late `connected_integrations` land in the prompt.
         // `Inline`/`File` sources still resolve to just the archetype
         // body and get wrapped by [`SystemPromptBuilder::for_subagent`].
         let prompt_builder = match target_def {
             Some(def) => match &def.system_prompt {
-                PromptSource::Dynamic(build) => SystemPromptBuilder::from_dynamic(*build),
+                PromptSource::Dynamic(()) => SystemPromptBuilder::from_dynamic(def.prompt_fn()?),
                 PromptSource::Verbatim(text) => SystemPromptBuilder::verbatim(text.clone()),
                 PromptSource::Inline(text) => SystemPromptBuilder::for_subagent(
                     text.clone(),
-                    def.omit_identity,
-                    def.omit_safety_preamble,
+                    def.extensions.omit_identity,
+                    def.extensions.omit_safety_preamble,
                 ),
                 PromptSource::File { path } => {
                     let prompt_root = config.workspace_dir.join("agent").join("prompts");
@@ -385,8 +382,8 @@ impl OpenHumanSessionHost {
                     };
                     SystemPromptBuilder::for_subagent(
                         body_text,
-                        def.omit_identity,
-                        def.omit_safety_preamble,
+                        def.extensions.omit_identity,
+                        def.extensions.omit_safety_preamble,
                     )
                 }
             },
@@ -431,7 +428,7 @@ impl OpenHumanSessionHost {
             Option<std::collections::HashSet<String>>,
         ) = match (
             target_def,
-            crate::agent::harness::definition::AgentDefinitionRegistry::current(),
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::current(),
         ) {
             // Host-only: no delegation; the host's names join an empty belt.
             _ if host_only => (Vec::new(), Some(super::host_only::empty_belt())),
@@ -640,14 +637,19 @@ impl OpenHumanSessionHost {
                 .chain(delegation_tools.iter())
                 .map(|tool| (tool.name(), tool.parameters_schema())),
         );
-        let dispatcher_kind = resolve_dispatcher_kind(&dispatcher_choice, supports_native);
+        let dispatcher_kind = ToolCallFormat::resolve(&dispatcher_choice, supports_native);
         let tool_dispatcher: Box<dyn ToolDialect> = match dispatcher_kind {
-            DispatcherKind::Native => Box::new(NativeDialect),
-            DispatcherKind::Xml => Box::new(XmlDialect),
-            DispatcherKind::PFormat => Box::new(PFormatDialect::new(pformat_registry.clone())),
-            DispatcherKind::Code(style) => {
-                Box::new(CodeDialect::new(style, pformat_registry.clone()))
-            }
+            ToolCallFormat::Native => Box::new(NativeDialect),
+            ToolCallFormat::Json => Box::new(XmlDialect),
+            ToolCallFormat::PFormat => Box::new(PFormatDialect::new(pformat_registry.clone())),
+            ToolCallFormat::Python => Box::new(CodeDialect::new(
+                CodeStyle::Python,
+                pformat_registry.clone(),
+            )),
+            ToolCallFormat::TypeScript => Box::new(CodeDialect::new(
+                CodeStyle::TypeScript,
+                pformat_registry.clone(),
+            )),
         };
 
         log::debug!(
@@ -666,10 +668,10 @@ impl OpenHumanSessionHost {
         // Whether a new session gets `context.md` prepended to its first user
         // message; agents without a definition get it.
         let effective_omit_memory_context = target_def
-            .map(|def| def.omit_memory_context)
+            .map(|def| def.extensions.omit_memory_context)
             .unwrap_or(false);
         let effective_tokenjuice_compression = target_def
-            .map(|def| def.effective_tokenjuice_compression())
+            .map(|def| def.extensions.tokenjuice_for(&def.model))
             .unwrap_or(tinyjuice_bus::types::AgentTokenjuiceCompression::Full);
 
         // Stamp the resolved agent definition id onto the OpenHumanSessionHost via the
@@ -713,7 +715,7 @@ impl OpenHumanSessionHost {
         let payload_summarizer: Option<
             std::sync::Arc<dyn crate::agent::tinyagents::payload_summarizer::PayloadSummarizer>,
         > = if !host_only && super::summarizes_tool_output(agent_id, config) {
-            match crate::agent::harness::definition::AgentDefinitionRegistry::current() {
+            match crate::agent::harness::host_definition::AgentDefinitionRegistry::current() {
                 Some(reg) => match reg.get("summarizer") {
                     Some(summarizer_def) => {
                         log::info!(
@@ -879,7 +881,7 @@ impl OpenHumanSessionHost {
 pub(super) fn resolve_target_definition(
     config: &Config,
     agent_id: &str,
-) -> Result<Option<crate::agent::harness::definition::AgentDefinition>> {
+) -> Result<Option<crate::agent::harness::host_definition::AgentDefinition>> {
     let registry = AgentDefinitionRegistry::current();
 
     if let Some(reg) = registry.as_deref() {
@@ -950,7 +952,7 @@ mod provider_role_tests;
 /// Flow readiness shares this path so it checks the provider used at runtime.
 pub(crate) fn provider_role_for_definition(
     default_model: Option<&str>,
-    target_def: Option<&crate::agent::harness::definition::AgentDefinition>,
+    target_def: Option<&crate::agent::harness::host_definition::AgentDefinition>,
 ) -> &'static str {
     let master_hint = default_model
         .is_none()
@@ -958,7 +960,7 @@ pub(crate) fn provider_role_for_definition(
             target_def.and_then(|def| {
                 if def.id == "orchestrator" {
                     match &def.model {
-                        crate::agent::harness::definition::ModelSpec::Hint(hint) => {
+                        tinyagents_definition::ModelSpec::Hint(hint) => {
                             Some(format!("hint:{hint}"))
                         }
                         _ => None,

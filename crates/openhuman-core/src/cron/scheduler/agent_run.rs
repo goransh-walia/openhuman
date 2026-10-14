@@ -10,7 +10,7 @@ use {tinyflows_schedule::types::CronJob, tinyflows_schedule::types::SessionTarge
 
 /// Recency window the morning briefing installs around its turn so Composio
 /// task-fetch tools only surface tasks created/changed in the last day. Read
-/// by the `composio_execute` handler via `current_task_recency_window`.
+/// by the `composio_execute` handler via the run context (`OpenHumanRunExt`).
 pub(super) const MORNING_BRIEFING_TASK_RECENCY_SECS: u64 = 24 * 60 * 60;
 
 /// [`run_agent_job_for_run`] under a fresh run id.
@@ -60,7 +60,7 @@ pub(super) async fn run_agent_job_for_run(
     } else {
         let agent_id = selected_agent_id;
         if let Some(registry) =
-            crate::agent::harness::definition::AgentDefinitionRegistry::current()
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::current()
         {
             if let Some(def) = registry.get(agent_id) {
                 tracing::debug!(
@@ -79,7 +79,7 @@ pub(super) async fn run_agent_job_for_run(
                 // that workload, regardless of which provider it lives
                 // on. Inherit / Exact keep their literal `resolve()`
                 // behaviour because neither relies on the `-v1` trick.
-                use crate::agent::harness::definition::ModelSpec;
+                use tinyagents_definition::ModelSpec;
                 let fallback_model = effective
                     .default_model
                     .clone()
@@ -164,6 +164,21 @@ pub(super) async fn run_agent_job_for_run(
                     // conversation, with its frozen system prompt and stale tool
                     // names. Every run starts from a fresh prompt instead.
                     start_cron_turn_clean(&mut agent);
+                    // Morning briefing only: Composio task-fetch tools
+                    // (Linear/ClickUp/Notion/Asana) surface only recently
+                    // created/changed tasks. Other cron agents and all chat
+                    // turns leave the window unset. It rides the run context
+                    // (`OpenHumanRunExt`), not a task-local.
+                    if is_morning_briefing_job(job) {
+                        tracing::debug!(
+                            job_id = %job.id,
+                            recency_window_secs = MORNING_BRIEFING_TASK_RECENCY_SECS,
+                            "[cron] applying morning-briefing task recency window"
+                        );
+                        agent.set_task_recency_window(Some(std::time::Duration::from_secs(
+                            MORNING_BRIEFING_TASK_RECENCY_SECS,
+                        )));
+                    }
                     // Scope the run's origin around the turn. A job with no
                     // channel origin runs as `TrustedAutomation { Cron }`: the
                     // approval gate treats it as user-authorized automation
@@ -187,28 +202,7 @@ pub(super) async fn run_agent_job_for_run(
                         }
                         None => Box::pin(turn),
                     };
-                    // Morning briefing only: install a 24h task-recency window
-                    // so Composio task-fetch tools (Linear/ClickUp/Notion/Asana)
-                    // surface only recently created/changed tasks. Other cron
-                    // agents and all chat turns leave the window unset.
-                    if is_morning_briefing_job(job) {
-                        tracing::debug!(
-                            job_id = %job.id,
-                            recency_window_secs = MORNING_BRIEFING_TASK_RECENCY_SECS,
-                            "[cron] applying morning-briefing task recency window"
-                        );
-                        crate::integrations::composio::task_recency_context::with_task_recency_window(
-                            std::time::Duration::from_secs(MORNING_BRIEFING_TASK_RECENCY_SECS),
-                            turn,
-                        )
-                        .await
-                    } else {
-                        tracing::trace!(
-                            job_id = %job.id,
-                            "[cron] task recency window not applied for this job"
-                        );
-                        turn.await
-                    }
+                    turn.await
                 }
                 Err(e) => Err(e),
             }

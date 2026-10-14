@@ -48,13 +48,15 @@ use super::envelope::TriggerEnvelope;
 #[cfg(test)]
 use super::routing::ResolvedProvider;
 #[cfg(test)]
-use crate::agent::harness::definition::{AgentDefinition, PromptSource};
+use crate::agent::harness::host_definition::AgentDefinition;
 #[cfg(test)]
 pub(crate) use arm::{classify_error, ArmError};
 #[cfg(test)]
 pub(crate) use chain::run_triage_with_arms_for_test;
 #[cfg(test)]
 pub(crate) use prompt::{extract_inline_prompt, render_user_message, truncate_payload};
+#[cfg(test)]
+use tinyagents_definition::PromptSource;
 
 #[cfg(test)]
 #[path = "evaluator_tests.rs"]

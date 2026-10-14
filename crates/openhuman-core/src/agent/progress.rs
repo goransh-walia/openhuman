@@ -223,7 +223,7 @@ pub enum AgentProgress {
         iteration: u32,
         /// Maximum iterations configured for this child run.
         max_iterations: u32,
-        /// `true` when the agent uses [`IterationPolicy::Extended`](crate::agent::harness::definition::IterationPolicy::Extended).
+        /// `true` when the agent uses [`IterationPolicy::Extended`](tinyagents_definition::IterationPolicy::Extended).
         /// The UI uses this to show "step N" instead of "turn N/M".
         extended_policy: bool,
     },

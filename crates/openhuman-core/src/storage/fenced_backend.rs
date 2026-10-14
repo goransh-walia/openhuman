@@ -358,6 +358,22 @@ impl StreamStore for FencedStreams {
         )
     }
 
+    /// Forwarded (and fenced): without it the trait default answers
+    /// `Unsupported(ConditionalStreamAppend)` even on a driver that has it,
+    /// which refuses every conversation append.
+    async fn append_batch_if_offset(
+        &self,
+        stream: &str,
+        expected_next_offset: u64,
+        values: Vec<Value>,
+    ) -> Result<u64> {
+        fenced_write!(
+            self,
+            "streams.append_batch_if_offset",
+            streams.append_batch_if_offset(stream, expected_next_offset, values)
+        )
+    }
+
     async fn read_window(&self, stream: &str, from: u64, limit: usize) -> Result<Vec<StreamEntry>> {
         self.inner.read_window(stream, from, limit).await
     }

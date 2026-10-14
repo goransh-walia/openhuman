@@ -218,13 +218,13 @@ coding workers, and background completion delivery. See
 
 ### Agent definitions, registry and prompts
 
-An `AgentDefinition` ([`harness/definition/`](./harness/definition/)) is an archetype: id, tier,
+An `AgentDefinition` ([`harness/host_definition.rs`](./harness/host_definition.rs), vocabulary in `tinyagents-definition`) is an archetype: id, tier,
 prompt source, model spec, `ToolScope`, `SandboxMode`, iteration policy and
 allowed sub-agents. Built-ins live in `registry/agents/<id>/` as an
 `agent.toml` plus `prompt.md` (orchestrator, planner, critic, summarizer,
 trigger_triage, trigger_reactor, vision_agent and others). Custom
 definitions are TOML files under `<workspace>/agents/*.toml`, with
-`~/.openhuman/agents/*.toml` as a fallback ([`harness/definition_loader.rs`](./harness/definition_loader.rs)).
+`~/.openhuman/agents/*.toml` as a fallback (`tinyagents_definition::DefinitionSet::load_dirs`, driven from [`harness/host_definition.rs`](./harness/host_definition.rs)).
 `AgentDefinitionRegistry` holds the merged set; `agent.reload_definitions`
 rebuilds it.
 
@@ -342,7 +342,7 @@ Persistence, setup and RPC:
 - `AgentProgress` (`progress.rs`): turn, iteration, tool, text and thinking
   deltas, cost updates and the `Subagent*` family.
 - `AgentDefinition`, `AgentDefinitionRegistry`, `ToolScope`, `SandboxMode`
-  (`harness/definition/`): what an agent is.
+  (`harness/host_definition.rs` + `tinyagents-definition`): what an agent is.
 - `ParentExecutionContext` ([`harness/fork_context.rs`](./harness/fork_context.rs)): task-local parent
   state a sub-agent reads; `orchestration::parent_context::build_root_parent`
   builds one for runs with no parent turn.

@@ -209,7 +209,7 @@ fn refusals_name_only_tools_on_every_listing_belt() {
         .expect("built-ins load")
         .into_iter()
         .filter_map(|def| {
-            let crate::agent::harness::definition::ToolScope::Named(tools) = &def.tools else {
+            let tinyagents_definition::ToolScope::Named(tools) = &def.tools else {
                 return None;
             };
             let belt: Vec<String> = tools.iter().chain(&def.deferred_tools).cloned().collect();

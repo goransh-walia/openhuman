@@ -13,9 +13,8 @@ use crate::agent::progress::AgentProgress;
 use crate::inference::provider::BilledUsage;
 use tinytools::humanize_tool_name;
 
-use super::cap_pauser::{
-    IterationCursor, ProviderUsageCarry, SubagentScope, ToolFailureMap, ToolNameMap,
-};
+use super::bridge_types::{ProviderUsageCarry, SubagentScope, ToolFailureMap, ToolNameMap};
+use tinyagents_harness::events::{CallDedupe, IterationCursor, OrderedSender};
 
 #[derive(Default)]
 pub(super) struct BridgeState {
@@ -49,7 +48,6 @@ pub(super) struct ResolvedCallFigures {
 /// An [`EventListener`] that mirrors harness events onto openhuman's progress
 /// sink and cost tracker.
 pub(crate) struct OpenhumanEventBridge {
-    pub(super) on_progress: Option<Sender<AgentProgress>>,
     pub(super) model: String,
     /// Telemetry provider id (`"managed"`, `"openai"`, …) — from
     /// [`Provider::telemetry_provider_id`](crate::inference::provider::Provider::telemetry_provider_id).
@@ -82,7 +80,7 @@ pub(crate) struct OpenhumanEventBridge {
     /// delivered to this bridge. Keyed on the run-scoped model-call identity (the
     /// iteration cursor, bumped once per `ModelStarted`) so a given call's usage
     /// is recorded exactly once. See [`OpenhumanEventBridge::record_usage`].
-    pub(super) recorded_iterations: Mutex<std::collections::HashSet<u32>>,
+    pub(super) recorded_iterations: CallDedupe,
     /// Per-iteration figures resolved by `record_usage` (see
     /// [`ResolvedCallFigures`]); taken by the `ModelCompleted` arm.
     pub(super) resolved_calls: Mutex<std::collections::HashMap<u32, ResolvedCallFigures>>,
@@ -113,15 +111,7 @@ pub(crate) struct OpenhumanEventBridge {
     /// `try_send` can never jump ahead of an earlier spilled event and scramble
     /// start/completed ordering (which would leave a tool row stuck `running`
     /// when a `ToolCallCompleted` overtakes its `ToolCallStarted`) (#4466).
-    pub(super) overflow: Arc<Mutex<OverflowState>>,
-}
-
-/// Backpressure overflow state guarded by a single mutex so the "are we
-/// draining?" decision and the queue mutation stay atomic together.
-#[derive(Default)]
-pub(super) struct OverflowState {
-    queue: std::collections::VecDeque<AgentProgress>,
-    draining: bool,
+    pub(super) sender: OrderedSender<AgentProgress>,
 }
 
 impl OpenhumanEventBridge {
@@ -165,7 +155,7 @@ impl OpenhumanEventBridge {
         tool_sets: Vec<Arc<Vec<Box<dyn tinytools::Tool>>>>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            on_progress,
+            sender: OrderedSender::new(on_progress),
             model: model.into(),
             provider_id: provider_id.into(),
             max_iterations: max_iterations as u32,
@@ -174,13 +164,12 @@ impl OpenhumanEventBridge {
             tool_names,
             failure_map,
             usage_carry,
-            recorded_iterations: Mutex::new(std::collections::HashSet::new()),
+            recorded_iterations: CallDedupe::default(),
             resolved_calls: Mutex::new(std::collections::HashMap::new()),
             tool_started_at: Mutex::new(std::collections::HashMap::new()),
             unknown_calls: Mutex::new(std::collections::HashMap::new()),
             tool_sets,
             state: Mutex::new(BridgeState::default()),
-            overflow: Arc::default(),
         })
     }
 
@@ -254,72 +243,19 @@ impl OpenhumanEventBridge {
 
     /// Forward a progress event without ever silently dropping it under
     /// backpressure (#4466). The crate `EventListener::on_event` callback is
-    /// **synchronous**, so we cannot `.await` a bounded `send()` inline the way
-    /// the legacy streaming path did. Fast path: `try_send`, which succeeds (and
-    /// stays fully synchronous + ordered) whenever the downstream channel has
-    /// room — the common case. Only when the channel is momentarily **full** do
-    /// we fall back to an awaited `send()` on a spawned task so the delta is
-    /// delivered under backpressure instead of being dropped (the old bug). A
-    /// `Closed` channel means the receiver is gone (turn tore down), where
-    /// dropping is correct.
+    /// **synchronous**, so the harness `OrderedSender` tries `try_send` first and,
+    /// when the channel is full, spills to a bounded FIFO drain task so later
+    /// items never overtake earlier ones. A closed channel means the receiver is
+    /// gone (turn tore down), where dropping is correct. If the bounded overflow
+    /// queue itself is full the delta is dropped and logged below.
     pub(super) fn send(&self, progress: AgentProgress) {
-        use tokio::sync::mpsc::error::TrySendError;
-        let Some(tx) = &self.on_progress else {
-            return;
-        };
-        // Hold the overflow lock across the ordering decision so "are we
-        // draining?" and the queue mutation are atomic (try_send is
-        // non-blocking, so holding a std mutex across it is fine).
-        let mut ov = self.overflow.lock().unwrap_or_else(|p| p.into_inner());
-        if ov.draining {
-            // Already spilling: queue in order; the single forwarder delivers it.
-            ov.queue.push_back(progress);
-            return;
-        }
-        match tx.try_send(progress) {
-            Ok(()) => {}
-            Err(TrySendError::Closed(_)) => {}
-            Err(TrySendError::Full(progress)) => {
-                // Backpressure, not capacity loss. Enter ordered-drain mode:
-                // queue this event and spawn ONE forwarder that awaits `send()`
-                // per event in FIFO order. `draining` stays set (so every later
-                // event also queues here) until the buffer fully drains — that is
-                // what stops a later `try_send` from overtaking a spilled earlier
-                // event and scrambling start/completed ordering.
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    ov.queue.push_back(progress);
-                    ov.draining = true;
-                    let overflow = Arc::clone(&self.overflow);
-                    let tx = tx.clone();
-                    drop(ov);
-                    handle.spawn(async move {
-                        loop {
-                            let next = {
-                                let mut ov = overflow.lock().unwrap_or_else(|p| p.into_inner());
-                                match ov.queue.pop_front() {
-                                    Some(item) => item,
-                                    None => {
-                                        ov.draining = false;
-                                        break;
-                                    }
-                                }
-                            };
-                            if tx.send(next).await.is_err() {
-                                // Receiver gone: stop draining, discard the rest.
-                                let mut ov = overflow.lock().unwrap_or_else(|p| p.into_inner());
-                                ov.queue.clear();
-                                ov.draining = false;
-                                break;
-                            }
-                        }
-                    });
-                } else {
-                    tracing::debug!(
-                        model = %self.model,
-                        "[tinyagents] progress channel full and no runtime to defer send; dropping one delta"
-                    );
-                }
-            }
+        use tinyagents_harness::events::SendFailure;
+        match self.sender.send(progress) {
+            Ok(()) | Err(SendFailure::Closed(_)) => {}
+            Err(SendFailure::Backpressure(_)) => tracing::debug!(
+                model = %self.model,
+                "[tinyagents] progress channel full and could not defer send; dropping one delta"
+            ),
         }
     }
 
@@ -342,20 +278,14 @@ impl OpenhumanEventBridge {
         // bridge instance is per-run (parent or child scope), so the set is
         // naturally (run, turn)-scoped. First writer for an iteration records;
         // any later `UsageRecorded` for the same iteration is a duplicate.
-        {
-            let mut seen = self
-                .recorded_iterations
-                .lock()
-                .unwrap_or_else(|p| p.into_inner());
-            if !seen.insert(iteration) {
-                tracing::debug!(
-                    iteration,
-                    model = %self.model,
-                    child = self.scope.is_some(),
-                    "[budget] duplicate UsageRecorded for model call — skipping double record"
-                );
-                return;
-            }
+        if !self.recorded_iterations.first_claim(iteration) {
+            tracing::debug!(
+                iteration,
+                model = %self.model,
+                child = self.scope.is_some(),
+                "[budget] duplicate UsageRecorded for model call — skipping double record"
+            );
+            return;
         }
         // Drain the provider-usage side-channel the model adapter fed for this
         // model call (FIFO, one push per provider response). The crate `Usage`

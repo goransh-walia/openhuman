@@ -9,10 +9,11 @@ use serde_json::{json, Value};
 
 use super::live_config::live_composio_config;
 use super::redact::redact_composio_outcome;
-use crate::agent::harness::definition::SandboxMode;
-use crate::agent::tinyagents::host::run_context::sandbox_mode_for_tool;
+use crate::agent::tinyagents::host::run_context::{
+    sandbox_mode_for_tool, task_recency_window_for_tool,
+};
 use crate::config::Config;
-use crate::integrations::composio::task_recency_context::current_task_recency_window;
+use tinyagents_definition::SandboxMode;
 use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolCategory, ToolResult, ToolRunContext};
 
 use super::super::contract::{toolkit_from_slug, ToolScope};
@@ -100,7 +101,7 @@ impl Tool for ComposioExecuteTool {
         ToolCategory::Workflow
     }
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        let (config, outcome) = Box::pin(self.execute_unredacted(args, None)).await;
+        let (config, outcome) = Box::pin(self.execute_unredacted(args, None, None)).await;
         redact_composio_outcome(&config, outcome)
     }
     async fn execute_with_context(
@@ -109,8 +110,12 @@ impl Tool for ComposioExecuteTool {
         _options: ToolCallOptions,
         context: Option<&dyn ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
-        let (config, outcome) =
-            Box::pin(self.execute_unredacted(args, sandbox_mode_for_tool(context))).await;
+        let (config, outcome) = Box::pin(self.execute_unredacted(
+            args,
+            sandbox_mode_for_tool(context),
+            task_recency_window_for_tool(context),
+        ))
+        .await;
         redact_composio_outcome(&config, outcome)
     }
 }
@@ -124,6 +129,7 @@ impl ComposioExecuteTool {
         &self,
         args: Value,
         sandbox_mode: Option<SandboxMode>,
+        task_recency_window: Option<std::time::Duration>,
     ) -> (Box<Config>, anyhow::Result<ToolResult>) {
         let tool = args
             .get("tool")
@@ -256,7 +262,7 @@ impl ComposioExecuteTool {
         // curated task-fetch slugs. No-op for every other slug and for
         // normal chat / CLI / JSON-RPC (window unset → None). The
         // authoritative enforcement is the post-filter on the response below.
-        let task_window_since = current_task_recency_window().map(|w| {
+        let task_window_since = task_recency_window.map(|w| {
             chrono::Utc::now()
                 - chrono::Duration::from_std(w).unwrap_or_else(|_| chrono::Duration::zero())
         });

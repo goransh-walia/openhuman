@@ -35,7 +35,7 @@ use futures_util::StreamExt;
 use serde_json::{json, Value};
 use tempfile::tempdir;
 
-use openhuman_core::agent::harness::AgentDefinitionRegistry;
+use openhuman_core::agent::harness::host_definition::AgentDefinitionRegistry;
 use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
 use openhuman_rpc::server::build_core_http_router;
 
@@ -2318,8 +2318,8 @@ async fn multi_hop_delegation_chain_inner() {
 
 mod streaming_support {
     use async_trait::async_trait;
-    use openhuman_core::agent::harness::definition::{
-        AgentDefinition, AgentDefinitionRegistry, ToolScope as DefinitionToolScope,
+    use openhuman_core::agent::harness::host_definition::{
+        AgentDefinition, AgentDefinitionRegistry,
     };
     use openhuman_core::agent::OpenHumanSessionHost;
     use openhuman_core::config::{AgentConfig, ContextConfig};
@@ -2329,6 +2329,7 @@ mod streaming_support {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
+    use tinyagents_definition::ToolScope as DefinitionToolScope;
     use tinyinference_llm::message::{AssistantMessage, ContentBlock};
     use tinyinference_llm::model::{
         ChatModel, ModelProfile, ModelRequest, ModelResponse, ModelStream, ModelStreamItem,

@@ -108,18 +108,19 @@
 #![cfg(not(coverage))]
 
 use async_trait::async_trait;
-use openhuman_core::agent::harness::definition::{AgentDefinitionRegistry, ModelSpec};
+use openhuman_core::agent::harness::host_definition::AgentDefinitionRegistry;
 use openhuman_core::agent::harness::{with_parent_context, ParentExecutionContext};
-use openhuman_core::agent::prompts::ToolCallFormat;
 use openhuman_core::agent::subagent_host::{run_subagent, SubagentRunOptions};
 use openhuman_core::config::AgentConfig;
 use parking_lot::Mutex;
 use serde_json::json;
 use std::sync::Arc;
 use tempfile::tempdir;
+use tinyagents_definition::ModelSpec;
 use tinyinference_llm::message::AssistantMessage;
 use tinyinference_llm::model::{ChatModel, ModelProfile, ModelRequest, ModelResponse};
 use tinyinference_llm::tool::ToolCall;
+use tinytools_agent::dialect::ToolCallFormat;
 
 /// Worker stack for this guard: 3 MiB, deliberately far below the production
 /// `AGENT_WORKER_STACK_BYTES` (16 MiB, which stays the real budget).

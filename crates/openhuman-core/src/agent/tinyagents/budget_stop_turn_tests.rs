@@ -97,7 +97,7 @@ fn hosted_base() -> Arc<crate::agent::tinyagents::host::OpenHumanHostBase> {
     Arc::new(crate::agent::tinyagents::host::OpenHumanHostBase {
         config: Arc::new(crate::config::Config::default()),
         definitions: Arc::new(
-            crate::agent::harness::definition::AgentDefinitionRegistry::builtins_only(),
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::builtins_only(),
         ),
         security_policy: Arc::new(crate::security::policy::SecurityPolicy::default()),
         post_turn_hooks: Vec::new(),
@@ -226,7 +226,7 @@ async fn deadline_wind_down_pauses_the_hosted_turn_inner() {
     let (tx, _rx) = tokio::sync::mpsc::channel(64);
     let mut context = root_context("deadline-wind-down", "/tmp/deadline-wind-down", tx);
     let now = std::time::Instant::now();
-    context.turn_deadline = Some(crate::agent::turn_deadline::TurnDeadline::new(
+    context.turn_deadline = Some(tinyagents_harness::turn_deadline::TurnDeadline::new(
         now - std::time::Duration::from_secs(800),
         std::time::Duration::from_secs(900),
     ));
@@ -297,10 +297,11 @@ fn a_turn_before_its_wind_down_point_runs_to_its_final_answer() {
                         .expect("scripted turn models build");
                     let (tx, _rx) = tokio::sync::mpsc::channel(64);
                     let mut context = root_context("deadline-fresh", "/tmp/deadline-fresh", tx);
-                    context.turn_deadline =
-                        Some(crate::agent::turn_deadline::TurnDeadline::starting_now(
+                    context.turn_deadline = Some(
+                        tinyagents_harness::turn_deadline::TurnDeadline::starting_now(
                             std::time::Duration::from_secs(900),
-                        ));
+                        ),
+                    );
                     let outcome = run_root_turn_via_hosted_agent(
                         context,
                         hosted_base(),

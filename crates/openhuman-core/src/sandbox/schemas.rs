@@ -185,8 +185,8 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
             .unwrap_or(false);
 
         let mode = match backend_str {
-            "docker" | "local" => crate::agent::harness::definition::SandboxMode::Sandboxed,
-            _ => crate::agent::harness::definition::SandboxMode::None,
+            "docker" | "local" => tinyagents_definition::SandboxMode::Sandboxed,
+            _ => tinyagents_definition::SandboxMode::None,
         };
 
         // Load the user's live config so the reported policy reflects the
@@ -237,9 +237,9 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
             .unwrap_or(false);
 
         let mode = match mode_str {
-            "sandboxed" => crate::agent::harness::definition::SandboxMode::Sandboxed,
-            "read_only" => crate::agent::harness::definition::SandboxMode::ReadOnly,
-            _ => crate::agent::harness::definition::SandboxMode::None,
+            "sandboxed" => tinyagents_definition::SandboxMode::Sandboxed,
+            "read_only" => tinyagents_definition::SandboxMode::ReadOnly,
+            _ => tinyagents_definition::SandboxMode::None,
         };
 
         // Load the user's live config so the resolved policy honors the

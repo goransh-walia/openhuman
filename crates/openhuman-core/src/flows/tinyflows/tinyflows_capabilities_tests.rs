@@ -447,7 +447,7 @@ fn harness_model_default_override_forwards_raw_byok_models_verbatim() {
 fn route_for_agent_ref_selects_harness_for_definitions_else_fallback() {
     // Ensure the global registry is populated (idempotent no-op if another test
     // already initialised it; builtins are always present either way).
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     // A shipped harness definition → full-loop harness path.
     assert_eq!(route_for_agent_ref("workflow_builder"), AgentRoute::Harness);

@@ -47,37 +47,41 @@ pub async fn persist_provider_profile(
 
     let written = rows.len();
     let (key_source, key_identifier) = (toolkit.clone(), identifier.clone());
-    file_store::update(config, IDENTITIES_FILE, move |identities: &mut Vec<ConnectedIdentity>| {
-        let index = match identities
-            .iter()
-            .position(|id| id.source == key_source && id.identifier == key_identifier)
-        {
-            Some(index) => index,
-            None => {
-                identities.push(ConnectedIdentity {
-                    source: key_source.clone(),
-                    identifier: key_identifier.clone(),
-                    ..ConnectedIdentity::default()
-                });
-                identities.len() - 1
-            }
-        };
-        let entry = &mut identities[index];
-        for (kind, value) in rows.iter().cloned() {
-            let slot = match kind {
-                IdentityKind::DisplayName => &mut entry.display_name,
-                IdentityKind::Email => &mut entry.email,
-                IdentityKind::Handle => &mut entry.handle,
-                IdentityKind::Phone => &mut entry.phone,
-                IdentityKind::UserId => &mut entry.user_id,
-                IdentityKind::AvatarUrl => &mut entry.avatar_url,
-                IdentityKind::ProfileUrl => &mut entry.profile_url,
+    file_store::update(
+        config,
+        IDENTITIES_FILE,
+        move |identities: &mut Vec<ConnectedIdentity>| {
+            let index = match identities
+                .iter()
+                .position(|id| id.source == key_source && id.identifier == key_identifier)
+            {
+                Some(index) => index,
+                None => {
+                    identities.push(ConnectedIdentity {
+                        source: key_source.clone(),
+                        identifier: key_identifier.clone(),
+                        ..ConnectedIdentity::default()
+                    });
+                    identities.len() - 1
+                }
             };
-            *slot = Some(value);
-        }
-        identities.sort_by(|a, b| (&a.source, &a.identifier).cmp(&(&b.source, &b.identifier)));
-        ((), true)
-    })
+            let entry = &mut identities[index];
+            for (kind, value) in rows.iter().cloned() {
+                let slot = match kind {
+                    IdentityKind::DisplayName => &mut entry.display_name,
+                    IdentityKind::Email => &mut entry.email,
+                    IdentityKind::Handle => &mut entry.handle,
+                    IdentityKind::Phone => &mut entry.phone,
+                    IdentityKind::UserId => &mut entry.user_id,
+                    IdentityKind::AvatarUrl => &mut entry.avatar_url,
+                    IdentityKind::ProfileUrl => &mut entry.profile_url,
+                };
+                *slot = Some(value);
+            }
+            identities.sort_by(|a, b| (&a.source, &a.identifier).cmp(&(&b.source, &b.identifier)));
+            ((), true)
+        },
+    )
     .await?;
 
     tracing::debug!(
@@ -171,18 +175,22 @@ pub async fn delete_connected_identity_facets(
     let source = keys.next().unwrap_or_default();
     let identifier = keys.next().unwrap_or_default();
 
-    file_store::update(config, IDENTITIES_FILE, move |identities: &mut Vec<ConnectedIdentity>| {
-        let mut deleted = 0usize;
-        identities.retain(|id| {
-            if id.source == source && id.identifier == identifier {
-                deleted += field_count(id);
-                false
-            } else {
-                true
-            }
-        });
-        (deleted, deleted > 0)
-    })
+    file_store::update(
+        config,
+        IDENTITIES_FILE,
+        move |identities: &mut Vec<ConnectedIdentity>| {
+            let mut deleted = 0usize;
+            identities.retain(|id| {
+                if id.source == source && id.identifier == identifier {
+                    deleted += field_count(id);
+                    false
+                } else {
+                    true
+                }
+            });
+            (deleted, deleted > 0)
+        },
+    )
     .await
 }
 

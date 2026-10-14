@@ -58,11 +58,11 @@ impl ProfileCapabilities {
     /// Make `definition` render the operator's system prompt, if one is set.
     pub fn apply_system_prompt(
         &self,
-        definition: &mut crate::agent::harness::definition::AgentDefinition,
+        definition: &mut crate::agent::harness::host_definition::AgentDefinition,
     ) {
         if let Some(prompt) = &self.system_prompt {
             definition.system_prompt =
-                crate::agent::harness::definition::PromptSource::Verbatim(prompt.clone());
+                tinyagents_definition::PromptSource::Verbatim(prompt.clone());
         }
     }
 

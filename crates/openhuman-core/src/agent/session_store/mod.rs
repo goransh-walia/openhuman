@@ -16,10 +16,9 @@
 
 use std::sync::{Arc, LazyLock, PoisonError, RwLock};
 
-pub use agent_transcripts::{agent_transcript_root, AgentTranscriptFiles};
 use tinyagents_session::port::{AgentStores, SessionStoreProvider};
+use tinyagents_session::transcript::{agent_transcript_root, AgentTranscriptFiles};
 
-mod agent_transcripts;
 pub mod ledger_sync;
 mod rebound;
 mod workspace;

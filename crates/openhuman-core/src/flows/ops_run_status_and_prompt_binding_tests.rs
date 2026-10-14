@@ -146,8 +146,10 @@ async fn flows_build_hides_the_live_run_tool_from_the_builder_belt() {
 
     // Building an agent constructs a memory client, which needs the host seams
     // wired. `Once`-guarded, so this is free when another test got there first.
-    crate::agent::harness::AgentDefinitionRegistry::init_global(&config.workspace_dir)
-        .expect("agent registry init");
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        &config.workspace_dir,
+    )
+    .expect("agent registry init");
     let mut agent =
         crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "workflow_builder")
             .expect("build workflow_builder agent");
@@ -244,8 +246,10 @@ async fn flows_build_copilot_toolset_unhides_the_live_run_tools() {
 
     // Building an agent constructs a memory client, which needs the host seams
     // wired. `Once`-guarded, so this is free when another test got there first.
-    crate::agent::harness::AgentDefinitionRegistry::init_global(&config.workspace_dir)
-        .expect("agent registry init");
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        &config.workspace_dir,
+    )
+    .expect("agent registry init");
     let mut agent =
         crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "workflow_builder")
             .expect("build workflow_builder agent");
@@ -305,9 +309,11 @@ async fn flows_build_applies_the_builder_definitions_effective_iteration_cap() {
 
     // Building an agent constructs a memory client, which needs the host seams
     // wired. `Once`-guarded, so this is free when another test got there first.
-    crate::agent::harness::AgentDefinitionRegistry::init_global(&config.workspace_dir)
-        .expect("agent registry init");
-    let def = crate::agent::harness::AgentDefinitionRegistry::global()
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        &config.workspace_dir,
+    )
+    .expect("agent registry init");
+    let def = crate::agent::harness::host_definition::AgentDefinitionRegistry::global()
         .expect("registry initialised")
         .get("workflow_builder")
         .expect("workflow_builder definition registered")

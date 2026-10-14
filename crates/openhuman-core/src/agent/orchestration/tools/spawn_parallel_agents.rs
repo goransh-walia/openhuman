@@ -1,14 +1,12 @@
 //! Tool: `spawn_parallel_agents` — fan out independent sub-agent tasks.
 
-use crate::agent::harness::definition::AgentDefinitionRegistry;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 #[cfg(test)]
-use crate::agent::orchestration::spawn_parallel_graph::with_ownership_boundary;
+use crate::agent::orchestration::spawn_parallel::ParallelAgentLineage;
 #[cfg(test)]
-use crate::agent::orchestration::spawn_parallel_graph::ParallelAgentLineage;
-#[cfg(test)]
-use crate::agent::orchestration::spawn_parallel_graph::ParallelAgentResult;
-use crate::agent::orchestration::spawn_parallel_graph::ParallelAgentTask;
-use crate::agent::orchestration::spawn_parallel_graph::{
+use crate::agent::orchestration::spawn_parallel::ParallelAgentResult;
+use crate::agent::orchestration::spawn_parallel::ParallelAgentTask;
+use crate::agent::orchestration::spawn_parallel::{
     format_spawn_parallel_success, run_spawn_parallel_tasks_with_cancellation_and_workspace,
     SpawnParallelGraphOutcome,
 };
@@ -217,7 +215,7 @@ impl Tool for SpawnParallelAgentsTool {
 
     /// Run **without** the global per-tool wall-clock deadline. This is a
     /// fan-out primitive: it spawns N independent sub-agents and awaits them
-    /// concurrently via `spawn_parallel_graph`'s bounded `map_reduce`. Under the
+    /// concurrently via `spawn_parallel`'s bounded `map_reduce`. Under the
     /// default `Inherit` policy the whole fan-out is hard-killed at the
     /// single-tool timeout (120s by default) — so a group of long workers is
     /// truncated at one worker's budget instead of running to ~the slowest, and

@@ -274,7 +274,7 @@ async fn setup() -> TestHarness {
         EnvVarGuard::set("OPENHUMAN_MEMORY_EMBED_MODEL", ""),
     ];
 
-    let _ = openhuman_core::agent::harness::AgentDefinitionRegistry::init_global_builtins();
+    let _ = openhuman_core::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     let (addr, rpc_join) = serve_rpc().await;
     TestHarness {

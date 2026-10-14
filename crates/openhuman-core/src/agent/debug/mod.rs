@@ -22,7 +22,7 @@ pub mod wire;
 pub use dump_writer::{write_prompt_dumps, DumpWriteSummary};
 pub use wire::render as render_wire_dump;
 
-use crate::agent::harness::definition::AgentDefinitionRegistry;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::agent::session_host::OpenHumanSessionHost;
 use crate::config::Config;
 use tinytools::ToolCategory;

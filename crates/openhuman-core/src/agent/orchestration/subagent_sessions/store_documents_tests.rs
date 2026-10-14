@@ -143,21 +143,47 @@ fn a_stale_snapshot_does_not_revert_a_newer_session() {
 }
 
 #[test]
-fn a_legacy_session_file_is_imported_once_and_retired() {
+fn a_legacy_session_file_is_imported_once_and_left_byte_identical() {
     let dir = tempfile::tempdir().unwrap();
     let legacy = dir.path().join(".openhuman");
     std::fs::create_dir_all(&legacy).unwrap();
-    std::fs::write(
-        legacy.join("subagent_sessions.json"),
-        serde_json::to_string(&vec![session("legacy-1")]).unwrap(),
-    )
-    .unwrap();
+    let original = serde_json::to_string(&vec![session("legacy-1")]).unwrap();
+    std::fs::write(legacy.join("subagent_sessions.json"), &original).unwrap();
     let store = SubagentSessionStore::new(dir.path().to_path_buf());
 
     let loaded = store.load().unwrap();
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].subagent_session_id, "legacy-1");
-    assert!(!legacy.join("subagent_sessions.json").exists());
-    assert!(legacy.join("subagent_sessions.json.migrated").exists());
+    // The legacy file is read only: same name, same bytes, no `.migrated`.
+    assert_eq!(
+        std::fs::read_to_string(legacy.join("subagent_sessions.json")).unwrap(),
+        original
+    );
+    assert!(!legacy.join("subagent_sessions.json.migrated").exists());
     assert_eq!(store.load().unwrap().len(), 1);
+    // The marker, not the file, stops a second import: a file that changed
+    // afterwards is not imported again.
+    let changed = serde_json::to_string(&vec![session("legacy-2")]).unwrap();
+    std::fs::write(legacy.join("subagent_sessions.json"), &changed).unwrap();
+    let again = store.load().unwrap();
+    assert_eq!(again.len(), 1);
+    assert_eq!(again[0].subagent_session_id, "legacy-1");
+}
+
+#[test]
+fn workspaces_sharing_a_backend_each_import_their_own_legacy_file() {
+    let docs = docs_in(&MemoryStorage::new(), "local");
+    let (one, two) = (
+        std::path::Path::new("/ws/one"),
+        std::path::Path::new("/ws/two"),
+    );
+    assert!(!docs.legacy_imported(one).unwrap());
+    docs.import_legacy(one, &[session("from-one")]).unwrap();
+    assert!(docs.legacy_imported(one).unwrap());
+    assert!(
+        !docs.legacy_imported(two).unwrap(),
+        "importing one workspace must not suppress another's import"
+    );
+    docs.import_legacy(two, &[session("from-two")]).unwrap();
+    assert_eq!(docs.load().unwrap().len(), 2);
 }

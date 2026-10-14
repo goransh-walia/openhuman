@@ -1,5 +1,5 @@
 use super::*;
-use crate::agent::harness::definition::AgentDefinitionRegistry;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::core::events::DomainEvent;
 use serde_json::json;
 use tokio::time::{sleep, timeout, Duration};

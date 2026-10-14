@@ -25,10 +25,10 @@
 use super::types::{
     AgentSnapshot, SpawnAgentRequest, SpawnAgentResponse, WaitAgentOptions, WaitAgentResponse,
 };
-use crate::agent::harness::definition::{AgentDefinition, AgentDefinitionRegistry};
 use crate::agent::harness::fork_context::{
     current_parent, with_parent_context, ParentExecutionContext,
 };
+use crate::agent::harness::host_definition::{AgentDefinition, AgentDefinitionRegistry};
 use crate::agent::progress::AgentProgress;
 use crate::agent::subagent_host::{
     run_subagent, SubagentRunError, SubagentRunOptions, SubagentRunOutcome, SubagentRunStatus,

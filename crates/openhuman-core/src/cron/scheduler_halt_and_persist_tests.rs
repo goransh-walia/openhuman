@@ -332,7 +332,7 @@ async fn cron_agent_job_uses_agent_definition_tool_scope() {
     // than relied upon from another test: `install_for_tests` is
     // `Once`-guarded, so a test that omits it passes only while some
     // earlier test in the same binary happened to run first.
-    crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins()
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins()
         .expect("init built-in agent definitions");
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;

@@ -187,7 +187,9 @@ pub(crate) async fn bootstrap_core_runtime(
     // multiple times. Uses the per-user scoped workspace_dir.
     if agent_enabled {
         if let Err(err) =
-            crate::agent::harness::AgentDefinitionRegistry::init_global(&workspace_dir)
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+                &workspace_dir,
+            )
         {
             log::warn!(
                 "[runtime] AgentDefinitionRegistry::init_global failed: {err} — \

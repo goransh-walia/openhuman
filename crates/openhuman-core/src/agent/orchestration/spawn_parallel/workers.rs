@@ -1,21 +1,21 @@
-//! Running the staged workers: the serial shared-workspace-write fallback,
-//! the bounded `map_reduce` parallel fanout, and the single-worker execution
-//! (`run_subagent` + post-run worktree status snapshot) both paths share.
+//! Running the staged workers on the module's [`run`]: the serial
+//! shared-workspace-write fallback and bounded fan-out are tinyagents-owned.
+//! This file keeps only the single-worker execution (`run_subagent` + post-run
+//! worktree status snapshot) and the result projection.
 
 use std::path::PathBuf;
 
-use tinyagents_graph::parallel::{map_reduce, FailurePolicy, ParallelOptions};
-use tinyagents_harness::{CancellationToken, TinyAgentsError};
+use tinyagents_harness::CancellationToken;
+use tinyagents_orchestration::parallel::{resolve_concurrency, run, Worker};
 
 use crate::agent::subagent_host::{
     run_subagent_with_parent, SubagentRunOptions, SubagentRunStatus,
 };
 
-use super::staging::WorkerDispatchMode;
 use super::types::{ParallelAgentResult, ParallelAgentStatus, SpawnParallelWorker};
 
 pub(crate) async fn run_spawn_parallel_workers(
-    prepared: Vec<SpawnParallelWorker>,
+    prepared: Vec<Worker<SpawnParallelWorker>>,
     action_root: Option<PathBuf>,
     cancel: CancellationToken,
     run_context: crate::agent::tinyagents::host::OpenHumanRunContext,
@@ -23,103 +23,45 @@ pub(crate) async fn run_spawn_parallel_workers(
         crate::agent::tinyagents::host::OpenHumanRunContext,
     >,
 ) -> tinyagents_harness::Result<Vec<ParallelAgentResult>> {
-    let n = prepared.len();
-    let serial_write_count = prepared
-        .iter()
-        .filter(|worker| {
-            matches!(
-                worker.dispatch_mode,
-                WorkerDispatchMode::SerialSharedWorkspaceWrite
-            )
-        })
-        .count();
-    if serial_write_count > 0 {
-        tracing::debug!(
-            target: "orchestration",
-            workers = n,
-            serial_write_count,
-            "[orchestration] running serial fallback for shared-workspace write fan-out"
-        );
-        let mut results = Vec::with_capacity(n);
-        for worker in prepared {
-            if cancel.is_cancelled() {
-                tracing::debug!(
-                    target: "orchestration",
-                    "[orchestration] spawn_parallel serial fan-out cancelled before next worker"
-                );
-                return Err(TinyAgentsError::Cancelled);
-            }
-            results.push(
-                run_one_parallel_task(
-                    worker,
-                    action_root.clone(),
-                    run_context.child(),
-                    live_parent,
-                )
-                .await,
-            );
-        }
-        return Ok(results);
-    }
-
-    let max_concurrency = prepared.len().max(1);
-    let action_root_for_workers = action_root.clone();
-    let run_context_for_workers = run_context.clone();
+    let concurrency = resolve_concurrency(0, prepared.len());
     tracing::debug!(
         target: "orchestration",
-        workers = n,
-        max_concurrency,
-        "[orchestration] running parallel fan-out on tinyagents map_reduce (spawn_parallel_agents)"
+        workers = prepared.len(),
+        concurrency,
+        "[orchestration] running spawn_parallel_agents on tinyagents-orchestration parallel::run"
     );
-    let options = ParallelOptions::default()
-        .with_max_concurrency(max_concurrency)
-        .with_failure_policy(FailurePolicy::CollectAll)
-        .with_cancellation(cancel);
-    let outcome = map_reduce(prepared, options, move |_i, worker| {
-        let repo_root = action_root_for_workers.clone();
-        let run_context = run_context_for_workers.child();
-        async move { Ok(run_one_parallel_task(worker, repo_root, run_context, live_parent).await) }
-    })
-    .await?;
-
-    let mut results = Vec::with_capacity(n);
-    for item in outcome.outcomes {
-        match item.result {
-            Ok(value) => results.push(value),
-            Err(err) => {
-                return Err(TinyAgentsError::Graph(format!(
-                    "spawn_parallel_agents fan-out: worker {} failed: {err}",
-                    item.index
-                )));
-            }
-        }
-    }
-    if results.len() != n {
-        return Err(TinyAgentsError::Graph(format!(
-            "spawn_parallel_agents fan-out: expected {n} result(s), got {}",
-            results.len()
-        )));
-    }
-    Ok(results)
+    run(
+        prepared,
+        concurrency,
+        cancel,
+        |_| run_context.child(),
+        |worker, child_context| {
+            run_one_parallel_task(worker, action_root.clone(), child_context, live_parent)
+        },
+    )
+    .await
 }
 
 async fn run_one_parallel_task(
-    worker: SpawnParallelWorker,
+    worker: Worker<SpawnParallelWorker>,
     repo_root: Option<PathBuf>,
     run_context: crate::agent::tinyagents::host::OpenHumanRunContext,
     live_parent: &tinyagents_harness::context::RunContext<
         crate::agent::tinyagents::host::OpenHumanRunContext,
     >,
 ) -> ParallelAgentResult {
-    let SpawnParallelWorker {
-        definition,
+    let Worker {
+        id: task_id,
         prompt,
-        task,
-        task_id,
-        lineage,
-        worktree_path,
-        workspace_descriptor,
-        dispatch_mode: _,
+        payload:
+            SpawnParallelWorker {
+                definition,
+                task,
+                lineage,
+                worktree_path,
+                workspace_descriptor,
+            },
+        ..
     } = worker;
     let started = std::time::Instant::now();
     tracing::debug!(

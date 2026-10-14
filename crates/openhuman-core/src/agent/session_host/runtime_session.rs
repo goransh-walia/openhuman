@@ -96,8 +96,8 @@ struct OpenHumanTurnPrelude {
     run_queue:
         Option<Arc<tinyagents_harness::run_queue::RunQueue<crate::agent::queued_turn::QueuedTurn>>>,
     allowed_subagent_ids: std::collections::HashSet<String>,
-    sandbox_mode: crate::agent::harness::definition::SandboxMode,
-    definition: Option<Arc<crate::agent::harness::definition::AgentDefinition>>,
+    sandbox_mode: tinyagents_definition::SandboxMode,
+    definition: Option<Arc<crate::agent::harness::host_definition::AgentDefinition>>,
     runtime_config: Option<Arc<crate::config::Config>>,
     /// This session's tool-rule layers; see `tool_rules.rs`.
     tool_rules: Arc<tinytools::ToolRuleSet>,
@@ -266,7 +266,7 @@ impl OpenHumanTurnPrelude {
     }
 
     fn build_system_prompt_tiered(&self) -> Result<crate::agent::prompts::TieredPrompt> {
-        use crate::agent::prompts::{tool_call_format_from_dialect, PromptContext, PromptTool};
+        use crate::agent::prompts::{PromptContext, PromptTool};
         let surface = self
             .tool_surface
             .lock()
@@ -330,9 +330,7 @@ impl OpenHumanTurnPrelude {
             workflows: &mutable.workflows,
             dispatcher_instructions: &instructions,
             visible_tool_names: &visible_tool_names,
-            tool_call_format: tool_call_format_from_dialect(
-                self.tool_dispatcher.tool_call_format(),
-            ),
+            tool_call_format: self.tool_dispatcher.tool_call_format(),
             connected_integrations: &mutable.connected_integrations,
             connected_identities_md: crate::agent::prompts::render_connected_identities(),
             user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
@@ -505,10 +503,9 @@ impl OpenHumanTurnPrelude {
         // the prompt was composed for, so a text dialect keeps its schemas off
         // the wire and renders the catalogue itself (`ToolsSection` no longer
         // does), and a code call is recovered against the positional registry.
-        run_context.tool_dialect = crate::agent::prompts::tool_call_format_from_dialect(
+        run_context.tool_dialect = tinyagents_harness::dialect::dispatcher_for_format(
             self.tool_dispatcher.tool_call_format(),
-        )
-        .harness_dispatcher();
+        );
         format!("{}\n\n{enriched}", turn.preamble())
     }
 
@@ -549,9 +546,7 @@ impl OpenHumanTurnPrelude {
             session_id: self.event_session_id.clone(),
             channel: self.event_channel.clone(),
             connected_integrations,
-            tool_call_format: crate::agent::prompts::tool_call_format_from_dialect(
-                self.tool_dispatcher.tool_call_format(),
-            ),
+            tool_call_format: self.tool_dispatcher.tool_call_format(),
             session_key: self.session_key.clone(),
             session_parent_prefix: self.session_parent_prefix.clone(),
             on_progress: self.on_progress.clone(),
@@ -719,7 +714,7 @@ impl OpenHumanSessionHost {
             self.workspace_descriptor.clone(),
             self.resolved_definition()
                 .map(|definition| definition.sandbox_mode)
-                .unwrap_or(crate::agent::harness::definition::SandboxMode::None),
+                .unwrap_or(tinyagents_definition::SandboxMode::None),
             self.hosted_base.clone(),
             self.agent_definition_id.clone(),
         ));
@@ -786,7 +781,7 @@ impl OpenHumanSessionHost {
                 sandbox_mode: self
                     .resolved_definition()
                     .map(|definition| definition.sandbox_mode)
-                    .unwrap_or(crate::agent::harness::definition::SandboxMode::None),
+                    .unwrap_or(tinyagents_definition::SandboxMode::None),
                 definition: self.resolved_definition(),
                 runtime_config: self.runtime_config.clone(),
                 tool_rules: self.session_tool_rules(),

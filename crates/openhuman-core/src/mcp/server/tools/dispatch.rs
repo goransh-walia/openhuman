@@ -1,7 +1,7 @@
 use serde_json::{json, Map, Value};
 use tinyinference_llm::tool::ToolSchema;
 
-use crate::agent::harness::AgentDefinitionRegistry;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::agent::OpenHumanSessionHost;
 use crate::config::rpc as config_rpc;
 use crate::core::all;

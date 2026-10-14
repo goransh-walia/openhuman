@@ -21,11 +21,11 @@
 
 mod compaction_carry;
 pub mod config;
+mod context_wiring;
 mod deadline_wind_down;
 pub mod discovery;
 mod embeddings;
 mod harness_assembly;
-mod harness_context_ladder;
 pub(crate) mod harness_tool_registration;
 pub mod host;
 pub(crate) mod hosted_error;
@@ -64,7 +64,6 @@ pub mod todos;
 pub(crate) mod tools;
 mod topology;
 mod turn_models;
-pub mod turn_observer;
 mod turn_outcome;
 mod turn_policy;
 mod turn_run_error;

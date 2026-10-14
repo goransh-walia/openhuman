@@ -63,7 +63,7 @@ async fn channel_turn_runs_through_the_graph() {
         MultimodalFileConfig::default(),
         None,
         None,
-        crate::agent::harness::SandboxMode::None,
+        tinyagents_definition::SandboxMode::None,
     )
     .await
     .expect("channel graph turn runs");
@@ -125,7 +125,7 @@ async fn channel_turn_pauses_on_ask_user_clarification() {
         MultimodalFileConfig::default(),
         None,
         None,
-        crate::agent::harness::SandboxMode::None,
+        tinyagents_definition::SandboxMode::None,
     )
     .await
     .expect("channel graph turn runs");

@@ -83,7 +83,7 @@ where
         Some(d) => match tokio::time::timeout(
             d,
             crate::agent::turn_deadline::with_turn_deadline(
-                Some(crate::agent::turn_deadline::TurnDeadline::starting_now(d)),
+                Some(tinyagents_harness::turn_deadline::TurnDeadline::starting_now(d)),
                 Box::pin(fut),
             ),
         )

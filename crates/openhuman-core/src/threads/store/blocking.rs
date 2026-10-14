@@ -69,7 +69,7 @@ where
     F: FnOnce() -> Result<T, String> + Send + 'static,
     T: Send + 'static,
 {
-    match tokio::task::spawn_blocking(f).await {
+    match crate::core::runtime::spawn_blocking_scoped(f).await {
         Ok(result) => result,
         Err(error) => {
             tracing::warn!(

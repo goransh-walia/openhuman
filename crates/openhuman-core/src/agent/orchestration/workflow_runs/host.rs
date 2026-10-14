@@ -11,7 +11,8 @@ use tinyagents_orchestration::workflow::{
     WorkflowDefinition, WorkflowExecutor,
 };
 
-use crate::agent::harness::definition::{AgentDefinitionRegistry, SandboxMode, ToolScope};
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
+use tinyagents_definition::{SandboxMode, ToolScope};
 use {
     crate::agent::orchestration::AgentOrchestrationSession,
     crate::agent::orchestration::SpawnAgentRequest, crate::agent::orchestration::WaitAgentOptions,

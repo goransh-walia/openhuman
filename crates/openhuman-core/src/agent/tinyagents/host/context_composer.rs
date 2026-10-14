@@ -62,6 +62,7 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use tinytools_agent::dialect::ToolCallFormat;
 
 use async_trait::async_trait;
 use tinyagents_harness::error::{Result as TinyAgentsResult, TinyAgentsError};
@@ -70,7 +71,7 @@ use tinyinference_llm::message::Message;
 
 use crate::agent::prompts::{
     load_agents_md_layers, render_connected_identities, AgentsMdContent, ConnectedIntegration,
-    PromptContext, PromptTool, SystemPromptBuilder, ToolCallFormat,
+    PromptContext, PromptTool, SystemPromptBuilder,
 };
 use crate::config::{Config, DEFAULT_MODEL};
 use tinyskills::Skill as Workflow;
@@ -96,7 +97,7 @@ pub struct OpenHumanContextComposer {
     /// it.
     model_name: String,
     /// How the tool catalogue renders. Left at the OpenHuman default
-    /// ([`ToolCallFormat::PFormat`]) unless the caller pins it, since the
+    /// ([`ToolCallFormat::Json`]) unless the caller pins it, since the
     /// authoritative value lives on the agent's tool dispatcher, which is not
     /// reachable from a `TurnContextRequest`.
     tool_call_format: ToolCallFormat,
@@ -121,7 +122,7 @@ impl OpenHumanContextComposer {
         Self {
             config,
             model_name,
-            tool_call_format: ToolCallFormat::default(),
+            tool_call_format: ToolCallFormat::Json,
             connected_integrations: Vec::new(),
             builder: SystemPromptBuilder::with_defaults(),
         }

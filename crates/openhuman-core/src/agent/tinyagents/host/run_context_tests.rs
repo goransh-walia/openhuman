@@ -261,7 +261,7 @@ fn stale_parent_snapshot() -> ParentExecutionContext {
         session_id: "parent-session".into(),
         channel: "test".into(),
         connected_integrations: Vec::new(),
-        tool_call_format: crate::agent::prompts::ToolCallFormat::Native,
+        tool_call_format: tinytools_agent::dialect::ToolCallFormat::Native,
         session_key: "parent-key".into(),
         session_parent_prefix: None,
         on_progress: None,
@@ -425,4 +425,27 @@ fn child_inherits_shared_model_budget_and_narrowed_depth_limit() {
         parent.model_budget.unwrap().ledger.snapshot().spent.tokens,
         10
     );
+}
+
+#[test]
+fn task_recency_window_reaches_tools_as_a_host_extension_not_a_task_local() {
+    let mut host = OpenHumanRunContext::new();
+    host.task_recency_window = Some(Duration::from_secs(86_400));
+    let run = host.into_tinyagents(tinyagents_harness::context::RunConfig::new("run-recency"));
+    assert_eq!(
+        run.host::<OpenHumanRunExt>()
+            .and_then(|ext| ext.task_recency_window),
+        Some(Duration::from_secs(86_400))
+    );
+
+    let unrestricted = OpenHumanRunContext::new()
+        .into_tinyagents(tinyagents_harness::context::RunConfig::new("run-open"));
+    assert_eq!(
+        unrestricted
+            .host::<OpenHumanRunExt>()
+            .and_then(|ext| ext.task_recency_window),
+        None
+    );
+    // Direct dispatch (no run context) is unrestricted.
+    assert_eq!(task_recency_window_for_tool(None), None);
 }

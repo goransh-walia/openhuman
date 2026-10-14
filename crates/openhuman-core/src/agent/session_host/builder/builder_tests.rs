@@ -36,7 +36,7 @@ fn test_config(tmp: &tempfile::TempDir) -> crate::config::Config {
 /// bundled TOML files, entirely independent of the global registry
 /// singleton (so tests can't be poisoned by another test's
 /// `AgentDefinitionRegistry::init_global*` call, and can't poison later ones).
-fn builtin_def(id: &str) -> crate::agent::harness::definition::AgentDefinition {
+fn builtin_def(id: &str) -> crate::agent::harness::host_definition::AgentDefinition {
     crate::agent::registry::agents::load_builtins()
         .unwrap()
         .into_iter()
@@ -48,11 +48,11 @@ fn builtin_def(id: &str) -> crate::agent::harness::definition::AgentDefinition {
 /// wire. No built-in keeps a wildcard belt any more (the generalist
 /// `tools_agent` was removed), so the shape is synthesised from a real
 /// built-in: same parsing and defaults, only the id and the belt differ.
-fn wildcard_probe_def() -> crate::agent::harness::definition::AgentDefinition {
+fn wildcard_probe_def() -> crate::agent::harness::host_definition::AgentDefinition {
     let mut def = builtin_def("summarizer");
     def.id = "wildcard_probe".to_string();
     def.delegate_name = None;
-    def.tools = crate::agent::harness::definition::ToolScope::Wildcard;
+    def.tools = tinyagents_definition::ToolScope::Wildcard;
     def.subagents = Vec::new();
     def
 }
@@ -331,7 +331,7 @@ async fn an_empty_named_scope_advertises_no_tools_at_all() {
     // Tolerant of an already-initialised singleton: this binary shares one
     // `OnceLock` across every test, so whether we are first is a property of
     // test ordering, not of this test.
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -341,7 +341,7 @@ async fn an_empty_named_scope_advertises_no_tools_at_all() {
     let visible = agent.visible_tool_names_for_test();
     let real: Vec<&String> = visible
         .iter()
-        .filter(|n| n.as_str() != crate::agent::harness::definition::NO_TOOLS_SENTINEL)
+        .filter(|n| n.as_str() != crate::agent::harness::host_definition::NO_TOOLS_SENTINEL)
         .collect();
     assert!(
         real.is_empty(),
@@ -361,7 +361,7 @@ async fn a_zero_tool_agent_does_not_gain_the_compaction_recovery_tool() {
     // Tolerant of an already-initialised singleton: this binary shares one
     // `OnceLock` across every test, so whether we are first is a property of
     // test ordering, not of this test.
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -381,14 +381,14 @@ fn the_no_tools_sentinel_can_never_name_a_real_tool() {
     // The value is load-bearing: it works only because no registry can contain
     // it. Leading underscores are not a legal tool name for any provider's
     // function-calling schema, which is why this shape was chosen.
-    use crate::agent::harness::definition::NO_TOOLS_SENTINEL;
+    use crate::agent::harness::host_definition::NO_TOOLS_SENTINEL;
     assert!(NO_TOOLS_SENTINEL.starts_with("__"));
     assert!(!NO_TOOLS_SENTINEL.chars().next().unwrap().is_alphanumeric());
 }
 
 #[test]
 fn is_empty_tool_scope_distinguishes_the_three_states() {
-    use crate::agent::harness::definition::{is_empty_tool_scope, NO_TOOLS_SENTINEL};
+    use crate::agent::harness::host_definition::{is_empty_tool_scope, NO_TOOLS_SENTINEL};
     use std::collections::HashSet;
 
     // Unset — the historical "everything" sentinel.
@@ -415,7 +415,7 @@ async fn a_summarized_agent_sees_the_recovery_tool_with_compaction_off() {
     // that gets them, so it must see the tool whatever the router says.
     use crate::agent::session_host::types::OpenHumanSessionHost;
 
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     let tmp = tempfile::TempDir::new().unwrap();
     let mut config = test_config(&tmp);
@@ -451,7 +451,7 @@ fn the_recovery_tool_joins_a_belt_only_when_something_can_point_at_it() {
 
 #[test]
 fn the_repl_tools_join_a_belt_only_while_handle_mode_is_active() {
-    use crate::agent::harness::definition::NO_TOOLS_SENTINEL;
+    use crate::agent::harness::host_definition::NO_TOOLS_SENTINEL;
     let belt = || std::collections::HashSet::from(["web_fetch".to_string()]);
 
     let mut inactive = belt();
@@ -484,7 +484,7 @@ async fn a_curated_orchestrator_sees_and_holds_every_juice_tool_in_handle_mode()
     // could not dispatch.
     use crate::agent::session_host::types::OpenHumanSessionHost;
 
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     let tmp = tempfile::TempDir::new().unwrap();
     let mut config = test_config(&tmp);

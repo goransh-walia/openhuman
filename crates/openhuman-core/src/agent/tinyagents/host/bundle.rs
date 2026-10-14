@@ -12,7 +12,7 @@ use tinyagents_harness::host::{
     SecurityGate, ToolOutcomeClassifier,
 };
 
-use crate::agent::harness::definition::AgentDefinitionRegistry;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::agent::hooks::PostTurnHook;
 use crate::config::Config;
 use crate::security::policy::SecurityPolicy;
@@ -38,7 +38,7 @@ pub struct OpenHumanHostBundleInputs {
     pub tool_policy: Option<Arc<ToolPolicySession>>,
     pub post_turn_hooks: Vec<Arc<dyn PostTurnHook>>,
     /// See [`OpenHumanHostBase::session_definition`].
-    pub session_definition: Option<Arc<crate::agent::harness::definition::AgentDefinition>>,
+    pub session_definition: Option<Arc<crate::agent::harness::host_definition::AgentDefinition>>,
 }
 
 /// Process/session-owned dependencies shared by hosted invocations.
@@ -58,7 +58,7 @@ pub struct OpenHumanHostBase {
     /// the registry it outranks, because it is fixed for the session's lifetime:
     /// one `Runtime` hosts several independently defined agents, but each gets
     /// its own session and therefore its own base.
-    pub session_definition: Option<Arc<crate::agent::harness::definition::AgentDefinition>>,
+    pub session_definition: Option<Arc<crate::agent::harness::host_definition::AgentDefinition>>,
 }
 
 /// Explicit inputs which vary for every hosted agent invocation.

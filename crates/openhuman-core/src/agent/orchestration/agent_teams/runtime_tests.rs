@@ -14,9 +14,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::*;
-use crate::agent::harness::definition::AgentDefinitionRegistry;
 use crate::agent::harness::fork_context::{with_parent_context, ParentExecutionContext};
-use crate::agent::prompts::ToolCallFormat;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::config::{AgentConfig, Config};
 use tinyagents_orchestration::teams::{SessionTeamLedger, TeamService};
 use tinyagents_session::run_ledger::{
@@ -25,6 +24,7 @@ use tinyagents_session::run_ledger::{
 };
 use tinyinference_llm::model::{ChatModel, ModelRequest, ModelResponse};
 use tinytools::Tool;
+use tinytools_agent::dialect::ToolCallFormat;
 
 // ── Mocks (mirror workflow_runs::engine_tests) ──────────────────────────────
 

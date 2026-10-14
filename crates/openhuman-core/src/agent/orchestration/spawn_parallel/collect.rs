@@ -2,22 +2,28 @@
 //! detection, stale-parent-read annotation, progress projection for
 //! completed/failed workers, and the outcome enum the graph run resolves to.
 
-use std::path::PathBuf;
-
 use serde_json::json;
 use tokio::sync::mpsc::Sender;
 
 use crate::agent::progress::AgentProgress;
 use crate::agent::turn_stop::TurnStop;
+use tinyagents_orchestration::parallel::{BranchReport, Collected};
 use tinytools_std::file_state;
 
 use super::types::{ParallelAgentResult, ParallelAgentStatus};
 
-#[derive(Clone)]
-pub(crate) struct SpawnParallelCollected {
-    pub(crate) results: Vec<ParallelAgentResult>,
-    pub(crate) failures: usize,
-    pub(crate) overlap_warnings: Vec<serde_json::Value>,
+pub(crate) type SpawnParallelCollected = Collected<ParallelAgentResult>;
+
+impl BranchReport for ParallelAgentResult {
+    fn branch_id(&self) -> &str {
+        &self.task_id
+    }
+    fn succeeded(&self) -> bool {
+        self.success
+    }
+    fn changed_files(&self) -> &[String] {
+        &self.changed_files
+    }
 }
 
 pub(crate) enum SpawnParallelGraphOutcome {
@@ -26,28 +32,20 @@ pub(crate) enum SpawnParallelGraphOutcome {
     Cancelled(String),
 }
 
-impl SpawnParallelCollected {
-    pub(crate) fn total(&self) -> usize {
-        self.results.len()
-    }
-
-    pub(crate) fn succeeded(&self) -> usize {
-        self.results.len().saturating_sub(self.failures)
-    }
-}
-
 pub(crate) fn collect_spawn_parallel_results(
     parent_session: &str,
     mut results: Vec<ParallelAgentResult>,
 ) -> SpawnParallelCollected {
     annotate_stale_parent_reads(&mut results);
-    let overlap_warnings = overlap_warnings_for_results(parent_session, &results);
-    let failures = results.iter().filter(|r| !r.success).count();
-    SpawnParallelCollected {
-        results,
-        failures,
-        overlap_warnings,
+    let collected = Collected::new(results);
+    if !collected.overlap_warnings.is_empty() {
+        tracing::warn!(
+            parent_session = %parent_session,
+            overlap_count = collected.overlap_warnings.len(),
+            "[spawn_parallel_agents] detected overlapping changed files across workers"
+        );
     }
+    collected
 }
 
 pub(crate) fn format_spawn_parallel_success(collected: &SpawnParallelCollected) -> String {
@@ -243,38 +241,4 @@ fn annotate_stale_parent_reads(results: &mut [ParallelAgentResult]) {
             }
         }
     }
-}
-
-fn overlap_warnings_for_results(
-    parent_session: &str,
-    results: &[ParallelAgentResult],
-) -> Vec<serde_json::Value> {
-    let per_worker: Vec<(String, Vec<PathBuf>)> = results
-        .iter()
-        .filter(|r| !r.changed_files.is_empty())
-        .map(|r| {
-            (
-                r.task_id.clone(),
-                r.changed_files.iter().map(PathBuf::from).collect(),
-            )
-        })
-        .collect();
-    let overlaps = tinyagents_harness::workspace::detect_worktree_overlaps(&per_worker);
-    let overlap_warnings: Vec<serde_json::Value> = overlaps
-        .iter()
-        .map(|(file, workers)| {
-            json!({
-                "file": file.to_string_lossy(),
-                "workers": workers,
-            })
-        })
-        .collect();
-    if !overlap_warnings.is_empty() {
-        tracing::warn!(
-            parent_session = %parent_session,
-            overlap_count = overlap_warnings.len(),
-            "[spawn_parallel_agents] detected overlapping changed files across workers"
-        );
-    }
-    overlap_warnings
 }

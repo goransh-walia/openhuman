@@ -1,6 +1,6 @@
 //! OpenHuman adapters for the neutral TinyAgents subagent lifecycle.
 //!
-//! Given an [`super::definition::AgentDefinition`] and a task prompt, the
+//! Given an [`crate::agent::harness::host_definition::AgentDefinition`] and a task prompt, the
 //! runner:
 //!
 //! 1. Reads the [`super::fork_context::ParentExecutionContext`] task-local

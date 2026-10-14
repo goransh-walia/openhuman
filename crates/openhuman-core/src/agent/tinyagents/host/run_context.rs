@@ -16,7 +16,6 @@ use std::time::Instant;
 
 use tokio::sync::mpsc::Sender;
 
-use crate::agent::harness::definition::SandboxMode;
 use crate::agent::harness::fork_context::{AgentContextPreparedSource, ParentExecutionContext};
 use crate::agent::progress::AgentProgress;
 use crate::agent::subagent_host::SubagentUsage;
@@ -25,6 +24,7 @@ use crate::agent::tinyagents::{
     turn_outcome::ToolCallOutcome, turn_policy::ToolPolicyEnforcement, TurnContextMiddleware,
 };
 use crate::agent::turn_origin::AgentTurnOrigin;
+use tinyagents_definition::SandboxMode;
 use tinyagents_harness::middleware::StopHook;
 use tinyagents_harness::store::InMemoryStore as ToolResultArtifactIndexStore;
 use tinyinference_llm::model::ResolvedModelRoute;
@@ -284,7 +284,7 @@ pub struct OpenHumanRunContext {
     /// only by the session turn entry point from the web backstop
     /// (`agent::turn_deadline`). The harness winds the run down and clamps
     /// its wall clock against it. `None` for turns without a backstop.
-    pub turn_deadline: Option<crate::agent::turn_deadline::TurnDeadline>,
+    pub turn_deadline: Option<tinyagents_harness::turn_deadline::TurnDeadline>,
     /// Parent runtime snapshot used by canonical recursive tool dispatch.
     pub parent: Option<ParentExecutionContext>,
     /// Context-preparation sources already consumed in this turn.
@@ -394,6 +394,37 @@ pub(crate) fn sandbox_mode_for_tool(
         })
         .and_then(|context| context.state::<HostOperationContext>())
         .and_then(|host| host.sandbox_mode)
+}
+
+/// OpenHuman product values that tools read from the run through
+/// `ToolExecutionContext::host::<OpenHumanRunExt>()`, installed by
+/// [`OpenHumanRunContext::into_tinyagents`] with `RunContext::with_host`.
+/// It replaces the former per-value task-locals, which do not cross a module
+/// boundary.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OpenHumanRunExt {
+    /// Recency window narrowing integration task-fetch tools (morning
+    /// briefing only); `None` leaves them unbounded.
+    pub task_recency_window: Option<Duration>,
+}
+
+/// Reads the run's task-recency window from the explicit tool carrier.
+/// Direct tool dispatch (CLI, JSON-RPC, tests) has none.
+pub(crate) fn task_recency_window_for_tool(
+    context: Option<&dyn tinytools::ToolRunContext>,
+) -> Option<Duration> {
+    let window = context
+        .and_then(tinytools::ToolRunContext::host_extension)
+        .and_then(|extension| {
+            extension.downcast_ref::<tinyagents_harness::tool::ToolExecutionContext>()
+        })
+        .and_then(|context| context.host::<OpenHumanRunExt>())
+        .and_then(|ext| ext.task_recency_window);
+    tracing::trace!(
+        has_window = window.is_some(),
+        "[composio][task-window] read run window"
+    );
+    window
 }
 
 impl Default for OpenHumanRunContext {
@@ -575,13 +606,17 @@ impl OpenHumanRunContext {
         }
         let cancellation = self.cancellation.clone();
         let workspace = self.workspace.clone();
+        let run_ext = OpenHumanRunExt {
+            task_recency_window: self.task_recency_window,
+        };
         let host_operations = Arc::new(HostOperationContext {
             origin: self.origin.clone(),
             sandbox_mode: self.sandbox_mode,
         });
         let context = tinyagents_harness::context::RunContext::new(config, self)
             .with_cancellation(cancellation)
-            .with_state_view(host_operations);
+            .with_state_view(host_operations)
+            .with_host(run_ext);
         match workspace {
             Some(workspace) => context.with_workspace(workspace),
             None => context,

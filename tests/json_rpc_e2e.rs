@@ -63,7 +63,7 @@ where
             // execute the full core boot sequence. Hosted turns still need
             // the same built-in definition registry that boot initializes in
             // production, so install it before constructing the router.
-            openhuman_core::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins()
+            openhuman_core::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins()
                 .expect("initialize built-in agent definitions for JSON-RPC E2E");
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)

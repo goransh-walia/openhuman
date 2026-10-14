@@ -16,10 +16,12 @@
 //! ## Module layout
 //!
 //! - [`types`] — shared worker/result/lineage types.
-//! - [`staging`] — OpenHuman policy admission and shared-workspace arbitration.
+//! - [`staging`] — OpenHuman policy admission (an `AdmissionPolicy` over
+//!   `tinyagents_orchestration::parallel::Plan`, which owns arbitration).
 //! - [`dispatch`] — worktree preflight and progress projection for the
 //!   `dispatch` phase, turning admitted tasks into staged workers.
-//! - [`workers`] — the serial and `map_reduce` worker fanout.
+//! - [`workers`] — single-worker execution; ordering, the serial fallback and
+//!   bounded fan-out are `tinyagents_orchestration::parallel::run`.
 //! - [`collect`] — collecting fanned-out results into the tool's final shape.
 //! - [`run`] — the public entry points that tie the above together.
 
@@ -36,8 +38,7 @@ pub(crate) use types::ParallelAgentTask;
 
 #[cfg(test)]
 pub(crate) use staging::{
-    prepare_spawn_parallel_tasks_from_defs, with_ownership_boundary, ParallelTaskRejectionKind,
-    SpawnParallelTaskPreflight, WorkerDispatchMode,
+    prepare_spawn_parallel_tasks_from_defs, ParallelTaskRejectionKind, SpawnParallelTaskPreflight,
 };
 #[cfg(test)]
 pub(crate) use types::{ParallelAgentLineage, ParallelAgentResult, ParallelAgentStatus};

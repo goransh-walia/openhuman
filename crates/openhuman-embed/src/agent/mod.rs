@@ -5,7 +5,7 @@
 //! [`Runtime::agent`](crate::Runtime::agent) assembled from an
 //! [`AgentSpec`]: its own `Config` (provider route and model, MCP servers,
 //! autonomy tier, `action_dir`), its
-//! [`AgentDefinition`](openhuman_core::agent::harness::definition::AgentDefinition)
+//! [`AgentDefinition`](openhuman_core::agent::harness::host_definition::AgentDefinition)
 //! (system prompt, tool scope, sandbox mode), its
 //! derived
 //! [`CoreContext`](openhuman_core::core::runtime::CoreContext) every turn
@@ -33,7 +33,7 @@ pub use spec::{AgentSpec, MemoryBinding};
 use std::path::Path;
 use std::sync::Arc;
 
-use openhuman_core::agent::harness::definition::AgentDefinition;
+use openhuman_core::agent::harness::host_definition::AgentDefinition;
 use openhuman_core::config::Config;
 use openhuman_core::core::runtime::{CoreContext, CoreRuntime};
 

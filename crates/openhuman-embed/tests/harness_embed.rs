@@ -212,7 +212,7 @@ fn a_harness_runs_a_turn_against_the_provider_it_was_given() {
             // own transcript root under the workspace (the old
             // `session_db/` files are gone). A harness session id is its
             // thread id.
-            let transcripts = openhuman_core::agent::session_store::AgentTranscriptFiles::new(
+            let transcripts = tinyagents_session::transcript::AgentTranscriptFiles::new(
                 &workspace_dir,
                 "harness",
             );

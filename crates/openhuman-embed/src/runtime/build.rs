@@ -390,13 +390,11 @@ impl RuntimeBuilder {
                 .or(Some(definition.max_iterations));
             if defaults.sandbox == crate::SandboxModeSpec::None {
                 defaults.sandbox = match definition.sandbox_mode {
-                    openhuman_core::agent::harness::definition::SandboxMode::None => {
-                        crate::SandboxModeSpec::None
-                    }
-                    openhuman_core::agent::harness::definition::SandboxMode::ReadOnly => {
+                    tinyagents_definition::SandboxMode::None => crate::SandboxModeSpec::None,
+                    tinyagents_definition::SandboxMode::ReadOnly => {
                         crate::SandboxModeSpec::ReadOnly
                     }
-                    openhuman_core::agent::harness::definition::SandboxMode::Sandboxed => {
+                    tinyagents_definition::SandboxMode::Sandboxed => {
                         crate::SandboxModeSpec::Sandboxed
                     }
                 };

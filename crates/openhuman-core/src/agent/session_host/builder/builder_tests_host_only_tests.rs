@@ -7,11 +7,11 @@
 //! session runs under can neither delegate nor act.
 
 use super::*;
-use crate::agent::harness::definition::{SandboxMode, ToolScope};
 use crate::agent::tool_policy::{
     ToolCallContext, ToolPolicy, ToolPolicyDecision, ToolPolicyRequest,
 };
 use std::sync::Arc;
+use tinyagents_definition::{SandboxMode, ToolScope};
 
 #[derive(Debug)]
 struct Marker(&'static str);
@@ -60,8 +60,8 @@ fn request(tool: &str) -> ToolPolicyRequest {
 
 /// The orchestrator's definition is the embed default, and the widest one:
 /// every registered tool, delegation and memory. Host-only must narrow it.
-fn orchestrator_def() -> crate::agent::harness::definition::AgentDefinition {
-    let mut def = crate::agent::harness::definition::AgentDefinitionRegistry::builtins_only()
+fn orchestrator_def() -> crate::agent::harness::host_definition::AgentDefinition {
+    let mut def = crate::agent::harness::host_definition::AgentDefinitionRegistry::builtins_only()
         .get("orchestrator")
         .cloned()
         .expect("built-in orchestrator");
@@ -134,7 +134,7 @@ fn a_host_only_session_runs_a_definition_that_cannot_delegate_or_act() {
     assert!(def.subagents.is_empty(), "no delegation surface");
     assert!(def.deferred_tools.is_empty());
     assert_eq!(def.sandbox_mode, SandboxMode::ReadOnly);
-    assert!(def.omit_memory_context);
+    assert!(def.extensions.omit_memory_context);
 }
 
 #[tokio::test]

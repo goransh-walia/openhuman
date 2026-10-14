@@ -28,12 +28,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::mpsc::Sender;
 
-use crate::agent::harness::SandboxMode;
 use crate::agent::progress::AgentProgress;
 use crate::agent::tinyagents::{
     run_root_turn_via_hosted_agent, TinyagentsTurnOutcome, TurnContextMiddleware,
 };
 use crate::inference::provider::AGENT_TURN_MAX_OUTPUT_TOKENS;
+use tinyagents_definition::SandboxMode;
 use tinyagents_harness::run_queue::RunQueue;
 use tinyagents_session::transcript::TranscriptMessage;
 use tinytools::Tool;

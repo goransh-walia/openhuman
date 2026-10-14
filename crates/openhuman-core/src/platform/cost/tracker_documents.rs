@@ -38,7 +38,11 @@ pub(super) fn current(workspace_dir: &std::path::Path) -> Result<CostDocs> {
     if let Some(docs) = TEST_OVERRIDE.with(|slot| slot.borrow().clone()) {
         return Ok(docs);
     }
-    Ok(CostDocs(Repo::current_for(workspace_dir, DOMAIN, collections)?))
+    Ok(CostDocs(Repo::current_for(
+        workspace_dir,
+        DOMAIN,
+        collections,
+    )?))
 }
 
 /// Runs `f` with `docs` standing in for the installed backend, on this thread

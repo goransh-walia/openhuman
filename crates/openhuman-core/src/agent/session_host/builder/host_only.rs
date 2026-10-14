@@ -24,11 +24,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::agent::harness::definition::{AgentDefinition, SandboxMode, ToolScope};
+use crate::agent::harness::host_definition::AgentDefinition;
 use crate::agent::tool_policy::{ToolPolicy, ToolPolicyDecision, ToolPolicyRequest};
 use crate::agent::OpenHumanSessionHost;
 use crate::config::Config;
 use anyhow::Result;
+use tinyagents_definition::{SandboxMode, ToolScope};
 
 /// Deny-by-default gate for a host-only session.
 ///
@@ -75,7 +76,7 @@ impl ToolPolicy for HostOnlyToolPolicy {
 /// The visible set of a host-only belt before the host's names are merged in:
 /// explicitly zero tools (an empty set would mean "no filter").
 pub(super) fn empty_belt() -> HashSet<String> {
-    HashSet::from([crate::agent::harness::definition::NO_TOOLS_SENTINEL.to_string()])
+    HashSet::from([crate::agent::harness::host_definition::NO_TOOLS_SENTINEL.to_string()])
 }
 
 /// The session gate: on a host-only belt, [`HostOnlyToolPolicy`] over the
@@ -108,7 +109,7 @@ pub(super) fn host_only_definition(definition: &AgentDefinition) -> AgentDefinit
     // `refresh_delegation_tools` returns before adding any later.
     def.subagents.clear();
     def.sandbox_mode = SandboxMode::ReadOnly;
-    def.omit_memory_context = true;
+    def.extensions.omit_memory_context = true;
     def
 }
 

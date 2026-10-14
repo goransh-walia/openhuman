@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::agent::harness::AgentDefinitionRegistry;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::agent::OpenHumanSessionHost;
 use crate::config::rpc as config_rpc;
 use crate::config::Config;

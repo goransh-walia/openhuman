@@ -5,7 +5,6 @@ use crate::agent::context::ContextManager;
 use crate::agent::session_host::types::{OpenHumanSessionHost, SessionHostBuilder};
 use anyhow::Result;
 use std::sync::Arc;
-use tinytools::ToolPolicyEngine;
 use tinytools::{Tool, ToolSpec};
 
 impl SessionHostBuilder {
@@ -183,7 +182,7 @@ impl SessionHostBuilder {
             deferred_names.retain(|name| !self.withheld_tool_names.contains(name));
             if visible_names.is_empty() {
                 visible_names
-                    .insert(crate::agent::harness::definition::NO_TOOLS_SENTINEL.to_string());
+                    .insert(crate::agent::harness::host_definition::NO_TOOLS_SENTINEL.to_string());
             }
         }
         visible_names.extend(self.permanent_tool_names.iter().cloned());
@@ -214,7 +213,7 @@ impl SessionHostBuilder {
             .chain(synthesized_tools.iter())
             .map(|tool| tool.as_ref())
             .collect();
-        let mut tool_policy_session = ToolPolicyEngine::build_session_from_refs(
+        let mut tool_policy_session = crate::tools::policy_session::build_policy_session(
             &agent_definition_name,
             &event_channel,
             "session",
@@ -240,7 +239,7 @@ impl SessionHostBuilder {
         // `tool_policy_session` marks both channel-blocked and role-hidden tools
         // as restricted, so deriving the child ceiling from it would reintroduce
         // exactly that conflation.
-        let channel_policy_session = ToolPolicyEngine::build_session_from_refs(
+        let channel_policy_session = crate::tools::policy_session::build_policy_session(
             &agent_definition_name,
             &event_channel,
             "session",
@@ -352,12 +351,13 @@ impl SessionHostBuilder {
         let hosted_config = Arc::new(hosted_config);
         #[cfg(test)]
         let definitions = Some(
-            crate::agent::harness::AgentDefinitionRegistry::current().unwrap_or_else(|| {
-                Arc::new(crate::agent::harness::AgentDefinitionRegistry::builtins_only())
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::current().unwrap_or_else(|| {
+                Arc::new(crate::agent::harness::host_definition::AgentDefinitionRegistry::builtins_only())
             }),
         );
         #[cfg(not(test))]
-        let definitions = crate::agent::harness::AgentDefinitionRegistry::current();
+        let definitions =
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::current();
         // A caller that brought its own definition is the authority for this
         // session, so it does not need a process registry to exist before it
         // may run a turn. The stand-in is deliberately *empty* rather than
@@ -369,9 +369,9 @@ impl SessionHostBuilder {
         // resolution changes.
         let session_definition = self.session_definition;
         let definitions = definitions.or_else(|| {
-            session_definition
-                .is_some()
-                .then(|| Arc::new(crate::agent::harness::AgentDefinitionRegistry::default()))
+            session_definition.is_some().then(|| {
+                Arc::new(crate::agent::harness::host_definition::AgentDefinitionRegistry::default())
+            })
         });
         let hosted_base = definitions.map(|definitions| {
             Arc::new(crate::agent::tinyagents::host::OpenHumanHostBase {
@@ -439,6 +439,7 @@ impl SessionHostBuilder {
             post_turn_hooks: self.post_turn_hooks,
             event_session_id,
             event_channel,
+            task_recency_window: None,
             thread_id: None,
             agent_definition_name: agent_definition_name.clone(),
             // Canonical registry id — captured here at build time

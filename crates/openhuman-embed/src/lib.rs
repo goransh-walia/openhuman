@@ -64,7 +64,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 /// Complete definition accepted by [`AgentDefinitionSpec::from_base`].
-pub use openhuman_core::agent::harness::definition::AgentDefinition;
+pub use openhuman_core::agent::harness::host_definition::AgentDefinition;
 pub use openhuman_core::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 
 /// The origin of the executing turn, with its original chat or channel route.

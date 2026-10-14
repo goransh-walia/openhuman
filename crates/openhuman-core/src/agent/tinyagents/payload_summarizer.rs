@@ -23,12 +23,13 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use tinyagents_harness::context::{RunConfig, RunContext};
+use tinyagents_harness::context::RunContext;
 use tinyagents_harness::runtime::{AgentHarness, InvalidArgsPolicy, RunPolicy, UnknownToolPolicy};
+use tinyagents_harness::summarization::payload_summarizer::summary_child_config;
 use tinyinference_llm::message::Message;
 use tracing::debug;
 
-use crate::agent::harness::definition::AgentDefinition;
+use crate::agent::harness::host_definition::AgentDefinition;
 use crate::agent::subagent_host;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use {
@@ -70,11 +71,8 @@ pub(crate) fn unary_child_context(
     max_iterations: usize,
     max_output_tokens: u32,
 ) -> tinyagents_harness::Result<RunContext<OpenHumanRunContext>> {
-    let child_config = RunConfig::new(format!("{agent_id}-summary"))
-        .with_max_model_calls(max_iterations)
-        .with_max_tool_calls(max_iterations.saturating_mul(8).max(8))
-        .with_max_depth(parent_ctx.config.max_depth())
-        .with_max_turn_output_tokens(max_output_tokens);
+    let child_config =
+        summary_child_config(parent_ctx, agent_id, max_iterations, max_output_tokens);
     let child_data = parent_ctx
         .data
         .child()

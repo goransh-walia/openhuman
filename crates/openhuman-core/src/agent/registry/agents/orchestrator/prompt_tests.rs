@@ -1,6 +1,6 @@
 use super::*;
-use crate::agent::prompts::ToolCallFormat;
 use std::collections::HashSet;
+use tinytools_agent::dialect::ToolCallFormat;
 
 #[test]
 fn render_installed_skills_lists_skills_and_names_the_hand_offs_it_is_given() {

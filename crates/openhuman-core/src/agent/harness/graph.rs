@@ -57,7 +57,7 @@ pub(crate) async fn run_channel_turn_via_graph(
     multimodal_files: MultimodalFileConfig,
     on_progress: Option<Sender<AgentProgress>>,
     origin: Option<crate::agent::turn_origin::AgentTurnOrigin>,
-    sandbox_mode: crate::agent::harness::SandboxMode,
+    sandbox_mode: tinyagents_definition::SandboxMode,
 ) -> Result<crate::agent::tinyagents::TinyagentsTurnOutcome> {
     let extra_arc = Arc::new(extra_tools);
 
