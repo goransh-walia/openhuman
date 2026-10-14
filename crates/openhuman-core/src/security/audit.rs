@@ -22,6 +22,9 @@ pub enum AuditEventType {
     AuthSuccess,
     AuthFailure,
     PolicyViolation,
+    /// A policy or approval decision that let a call through without a prompt
+    /// (`auto_approve_all`, the per-agent gate-off, the allowlist).
+    PolicyDecision,
     SecurityEvent,
 }
 
@@ -130,6 +133,15 @@ impl AuditEvent {
             policy_decision: None,
             approval_id: None,
         });
+        self
+    }
+
+    /// Record which policy path produced the decision (for example
+    /// `auto_approve_all`). No-op until [`Self::with_action`] set an action.
+    pub fn with_policy_decision(mut self, decision: &str) -> Self {
+        if let Some(action) = self.action.as_mut() {
+            action.policy_decision = Some(decision.to_string());
+        }
         self
     }
 

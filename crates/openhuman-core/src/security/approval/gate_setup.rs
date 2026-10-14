@@ -127,6 +127,40 @@ impl ApprovalGate {
         self.config.autonomy.auto_approve_all
     }
 
+    /// Append an audit row for a call the gate let through without a prompt.
+    /// Best effort: an audit failure is logged, never turned into a denial of
+    /// a call the policy already allowed.
+    pub(super) fn audit_unprompted_allow(
+        &self,
+        tool_name: &str,
+        policy_decision: &str,
+        origin_class: &str,
+    ) {
+        let audit = match crate::security::get_or_create_workspace_audit_logger(
+            self.config.security.audit.clone(),
+            self.config.workspace_dir.clone(),
+        ) {
+            Ok(audit) => audit,
+            Err(error) => {
+                tracing::warn!(%error, "[approval::gate] audit logger unavailable");
+                return;
+            }
+        };
+        let event =
+            crate::security::AuditEvent::new(crate::security::AuditEventType::PolicyDecision)
+                .with_actor(origin_class.to_string(), None, None)
+                .with_action(
+                    tool_name.to_string(),
+                    "external_effect".to_string(),
+                    true,
+                    true,
+                )
+                .with_policy_decision(policy_decision);
+        if let Err(error) = audit.log(&event) {
+            tracing::warn!(%error, policy_decision, "[approval::gate] audit write failed");
+        }
+    }
+
     /// Intercept a tool call. Blocks until the user decides or the
     /// TTL elapses (timeout → `Deny`).
     ///
