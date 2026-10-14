@@ -73,6 +73,14 @@
       "test": ""
     },
     {
+      "file": "crates/openhuman-core/src/cron/scheduler/shell_job.rs",
+      "spawns": 1,
+      "trust": "unclassified",
+      "plan": "",
+      "executor": "n/a",
+      "test": ""
+    },
+    {
       "file": "crates/openhuman-core/src/hooks/shell.rs",
       "spawns": 2,
       "trust": "unclassified",
@@ -139,6 +147,14 @@
     {
       "file": "crates/openhuman-core/src/platform/service/windows.rs",
       "spawns": 6,
+      "trust": "unclassified",
+      "plan": "",
+      "executor": "n/a",
+      "test": ""
+    },
+    {
+      "file": "crates/openhuman-core/src/sandbox/ops.rs",
+      "spawns": 1,
       "trust": "unclassified",
       "plan": "",
       "executor": "n/a",

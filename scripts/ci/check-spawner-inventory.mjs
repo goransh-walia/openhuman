@@ -9,7 +9,7 @@
 //
 // Each row:
 //   file     repo-relative path of a non-test Rust file
-//   spawns   number of `Command::new(` sites in it
+//   spawns   number of `Command::new(` sites plus `shell_exec::run_host(` calls
 //   trust    "operator" (host-authored argv), "untrusted" (model, flow, skill,
 //            MCP or user-supplied argv), or "host-probe" (fixed diagnostics)
 //   plan     for untrusted rows, the sandbox plan family that governs it
@@ -38,6 +38,9 @@ const inventoryPath = resolve(repoRoot, "scripts/ci/spawner-inventory.json");
 const write = process.argv.includes("--write");
 
 const SPAWN = /\b[A-Za-z]*Command::new\s*\(/g;
+// The host shell helper starts a process on the caller's behalf, so its call
+// sites are spawn sites of the caller.
+const HELPER = /\bshell_exec::run_host\s*\(/g;
 const PROCESS_CMD = /process::(?:Command\b|\{[^}]*\bCommand\b)/;
 const TRUSTS = new Set(["operator", "untrusted", "host-probe", "unclassified"]);
 
@@ -76,8 +79,8 @@ export async function scan(root) {
         const rel = relative(root, file).split(sep).join("/");
         if (isTestFile(rel)) continue;
         const text = await readFile(file, "utf8");
-        if (!PROCESS_CMD.test(text)) continue;
-        const n = (text.match(SPAWN) ?? []).length;
+        const direct = PROCESS_CMD.test(text) ? (text.match(SPAWN) ?? []).length : 0;
+        const n = direct + (text.match(HELPER) ?? []).length;
         if (n > 0) found.set(rel, n);
       }
     } catch {
