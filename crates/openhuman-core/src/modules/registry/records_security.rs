@@ -1,4 +1,7 @@
 //! Published TinySecurity admission pins copied verbatim from v0.3.1/checksum.toml.
+//!
+//! `LoadPolicy::Eager` is the "load at boot" policy (the issue calls it Boot): a missing
+//! security module changes behaviour, so it must be serving before the first request.
 use crate::modules::types::{LoadPolicy, ModuleRecord, PlatformAsset, SourceSpec};
 
 pub(crate) const TINYSECURITY: ModuleRecord = ModuleRecord {
@@ -65,7 +68,7 @@ pub(crate) const TINYSECURITY: ModuleRecord = ModuleRecord {
             sha256: "7d3bfcec0856330d2358a06db4292067f8702351b88ece5c9b5101a5bbf7e748",
         },
     ],
-    load: LoadPolicy::Boot,
+    load: LoadPolicy::Eager,
     source: SourceSpec {
         submodule: "tinysecurity",
         manifest: "crates/tinysecurity-module/Cargo.toml",
