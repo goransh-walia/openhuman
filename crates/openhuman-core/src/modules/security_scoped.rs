@@ -253,7 +253,7 @@ pub(crate) async fn activate_on(
             let id: PolicyId = proxy
                 .call_confidential(names::methods::REGISTER_POLICY, (next,))
                 .await
-                .map_err(|e| { eprintln!("DEBUGERR {e:?}"); "TinySecurity RegisterPolicy failed" })?;
+                .map_err(|_| "TinySecurity RegisterPolicy failed")?;
             if id.0.is_empty() {
                 return Err("TinySecurity returned an empty policy id".into());
             }

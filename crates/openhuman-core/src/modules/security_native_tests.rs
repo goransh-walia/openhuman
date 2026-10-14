@@ -641,8 +641,15 @@ async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
     };
     assert_ne!(a.policy_id, b.policy_id);
 
+    // A tool rule denial is the `Access` reason; a tool without a rule falls
+    // through to the module's own checks (`UnsupportedEffect` for these probes).
     let denied = |decision: &tinysecurity_bus::ScopedDecision| {
-        matches!(decision.decision.verdict, Verdict::Deny { .. })
+        matches!(
+            decision.decision.verdict,
+            Verdict::Deny {
+                reason: tinysecurity_bus::DenialReason::Access
+            }
+        )
     };
     let alice_http = evaluate_on(
         proxy,
@@ -680,7 +687,6 @@ async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
     )
     .await
     .unwrap();
-    eprintln!("DBG {alice_http:?} {alice_read:?} {bob_http:?} {bob_read:?}");
     assert!(
         denied(&alice_http) && !denied(&alice_read),
         "alice denies only http_request"
