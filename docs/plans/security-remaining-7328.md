@@ -162,6 +162,20 @@ missing behaviors are RED, not removed or marked successful.
    config/env fallback for SaaS. Secret settings never enter PolicyInfo or logs.
 **Exit:** round-trip old config fixtures and isolated new effective policies pass.
 
+**Host status (tinysecurity v0.4.0 repinned):** done: `[security]` table
+(`config/schema/security.rs`, audit and approval TTL wired from it, folded
+`[security.autonomy|sandbox|privacy]` overlay), migration 14->15
+(`security_policy.rs`, `max_cost_per_day_cents` deleted with a notice), single
+translator (`modules/security_policy.rs`), scoped client with generation-keyed
+decision cache (`modules/security_scoped.rs`), `live_policy::reload_from_config`
+driver, `SecurityPolicy::from_full_config` (privacy no longer hard-coded), the
+trusted-host binding in `module_config`, and a released-module two-tenant test.
+Open: routing shell/filesystem/network gates through the client and deleting the
+`tinybox_core::shell` calls in `command_checks.rs` (needs `security-module`
+default-on and a sync-to-async seam), a `PolicyChanged` signal subscriber,
+scoped audited variants, and physically moving `[autonomy]/[sandbox]/[privacy]`
+under `[security]` in `Config`.
+
 ## Task 3 — Command grammar, tool rules and action accounting
 
 **In progress:** root has dispatched this task; resume its result/review instead
