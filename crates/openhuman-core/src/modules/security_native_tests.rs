@@ -12,11 +12,18 @@ const PERF_OUT_ENV: &str = "OPENHUMAN_SECURITY_PERF_OUT";
 const TURN_CHECKS: usize = 5;
 const TURN_SAMPLES: usize = 200;
 
-/// The native CI lane loads the real release through its compiled archive pin.
-/// An explicitly selected local fixture remains available for module development.
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
+/// A released (or explicitly selected local) module loaded behind an in-memory
+/// broker, with the host connection already named as its trusted peer.
+struct NativeFixture {
+    _fixtures: tempfile::TempDir,
+    acting: tempfile::TempDir,
+    host: ModuleHost,
+    _broker_task: tokio::task::JoinHandle<()>,
+    proxy: tinybus::Proxy,
+    record: super::super::ModuleRecord,
+}
+
+async fn native_fixture() -> NativeFixture {
     let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
     std::fs::create_dir_all(&target).unwrap();
     let fixture_root = std::env::var_os("OPENHUMAN_TEST_SECURITY_FIXTURE_DIR")
@@ -118,6 +125,29 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
         "TinySecurity recipient does not match a pinned release"
     );
     require_attestation(&proxy, &record).await.unwrap();
+    NativeFixture {
+        _fixtures: fixtures,
+        acting,
+        host,
+        _broker_task: broker_task,
+        proxy,
+        record,
+    }
+}
+
+/// The native CI lane loads the real release through its compiled archive pin.
+/// An explicitly selected local fixture remains available for module development.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
+    let NativeFixture {
+        _fixtures,
+        acting,
+        host,
+        _broker_task: broker_task,
+        proxy,
+        record,
+    } = native_fixture().await;
     let root = acting.path().canonicalize().unwrap();
     let action = root.join("action");
     std::fs::create_dir(&action).unwrap();
