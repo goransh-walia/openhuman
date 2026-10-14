@@ -1,7 +1,8 @@
 //! Phase-0 crypto characterization (issue #7328, plan Task 1). Committed
 //! fixtures written by the current implementations must keep decrypting after
 //! the port into the tinysecurity module: Argon2id + AES-256-GCM payloads
-//! (`security/encryption/core.rs`) and the X25519/HKDF/XChaCha20 device tunnel
+//! (now owned by tinysecurity `PasswordCrypt2`; its rows live in
+//! `modules/security_crypto_tests.rs`) and the X25519/HKDF/XChaCha20 device tunnel
 //! (`security/devices/crypto.rs`). The encrypted-file keyring (`secrets_enc.bin`,
 //! `enc2_values.txt`) is decrypted by the test-only master-key seam in
 //! `secret_storage/encrypted_file_backend_fixture_tests.rs`; this file pins the
@@ -12,7 +13,6 @@ use openhuman_core::security::devices::crypto::{
     base64url_decode, base64url_encode, derive_bootstrap_key, derive_session_keys, DeviceKeypair,
     SessionKeys, TunnelCipher, TunnelRole, HKDF_INFO_C2S, HKDF_INFO_S2C,
 };
-use openhuman_core::security::encryption::{EncryptedPayload, EncryptionKey};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -40,64 +40,6 @@ fn payload(c: &Value) -> EncryptedPayload {
         nonce: unhex(&c["nonce"]),
         salt: Vec::new(),
     }
-}
-
-#[test]
-fn argon2id_aes_gcm_fixture_decrypts() {
-    let c = corpus();
-    let a = &c["argon2_aes_gcm"];
-    let key = EncryptionKey::derive(a["password"].as_str().unwrap(), &unhex(&a["salt"])).unwrap();
-    let plain = key.decrypt(&payload(a)).unwrap();
-    assert_eq!(plain, a["plaintext"].as_str().unwrap().as_bytes());
-}
-
-#[test]
-fn argon2id_aes_gcm_rejects_wrong_password_tamper_and_bad_nonce() {
-    let c = corpus();
-    let a = &c["argon2_aes_gcm"];
-    let salt = unhex(&a["salt"]);
-    let wrong = EncryptionKey::derive("not-the-password", &salt).unwrap();
-    assert!(wrong
-        .decrypt(&payload(a))
-        .unwrap_err()
-        .contains("Decryption failed"));
-
-    let key = EncryptionKey::derive(a["password"].as_str().unwrap(), &salt).unwrap();
-    let mut flipped = payload(a);
-    flipped.ciphertext[0] ^= 1;
-    assert!(key.decrypt(&flipped).is_err(), "tampered ciphertext");
-    let mut truncated_tag = payload(a);
-    truncated_tag.ciphertext.pop();
-    assert!(key.decrypt(&truncated_tag).is_err(), "truncated tag");
-    let mut other_salt = salt.clone();
-    other_salt[0] ^= 1;
-    let rederived = EncryptionKey::derive(a["password"].as_str().unwrap(), &other_salt).unwrap();
-    assert!(
-        rederived.decrypt(&payload(a)).is_err(),
-        "different salt derives a different key"
-    );
-}
-
-#[test]
-fn argon2id_aes_gcm_round_trips_and_never_reuses_a_nonce() {
-    let salt = EncryptionKey::generate_salt();
-    assert_eq!(salt.len(), 16);
-    let key = EncryptionKey::derive("pw", &salt).unwrap();
-    let a = key.encrypt(b"same plaintext").unwrap();
-    let b = key.encrypt(b"same plaintext").unwrap();
-    assert_eq!(a.nonce.len(), 12);
-    assert_ne!(a.nonce, b.nonce);
-    assert_ne!(a.ciphertext, b.ciphertext);
-    assert_eq!(key.decrypt(&a).unwrap(), b"same plaintext");
-    assert!(
-        a.salt.is_empty(),
-        "the salt lives beside the payload, not inside it"
-    );
-    assert_eq!(
-        a.ciphertext.len(),
-        "same plaintext".len() + 16,
-        "GCM tag is 16 bytes"
-    );
 }
 
 #[test]
@@ -221,18 +163,4 @@ fn encrypted_file_keyring_fixture_bytes_are_unchanged() {
     for line in std::str::from_utf8(ENC2_VALUES).unwrap().lines() {
         assert!(line.starts_with("enc2:"));
     }
-}
-
-/// DESIRED (plan Task 10): a payload larger than the module's binary size limit
-/// is refused up front. No limit exists today. Red until the crypto module
-/// defines one.
-#[test]
-#[should_panic(expected = "DESIRED-RED")]
-fn desired_encrypt_refuses_payloads_over_the_binary_limit() {
-    let key = EncryptionKey::derive("pw", &EncryptionKey::generate_salt()).unwrap();
-    let oversized = vec![0u8; 64 * 1024 * 1024 + 1];
-    assert!(
-        key.encrypt(&oversized).is_err(),
-        "DESIRED-RED: encrypt accepts an unbounded payload"
-    );
 }

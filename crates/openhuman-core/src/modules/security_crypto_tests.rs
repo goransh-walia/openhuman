@@ -47,10 +47,11 @@ fn legacy_host_payload_shape_is_the_bus_payload_shape() {
     let payload: LegacyPayload = serde_json::from_str(LEGACY_PAYLOAD).unwrap();
     assert_eq!(payload.nonce.len(), 12);
     assert_eq!(payload.salt.len(), 16);
-    let legacy: crate::security::encryption::EncryptedPayload =
-        serde_json::from_str(LEGACY_PAYLOAD).unwrap();
-    assert_eq!(legacy.ciphertext, payload.ciphertext);
-    assert_eq!(legacy.salt, payload.salt);
+    // The pre-bus host layout is exactly these three byte arrays.
+    let value: serde_json::Value = serde_json::from_str(LEGACY_PAYLOAD).unwrap();
+    let mut keys: Vec<_> = value.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    assert_eq!(keys, ["ciphertext", "nonce", "salt"]);
 }
 
 #[test]
@@ -98,16 +99,118 @@ async fn password_crypt_opens_legacy_host_payloads_and_interoperates() {
     let sealed = password_encrypt(&fx.proxy, "pw".into(), b"from module".to_vec(), None)
         .await
         .unwrap();
-    let key = crate::security::encryption::EncryptionKey::derive("pw", &sealed.salt).unwrap();
-    let host_view = crate::security::encryption::EncryptedPayload {
-        ciphertext: sealed.ciphertext.clone(),
-        nonce: sealed.nonce.clone(),
-        salt: sealed.salt.clone(),
-    };
-    assert_eq!(key.decrypt(&host_view).unwrap(), b"from module");
+    assert_eq!(
+        reference_decrypt("pw", &sealed.salt, &sealed.nonce, &sealed.ciphertext).unwrap(),
+        b"from module"
+    );
 
     let wrong = password_decrypt(&fx.proxy, "other".into(), sealed).await;
     assert!(wrong.is_err());
+}
+
+/// Independent Argon2id (64 MiB, 3 passes, 1 lane) + AES-256-GCM reference
+/// for the legacy layout, so interop does not lean on the module under test.
+fn reference_decrypt(
+    password: &str,
+    salt: &[u8],
+    nonce: &[u8],
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, String> {
+    use aes_gcm::aead::{Aead, KeyInit};
+    let params = argon2::Params::new(65536, 3, 1, Some(32)).map_err(|e| e.to_string())?;
+    let argon = argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+    let mut key = [0u8; 32];
+    argon
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .map_err(|e| e.to_string())?;
+    aes_gcm::Aes256Gcm::new_from_slice(&key)
+        .map_err(|e| e.to_string())?
+        .decrypt(aes_gcm::Nonce::from_slice(nonce), ciphertext)
+        .map_err(|e| e.to_string())
+}
+
+const CORPUS: &str = include_str!("../../../../tests/fixtures/security-crypto-corpus.json");
+
+fn corpus_payload() -> (String, String, LegacyPayload) {
+    let v: serde_json::Value = serde_json::from_str(CORPUS).unwrap();
+    let a = &v["argon2_aes_gcm"];
+    let unhex = |k: &str| -> Vec<u8> {
+        let h = a[k].as_str().unwrap();
+        (0..h.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap())
+            .collect()
+    };
+    (
+        a["password"].as_str().unwrap().to_string(),
+        a["plaintext"].as_str().unwrap().to_string(),
+        LegacyPayload {
+            ciphertext: unhex("ciphertext"),
+            nonce: unhex("nonce"),
+            salt: unhex("salt"),
+        },
+    )
+}
+
+/// Phase-0 characterization rows, now pinned through the module: the committed
+/// corpus decrypts, and a wrong password, a tampered ciphertext, a truncated
+/// tag, a flipped salt and a flipped nonce are all refused.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn corpus_payload_decrypts_and_tampering_is_refused_through_the_module() {
+    let fx =
+        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    let (password, plaintext, payload) = corpus_payload();
+    let opened = password_decrypt(&fx.proxy, password.clone(), payload.clone())
+        .await
+        .unwrap();
+    assert_eq!(opened, plaintext.as_bytes());
+
+    assert!(password_decrypt(&fx.proxy, "not-the-password".into(), payload.clone())
+        .await
+        .is_err());
+    let mut flipped = payload.clone();
+    flipped.ciphertext[0] ^= 1;
+    assert!(password_decrypt(&fx.proxy, password.clone(), flipped).await.is_err());
+    let mut truncated = payload.clone();
+    truncated.ciphertext.pop();
+    assert!(password_decrypt(&fx.proxy, password.clone(), truncated).await.is_err());
+    let mut salt = payload.clone();
+    salt.salt[0] ^= 1;
+    assert!(password_decrypt(&fx.proxy, password.clone(), salt).await.is_err());
+    let mut nonce = payload;
+    nonce.nonce[0] ^= 1;
+    assert!(password_decrypt(&fx.proxy, password, nonce).await.is_err());
+}
+
+/// Fresh encryptions never repeat a nonce or salt and carry a 16-byte tag.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn module_encryptions_never_reuse_a_nonce_and_carry_a_gcm_tag() {
+    let fx =
+        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    let a = password_encrypt(&fx.proxy, "pw".into(), b"same plaintext".to_vec(), None)
+        .await
+        .unwrap();
+    let b = password_encrypt(&fx.proxy, "pw".into(), b"same plaintext".to_vec(), None)
+        .await
+        .unwrap();
+    assert_eq!((a.nonce.len(), a.salt.len()), (12, 16));
+    assert_ne!(a.nonce, b.nonce);
+    assert_ne!(a.ciphertext, b.ciphertext);
+    assert_eq!(a.ciphertext.len(), "same plaintext".len() + 16);
+}
+
+/// Replaces the former DESIRED-RED row: the module bounds payload size.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn module_refuses_payloads_over_the_configured_limit() {
+    let fx =
+        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    let oversized = vec![0u8; 65_536 + 1];
+    assert!(password_encrypt(&fx.proxy, "pw".into(), oversized, None)
+        .await
+        .is_err());
 }
 
 fn fx_dir() -> tempfile::TempDir {
