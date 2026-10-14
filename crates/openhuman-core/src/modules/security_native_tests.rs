@@ -680,6 +680,7 @@ async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
     )
     .await
     .unwrap();
+    eprintln!("DBG {alice_http:?} {alice_read:?} {bob_http:?} {bob_read:?}");
     assert!(
         denied(&alice_http) && !denied(&alice_read),
         "alice denies only http_request"
