@@ -2,6 +2,16 @@ use super::*;
 use tinybus::{broker::Broker, module::ModuleHost, transport::memory::MemoryBus, Connection};
 use tinysecurity_bus::{PathAccess, PathPolicy, PathTrustedRoot, PathValidationResult};
 
+/// Release-build per-call budget committed by the owner (tinysecurity#8,
+/// `docs/performance.md`): p50 <= 1 ms and p99 <= 10 ms per Evaluate/Check.
+/// Enforced only when `OPENHUMAN_SECURITY_PERF_BUDGET=1` on a release build.
+const PERF_BUDGET_P50: Duration = Duration::from_millis(1);
+const PERF_BUDGET_P99: Duration = Duration::from_millis(10);
+const PERF_BUDGET_ENV: &str = "OPENHUMAN_SECURITY_PERF_BUDGET";
+const PERF_OUT_ENV: &str = "OPENHUMAN_SECURITY_PERF_OUT";
+const TURN_CHECKS: usize = 5;
+const TURN_SAMPLES: usize = 200;
+
 /// The native CI lane loads the real release through its compiled archive pin.
 /// An explicitly selected local fixture remains available for module development.
 #[tokio::test(flavor = "multi_thread")]
@@ -223,11 +233,83 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
         samples.push(started.elapsed());
     }
     samples.sort_unstable();
-    println!("native path client: 500 samples, 1 bus call/sample, shared production scope-cache/validation helper; excludes config-file load and first admission; p50={:?}, p99={:?}; budget p99<50ms", samples[250], samples[494]);
+    println!("native path client: 500 samples, 1 bus call/sample, shared production scope-cache/validation helper; excludes config-file load and first admission; p50={:?}, p99={:?}; admission budget p99<50ms", samples[250], samples[494]);
     assert!(
         samples[494] < Duration::from_millis(50),
         "native path p99 exceeds 50ms admission budget"
     );
+
+    // Representative turn: one shell tool call that reads three files, creates
+    // one and probes one path outside the root. Each check is exactly one bus
+    // call once the registration is cached, so a turn costs TURN_CHECKS calls.
+    // The per-call distribution is gated against the release-build budget the
+    // owner commits in vendor/tinysecurity/docs/performance.md.
+    const TURN: [(&str, bool); TURN_CHECKS] = [
+        ("readable.txt", false),
+        ("readable.txt", false),
+        ("readable.txt", false),
+        ("new.txt", true),
+        ("../outside", false),
+    ];
+    let mut per_call = Vec::with_capacity(TURN_SAMPLES * TURN_CHECKS);
+    let mut per_turn = Vec::with_capacity(TURN_SAMPLES);
+    let mut calls = 0usize;
+    for _ in 0..TURN_SAMPLES {
+        let turn_started = std::time::Instant::now();
+        for (path, parent) in TURN {
+            let started = std::time::Instant::now();
+            let outcome = call_host_path(&mut operation_state, &proxy, policy.clone(), path, parent)
+                .await
+                .unwrap();
+            per_call.push(started.elapsed());
+            calls += 1;
+            assert_eq!(
+                matches!(outcome, PathValidationResult::Denied { .. }),
+                path == "../outside",
+                "{path}"
+            );
+        }
+        per_turn.push(turn_started.elapsed());
+    }
+    assert_eq!(calls, TURN_SAMPLES * TURN_CHECKS);
+    per_call.sort_unstable();
+    per_turn.sort_unstable();
+    let pct = |v: &[Duration], q: f64| v[((v.len() as f64 * q) as usize).min(v.len() - 1)];
+    let release = !cfg!(debug_assertions);
+    let record = serde_json::json!({
+        "profile": if release { "release" } else { "debug" },
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "workload": "shell turn: 3 reads, 1 parent-create, 1 denied probe; warmed registration",
+        "calls_per_turn": TURN_CHECKS,
+        "turns": TURN_SAMPLES,
+        "call_p50_us": pct(&per_call, 0.50).as_micros(),
+        "call_p99_us": pct(&per_call, 0.99).as_micros(),
+        "turn_p50_us": pct(&per_turn, 0.50).as_micros(),
+        "turn_p99_us": pct(&per_turn, 0.99).as_micros(),
+        "budget_call_p50_us": PERF_BUDGET_P50.as_micros(),
+        "budget_call_p99_us": PERF_BUDGET_P99.as_micros(),
+    });
+    println!("SECURITY-PERF {record}");
+    if let Some(out) = std::env::var_os(PERF_OUT_ENV) {
+        std::fs::write(out, serde_json::to_vec_pretty(&record).unwrap()).unwrap();
+    }
+    if std::env::var(PERF_BUDGET_ENV).as_deref() == Ok("1") {
+        assert!(
+            release,
+            "{PERF_BUDGET_ENV}=1 gates the release-build budget; run with --release"
+        );
+        assert!(
+            pct(&per_call, 0.50) <= PERF_BUDGET_P50,
+            "native per-call p50 {:?} exceeds the {PERF_BUDGET_P50:?} budget",
+            pct(&per_call, 0.50)
+        );
+        assert!(
+            pct(&per_call, 0.99) <= PERF_BUDGET_P99,
+            "native per-call p99 {:?} exceeds the {PERF_BUDGET_P99:?} budget",
+            pct(&per_call, 0.99)
+        );
+    }
     host.shutdown(Duration::from_secs(1)).await;
     assert!(
         call_validate_path(
