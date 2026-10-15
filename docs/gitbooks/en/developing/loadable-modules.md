@@ -64,7 +64,7 @@ the host library chain. Asynchronous filesystem checks use immutable scopes
 containing host-authorized roots and internal-state reservations. The client
 requires artifact attestation and fails closed if loading or validation fails.
 
-The production registry pins TinySecurity v0.7.0 and its 11 supported host
+The production registry pins TinySecurity v0.9.0 and its 11 supported host
 archives using digests copied from the published checksum manifest. Native CI
 loads these released archives through digest admission. Explicit local fixtures
 remain available for module development and never replace production pins.
@@ -74,11 +74,16 @@ classification and gating, the network and write tier gates, and password crypt
 registers an immutable `CommandPolicy` derived from its configuration and asks
 `CheckCommand` / `ClassifyCommand` (`modules/security_command.rs`), and a module
 that is missing, untrusted or slow refuses the command. The flow nodes' tier
-table, the approval engine, the Jev judge, sandbox planning, redaction and the
-keyring and pairing crypto paths still run through their existing host
-implementations. Text redaction and prompt scans (`Redact`, `ScanPrompt`,
-`ScanToolDefinition`) and the Sensitive-mode egress check are module calls too,
-and fail closed. Tracker issue
+table, the approval engine, the Jev judge, sandbox planning and the keyring and
+pairing crypto paths still run through their existing host implementations.
+Redaction and egress are module calls and fail closed: text and endpoint
+redaction (`Redact`), tool-result credential removal (`CredentialsOnly`, in
+chunks the module accepts), a tenant's exact provider keys for one call
+(`RedactWith`), prompt and tool-definition scans (`ScanPrompt`,
+`ScanToolDefinition`), the Sensitive-mode check of what a chat request or tool call
+carries, and the destination of every agent network tool (`ScopedUrlGuard`: the
+tool connects only to the addresses the module approves). Browser navigation gets a
+module verdict for the `Browser` transport. Tracker issue
 #7328 lists the remaining phases; this page describes only what has landed.
 
 ## Resolution order

@@ -1,5 +1,5 @@
 //! Host adapter for the TinySecurity confidential password, keyring and pairing
-//! members (contract 1.14).
+//! members (contract 1.16).
 //!
 //! Only the bus contract is linked. Every call is confidential, bound by the
 //! module to the verified `trusted_host`, and fails closed: any transport,
