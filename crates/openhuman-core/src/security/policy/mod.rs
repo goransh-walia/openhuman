@@ -4,11 +4,9 @@
 
 mod command_checks;
 mod enforcement;
-mod native_commands;
+pub(crate) mod native_commands;
 #[cfg(test)]
 pub(crate) mod native_commands_stub;
-#[cfg(feature = "security-module")]
-pub(crate) use native_commands::{host_gate, project as project_decision};
 #[cfg(feature = "security-module")]
 mod native_paths;
 mod path_checks;

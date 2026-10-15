@@ -400,7 +400,7 @@ async fn released_module_refusals_do_not_echo_command_arguments() {
             flow,
             stage: CommandStage::Authorize,
         };
-        let projected = crate::security::policy::project_decision(&query, false, Ok(decision.clone()));
+        let projected = crate::security::policy::native_commands::project(&query, false, Ok(decision.clone()));
         if let Err(refusal) = projected {
             let text = refusal.to_string();
             assert!(!text.contains("hunter2") && !text.contains("psql"), "{text}");
