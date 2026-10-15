@@ -9,8 +9,9 @@
 //! nothing itself and has no local classifier to fall back on: a module that is
 //! missing, untrusted, faulted or slow denies the command.
 //!
-//! Embedders and tests that cannot load the native module install a
-//! [`CommandGateway`] on the policy; the default is the module.
+//! Unit tests of what a caller does with an answer install a scripted
+//! [`CommandGateway`] on the policy (the trait is sealed to this crate);
+//! production always asks the module.
 
 use std::path::PathBuf;
 use std::sync::Arc;
