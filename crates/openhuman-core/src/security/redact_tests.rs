@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(feature = "security-module")]
 /// A config whose module is the published archive, downloaded into a scratch
 /// install under `target/tmp` (a `TMPDIR` under `/tmp` breaks the policy tests).
 ///
@@ -26,6 +27,7 @@ pub(crate) fn released_config() -> ((), crate::config::Config) {
     ((), config.clone())
 }
 
+#[cfg(feature = "security-module")]
 /// Load the module and arm the log bridge through an ordinary async call.
 pub(crate) async fn arm(config: &crate::config::Config) {
     crate::modules::security::text::redact(
@@ -37,6 +39,7 @@ pub(crate) async fn arm(config: &crate::config::Config) {
     .expect("the released module must answer a redaction");
 }
 
+#[cfg(feature = "security-module")]
 fn corpus(name: &str) -> serde_json::Value {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures")
@@ -47,6 +50,7 @@ fn corpus(name: &str) -> serde_json::Value {
 /// Every URL in both shared corpora through the released module: credentials,
 /// path, query and fragment are gone from the origin and host forms, and the
 /// forms are the ones the removed host helpers produced.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
@@ -87,6 +91,7 @@ async fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
 
 /// The sync text pass removes every secret shape of the shared text corpora and
 /// keeps ordinary text, from a plain thread and from a runtime worker.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
@@ -121,6 +126,7 @@ async fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
 
 /// A timestamp and a bare digit run survive (corroborated card policy), and a
 /// card with an issuer prefix does not.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
@@ -155,6 +161,7 @@ fn text_prefers_the_module_answer() {
 /// The moved callers end to end on the released archive: the artifact redactor
 /// reports a secret-bearing body as rewritten without the secret, leaves a clean
 /// body unchanged, and the halt-summary error line loses the secret.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn moved_text_callers_redact_through_the_released_archive() {
@@ -241,6 +248,7 @@ fn arguments_without_an_armed_module_never_return_the_original() {
 /// through `scrub_secrets`: the boot floor, then the module. The floor alone
 /// misses a scheme-less `user:pass@host` DSN; the module pass is what removes it,
 /// so this is pinned on the released archive rather than assumed.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {

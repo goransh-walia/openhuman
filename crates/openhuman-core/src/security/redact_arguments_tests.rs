@@ -336,6 +336,7 @@ fn non_string_sensitive_values_redact_to_kind_markers_and_nested_values_recurse(
 }
 
 /// Every ported case through the released module, from a runtime worker.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn approval_argument_contract_holds_on_the_released_archive() {
