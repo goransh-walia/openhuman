@@ -56,7 +56,7 @@ pub(super) fn backend_egress_for(
     let descriptor = backend_egress_descriptor(path);
     let query = path.split_once('?').map_or("", |(_, query)| query);
     match payload {
-        BackendPayload::None => descriptor.assessed(query),
+        BackendPayload::None => descriptor,
         BackendPayload::Json(body) => descriptor
             .with_data_kind(DataKind::ToolArguments)
             .assessed(&format!("{query}\n{body}")),
