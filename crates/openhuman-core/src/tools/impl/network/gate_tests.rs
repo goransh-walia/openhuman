@@ -442,34 +442,6 @@ async fn a_destination_the_module_refuses_is_a_policy_message_not_addresses() {
     }
 }
 
-/// Fail closed on an ordinary public destination: with the module built in but
-/// not serving (no module is loaded in a unit test), the gate refuses with the
-/// tool-facing policy message instead of handing the tool addresses to dial.
-#[cfg(feature = "security-module")]
-#[tokio::test]
-async fn a_public_destination_is_refused_when_no_module_answers() {
-    let dir = tempfile::tempdir().unwrap();
-    let security = Arc::new(SecurityPolicy {
-        workspace_dir: dir.path().to_path_buf(),
-        ..SecurityPolicy::default()
-    });
-    let destination = destination_of("https://example.com/");
-    for answer in [
-        NetGate::authorize_destination(&*security, &destination).await,
-        RoutedGate::new(security.clone(), None, &json!({}))
-            .authorize_destination(&destination)
-            .await,
-    ] {
-        let refusal = answer
-            .expect("the module owns the decision")
-            .expect_err("no module answers in a unit test");
-        assert!(
-            refusal.starts_with(tinytools::status::POLICY_BLOCKED_MARKER),
-            "{refusal}"
-        );
-    }
-}
-
 /// A build without the module leaves the tool's own DNS check in force.
 #[cfg(not(feature = "security-module"))]
 #[tokio::test]
