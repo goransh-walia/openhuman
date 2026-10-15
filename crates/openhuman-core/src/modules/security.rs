@@ -101,13 +101,19 @@ async fn proxy(config: &Config, state: &mut ClientState) -> Result<tinybus::Prox
     if let Some(proxy) = &state.proxy {
         return Ok(proxy.clone());
     }
-    let configuration = module_config(config);
     super::ops::ensure_loaded_within(config, MODULE_ID, Some(LOAD_TIMEOUT))
         .await
         .map_err(super::ops::load_error_message)?;
     let runtime = super::runtime::runtime()
         .await
         .map_err(|_| "TinySecurity bus unavailable")?;
+    // Built only after the runtime is started: `trusted_host` is this host's own
+    // bus connection, and a refresh sent without it would drop the privileged
+    // peer binding and deny RegisterPathPolicy.
+    let configuration = module_config(config);
+    if configuration.trusted_host.is_none() {
+        return Err("TinySecurity trusted host connection unavailable".into());
+    }
     let record = super::registry::find(MODULE_ID).ok_or("TinySecurity registry entry missing")?;
     let proxy = runtime
         .proxy(names::INTERFACE, names::OBJECT_PATH)
