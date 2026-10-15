@@ -352,6 +352,17 @@ fn from_bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
     }
 }
 
+/// The host's gate for a module gate.
+#[cfg(feature = "security-module")]
+pub(crate) fn host_gate(gate: tinysecurity_bus::CommandGate) -> GateDecision {
+    use tinysecurity_bus::CommandGate;
+    match gate {
+        CommandGate::Allow => GateDecision::Allow,
+        CommandGate::Prompt => GateDecision::Prompt,
+        CommandGate::Block => GateDecision::Block,
+    }
+}
+
 /// Project the module's content-free decision into the host contract.
 ///
 /// `class_only` marks a question about a tier's gate for a class of command
@@ -388,14 +399,12 @@ pub(crate) fn project(
         log::debug!("[security][command] refused flow={:?} reason={refusal:?}", query.flow);
         return Err(refusal);
     }
-    let gate = match decision.gate {
-        CommandGate::Allow => GateDecision::Allow,
-        CommandGate::Prompt => GateDecision::Prompt,
-        // A class question reports a blocked tier as such; for a real command
-        // a block always carries a denial, so one without is refused outright.
-        CommandGate::Block if class_only => GateDecision::Block,
-        CommandGate::Block => return Err(Refusal::Category),
-    };
+    // A class question reports a blocked tier as such; for a real command a
+    // block always carries a denial, so one without is refused outright.
+    if decision.gate == CommandGate::Block && !class_only {
+        return Err(Refusal::Category);
+    }
+    let gate = host_gate(decision.gate);
     Ok(CommandVerdict {
         class: from_bus_class(decision.class),
         gate,

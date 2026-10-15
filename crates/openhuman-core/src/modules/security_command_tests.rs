@@ -155,9 +155,7 @@ async fn released_module_tier_gate_matches_the_host_gate_table() {
                         CommandOp::Classify,
                     )
                     .await;
-                let projected = crate::security::policy::native_commands_project_for_tests(
-                    decision.gate,
-                );
+                let projected = crate::security::policy::host_gate(decision.gate);
                 assert_eq!(
                     projected,
                     host.gate_decision(class),
@@ -379,7 +377,7 @@ fn the_gate_table_projection_is_total() {
         (CommandGate::Block, GateDecision::Block),
     ] {
         assert_eq!(
-            crate::security::policy::native_commands_project_for_tests(gate),
+            crate::security::policy::host_gate(gate),
             expected
         );
     }
