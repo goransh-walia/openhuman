@@ -67,10 +67,7 @@ pub async fn command_requires_sandbox(
     }
     Ok(matches!(
         config.sandbox.backend,
-        SandboxBackend::Landlock
-            | SandboxBackend::Firejail
-            | SandboxBackend::Bubblewrap
-            | SandboxBackend::Docker
+        SandboxBackend::Landlock | SandboxBackend::Docker
     ))
 }
 
@@ -491,16 +488,6 @@ pub(crate) async fn apply_requested_backend(
             policy.backend = SandboxBackendKind::Local;
             policy.docker_overrides = None;
             Ok(true)
-        }
-        SandboxBackend::Firejail => {
-            anyhow::bail!(
-                "Firejail sandbox was explicitly requested but this build has no Firejail execution backend"
-            )
-        }
-        SandboxBackend::Bubblewrap => {
-            anyhow::bail!(
-                "Bubblewrap sandbox was explicitly requested but this build has no Bubblewrap execution backend"
-            )
         }
     }
 }

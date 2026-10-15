@@ -34,8 +34,6 @@ pub async fn get_sandbox_settings(ctx: &DispatchCtx) -> Result<Outcome<serde_jso
     let backend_str = match sandbox.backend {
         crate::config::SandboxBackend::Auto => "auto",
         crate::config::SandboxBackend::Landlock => "landlock",
-        crate::config::SandboxBackend::Firejail => "firejail",
-        crate::config::SandboxBackend::Bubblewrap => "bubblewrap",
         crate::config::SandboxBackend::Docker => "docker",
         crate::config::SandboxBackend::None => "none",
     };
@@ -67,14 +65,12 @@ pub async fn apply_sandbox_settings(
         config.sandbox.backend = match backend.as_str() {
             "auto" => crate::config::SandboxBackend::Auto,
             "landlock" => crate::config::SandboxBackend::Landlock,
-            "firejail" => crate::config::SandboxBackend::Firejail,
-            "bubblewrap" => crate::config::SandboxBackend::Bubblewrap,
             "docker" => crate::config::SandboxBackend::Docker,
             "none" => crate::config::SandboxBackend::None,
             other => {
                 log::warn!("[config][sandbox] rejected unknown backend: {other}");
                 return Err(format!(
-                    "unknown sandbox backend '{other}'; valid: auto, landlock, firejail, bubblewrap, docker, none"
+                    "unknown sandbox backend '{other}'; valid: auto, landlock, docker, none"
                 ));
             }
         };

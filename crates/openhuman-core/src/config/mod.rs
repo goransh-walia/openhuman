@@ -52,7 +52,7 @@ pub use schema::{
     McpAuthConfig, McpClientConfig, McpClientIdentityConfig, McpServerConfig, McpToolExposure,
     MemoryConfig, MemoryLayoutMode, ModelRouteConfig, MultimodalConfig, MultimodalFileConfig,
     ObservabilityConfig, OrchestratorModelConfig, PresentationMode, PrivacyConfig, PrivacyMode,
-    ProviderRoute, ProxyConfig, ProxyScope, ReliabilityConfig, ResourceLimitsConfig, RuntimeConfig,
+    ProviderRoute, ProxyConfig, ProxyScope, ReliabilityConfig, RuntimeConfig,
     SandboxBackend, SandboxConfig, SchedulerConfig, SchedulerGateConfig, SchedulerGateMode,
     SearchConfig, SearchEngineCredentials, SearchHostCredential, SearchProviderSettings,
     SearxngConfig, SecretsConfig, SecurityConfig, ShellConfig, SlackConfig, StreamMode, SttEngine,
