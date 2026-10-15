@@ -73,6 +73,10 @@ impl From<SeamError> for String {
 }
 
 static TARGET: OnceLock<Handle> = OnceLock::new();
+/// The module bus's own runtime. When armed it is preferred over [`TARGET`]:
+/// it lives for the process, so it cannot be a caller runtime that has since
+/// shut down, and it is the runtime the module connection belongs to.
+static MODULE_TARGET: OnceLock<Handle> = OnceLock::new();
 static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
 /// Remember the runtime the module connection lives on. The first runtime wins.
@@ -87,13 +91,40 @@ pub(crate) fn arm_current() -> bool {
     }
 }
 
+/// Target the module bus's own runtime, once it is up. Returns false while the
+/// module runtime has not started or does not answer in time.
+pub(crate) fn arm_module_runtime() -> bool {
+    if MODULE_TARGET.get().is_some() {
+        return true;
+    }
+    let Some(runtime) = super::super::runtime::started() else {
+        return false;
+    };
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    runtime.spawn(async move {
+        let _ = tx.send(Handle::current());
+    });
+    match rx.recv_timeout(Duration::from_secs(1)) {
+        Ok(handle) => {
+            let _ = MODULE_TARGET.set(handle);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
 /// Run `future` on the module runtime and wait at most `timeout` for it.
 pub(crate) fn run<T, F>(timeout: Duration, future: F) -> Result<T, SeamError>
 where
     T: Send + 'static,
     F: Future<Output = Result<T, String>> + Send + 'static,
 {
-    run_slot(&TARGET, &IN_FLIGHT, MAX_IN_FLIGHT, timeout, future)
+    let slot = if MODULE_TARGET.get().is_some() {
+        &MODULE_TARGET
+    } else {
+        &TARGET
+    };
+    run_slot(slot, &IN_FLIGHT, MAX_IN_FLIGHT, timeout, future)
 }
 
 fn run_slot<T, F>(
