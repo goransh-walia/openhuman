@@ -172,14 +172,11 @@ async fn shell_executes_allowed_command() {
 #[tokio::test]
 async fn shell_destructive_command_is_gated_not_run_inline() {
     // `rm -rf /` is Destructive → it must route through the human approval
-    // gate (external_effect), never auto-run. Assert the classification
-    // here rather than executing it.
+    // gate (external_effect), never auto-run. The class itself is the security
+    // module's answer (pinned by the module-backed command tests); the tool's
+    // part is declaring every command an external effect.
     let security = test_security(AutonomyLevel::Supervised);
     let tool = ShellTool::new(security.clone(), test_runtime(), test_audit());
-    assert_eq!(
-        security.classify_command("rm -rf /"),
-        CommandClass::Destructive
-    );
     assert!(tool.external_effect_with_args(&json!({"command": "rm -rf /"})));
 }
 

@@ -1,7 +1,6 @@
 use super::*;
 use crate::agent::host_runtime::{NativeRuntime, RuntimeAdapter};
 use crate::security::{AutonomyLevel, SecurityPolicy};
-use tinybox_bus::CommandClass;
 
 fn test_security(autonomy: AutonomyLevel) -> Arc<SecurityPolicy> {
     Arc::new(SecurityPolicy {

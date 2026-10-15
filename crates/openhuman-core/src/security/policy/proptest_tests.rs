@@ -1,13 +1,11 @@
-//! Property-based tests for the autonomy classifier's adversarial-input
-//! surfaces (plan.md §6.3 — proptest was previously absent). The command
-//! classifier and path checks run on fully untrusted strings from the
-//! LLM/user, so the central properties are "never panics on any input" and a
-//! handful of fail-closed invariants that must hold for *all* inputs, not just
-//! the hand-enumerated cases in `policy_tests.rs`.
+//! Property-based tests for the path check's adversarial-input surface
+//! (plan.md §6.3 — proptest was previously absent). Paths arrive as fully
+//! untrusted strings from the LLM/user, so the central property is "never
+//! panics on any input". The command classifier these once also covered is the
+//! TinySecurity module's now, and is fuzzed there.
 
 use super::types::SecurityPolicy;
 use proptest::prelude::*;
-use tinybox_bus::CommandClass;
 
 proptest! {
     #![proptest_config(ProptestConfig {

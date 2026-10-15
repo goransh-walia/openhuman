@@ -89,7 +89,6 @@ use crate::security::approval::{
 use crate::security::policy::{
     CommandFlow, CommandQuery, CommandStage, GateDecision as PolicyGateDecision, SecurityPolicy,
 };
-use tinybox_bus::CommandClass;
 use tinytools::{PermissionLevel, Tool};
 use tinytools::{ToolPolicyAction, ToolPolicySession};
 
