@@ -48,10 +48,10 @@
 //!    step** — the two are alternatives, not layers. The session-allowlist
 //!    shortcut yields no id and needs no terminal row.
 //! 3. **No `Redacted` outcome is ever produced.** OpenHuman can *detect* PII
-//!    ([`tinymemory_api::safety::scan`]) but exposes no verified
-//!    public helper that rewrites free text into a redacted copy — the one that
-//!    exists (`approval::redact::scrub_paths`) is private and shaped for JSON
-//!    argument maps. Screening therefore only ever passes or blocks. See the
+//!    ([`tinymemory_api::safety::scan`]) and now has a module-backed free-text
+//!    redactor (`security::redact::text`), but mapping "PII found, injection
+//!    clean" to `Redacted` is a behaviour change owned by the phase 4 approval
+//!    move. Screening therefore only ever passes or blocks. See the
 //!    `TODO(phase4)` in [`OpenHumanSecurityGate::screen_input`].
 //! 4. **An absent approval gate allows, it does not deny.** When
 //!    [`ApprovalGate::try_global`] is `None` (CLI, headless embed, tests) a

@@ -9,7 +9,7 @@ Interactive approval workflow for supervised mode (issue #1339). `ApprovalGate` 
 - Cron agent turns may use read-only tools and the job's configured delivery. Their external-effect calls are denied, including schedule mutation. Other automation follows its origin-specific gate policy.
 - Persist pending requests in SQLite so they survive a core restart; lazily expire stale rows; keep a durable decided/executed audit trail.
 - Resolve a parked call on a user decision (`approve_once` / `approve_always_for_tool` / `deny`), TTL timeout, or channel drop, failing closed in every non-approve path.
-- Redact arguments (`redact_args`) and build safe action summaries (`summarize_action`) before anything leaves the gate.
+- Build safe action summaries (`summarize_action`) before anything leaves the gate; argument redaction is the TinySecurity module's (`security::redact::arguments`, `StructuredArguments` mode), and the arguments are withheld when the module cannot answer.
 - Route a thread's yes/no chat reply back to a parked approval (`pending_for_thread` + `parse_approval_reply`).
 - On `approve_always_for_tool`, persist the tool onto `autonomy.auto_approve` (config save + live-policy reload) so it skips prompting next time.
 
@@ -24,7 +24,7 @@ Interactive approval workflow for supervised mode (issue #1339). `ApprovalGate` 
 | `crates/openhuman-core/src/security/approval/gate_state.rs` | `decide` (resolves the parked future, emits `ApprovalDecided`), `classify_decide_miss`, `record_execution` (best-effort terminal audit row), `list_pending`/`list_recent_decisions`, the flow-trust helpers, and the thread→request routing lookups. |
 | `crates/openhuman-core/src/security/approval/store.rs` | SQLite persistence (`pending_approvals` table). `insert_pending`, `decide`, `get_decision`, `record_execution`, `list_pending`, `list_recent_decisions`, `purge_session`, `expire_stale`, plus idempotent column migration for the v1 schema. |
 | `crates/openhuman-core/src/security/approval/types.rs` | Serde domain types: `PendingApproval`, `ApprovalAuditEntry`, `ApprovalDecision`, `GateOutcome`, `ExecutionOutcome`. |
-| `crates/openhuman-core/src/security/approval/redact.rs` | `redact_args` (PII/chat-content key scrubbing + home-path stripping) and `summarize_action` (safe-field summary). |
+| `crates/openhuman-core/src/security/approval/summary.rs` | `summarize_action` (safe-field summary). |
 | `crates/openhuman-core/src/security/approval/rpc.rs` | Domain RPC entry points returning `Outcome<T>`: `approval_get_gate_state`, `approval_list_pending`, `approval_list_recent_decisions`, `approval_decide`, `approval_preauthorize_flow`. |
 | `crates/openhuman-core/src/security/approval/schemas.rs` | Controller schemas + `handle_*` fns wiring the RPC into the registry. |
 
@@ -33,7 +33,7 @@ Interactive approval workflow for supervised mode (issue #1339). `ApprovalGate` 
 Re-exported from [`mod.rs`](./mod.rs):
 
 - Gate: `ApprovalGate`, `ApprovalChatContext`, `FlowRunContext`, `ApprovalTurnContext` (the explicit per-turn chat / copilot / flow-run context every gate check takes), `parse_approval_reply`.
-- Redaction: `redact_args`, `summarize_action`.
+- Summaries: `summarize_action`; redaction: `security::redact::arguments`.
 - Types: `PendingApproval`, `ApprovalAuditEntry`, `ApprovalDecision`, `ApprovalSourceContext`, `ExecutionOutcome`, `GateOutcome`.
 - Controller registry: `all_approval_controller_schemas`, `all_approval_registered_controllers`.
 

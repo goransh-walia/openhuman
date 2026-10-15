@@ -46,12 +46,10 @@ impl SecurityGate for OpenHumanSecurityGate {
     /// The reason string carries the verdict and the rule codes only — never
     /// the screened text, which is the thing suspected of being hostile.
     ///
-    /// TODO(phase4): no [`ScreenOutcome::Redacted`] is ever returned. Producing
-    /// one needs a free-text redactor; `tinymemory_api::safety::scan` detects spans but
-    /// returns no rewritten string, and `approval::redact::scrub_paths` is
-    /// private and shaped for JSON argument maps. Either lift a public
-    /// `redact_text(&str) -> String` out of `approval::redact` or add one to
-    /// `tinymemory_api::safety`, then map "PII found, injection clean" to `Redacted`.
+    /// TODO(phase4): no [`ScreenOutcome::Redacted`] is ever returned. The
+    /// free-text redactor now exists (`security::redact::text`, answered by the
+    /// TinySecurity module); mapping "PII found, injection clean" to `Redacted`
+    /// is a behaviour change that belongs with the phase 4 approval move.
     async fn screen_input(&self, text: &str, origin: ContentOrigin) -> TaResult<ScreenOutcome> {
         if !self.screens_input {
             return Ok(ScreenOutcome::Pass);
