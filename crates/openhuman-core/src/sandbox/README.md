@@ -136,6 +136,26 @@ and suitable for untrusted code. Missing modules and transport errors are
 reported as errors; unavailable or insufficient isolation is `Inactive`, and
 execution refuses to run without the required provider.
 
+### Untrusted spawns (issue #7328, phase 5)
+
+Text the host did not author reaches a shell through exactly one gate,
+`untrusted::run`: it resolves the jail policy, refuses a jail that is missing,
+inactive (Noop) or not suitable for untrusted code (`IsolationFloor`), and runs
+the command in the native jail or the Docker container. The only unjailed path is
+the operator's own opt-out (`OPENHUMAN_SANDBOX=off`, `[sandbox] enabled = false`,
+`[components] sandbox = false`), which SaaS never honours: `execute_in_sandbox`
+also refuses a SaaS spawn whose policy resolved to no backend. Scheduled shell
+jobs use it today. `scripts/ci/spawner-inventory.json` (checked by
+`node scripts/ci/check-spawner-inventory.mjs`, part of `pnpm rust:layout`) lists
+every process spawn site with its source trust; the rows still `direct` are the
+open backlog and each carries the reason.
+
+`[sandbox] backend` accepts `auto`, `landlock`, `docker` and `none`. Earlier
+builds also accepted `firejail` and `bubblewrap` and `firejail_args`, but no
+execution path ever existed for them, so selecting one made every command fail.
+The config load migrates them to `auto` (the TinyBox-selected jail) with a
+warning, and deletes `firejail_args` (`config/migrations/security_policy.rs`).
+
 ## Layout
 
 | Path | What it does |
