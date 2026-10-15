@@ -77,10 +77,8 @@ fn outcome<T>(result: &Result<T>) -> &'static str {
 #[must_use]
 pub fn scrub(item: StoreItem) -> StoreItem {
     let kind = item.kind();
-    let scrubbed = tinymemory_integrations::safety::scrub_item_with(
-        item,
-        tinyredact::Policy::corroborated(),
-    );
+    let scrubbed =
+        tinymemory_integrations::safety::scrub_item_with(item, tinyredact::Policy::corroborated());
     if scrubbed.report.changed() {
         tracing::debug!(
             kind = kind.as_str(),

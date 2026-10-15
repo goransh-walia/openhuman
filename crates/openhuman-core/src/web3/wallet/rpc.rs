@@ -103,7 +103,10 @@ async fn rpc_call_to_inner<T: DeserializeOwned>(
 
 /// Plain REST GET returning JSON or text.
 pub async fn rest_get_text(url: &str) -> Result<String, String> {
-    log::debug!("{LOG_PREFIX} rest_get url={}", crate::security::redact::endpoint_origin(url));
+    log::debug!(
+        "{LOG_PREFIX} rest_get url={}",
+        crate::security::redact::endpoint_origin(url)
+    );
     let response = client()
         .get(url)
         .send()

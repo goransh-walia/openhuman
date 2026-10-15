@@ -12,13 +12,13 @@ pub mod approval;
 pub mod credentials;
 pub mod devices;
 pub mod egress;
-pub mod redact;
 pub mod encryption;
 pub mod keyring_consent;
 pub mod live_policy;
 pub mod pairing;
 pub mod policy;
 pub mod prompt_injection;
+pub mod redact;
 pub mod secret_storage;
 
 pub use self::secret_storage::SecretStore;

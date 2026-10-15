@@ -123,14 +123,23 @@ async fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
 
 #[test]
 fn text_falls_back_to_the_floor_never_the_original_or_a_blank() {
-    let out = answer_or_floor(None, "retry failed: Authorization: Bearer abcdefghijklmnop\nok");
+    let out = answer_or_floor(
+        None,
+        "retry failed: Authorization: Bearer abcdefghijklmnop\nok",
+    );
     assert!(!out.contains("abcdefghijklmnop"), "{out}");
-    assert!(out.starts_with("retry failed:") && out.ends_with("\nok"), "{out}");
+    assert!(
+        out.starts_with("retry failed:") && out.ends_with("\nok"),
+        "{out}"
+    );
 }
 
 #[test]
 fn text_prefers_the_module_answer() {
-    assert_eq!(answer_or_floor(Some("module said".into()), "raw"), "module said");
+    assert_eq!(
+        answer_or_floor(Some("module said".into()), "raw"),
+        "module said"
+    );
 }
 
 /// The moved callers end to end on the released archive: the artifact redactor

@@ -35,7 +35,13 @@ impl std::fmt::Debug for StorageConfig {
     /// Redacts credentials: a MongoDB URL carries the database password.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StorageConfig")
-            .field("url", &self.url.as_deref().map(crate::core::log_redaction::scrub_secrets))
+            .field(
+                "url",
+                &self
+                    .url
+                    .as_deref()
+                    .map(crate::core::log_redaction::scrub_secrets),
+            )
             .finish()
     }
 }

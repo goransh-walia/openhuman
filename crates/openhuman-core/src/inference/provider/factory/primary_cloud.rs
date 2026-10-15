@@ -21,7 +21,9 @@ pub(super) fn resolve_primary_cloud_provider_string(config: &Config) -> String {
             log::debug!(
                 "[providers][chat-factory] BYOK intent detected (host={}) \
                  but no matching cloud_providers entry found; returning fail-closed sentinel",
-                crate::security::redact::endpoint_host(config.inference_url.as_deref().unwrap_or_default())
+                crate::security::redact::endpoint_host(
+                    config.inference_url.as_deref().unwrap_or_default()
+                )
             );
             return BYOK_INCOMPLETE_SENTINEL.to_string();
         }

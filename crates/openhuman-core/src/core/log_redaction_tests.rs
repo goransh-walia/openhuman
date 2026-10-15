@@ -201,8 +201,12 @@ fn shared_url_corpus_loses_userinfo_and_query_but_keeps_plain_urls() {
 
 #[test]
 fn mongodb_style_storage_urls_lose_password_and_option_tokens() {
-    let out = scrub_secrets("mongodb://app:pw@db/x?authMechanismProperties=AWS_SESSION_TOKEN%3Asecret");
-    assert!(!out.contains("pw@") && !out.contains("AWS_SESSION_TOKEN"), "{out}");
+    let out =
+        scrub_secrets("mongodb://app:pw@db/x?authMechanismProperties=AWS_SESSION_TOKEN%3Asecret");
+    assert!(
+        !out.contains("pw@") && !out.contains("AWS_SESSION_TOKEN"),
+        "{out}"
+    );
     assert_eq!(scrub_secrets("sqlite:/tmp/x"), "sqlite:/tmp/x");
 }
 

@@ -345,6 +345,9 @@ fn shared_url_redaction_corpus_is_cleaned_by_the_log_floor() {
     for case in corpus["urls"].as_array().unwrap() {
         let input = case["input"].as_str().unwrap();
         let out = openhuman_core::core::log_redaction::scrub_secrets(input);
-        assert!(!out.contains("hunter2") && !out.contains("key=secret"), "{out}");
+        assert!(
+            !out.contains("hunter2") && !out.contains("key=secret"),
+            "{out}"
+        );
     }
 }
