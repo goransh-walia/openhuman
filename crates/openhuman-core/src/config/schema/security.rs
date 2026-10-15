@@ -89,8 +89,6 @@ pub struct SandboxConfig {
     pub enabled: Option<bool>,
     #[serde(default)]
     pub backend: SandboxBackend,
-    #[serde(default)]
-    pub firejail_args: Vec<String>,
 }
 
 impl Default for SandboxConfig {
@@ -98,7 +96,6 @@ impl Default for SandboxConfig {
         Self {
             enabled: None,
             backend: SandboxBackend::Auto,
-            firejail_args: Vec::new(),
         }
     }
 }
@@ -109,16 +106,9 @@ pub enum SandboxBackend {
     #[default]
     Auto,
     Landlock,
-    Firejail,
-    Bubblewrap,
     Docker,
     None,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-#[derive(Default)]
-pub struct ResourceLimitsConfig {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
