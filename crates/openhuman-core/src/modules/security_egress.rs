@@ -312,11 +312,12 @@ pub(crate) async fn authorize_tool_destination(
             unavailable()
         })?;
     let tenant = crate::core::runtime::tenant::current_tenant().map_err(|_| unavailable())?;
-    let owner = super::policy_translation::subject_scope(&tenant, workspace_dir, saas)
-        .map_err(|error| {
+    let owner = super::policy_translation::subject_scope(&tenant, workspace_dir, saas).map_err(
+        |error| {
             log::warn!("[security][egress] no verified subject: {error}");
             unavailable()
-        })?;
+        },
+    )?;
     let privacy = super::policy_translation::privacy_mode(
         crate::security::live_policy::current_privacy_mode(),
     );

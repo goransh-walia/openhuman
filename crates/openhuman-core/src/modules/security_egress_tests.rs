@@ -195,3 +195,150 @@ async fn rebinding_resolver_answer_after_validation_is_never_used() {
         "the rebound address received a connection"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Agent tool destinations
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_open_public_policy_registers_no_destination_and_no_local_capability() {
+    let policy = open_public_policy(subject(), tinysecurity_bus::PrivacyMode::Standard);
+    assert!(policy.open_public);
+    assert!(policy.destinations.is_empty() && policy.local_capabilities.is_empty());
+    assert!(policy.preflight_transports.is_empty());
+}
+
+#[test]
+fn a_tool_request_carries_the_real_method_headers_and_body_as_user_content() {
+    let headers = vec![("Authorization".to_string(), "Bearer abc".to_string())];
+    let destination = ToolDestination {
+        url: "https://example.test/x?q=1",
+        method: "post",
+        headers: &headers,
+        body: Some("hello"),
+    };
+    let request = tool_request(EgressPolicyId("p".into()), subject(), &destination);
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.payload, "hello");
+    assert_eq!(request.headers.len(), 1);
+    assert_eq!(request.category, DataCategory::UserContent);
+    assert_eq!(request.transport, EgressTransport::PinnedDirect);
+    assert!(request.local_capability.is_none() && request.transformation.is_none());
+}
+
+async fn register_open_public(
+    proxy: &tinybus::Proxy,
+    privacy: tinysecurity_bus::PrivacyMode,
+) -> EgressPolicyId {
+    proxy
+        .call_confidential(
+            names::methods::REGISTER_EGRESS_POLICY,
+            (open_public_policy(subject(), privacy),),
+        )
+        .await
+        .expect("the trusted host registers an open-public policy")
+}
+
+async fn judge(
+    proxy: &tinybus::Proxy,
+    id: &EgressPolicyId,
+    url: &str,
+    body: Option<&str>,
+) -> EgressOutcome {
+    let destination = ToolDestination {
+        url,
+        method: "POST",
+        headers: &[],
+        body,
+    };
+    let mut request = tool_request(id.clone(), subject(), &destination);
+    request.tier = AccessTier::Full;
+    scoped_url_guard_on(proxy, request)
+        .await
+        .expect("the module answers")
+}
+
+/// The released module, through the exact request the network tools' gate
+/// builds: a public destination is authorized and pinned to its address, the
+/// grant is spent once, and the address floor refuses everything private.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn released_module_authorizes_public_tool_destinations_and_refuses_private_ones() {
+    let fx = super::super::native_tests::native_fixture().await;
+    let standard = register_open_public(&fx.proxy, tinysecurity_bus::PrivacyMode::Standard).await;
+
+    let public = "http://93.184.216.34/x";
+    let EgressOutcome::Authorized(auth) = judge(&fx.proxy, &standard, public, Some("hi")).await
+    else {
+        panic!("a public literal must be authorized");
+    };
+    assert_eq!(auth.addresses, vec!["93.184.216.34:80".parse().unwrap()]);
+    let destination = ToolDestination {
+        url: public,
+        method: "POST",
+        headers: &[],
+        body: Some("hi"),
+    };
+    let mut request = tool_request(standard.clone(), subject(), &destination);
+    request.tier = AccessTier::Full;
+    consume_on(&fx.proxy, request.clone(), (*auth).clone())
+        .await
+        .expect("the first use of a grant is accepted");
+    assert!(
+        consume_on(&fx.proxy, request, *auth).await.is_err(),
+        "a grant is spent once"
+    );
+
+    for private in [
+        "http://127.0.0.1/x",
+        "http://169.254.169.254/latest/meta-data",
+        "http://10.0.0.5/x",
+        "http://100.64.0.1/x",
+        "http://192.168.1.1/x",
+    ] {
+        assert!(
+            matches!(
+                judge(&fx.proxy, &standard, private, None).await,
+                EgressOutcome::Denied(EgressDenial::Address)
+            ),
+            "{private} must hit the address floor"
+        );
+    }
+}
+
+/// Under Sensitive the module itself refuses a payload the redactor would
+/// change, and under LocalOnly it refuses every external destination.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn released_module_applies_the_privacy_mode_to_the_tools_real_payload() {
+    let fx = super::super::native_tests::native_fixture().await;
+    let sensitive = register_open_public(&fx.proxy, tinysecurity_bus::PrivacyMode::Sensitive).await;
+    // Built at runtime so no credential-shaped literal sits in the source.
+    let secret = format!("{}-{}", "sk", "abcdefghijklmnopqrstuvwxyz123456");
+    assert!(matches!(
+        judge(
+            &fx.proxy,
+            &sensitive,
+            "http://93.184.216.34/x",
+            Some(&secret)
+        )
+        .await,
+        EgressOutcome::Denied(EgressDenial::Privacy)
+    ));
+    assert!(matches!(
+        judge(
+            &fx.proxy,
+            &sensitive,
+            "http://93.184.216.34/x",
+            Some("plain words")
+        )
+        .await,
+        EgressOutcome::Authorized(_)
+    ));
+    let local_only =
+        register_open_public(&fx.proxy, tinysecurity_bus::PrivacyMode::LocalOnly).await;
+    assert!(matches!(
+        judge(&fx.proxy, &local_only, "http://93.184.216.34/x", None).await,
+        EgressOutcome::Denied(_)
+    ));
+}
