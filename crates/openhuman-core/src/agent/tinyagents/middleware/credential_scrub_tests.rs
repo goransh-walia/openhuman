@@ -11,7 +11,13 @@ use super::*;
 fn fake_module(text: &str) -> Option<String> {
     Some(
         text.split(' ')
-            .map(|w| if w.starts_with("secret-") { "[REDACTED]" } else { w })
+            .map(|w| {
+                if w.starts_with("secret-") {
+                    "[REDACTED]"
+                } else {
+                    w
+                }
+            })
             .collect::<Vec<_>>()
             .join(" "),
     )
@@ -24,8 +30,7 @@ fn unchanged_result_is_left_alone() {
 
 #[test]
 fn changed_result_carries_the_model_facing_notice_and_count() {
-    let (text, count) =
-        scrub_for_tool(&fake_module, "read_file", "a secret-1 b secret-2").unwrap();
+    let (text, count) = scrub_for_tool(&fake_module, "read_file", "a secret-1 b secret-2").unwrap();
     assert_eq!(count, 2);
     assert!(text.starts_with("a [REDACTED] b [REDACTED]\n\n[credential_scrub] 2 value(s)"));
 }
@@ -38,8 +43,7 @@ fn placeholders_already_in_the_result_are_not_counted() {
 
 #[test]
 fn a_module_that_cannot_answer_withholds_the_result_instead_of_passing_it_on() {
-    let (text, count) =
-        scrub_for_tool(&|_| None, "read_file", "password=hunter2secret").unwrap();
+    let (text, count) = scrub_for_tool(&|_| None, "read_file", "password=hunter2secret").unwrap();
     assert_eq!(text, WITHHELD_NOTICE);
     assert_eq!(count, 1);
     assert!(!text.contains("hunter2"));

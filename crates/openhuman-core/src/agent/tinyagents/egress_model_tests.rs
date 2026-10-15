@@ -95,10 +95,20 @@ async fn under_sensitive_an_unassessable_request_is_refused_before_the_route_is_
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let (model, calls) = route(false);
     let error = model.invoke(&(), request()).await.err().expect("refused");
-    assert!(error.to_string().contains("Sensitive privacy mode"), "{error}");
-    assert_eq!(calls.load(Ordering::SeqCst), 0, "the route must not be called");
+    assert!(
+        error.to_string().contains("Sensitive privacy mode"),
+        "{error}"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "the route must not be called"
+    );
     let streamed = model.stream(&(), request()).await.err().expect("refused");
-    assert!(streamed.to_string().contains("Sensitive privacy mode"), "{streamed}");
+    assert!(
+        streamed.to_string().contains("Sensitive privacy mode"),
+        "{streamed}"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
@@ -106,7 +116,10 @@ async fn under_sensitive_an_unassessable_request_is_refused_before_the_route_is_
 async fn a_route_that_stays_on_the_device_is_never_assessed() {
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let (model, calls) = route(true);
-    model.invoke(&(), request()).await.expect("local route is not assessed");
+    model
+        .invoke(&(), request())
+        .await
+        .expect("local route is not assessed");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
@@ -117,7 +130,10 @@ async fn a_local_primary_does_not_exempt_an_external_fallback_route() {
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let (primary, primary_calls) = route(true);
     let (fallback, fallback_calls) = route(false);
-    primary.invoke(&(), request()).await.expect("primary is local");
+    primary
+        .invoke(&(), request())
+        .await
+        .expect("primary is local");
     assert!(fallback.invoke(&(), request()).await.is_err());
     assert_eq!(primary_calls.load(Ordering::SeqCst), 1);
     assert_eq!(fallback_calls.load(Ordering::SeqCst), 0);

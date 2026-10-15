@@ -4,9 +4,7 @@
 //! the notice. The only host policy is the browser task's confirmation token,
 //! which is minted by the host and must survive the scrubber.
 
-use tinyagents_harness::middleware::{
-    redaction_notice, CredentialScrubMiddleware, ToolScrubber,
-};
+use tinyagents_harness::middleware::{redaction_notice, CredentialScrubMiddleware, ToolScrubber};
 
 /// What the module writes where it removed a credential.
 const MODULE_PLACEHOLDER: &str = "[REDACTED]";
@@ -56,7 +54,11 @@ fn scrub_through(redact: Redactor<'_>, content: &str) -> Option<(String, usize)>
 ///
 /// The token is removed before scrubbing and put back afterwards, so it is
 /// never seen by (or counted against) the scrubber.
-pub(crate) fn scrub_for_tool(redact: Redactor<'_>, tool_name: &str, content: &str) -> Option<(String, usize)> {
+pub(crate) fn scrub_for_tool(
+    redact: Redactor<'_>,
+    tool_name: &str,
+    content: &str,
+) -> Option<(String, usize)> {
     if tool_name != "browser" {
         return scrub_through(redact, content);
     }

@@ -120,7 +120,12 @@ impl ChatModel<()> for EgressAssessedModel {
         self.inner.profile()
     }
 
-    fn supports_input(&self, modality: InputModality, mime_type: &str, source: InputSource) -> bool {
+    fn supports_input(
+        &self,
+        modality: InputModality,
+        mime_type: &str,
+        source: InputSource,
+    ) -> bool {
         self.inner.supports_input(modality, mime_type, source)
     }
 
@@ -128,12 +133,20 @@ impl ChatModel<()> for EgressAssessedModel {
         self.inner.cache_identity()
     }
 
-    async fn invoke(&self, state: &(), request: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+    async fn invoke(
+        &self,
+        state: &(),
+        request: ModelRequest,
+    ) -> tinyinference_llm::Result<ModelResponse> {
         self.check(&request)?;
         self.inner.invoke(state, request).await
     }
 
-    async fn stream(&self, state: &(), request: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+    async fn stream(
+        &self,
+        state: &(),
+        request: ModelRequest,
+    ) -> tinyinference_llm::Result<ModelStream> {
         self.check(&request)?;
         self.inner.stream(state, request).await
     }
