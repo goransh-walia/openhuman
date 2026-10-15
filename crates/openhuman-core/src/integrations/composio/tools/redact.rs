@@ -204,6 +204,7 @@ where
 
 /// The module's answer for each of `strings` with `secrets` as this call's exact
 /// credentials.
+#[cfg(feature = "security-module")]
 async fn module_answers(config: &Config, secrets: &[String], strings: Vec<String>) -> Answers {
     let answers = futures::future::join_all(strings.iter().map(|text| {
         crate::modules::security::text::redact_credentials_with(config, text, secrets)
@@ -216,6 +217,24 @@ async fn module_answers(config: &Config, secrets: &[String], strings: Vec<String
         .collect()
 }
 
+/// Without the security module nothing can check a string that mentions a key,
+/// so every such string is withheld (fail closed).
+#[cfg(not(feature = "security-module"))]
+async fn module_answers(_config: &Config, _secrets: &[String], _strings: Vec<String>) -> Answers {
+    Err("the security module is not built into this host".to_string())
+}
+
+/// The module's redaction of one string with `secrets` as exact credentials.
+#[cfg(feature = "security-module")]
+async fn redact_one(config: &Config, text: &str, secrets: &[String]) -> Result<String, String> {
+    crate::modules::security::text::redact_credentials_with(config, text, secrets).await
+}
+
+#[cfg(not(feature = "security-module"))]
+async fn redact_one(_config: &Config, _text: &str, _secrets: &[String]) -> Result<String, String> {
+    Err("the security module is not built into this host".to_string())
+}
+
 /// Redact every Composio secret `config` resolves to from `rendered`, report
 /// the redacted copy via
 /// [`report_composio_op_error`](super::super::ops::report_composio_op_error),
@@ -225,9 +244,7 @@ pub(crate) async fn redact_and_report(config: &Config, operation: &str, rendered
     let redacted = if !mentions_a_key(rendered, &secrets) {
         rendered.to_string()
     } else {
-        match crate::modules::security::text::redact_credentials_with(config, rendered, &secrets)
-            .await
-        {
+        match redact_one(config, rendered, &secrets).await {
             Ok(redacted) => redacted,
             Err(error) => {
                 tracing::warn!("[composio] error text withheld: {error}");
