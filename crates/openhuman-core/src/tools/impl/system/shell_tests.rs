@@ -84,6 +84,7 @@ mod timeout_tests;
 /// The shell tool's gate on the released module, with no gateway stub: a read
 /// runs in read-only mode, a write and hidden execution are refused before
 /// anything is launched, and the run spends the module's hourly budget.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn shell_tool_gates_commands_on_the_released_module() {

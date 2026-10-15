@@ -386,6 +386,7 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
 /// Scheduled shell authorization and admission on the released module, with no
 /// gateway stub: the allowlist applies, the protected floor refuses, and only
 /// admission (the run) spends the hourly budget.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn scheduled_shell_commands_are_gated_by_the_released_module() {

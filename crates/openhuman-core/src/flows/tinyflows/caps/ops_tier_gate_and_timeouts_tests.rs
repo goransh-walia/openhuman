@@ -589,6 +589,7 @@ fn response_fields_from_schema_empty_for_none_or_non_object() {
 /// The flow-node tier gate on the released module, with no gateway stub:
 /// read-only blocks an acting node with the policy marker, supervised parks it
 /// for approval, full runs a write and still asks for the network.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn node_tier_gate_is_answered_by_the_released_module() {

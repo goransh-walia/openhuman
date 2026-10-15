@@ -292,6 +292,7 @@ mod screen_and_policy;
 /// stub: a read is allowed in read-only mode, a write is denied there with the
 /// policy marker, a supervised write waits for a human, and hidden execution is
 /// denied.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn the_shell_decision_comes_from_the_released_module() {

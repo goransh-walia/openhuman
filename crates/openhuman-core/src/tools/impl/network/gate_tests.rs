@@ -287,6 +287,7 @@ fn egress_descriptor_reports_both_body_and_headers() {
 /// The network gate on the released module, with no gateway stub, from a
 /// runtime worker and from a plain thread: read-only cannot act, supervised
 /// can and asks for approval.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn the_network_gate_is_answered_by_the_released_module() {
