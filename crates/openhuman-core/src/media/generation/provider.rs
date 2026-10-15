@@ -197,7 +197,7 @@ impl Guard {
         descriptor: crate::security::egress::EgressDescriptor,
     ) -> ti_image::Result<()> {
         crate::security::egress::enforce_egress(&descriptor).map_err(|error| {
-            tracing::info!(route, %error, "[media_generation] blocked by privacy policy");
+            tracing::info!(route = %descriptor.service, %error, "[media_generation] blocked by privacy policy");
             ti_image::Error::Validation(format!("blocked by the privacy policy: {error}"))
         })?;
         crate::security::egress::emit_external_transfer(self.chat.as_ref(), descriptor);
@@ -267,15 +267,13 @@ impl VideoGenerator for GuardedVideo {
     }
 
     async fn submit(&self, request: VideoRequest) -> ti_video::Result<VideoJob> {
-        self.guard
-            .admit_prompt(
-                "videos",
-                request.prompt.as_deref().unwrap_or_default(),
-                request.first_frame.is_some()
-                    || request.last_frame.is_some()
-                    || !request.references.is_empty(),
-            )
-            .map_err(|error| ti_video::Error::Validation(error.to_string()))?;
+        self.guard.admit_prompt(
+            "videos",
+            request.prompt.as_deref().unwrap_or_default(),
+            request.first_frame.is_some()
+                || request.last_frame.is_some()
+                || !request.references.is_empty(),
+        )?;
         self.guard.budget().await?;
         self.inner.submit(request).await
     }
