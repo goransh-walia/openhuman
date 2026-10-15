@@ -543,6 +543,9 @@ pub(crate) mod policy_translation;
 #[path = "security_scoped.rs"]
 pub(crate) mod scoped_client;
 
+#[path = "security_sync.rs"]
+pub(crate) mod sync_seam;
+
 #[path = "security_text.rs"]
 pub(crate) mod text;
 

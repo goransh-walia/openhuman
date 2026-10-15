@@ -214,7 +214,6 @@ const LOG_BRIDGE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis
 
 struct LogBridge {
     config: Config,
-    handle: tokio::runtime::Handle,
 }
 
 static LOG_BRIDGE: std::sync::OnceLock<LogBridge> = std::sync::OnceLock::new();
@@ -223,17 +222,34 @@ thread_local! {
     static IN_BRIDGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+/// Redact from a synchronous caller through the shared seam
+/// ([`super::sync_seam`]): bounded, never `block_on` on a worker thread, and
+/// `Err` (never the original text) when the module cannot answer.
+pub(crate) fn redact_blocking(
+    config: &Config,
+    mode: RedactMode,
+    text: &str,
+    timeout: std::time::Duration,
+) -> Result<String, String> {
+    if let Some(hit) = cache().lock().ok().and_then(|c| c.get(&mode, text)) {
+        return Ok(hit);
+    }
+    let config = config.clone();
+    let text = text.to_string();
+    super::sync_seam::run(timeout, async move { redact(&config, mode, &text).await })
+        .map_err(String::from)
+}
+
 /// Arm the module-backed second pass for `core::log_redaction::scrub_secrets`
 /// (Sentry `before_send`, error logs). Called once the module answered; a no-op
 /// outside a tokio runtime or when already armed.
 pub(crate) fn arm_log_scrubber(config: &Config) {
-    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+    if !super::sync_seam::arm_current() {
         return;
-    };
+    }
     if LOG_BRIDGE
         .set(LogBridge {
             config: config.clone(),
-            handle,
         })
         .is_ok()
     {
@@ -245,13 +261,6 @@ pub(crate) fn arm_log_scrubber(config: &Config) {
 /// the caller with the floor result.
 fn bridge_scrub(text: &str) -> Option<String> {
     let bridge = LOG_BRIDGE.get()?;
-    if let Some(hit) = cache()
-        .lock()
-        .ok()
-        .and_then(|c| c.get(&RedactMode::Text, text))
-    {
-        return Some(hit);
-    }
     // The module call may itself log; never recurse into the bridge.
     if IN_BRIDGE.with(|flag| flag.replace(true)) {
         return None;
@@ -263,23 +272,9 @@ fn bridge_scrub(text: &str) -> Option<String> {
         }
     }
     let _reset = Reset;
-    let call = async {
-        tokio::time::timeout(
-            LOG_BRIDGE_TIMEOUT,
-            redact(&bridge.config, RedactMode::Text, text),
-        )
-        .await
-    };
-    let outcome = match tokio::runtime::Handle::try_current() {
-        Ok(current) if current.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
-            tokio::task::block_in_place(|| bridge.handle.block_on(call))
-        }
-        Ok(_) => return None,
-        Err(_) => bridge.handle.block_on(call),
-    };
-    match outcome {
-        Ok(Ok(redacted)) => Some(redacted),
-        _ => {
+    match redact_blocking(&bridge.config, RedactMode::Text, text, LOG_BRIDGE_TIMEOUT) {
+        Ok(redacted) => Some(redacted),
+        Err(_) => {
             log::debug!("[security][floor] module redact unavailable; floor result stands");
             None
         }
