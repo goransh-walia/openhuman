@@ -396,6 +396,20 @@ Capability {
         privacy: None,
     },
 Capability {
+        id: "security.privacy_mode",
+        name: "Privacy Mode",
+        domain: "security",
+        category: CapabilityCategory::Settings,
+        description: "Choose how much leaves the device. Local-only refuses every external model, \
+                      network tool, search, integration and cloud embedding. Sensitive checks each \
+                      outgoing payload with the security module's redaction and refuses content \
+                      that holds a credential or identifier, or that could not be checked. \
+                      Backend control-plane calls and local runtimes are unaffected.",
+        how_to: "Settings → Privacy, or [privacy] mode in config.toml.",
+        status: CapabilityStatus::Beta,
+        privacy: None,
+    },
+Capability {
         id: "security.sandbox_backends",
         name: "Sandbox Execution Backends",
         domain: "security",
