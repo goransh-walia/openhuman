@@ -345,6 +345,11 @@ decision. See [approval/README.md](approval/README.md).
     messages on every route that leaves the device (the primary, workload-tier
     routes and fallbacks), not only the primary: a local primary does not exempt
     an external fallback. A refused hop fails that hop only.
+  - Hot logging paths keep a documented floor instead of a bus call per line:
+    `core::log_redaction` (boot floor plus the module second pass; Sentry
+    `before_send` runs through it) and `core::rpc_log::redact_params_for_log`
+    (key-name masking of the `[rpc:dispatch] enter` trace, which fires on every
+    dispatch and must not cross the module bus). Neither is a policy decision.
   - Redactors deliberately left, with owners: the memory write guard
     (`tinymemory_api::safety`, tinymemory-owned), the `denials` log
     (`tinytools`, upstream), and the rpc client / app deep-link
