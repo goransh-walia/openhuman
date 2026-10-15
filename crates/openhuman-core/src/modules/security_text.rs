@@ -323,17 +323,33 @@ fn redact_for_log_with(
     text: &str,
     timeout: Option<std::time::Duration>,
 ) -> String {
-    let Some(bridge) = bridge else {
-        log::debug!("[security][redact] log bridge not armed; suppressing");
-        return SUPPRESSED.to_string();
-    };
-    match redact_through_bridge(bridge, mode, text, timeout) {
+    match try_redact_with(bridge, mode, text, timeout) {
         Ok(redacted) => redacted,
         Err(error) => {
             log::debug!("[security][redact] module unavailable, suppressing: {error}");
             SUPPRESSED.to_string()
         }
     }
+}
+
+/// The module's answer for a synchronous caller, or why there is none (bridge
+/// not armed, re-entered, timed out, faulted). Never the original text.
+pub(crate) fn try_redact(
+    mode: RedactMode,
+    text: &str,
+    timeout: Option<std::time::Duration>,
+) -> Result<String, String> {
+    try_redact_with(LOG_BRIDGE.get(), mode, text, timeout)
+}
+
+fn try_redact_with(
+    bridge: Option<&LogBridge>,
+    mode: RedactMode,
+    text: &str,
+    timeout: Option<std::time::Duration>,
+) -> Result<String, String> {
+    let bridge = bridge.ok_or_else(|| "TinySecurity log bridge not armed".to_string())?;
+    redact_through_bridge(bridge, mode, text, timeout)
 }
 
 #[cfg(test)]

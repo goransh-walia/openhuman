@@ -22,11 +22,38 @@ pub fn endpoint_host(url: &str) -> String {
 }
 
 /// Secrets and PII removed from free `text` (the module's `Text` mode), for
-/// callers that persist or show the result: audit rows, halt summaries and
-/// failure lines. Waits up to [`TEXT_TIMEOUT`] for the module.
+/// callers that persist or show the result: audit rows, halt summaries,
+/// failure lines and artifact bodies. Waits up to [`TEXT_TIMEOUT`] for the
+/// module.
+///
+/// This text is data the user still needs (an artifact the model re-reads, an
+/// audit row), so unlike an endpoint field it is not blanked when the module
+/// cannot answer. The fixed boot floor (`core::log_redaction`, ADR 7) is
+/// applied instead, line by line so a large body is not suppressed whole; the
+/// original text is never returned unfiltered.
 #[must_use]
 pub fn text(text: &str) -> String {
-    redact(Kind::Text, text)
+    match module_text(text) {
+        Some(redacted) => redacted,
+        None => crate::core::log_redaction::floor_scrub_text(text),
+    }
+}
+
+#[cfg(feature = "security-module")]
+fn module_text(input: &str) -> Option<String> {
+    use crate::modules::security::text::{try_redact, RedactMode};
+    match try_redact(RedactMode::Text, input, Some(TEXT_TIMEOUT)) {
+        Ok(redacted) => Some(redacted),
+        Err(error) => {
+            log::debug!("[security][redact] module text pass unavailable, floor applies: {error}");
+            None
+        }
+    }
+}
+
+#[cfg(not(feature = "security-module"))]
+fn module_text(_input: &str) -> Option<String> {
+    None
 }
 
 /// Longest [`text`] waits for the module; large artifact bodies need more than
@@ -36,18 +63,16 @@ const TEXT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 enum Kind {
     Origin,
     Host,
-    Text,
 }
 
 #[cfg(feature = "security-module")]
 fn redact(kind: Kind, input: &str) -> String {
     use crate::modules::security::text::{redact_for_log, RedactMode};
-    let (mode, timeout) = match kind {
-        Kind::Origin => (RedactMode::EndpointOrigin, None),
-        Kind::Host => (RedactMode::EndpointHost, None),
-        Kind::Text => (RedactMode::Text, Some(TEXT_TIMEOUT)),
+    let mode = match kind {
+        Kind::Origin => RedactMode::EndpointOrigin,
+        Kind::Host => RedactMode::EndpointHost,
     };
-    redact_for_log(mode, input, timeout)
+    redact_for_log(mode, input, None)
 }
 
 #[cfg(not(feature = "security-module"))]
