@@ -1,10 +1,18 @@
-//! Regression coverage for `redact.rs` gaps flagged by review on PR #6689.
+//! The walk of a Composio outcome around the module's `RedactWith`: every string
+//! channel is sent for checking, answers are written back (object keys included,
+//! colliding keys kept apart), and a result the module could not check is
+//! withheld. What the module removes is pinned against the released archive in
+//! `modules/security_text_tests.rs`.
+
+use std::collections::HashMap;
 
 use serde_json::json;
 
 use crate::config::{ComposioHostCredential, Config};
-use crate::integrations::composio::tools::redact::redact_and_report;
-use crate::integrations::composio::tools::redact_composio_outcome;
+use crate::integrations::composio::tools::redact::{
+    composio_secrets, redact_and_report, redact_composio_outcome, redact_outcome_with, Answers,
+    WITHHELD,
+};
 
 const SHORT_KEY: &str = "abcdefgh";
 const LONG_KEY: &str = "abcdefghi";
@@ -21,22 +29,27 @@ fn config_with_overlapping_secrets() -> Config {
     config
 }
 
-/// Before the fix, `composio_secrets` lexicographically sorted
-/// `[SHORT_KEY, LONG_KEY]` (`SHORT_KEY` sorts first since it's a prefix)
-/// and redacted in that order, replacing `SHORT_KEY` everywhere first —
-/// including inside `LONG_KEY` — and leaving the trailing `i` behind
-/// instead of a clean `[REDACTED]`.
-#[test]
-fn overlapping_secrets_redact_longest_first() {
-    let config = config_with_overlapping_secrets();
-    let outcome = redact_composio_outcome(
-        &config,
-        Ok(tinytools::ToolResult::success(format!(
-            "token {LONG_KEY} in transit"
-        ))),
-    )
-    .unwrap();
-    let text = outcome
+/// A stand-in for the module: replaces the exact secrets, longest first, like
+/// the module's registry does.
+async fn replace_longest_first(strings: Vec<String>) -> Answers {
+    let secrets = [LONG_KEY, SHORT_KEY];
+    Ok(strings
+        .into_iter()
+        .map(|text| {
+            let redacted = secrets
+                .iter()
+                .fold(text.clone(), |acc, key| acc.replace(key, "[REDACTED]"));
+            (text, redacted)
+        })
+        .collect())
+}
+
+async fn cannot_answer(_strings: Vec<String>) -> Answers {
+    Err("TinySecurity RedactWith failed".to_string())
+}
+
+fn texts(result: &tinytools::ToolResult) -> String {
+    result
         .content
         .iter()
         .filter_map(|c| match c {
@@ -44,62 +57,148 @@ fn overlapping_secrets_redact_longest_first() {
             _ => None,
         })
         .collect::<Vec<_>>()
-        .join(" ");
-    assert!(!text.contains(LONG_KEY), "{text}");
-    assert!(!text.contains(SHORT_KEY), "{text}");
-    assert_eq!(text, "token [REDACTED] in transit");
+        .join(" ")
 }
 
-/// `redact_value` used to walk only object *values*; a secret that
-/// happened to be used as a JSON object key survived untouched.
 #[test]
-fn secret_used_as_a_json_object_key_is_redacted() {
-    let config = config_with_overlapping_secrets();
-    let outcome = redact_composio_outcome(
-        &config,
+fn the_host_resolves_every_key_a_call_can_use_longest_first() {
+    let secrets = composio_secrets(&config_with_overlapping_secrets());
+    assert_eq!(secrets, vec![LONG_KEY.to_string(), SHORT_KEY.to_string()]);
+}
+
+#[tokio::test]
+async fn overlapping_secrets_redact_longest_first_in_text() {
+    let outcome = redact_outcome_with(
+        Ok(tinytools::ToolResult::success(format!(
+            "token {LONG_KEY} in transit"
+        ))),
+        replace_longest_first,
+    )
+    .await
+    .unwrap();
+    assert_eq!(texts(&outcome), "token [REDACTED] in transit");
+}
+
+/// A secret that happened to be used as a JSON object key must not survive.
+#[tokio::test]
+async fn secret_used_as_a_json_object_key_is_redacted() {
+    let outcome = redact_outcome_with(
         Ok(tinytools::ToolResult::json(
             json!({ format!("token_{LONG_KEY}"): "value" }),
         )),
+        replace_longest_first,
     )
+    .await
     .unwrap();
     let serialized = serde_json::to_string(&outcome).unwrap();
     assert!(!serialized.contains(LONG_KEY), "{serialized}");
     assert!(serialized.contains("[REDACTED]"), "{serialized}");
 }
 
-#[test]
-fn colliding_redacted_object_keys_keep_both_values() {
-    let config = config_with_overlapping_secrets();
-    let outcome = redact_composio_outcome(
-        &config,
+#[tokio::test]
+async fn colliding_redacted_object_keys_keep_both_values() {
+    let outcome = redact_outcome_with(
         Ok(tinytools::ToolResult::json(json!({
             (SHORT_KEY): "short value",
             (LONG_KEY): "long value",
         }))),
+        replace_longest_first,
     )
+    .await
     .unwrap();
-    let value = &outcome.content[0];
-    let tinytools::ToolContent::Json { data } = value else {
+    let tinytools::ToolContent::Json { data } = &outcome.content[0] else {
         panic!("expected JSON content");
     };
     let object = data.as_object().expect("JSON object");
     assert_eq!(object.len(), 2);
-    assert_eq!(object.get("[REDACTED]").unwrap(), "short value");
-    assert_eq!(object.get("[REDACTED] (2)").unwrap(), "long value");
+    let mut values: Vec<_> = object.values().map(|v| v.as_str().unwrap()).collect();
+    values.sort_unstable();
+    assert_eq!(values, vec!["long value", "short value"]);
+    assert!(object.keys().all(|key| key.starts_with("[REDACTED]")));
 }
 
-/// `redact_and_report` is the single call site that both reports a
-/// direct-mode error to observability and supplies the caller's returned
-/// error text — one redacted value serves both, so this return value is
-/// exactly what reaches `report_composio_op_error`.
-#[test]
-fn redact_and_report_returns_no_raw_secret() {
+/// Only strings long enough to hold a key are sent for checking.
+#[tokio::test]
+async fn short_strings_are_not_sent_and_an_empty_outcome_is_not_checked() {
+    use std::sync::Mutex;
+    let seen = Mutex::new(Vec::<Vec<String>>::new());
+    let redactor = |strings: Vec<String>| {
+        seen.lock().unwrap().push(strings.clone());
+        async move { Ok(strings.into_iter().map(|s| (s.clone(), s)).collect::<HashMap<_, _>>()) }
+    };
+    let result = redact_outcome_with(
+        Ok(tinytools::ToolResult::json(json!({"a": "ok", "long": "a long enough value"}))),
+        &redactor,
+    )
+    .await
+    .unwrap();
+    assert!(serde_json::to_string(&result).unwrap().contains("a long enough value"));
+    let sent = seen.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].iter().all(|s| s.len() >= 8), "{sent:?}");
+    // Nothing long enough: the module is not asked at all.
+    let none = redact_outcome_with(Ok(tinytools::ToolResult::success("ok")), cannot_answer).await;
+    assert!(none.is_ok());
+}
+
+#[tokio::test]
+async fn a_result_the_module_could_not_check_is_withheld() {
+    let error = redact_outcome_with(
+        Ok(tinytools::ToolResult::success(format!("token {LONG_KEY} in transit"))),
+        cannot_answer,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.to_string(), WITHHELD);
+    assert!(!error.to_string().contains(LONG_KEY));
+}
+
+#[tokio::test]
+async fn an_error_text_is_redacted_or_withheld_never_passed_on() {
+    let redacted = redact_outcome_with(
+        Err(anyhow::anyhow!("bad credential {LONG_KEY}")),
+        replace_longest_first,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(redacted.to_string(), "bad credential [REDACTED]");
+    let withheld = redact_outcome_with(Err(anyhow::anyhow!("bad credential {LONG_KEY}")), cannot_answer)
+        .await
+        .unwrap_err();
+    assert_eq!(withheld.to_string(), WITHHELD);
+    // A short, key-free error is returned unchanged without asking the module.
+    let short = redact_outcome_with(Err(anyhow::anyhow!("nope")), cannot_answer)
+        .await
+        .unwrap_err();
+    assert_eq!(short.to_string(), "nope");
+}
+
+/// With no module serving (a unit-test process), the production entry points
+/// refuse to pass a configured key on.
+#[tokio::test]
+async fn without_a_serving_module_the_production_entry_points_withhold() {
     let config = config_with_overlapping_secrets();
-    let rendered = format!(
-        "[composio-direct] composio_list_connections (direct) failed: invalid credential {LONG_KEY}"
-    );
-    let redacted = redact_and_report(&config, "test_op", &rendered);
-    assert!(!redacted.contains(LONG_KEY), "{redacted}");
-    assert!(!redacted.contains(SHORT_KEY), "{redacted}");
-    assert!(redacted.contains("[REDACTED]"), "{redacted}");
+    let outcome = redact_composio_outcome(
+        &config,
+        Ok(tinytools::ToolResult::success(format!("key {LONG_KEY}"))),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(outcome.to_string(), WITHHELD);
+    let rendered = format!("[composio-direct] failed: invalid credential {LONG_KEY}");
+    let reported = redact_and_report(&config, "test_op", &rendered).await;
+    assert_eq!(reported, WITHHELD);
+    assert!(!reported.contains(LONG_KEY) && !reported.contains(SHORT_KEY));
+}
+
+/// A call with no configured key is not checked: there is nothing exact to remove.
+#[tokio::test]
+async fn an_unconfigured_call_passes_through_untouched() {
+    let mut config = Config::default();
+    let tmp = tempfile::tempdir().unwrap();
+    config.config_path = tmp.path().join("config.toml");
+    let outcome = redact_composio_outcome(&config, Ok(tinytools::ToolResult::success("plain")))
+        .await
+        .unwrap();
+    assert_eq!(texts(&outcome), "plain");
 }
