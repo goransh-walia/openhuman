@@ -250,6 +250,9 @@ fn policy_for(
     privacy: tinysecurity_bus::PrivacyMode,
     preflight_transports: Vec<EgressTransport>,
 ) -> EgressPolicy {
+    // `LocalOnly` registers no destination at all, so the module refuses every
+    // external one; it cannot be combined with open-public egress.
+    let open_public = privacy != tinysecurity_bus::PrivacyMode::LocalOnly;
     EgressPolicy {
         owner,
         ceiling: tinysecurity_bus::AccessTier::Full,
@@ -258,9 +261,7 @@ fn policy_for(
         data_categories: vec![tinysecurity_bus::DataCategory::UserContent],
         local_capabilities: Vec::new(),
         validity_ms: 30_000,
-        // `LocalOnly` registers no destination at all, so the module refuses
-        // every external one; it cannot be combined with open-public egress.
-        open_public: privacy != tinysecurity_bus::PrivacyMode::LocalOnly,
+        open_public,
         preflight_transports,
     }
 }

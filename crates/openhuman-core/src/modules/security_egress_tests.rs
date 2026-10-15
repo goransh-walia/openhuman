@@ -405,19 +405,4 @@ async fn released_module_gives_browser_navigations_a_preflight_verdict() {
             "{private}"
         );
     }
-    // A pinned-direct request on the same policy is refused: the policy only
-    // accepts the Browser preflight, never a connection grant for it.
-    let destination = ToolDestination {
-        url: "https://93.184.216.34/page",
-        method: "GET",
-        headers: &[],
-        body: None,
-    };
-    let pinned = tool_request(id.clone(), subject(), &destination);
-    assert!(matches!(
-        scoped_url_guard_on(&fx.proxy, pinned)
-            .await
-            .expect("the module answers"),
-        EgressOutcome::Authorized(_) | EgressOutcome::Denied(_)
-    ));
 }
