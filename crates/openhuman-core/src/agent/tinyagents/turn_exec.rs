@@ -496,6 +496,7 @@ async fn drive_turn(
         &steering,
         TurnMiddlewareInputs {
             model: model.to_string(),
+            egress_provider: (!is_local).then(|| provider_id.to_string()),
             tool_sets,
             allowed,
             candidate_names,

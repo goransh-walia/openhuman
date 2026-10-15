@@ -46,6 +46,9 @@ use super::ToolPolicyEnforcement;
 pub(super) struct TurnMiddlewareInputs {
     /// The turn's primary model name.
     pub(super) model: String,
+    /// The provider id when the primary model leaves the device; `None` for a
+    /// local runtime. Installs the payload-time egress check.
+    pub(super) egress_provider: Option<String>,
     /// The shared tool sets the turn's tools resolve against.
     pub(super) tool_sets: Vec<tinyagents_runtime::turn_driver::SharedToolSet>,
     /// The allowlist the turn registered under (`None` = every visible tool).
@@ -118,6 +121,7 @@ pub(super) fn install_turn_middleware(
 ) -> TurnWiring {
     let TurnMiddlewareInputs {
         model,
+        egress_provider,
         tool_sets,
         allowed,
         candidate_names,
@@ -170,6 +174,15 @@ pub(super) fn install_turn_middleware(
     harness.push_model_middleware(Arc::new(routes::UsageCarryMiddleware::new(
         provider_usage_carry.clone(),
     )));
+
+    // Payload-time egress check (privacy epic S5/S7): the destination was
+    // disclosed when the model was built; what the request carries is only known
+    // here. Passes straight through unless the privacy mode is Sensitive.
+    if let Some(provider) = egress_provider {
+        harness.push_model_middleware(Arc::new(
+            middleware::egress_assess::EgressAssessMiddleware::new(provider, model),
+        ));
+    }
 
     // Route audit capture is a typed run-context concern. The canonical
     // TinyInference decorator attached in `turn_models` stamps the successful
