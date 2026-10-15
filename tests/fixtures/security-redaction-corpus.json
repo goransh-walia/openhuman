@@ -44,6 +44,7 @@
       "removed_by": [
         "prefix",
         "identity_hash",
+        "log",
         "approval"
       ],
       "composio_secret": "unrelated-configured-key"
@@ -55,6 +56,7 @@
       "removed_by": [
         "prefix",
         "identity_hash",
+        "log",
         "approval"
       ],
       "composio_secret": "unrelated-configured-key"
