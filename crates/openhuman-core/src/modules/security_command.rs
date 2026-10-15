@@ -160,3 +160,7 @@ pub(crate) fn command_decision_blocking(
 #[cfg(test)]
 #[path = "security_command_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "security_command_characterization_tests.rs"]
+mod characterization_tests;
