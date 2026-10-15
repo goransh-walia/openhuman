@@ -97,7 +97,12 @@ fn strings_of(result: &ToolResult, secrets: &[String]) -> Vec<String> {
 /// Write `answers` (original string to redacted string) back into `result`.
 /// A string without an answer is left as it is (it never mentioned a key).
 fn apply_answers(result: &mut ToolResult, answers: &HashMap<String, String>) {
-    let map = |text: &str| answers.get(text).cloned().unwrap_or_else(|| text.to_owned());
+    let map = |text: &str| {
+        answers
+            .get(text)
+            .cloned()
+            .unwrap_or_else(|| text.to_owned())
+    };
     fn json(value: &mut Value, map: &dyn Fn(&str) -> String) {
         match value {
             Value::String(text) => *text = map(text),

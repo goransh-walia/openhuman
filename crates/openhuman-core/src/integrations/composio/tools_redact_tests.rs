@@ -17,6 +17,10 @@ use crate::integrations::composio::tools::redact::{
 const SHORT_KEY: &str = "abcdefgh";
 const LONG_KEY: &str = "abcdefghi";
 
+fn keys() -> Vec<String> {
+    vec![LONG_KEY.to_string(), SHORT_KEY.to_string()]
+}
+
 fn config_with_overlapping_secrets() -> Config {
     let tmp = tempfile::tempdir().expect("tempdir for config_with_overlapping_secrets");
     let mut config = Config::default();
@@ -72,6 +76,7 @@ async fn overlapping_secrets_redact_longest_first_in_text() {
         Ok(tinytools::ToolResult::success(format!(
             "token {LONG_KEY} in transit"
         ))),
+        &keys(),
         replace_longest_first,
     )
     .await
@@ -86,6 +91,7 @@ async fn secret_used_as_a_json_object_key_is_redacted() {
         Ok(tinytools::ToolResult::json(
             json!({ format!("token_{LONG_KEY}"): "value" }),
         )),
+        &keys(),
         replace_longest_first,
     )
     .await
@@ -102,6 +108,7 @@ async fn colliding_redacted_object_keys_keep_both_values() {
             (SHORT_KEY): "short value",
             (LONG_KEY): "long value",
         }))),
+        &keys(),
         replace_longest_first,
     )
     .await
@@ -117,34 +124,56 @@ async fn colliding_redacted_object_keys_keep_both_values() {
     assert!(object.keys().all(|key| key.starts_with("[REDACTED]")));
 }
 
-/// Only strings long enough to hold a key are sent for checking.
+/// Only a string that mentions a key is sent for checking, so a result that
+/// never mentions one costs no module call and cannot be withheld.
 #[tokio::test]
-async fn short_strings_are_not_sent_and_an_empty_outcome_is_not_checked() {
+async fn only_strings_that_mention_a_key_are_sent_to_the_module() {
     use std::sync::Mutex;
     let seen = Mutex::new(Vec::<Vec<String>>::new());
     let redactor = |strings: Vec<String>| {
         seen.lock().unwrap().push(strings.clone());
-        async move { Ok(strings.into_iter().map(|s| (s.clone(), s)).collect::<HashMap<_, _>>()) }
+        async move {
+            Ok(strings
+                .into_iter()
+                .map(|s| (s.clone(), s.replace(LONG_KEY, "[REDACTED]")))
+                .collect::<HashMap<_, _>>())
+        }
     };
     let result = redact_outcome_with(
-        Ok(tinytools::ToolResult::json(json!({"a": "ok", "long": "a long enough value"}))),
+        Ok(tinytools::ToolResult::json(
+            json!({"clean": "a long enough value", "dirty": format!("has {LONG_KEY} inside")}),
+        )),
+        &keys(),
         &redactor,
     )
     .await
     .unwrap();
-    assert!(serde_json::to_string(&result).unwrap().contains("a long enough value"));
+    let serialized = serde_json::to_string(&result).unwrap();
+    assert!(serialized.contains("a long enough value"));
+    assert!(!serialized.contains(LONG_KEY), "{serialized}");
     let sent = seen.lock().unwrap().clone();
     assert_eq!(sent.len(), 1);
-    assert!(sent[0].iter().all(|s| s.len() >= 8), "{sent:?}");
-    // Nothing long enough: the module is not asked at all.
-    let none = redact_outcome_with(Ok(tinytools::ToolResult::success("ok")), cannot_answer).await;
-    assert!(none.is_ok());
+    assert_eq!(sent[0], vec![format!("has {LONG_KEY} inside")]);
+
+    // A result that never mentions a key does not reach the module at all, so a
+    // module that cannot answer cannot withhold it.
+    let clean = redact_outcome_with(
+        Ok(tinytools::ToolResult::success("nothing sensitive here")),
+        &keys(),
+        cannot_answer,
+    )
+    .await
+    .unwrap();
+    assert_eq!(texts(&clean), "nothing sensitive here");
 }
 
 #[tokio::test]
 async fn a_result_the_module_could_not_check_is_withheld() {
     let error = redact_outcome_with(
-        Ok(tinytools::ToolResult::success(format!("token {LONG_KEY} in transit"))),
+        Ok(tinytools::ToolResult::success(format!(
+            "token {LONG_KEY} in transit"
+        ))),
+        &keys(),
         cannot_answer,
     )
     .await
@@ -157,24 +186,30 @@ async fn a_result_the_module_could_not_check_is_withheld() {
 async fn an_error_text_is_redacted_or_withheld_never_passed_on() {
     let redacted = redact_outcome_with(
         Err(anyhow::anyhow!("bad credential {LONG_KEY}")),
+        &keys(),
         replace_longest_first,
     )
     .await
     .unwrap_err();
     assert_eq!(redacted.to_string(), "bad credential [REDACTED]");
-    let withheld = redact_outcome_with(Err(anyhow::anyhow!("bad credential {LONG_KEY}")), cannot_answer)
-        .await
-        .unwrap_err();
+    let withheld = redact_outcome_with(
+        Err(anyhow::anyhow!("bad credential {LONG_KEY}")),
+        &keys(),
+        cannot_answer,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(withheld.to_string(), WITHHELD);
     // A short, key-free error is returned unchanged without asking the module.
-    let short = redact_outcome_with(Err(anyhow::anyhow!("nope")), cannot_answer)
+    let short = redact_outcome_with(Err(anyhow::anyhow!("nope")), &keys(), cannot_answer)
         .await
         .unwrap_err();
     assert_eq!(short.to_string(), "nope");
 }
 
 /// With no module serving (a unit-test process), the production entry points
-/// refuse to pass a configured key on.
+/// refuse to pass a result that mentions a configured key on, and let one that
+/// does not through.
 #[tokio::test]
 async fn without_a_serving_module_the_production_entry_points_withhold() {
     let config = config_with_overlapping_secrets();
@@ -189,6 +224,13 @@ async fn without_a_serving_module_the_production_entry_points_withhold() {
     let reported = redact_and_report(&config, "test_op", &rendered).await;
     assert_eq!(reported, WITHHELD);
     assert!(!reported.contains(LONG_KEY) && !reported.contains(SHORT_KEY));
+    let unrelated = redact_composio_outcome(
+        &config,
+        Ok(tinytools::ToolResult::success("a result without any key")),
+    )
+    .await
+    .unwrap();
+    assert_eq!(texts(&unrelated), "a result without any key");
 }
 
 /// A call with no configured key is not checked: there is nothing exact to remove.

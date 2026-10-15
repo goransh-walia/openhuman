@@ -256,9 +256,9 @@ async fn redaction_covers_every_result_channel() {
             Ok(strings
                 .into_iter()
                 .map(|text| {
-                    let redacted = secrets
-                        .iter()
-                        .fold(text.clone(), |acc, key| acc.replace(key.as_str(), "[REDACTED]"));
+                    let redacted = secrets.iter().fold(text.clone(), |acc, key| {
+                        acc.replace(key.as_str(), "[REDACTED]")
+                    });
                     (text, redacted)
                 })
                 .collect())
@@ -274,11 +274,13 @@ async fn redaction_covers_every_result_channel() {
     result.follow_up.push(tinytools::ToolContent::Text {
         text: format!("follow {KEY_A}"),
     });
-    let redacted = redact_outcome_with(Ok(result), &redactor).await.unwrap();
+    let redacted = redact_outcome_with(Ok(result), &secrets, &redactor)
+        .await
+        .unwrap();
     let serialized = serde_json::to_string(&redacted).unwrap();
     assert!(!serialized.contains(KEY_A), "{serialized}");
 
-    let err = redact_outcome_with(Err(anyhow::anyhow!("bad key {KEY_A}")), &redactor)
+    let err = redact_outcome_with(Err(anyhow::anyhow!("bad key {KEY_A}")), &secrets, &redactor)
         .await
         .unwrap_err();
     assert!(!format!("{err:#}").contains(KEY_A));
