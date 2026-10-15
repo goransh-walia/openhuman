@@ -315,3 +315,51 @@ async fn the_network_gate_is_answered_by_the_released_module() {
     };
     assert!(can_act && needs_approval);
 }
+
+// --- the call's payload decides a Sensitive transfer ------------------------
+
+fn routed_with(payload: Option<Assessment>) -> RoutedGate {
+    RoutedGate {
+        policy: policy(AutonomyLevel::Supervised, 100),
+        chat: None,
+        payload,
+    }
+}
+
+#[test]
+fn sensitive_mode_permits_a_fetch_assessed_clean_and_refuses_the_rest() {
+    use crate::config::PrivacyMode;
+    use crate::security::live_policy::test_privacy_scope;
+    let _mode = test_privacy_scope(PrivacyMode::Sensitive);
+    let clean = routed_with(Some(Assessment {
+        level: IdentificationRisk::None,
+        categories: Vec::new(),
+    }));
+    assert!(clean.local_only_block("example.com").is_none());
+
+    let identifying = routed_with(Some(Assessment {
+        level: IdentificationRisk::High,
+        categories: vec!["credential_or_identifier".into()],
+    }));
+    let refusal = identifying
+        .local_only_block("example.com")
+        .expect("a payload the redactor would change is refused");
+    assert!(refusal.contains("Sensitive privacy mode"), "{refusal}");
+
+    // Not assessed (module could not answer): never assumed clean.
+    assert!(routed_with(None).local_only_block("example.com").is_some());
+}
+
+#[test]
+fn other_modes_never_assess_the_arguments() {
+    use crate::config::PrivacyMode;
+    use crate::security::live_policy::test_privacy_scope;
+    let _mode = test_privacy_scope(PrivacyMode::Standard);
+    let gate = RoutedGate::new(
+        policy(AutonomyLevel::Supervised, 100),
+        None,
+        &json!({"url": "https://example.com/?k=Bearer abcdefghijklmnop"}),
+    );
+    assert!(gate.payload.is_none());
+    assert!(gate.local_only_block("example.com").is_none());
+}
