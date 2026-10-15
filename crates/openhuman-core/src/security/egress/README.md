@@ -67,10 +67,14 @@ Sites: Composio execute (arguments), managed-backend round-trips (JSON body;
 multipart uploads stay `Unknown`), cloud embeddings (inputs), media generation
 (prompt; reference media stays `Unknown`), the network tools (the call's URL,
 headers and body, assessed once per call by `RoutedGate`) and chat inference (the
-outgoing messages, by `EgressAssessMiddleware` as a model wrap). The inference
-destination is still disclosed once per turn when the model is built; the wrap
-only enforces. A local primary with an external fallback route is not covered by
-the wrap, which is installed when the primary leaves the device.
+outgoing messages, by `EgressAssessedModel`, a `ChatModel` decorator around every
+route that leaves the device: the primary, the workload-tier routes and the
+fallbacks). The inference destination is still disclosed once per turn when the
+model is built; the decorator only enforces, per hop, so a local primary does not
+exempt an external fallback and a refused hop leaves the fallback traversal free
+to move on to a route that stays on the device. Browser navigation is disclosed
+when the page is opened (`network_fetch(host)`) and judged by the module as a
+`Browser` preflight.
 
 ## Relates to
 

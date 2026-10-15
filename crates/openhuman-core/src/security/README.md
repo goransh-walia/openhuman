@@ -305,25 +305,51 @@ decision. See [approval/README.md](approval/README.md).
     `whole_url_log_fields_lose_their_credentials_with_the_module_armed`).
   - Lexical host classification (Langfuse environment, turn policy, the
     TinyHumans backend URL guard) uses `tinytools_std::url_guard::
-    is_private_or_local_host`. These callers label an endpoint for routing and
-    run no resolve-time check, so the module's scoped `ScopedUrlGuard`
-    (destination registry, DNS pinning, one-shot grant) is not the right tool
-    for them.
-  - `modules/browser.rs` uses the same lexical guard as a pre-filter.
-    `ScopedUrlGuard` refuses the `Browser` transport (no verified per-hop
-    enforcement), so resolved-address enforcement for browser navigation belongs
-    to TinyComputer, which performs the connection.
-  - Redactors deliberately left, with owners: Composio exact-key replacement
-    (`integrations/composio/tools/redact.rs`, the module registry is init-only and
-    the key can change at runtime, needs a reinit-on-credential-change hook),
-    `agent/tinyagents/middleware/credential_scrub.rs` and the harness scrubber
-    (credential-only scrub of tool results; the module's `Text` mode also removes
-    emails/IPs and rewrites source code that mentions tokens, so a credential-only
-    mode is needed upstream in tinysecurity first), the memory write guard
+    is_private_or_local_host`. These callers label a configured endpoint for
+    routing and authorize no request, so the module's scoped `ScopedUrlGuard`
+    (destination policy, DNS pinning, one-shot grant) is not the right tool for
+    them.
+  - Agent network tools (`http_request`, `web_fetch`, `curl`) ask the module for
+    every destination: the gate (`tools/impl/network/gate.rs`) implements
+    `NetGate::authorize_destination` over `modules::security::egress::
+    authorize_tool_destination`, which registers an open-public egress policy
+    for the authenticated subject, runs `ScopedUrlGuard` on the real URL,
+    method, headers and body, spends the grant and hands the tool the approved
+    socket addresses. The tool connects only to those (`resolve_to_addrs`, URL
+    host kept for `Host`/SNI/certificate checks). A refused, missing, faulted or
+    slow module refuses the call; a build without `security-module` leaves the
+    tool's own DNS check in force.
+  - Browser navigation (`modules/browser.rs`) keeps the synchronous lexical
+    pre-filter and then asks the module for a verdict on the `Browser`
+    transport (`authorize_browser_navigation`): the address floor on every
+    resolved address and the privacy mode. The browser module performs the
+    connection, so this is a preflight verdict, not a grant, and a redirect or
+    subresource the page causes later is the browser module's to enforce.
+  - Tool-result credential scrub (`agent/tinyagents/middleware/
+    credential_scrub.rs`) is the module's `CredentialsOnly` mode
+    (`redact::credentials`): provider tokens, JWTs, PEM keys, cookie headers
+    and labelled secrets go, while source code that mentions tokens and PII
+    stay (#6954). Results above the module's 64 KiB request bound are answered
+    in 48 KiB line-aligned chunks. Once the module serves, a failed answer
+    withholds the result; where no module serves (slim build, library host,
+    unit test) the harness's own credential scrub is the documented floor, as
+    `core::log_redaction` is for logs. The browser confirmation token is taken
+    out of the document before the scrub and put back afterwards.
+  - Composio exact-key removal (`integrations/composio/tools/redact.rs`) uses
+    the module's `RedactWith`: the keys a call resolves to are sent as that
+    call's exact credentials, so a tenant's key is removed from that tenant's
+    output without a process-wide reinitialization. The file only resolves the
+    keys (host configuration), walks the outcome and writes answers back; a
+    result the module could not check is withheld.
+  - Chat inference (`agent/tinyagents/egress_model.rs`) assesses the outgoing
+    messages on every route that leaves the device (the primary, workload-tier
+    routes and fallbacks), not only the primary: a local primary does not exempt
+    an external fallback. A refused hop fails that hop only.
+  - Redactors deliberately left, with owners: the memory write guard
     (`tinymemory_api::safety`, tinymemory-owned), the `denials` log
-    (`tinytools`, upstream), and the rpc client / app deep-link `redact_url_for_log`
-    copies (they run where no module exists: a remote-core client and the
-    deep-link forwarding process).
+    (`tinytools`, upstream), and the rpc client / app deep-link
+    `redact_url_for_log` copies (they run where no module exists: a remote-core
+    client and the deep-link forwarding process).
 - `AuditLogger` and `get_or_create_workspace_audit_logger` ([`audit.rs`](./audit.rs)).
 - `is_public_bind` and `ensure_core_rpc_token_for_bind` (`pairing.rs`): refuse
   a non-loopback RPC bind without an `OPENHUMAN_CORE_TOKEN`
