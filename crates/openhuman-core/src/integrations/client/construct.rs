@@ -25,8 +25,8 @@ pub(super) fn sanitize_backend_url(backend_url: &str) -> String {
         // segment. The helper preserves host/path for diagnosability
         // while scrubbing secrets.
         tracing::warn!(
-            input = %crate::util::redact_url_for_log(trimmed),
-            cleaned = %crate::util::redact_url_for_log(&cleaned),
+            input = %crate::core::log_redaction::scrub_secrets(trimmed),
+            cleaned = %crate::core::log_redaction::scrub_secrets(&cleaned),
             "[integrations] backend_url carried an inference / non-root path; \
              stripping before use (issue #2075)"
         );

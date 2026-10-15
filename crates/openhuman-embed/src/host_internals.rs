@@ -247,10 +247,8 @@ pub mod security {
 
 /// tinyhumans: TLS, URL and redaction helpers for the backend client.
 pub mod util {
-    pub use openhuman_core::util::redact_url_for_log;
-
-    pub mod redact {
-        pub use openhuman_core::util::redact::redact_url_for_log;
+    pub mod log_redaction {
+        pub use openhuman_core::core::log_redaction::scrub_secrets;
     }
     pub mod tls {
         pub use openhuman_core::util::tls::tls_client_builder;

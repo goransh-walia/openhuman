@@ -1,4 +1,3 @@
-mod redact;
 pub mod ops;
 mod schemas;
 pub mod tools;
@@ -27,7 +26,6 @@ pub use audit::{
     get_or_create_workspace_audit_logger, AuditEvent, AuditEventType, AuditLogger,
     CommandExecutionLog,
 };
-pub use redact::*;
 pub use egress::{
     emit_external_transfer, enforce_egress, local_only_blocks, local_only_tool_block, DataKind,
     EgressDescriptor, EgressReason, IdentificationRisk,
