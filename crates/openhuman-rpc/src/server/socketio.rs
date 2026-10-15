@@ -30,7 +30,6 @@
 //! (a "type carve-out"; see AGENTS.md). `pub mod socketio;` in `core::mod` is
 //! intentionally NOT gated for the same reason.
 
-use crate::core_host::core::runtime::DispatchCtx;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
