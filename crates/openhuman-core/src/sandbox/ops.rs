@@ -89,6 +89,19 @@ pub(crate) async fn resolve_command_policy(
         .load_config()
         .await
         .map_err(|error| format!("Cannot read sandbox configuration: {error}"))?;
+    resolve_command_policy_with_config(&config, action_dir, state_dir).await
+}
+
+/// [`resolve_command_policy`] for a caller that already holds the loaded
+/// configuration (the scheduler). SaaS still wins over everything else.
+pub(crate) async fn resolve_command_policy_with_config(
+    config: &crate::config::Config,
+    action_dir: &Path,
+    state_dir: &Path,
+) -> Result<SandboxPolicy, String> {
+    if crate::core::runtime::is_saas() {
+        return crate::profiles::tools::sandbox_policy(action_dir, state_dir);
+    }
     let mut policy = resolve_sandbox_policy(
         SandboxMode::Sandboxed,
         action_dir,
@@ -96,15 +109,15 @@ pub(crate) async fn resolve_command_policy(
         &config.runtime,
         false,
     );
-    if !config_disables_sandbox(&config) && !sandbox_disabled_by_host() {
-        apply_requested_backend(&mut policy, &config.sandbox, &config.runtime, &config)
+    if !config_disables_sandbox(config) && !sandbox_disabled_by_host() {
+        apply_requested_backend(&mut policy, &config.sandbox, &config.runtime, config)
             .await
             .map_err(|error| error.to_string())?;
     }
     Ok(policy)
 }
 
-fn sandbox_disabled_by_host() -> bool {
+pub(crate) fn sandbox_disabled_by_host() -> bool {
     sandbox_off_value(std::env::var(SANDBOX_OFF_ENV).ok().as_deref()) || sandbox_component_off()
 }
 
@@ -121,7 +134,7 @@ pub(crate) fn sandbox_component_off() -> bool {
 
 /// The saved config says no isolation: the legacy `enabled = false` flag or
 /// `[components] sandbox = false`.
-fn config_disables_sandbox(config: &crate::config::Config) -> bool {
+pub(crate) fn config_disables_sandbox(config: &crate::config::Config) -> bool {
     config.sandbox.enabled == Some(false)
         || !crate::core::runtime::ComponentSet::from_config(&config.components).sandbox
 }
@@ -228,6 +241,20 @@ pub(crate) fn local_status_for_jail(
     }
 }
 
+/// The refusal every untrusted spawner reports when the jail cannot meet the
+/// isolation floor. A typed error so callers can tell a deterministic policy
+/// refusal (never retried) from a transient failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct IsolationFloor;
+
+impl std::fmt::Display for IsolationFloor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the sandbox cannot meet the isolation floor for untrusted code")
+    }
+}
+
+impl std::error::Error for IsolationFloor {}
+
 /// Fail-closed gate for every spawn that runs untrusted code: a jail that is
 /// missing, inactive (Noop) or not suitable for untrusted code is a denial,
 /// never a silent downgrade to unsandboxed execution.
@@ -235,10 +262,10 @@ pub(crate) fn local_status_for_jail(
 pub(crate) fn require_untrusted_isolation(
     available: bool,
     suitable_for_untrusted_code: bool,
-) -> Result<(), String> {
+) -> Result<(), IsolationFloor> {
     match local_status_for_jail(available, suitable_for_untrusted_code) {
         SandboxStatus::Ready => Ok(()),
-        _ => Err("the sandbox cannot meet the isolation floor for untrusted code".to_owned()),
+        _ => Err(IsolationFloor),
     }
 }
 
