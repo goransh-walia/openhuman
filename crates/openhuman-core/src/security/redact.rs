@@ -88,16 +88,11 @@ fn floor_credentials(chunk: &str) -> String {
 /// Largest slice handed to the module in one `CredentialsOnly` call.
 pub const CREDENTIAL_CHUNK_BYTES: usize = 48 * 1024;
 
-/// [`credentials`] over an explicit per-chunk answerer, so the chunking is
-/// testable without a module.
-pub(crate) fn credentials_with(
-    text: &str,
-    mut answer: impl FnMut(&str) -> Option<String>,
-) -> Option<String> {
-    if text.len() <= CREDENTIAL_CHUNK_BYTES {
-        return answer(text);
-    }
-    let mut out = String::with_capacity(text.len());
+/// `text` cut into slices of at most [`CREDENTIAL_CHUNK_BYTES`], on line breaks
+/// where there are any (see [`credentials`]). Concatenating the slices gives
+/// `text` back byte for byte.
+pub(crate) fn credential_chunks(text: &str) -> Vec<&str> {
+    let mut chunks = Vec::new();
     let mut rest = text;
     while !rest.is_empty() {
         let mut end = rest.len().min(CREDENTIAL_CHUNK_BYTES);
@@ -111,8 +106,24 @@ pub(crate) fn credentials_with(
                 }
             }
         }
-        out.push_str(&answer(&rest[..end])?);
+        chunks.push(&rest[..end]);
         rest = &rest[end..];
+    }
+    chunks
+}
+
+/// [`credentials`] over an explicit per-chunk answerer, so the chunking is
+/// testable without a module.
+pub(crate) fn credentials_with(
+    text: &str,
+    mut answer: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    if text.len() <= CREDENTIAL_CHUNK_BYTES {
+        return answer(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    for chunk in credential_chunks(text) {
+        out.push_str(&answer(chunk)?);
     }
     Some(out)
 }
