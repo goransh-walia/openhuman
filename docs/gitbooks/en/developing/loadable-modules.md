@@ -68,10 +68,15 @@ The production registry pins TinySecurity v0.7.0 and its 11 supported host
 archives using digests copied from the published checksum manifest. Native CI
 loads these released archives through digest admission. Explicit local fixtures
 remain available for module development and never replace production pins.
-Today the module owns asynchronous filesystem authorization and password crypt
-(`modules/security_crypto.rs`). Shell and network policy, the approval engine,
-the Jev judge, sandbox planning, redaction and the keyring and pairing crypto
-paths still run through their existing host implementations. Tracker issue
+Today the module owns asynchronous filesystem authorization, shell command
+classification and gating, the network and write tier gates, and password crypt
+(`modules/security_crypto.rs`). The host no longer classifies a command: it
+registers an immutable `CommandPolicy` derived from its configuration and asks
+`CheckCommand` / `ClassifyCommand` (`modules/security_command.rs`), and a module
+that is missing, untrusted or slow refuses the command. The flow nodes' tier
+table, the approval engine, the Jev judge, sandbox planning, redaction and the
+keyring and pairing crypto paths still run through their existing host
+implementations. Tracker issue
 #7328 lists the remaining phases; this page describes only what has landed.
 
 ## Resolution order
