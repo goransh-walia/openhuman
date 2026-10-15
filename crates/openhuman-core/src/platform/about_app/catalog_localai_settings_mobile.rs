@@ -405,7 +405,7 @@ Capability {
                       outgoing payload with the security module's redaction and refuses content \
                       that holds a credential or identifier, or that could not be checked. \
                       Backend control-plane calls and local runtimes are unaffected.",
-        how_to: "Settings → Privacy, or [privacy] mode in config.toml.",
+        how_to: "Set [privacy] mode (standard, sensitive or local_only) in config.toml, or change it in Settings.",,
         status: CapabilityStatus::Beta,
         privacy: None,
     },
