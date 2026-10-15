@@ -1,4 +1,5 @@
 use super::*;
+use crate::sandbox::types::SandboxStatus;
 
 fn config_in(root: &Path) -> Config {
     let workspace = root.join("workspace");
@@ -90,15 +91,21 @@ async fn saas_refuses_an_untrusted_command_even_when_the_operator_opted_out() {
     );
 }
 
-/// Drives the real gate against the released TinyBox archive: the command runs
-/// inside the native jail, so it can write its workspace and cannot write a
-/// sibling directory. Run with
-/// `cargo test -p openhuman --lib untrusted_command_is_confined -- --ignored`
+/// Drives the real gate against the released TinyBox archive. What the jail
+/// reports decides what must happen, and the two must agree:
+///
+/// * suitable for untrusted code: the command runs, can write its workspace and
+///   cannot write a sibling directory;
+/// * not suitable (no process isolation, for example AppArmor restricting
+///   unprivileged user namespaces): the command is refused with
+///   [`IsolationFloor`] and never starts.
+///
+/// Run with `cargo test -p openhuman --lib untrusted_gate_follows_the_released_jail -- --ignored`
 /// (downloads the pinned archive into a scratch install under `target/tmp`).
 #[cfg(all(feature = "modules", target_os = "linux"))]
 #[tokio::test]
-#[ignore = "requires the released TinyBox archive and a supported Linux jail"]
-async fn untrusted_command_is_confined_by_the_released_native_jail() {
+#[ignore = "requires the released TinyBox archive"]
+async fn untrusted_gate_follows_the_released_jail() {
     let _environment_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();
@@ -119,6 +126,11 @@ async fn untrusted_command_is_confined_by_the_released_native_jail() {
     config.modules.install_dir = Some(base.join("modules").display().to_string());
     let state = base.join("state");
 
+    let (backend, status) = super::super::native_jail::status(&config)
+        .await
+        .expect("the released module reports its jail");
+    eprintln!("released jail backend={backend} status={status:?}");
+
     let inside = run(UntrustedShell {
         config: &config,
         command: "echo jailed > inside.txt && cat inside.txt",
@@ -127,14 +139,10 @@ async fn untrusted_command_is_confined_by_the_released_native_jail() {
         timeout: Duration::from_secs(30),
         preserve_pipeline_status: false,
     })
-    .await
-    .expect("the released jail runs a workspace write");
-    assert!(inside.success(), "{inside:?}");
-    assert!(inside.stdout.contains("jailed"), "{}", inside.stdout);
-
+    .await;
     let escape = outside.join("escaped.txt");
     let command = format!("echo escaped > '{}'", escape.display());
-    let outcome = run(UntrustedShell {
+    let escaped = run(UntrustedShell {
         config: &config,
         command: &command,
         cwd: &workspace,
@@ -143,8 +151,23 @@ async fn untrusted_command_is_confined_by_the_released_native_jail() {
         preserve_pipeline_status: false,
     })
     .await;
+
     assert!(
         !escape.exists(),
-        "the jail let an untrusted command write outside its workspace: {outcome:?}"
+        "an untrusted command wrote outside its workspace: {escaped:?}"
     );
+    match status {
+        SandboxStatus::Ready => {
+            let inside = inside.expect("a suitable jail runs a workspace write");
+            assert!(inside.success(), "{inside:?}");
+            assert!(inside.stdout.contains("jailed"), "{}", inside.stdout);
+            assert!(workspace.join("inside.txt").is_file());
+        }
+        _ => {
+            let error = inside.expect_err("a jail below the floor must refuse");
+            assert!(error.downcast_ref::<super::super::ops::IsolationFloor>().is_some(), "{error}");
+            assert!(!workspace.join("inside.txt").exists(), "the refused command ran");
+            assert!(escaped.is_err());
+        }
+    }
 }
