@@ -53,6 +53,76 @@ pub fn arguments(args: &serde_json::Value) -> serde_json::Value {
     arguments_from(module_arguments(args), args)
 }
 
+/// Credentials removed from a tool result, or `None` when the module cannot
+/// answer (not armed, faulted, timed out, a chunk refused). Never the original.
+///
+/// This is the module's `CredentialsOnly` mode: provider token shapes, JWTs,
+/// PEM keys, cookie headers and labelled values that look like credentials are
+/// replaced; PII and source code that merely talks about tokens are kept, so a
+/// file the user asked the model to read arrives intact (#6954). The module
+/// bounds one request (64 KiB), so a larger result is answered in line-aligned
+/// chunks of [`CREDENTIAL_CHUNK_BYTES`]. A single line longer than a chunk is
+/// split on a char boundary, so a secret straddling that split is not seen
+/// whole; real credentials are far shorter than a chunk and ordinary text has
+/// line breaks.
+///
+/// Without the `security-module` build there is no module; the harness's own
+/// scrubber answers instead, since a build without the module cannot serve any
+/// other redactor either.
+#[must_use]
+pub fn credentials(text: &str) -> Option<String> {
+    credentials_with(text, module_credentials)
+}
+
+/// Largest slice handed to the module in one `CredentialsOnly` call.
+pub const CREDENTIAL_CHUNK_BYTES: usize = 48 * 1024;
+
+/// [`credentials`] over an explicit per-chunk answerer, so the chunking is
+/// testable without a module.
+pub(crate) fn credentials_with(
+    text: &str,
+    mut answer: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    if text.len() <= CREDENTIAL_CHUNK_BYTES {
+        return answer(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while !rest.is_empty() {
+        let mut end = rest.len().min(CREDENTIAL_CHUNK_BYTES);
+        if end < rest.len() {
+            // Prefer the last line break inside the window.
+            if let Some(nl) = rest[..end].rfind('\n') {
+                end = nl + 1;
+            } else {
+                while !rest.is_char_boundary(end) {
+                    end -= 1;
+                }
+            }
+        }
+        out.push_str(&answer(&rest[..end])?);
+        rest = &rest[end..];
+    }
+    Some(out)
+}
+
+#[cfg(feature = "security-module")]
+fn module_credentials(chunk: &str) -> Option<String> {
+    use crate::modules::security::text::{try_redact, RedactMode};
+    match try_redact(RedactMode::CredentialsOnly, chunk, Some(TEXT_TIMEOUT)) {
+        Ok(redacted) => Some(redacted),
+        Err(error) => {
+            log::debug!("[security][redact] module credential pass unavailable, withheld: {error}");
+            None
+        }
+    }
+}
+
+#[cfg(not(feature = "security-module"))]
+fn module_credentials(chunk: &str) -> Option<String> {
+    Some(tinyinference_core::sanitize::scrub_credentials(chunk))
+}
+
 /// The module's `answer` as JSON, or the shape-only marker for `args`.
 fn arguments_from(answer: Option<String>, args: &serde_json::Value) -> serde_json::Value {
     answer
