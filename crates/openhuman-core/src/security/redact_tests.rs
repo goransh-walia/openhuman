@@ -222,3 +222,29 @@ fn arguments_without_an_armed_module_never_return_the_original() {
     assert!(!out.contains("abcdefghijklmnopqrstuvwxyz"), "{out}");
 }
 
+
+/// Whole-URL log fields (storage and backend URLs, the config snapshot) go
+/// through `scrub_secrets`: the boot floor, then the module. The floor alone
+/// misses a scheme-less `user:pass@host` DSN; the module pass is what removes it,
+/// so this is pinned on the released archive rather than assumed.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {
+    let (_dir, config) = released_config();
+    arm(&config).await;
+    let secret = "hunter2pw";
+    for input in [
+        format!("https://alice:{secret}@db.example.com/app?x=1"),
+        format!("redis://:{secret}@cache.internal:6379/0"),
+        format!("postgres://app:{secret}@db.internal:5432/app"),
+        format!("alice:{secret}@db.internal:5432/app"),
+        format!("db.internal:5432/app?password={secret}"),
+        format!("mongodb://app:{secret}@db/x?authSource=admin"),
+    ] {
+        let out = crate::core::log_redaction::scrub_secrets(&input);
+        assert!(!out.contains(secret), "{input} -> {out}");
+    }
+    // An ordinary URL keeps its host and path.
+    let plain = crate::core::log_redaction::scrub_secrets("https://example.com/docs/page");
+    assert!(plain.contains("example.com"), "{plain}");
+}
