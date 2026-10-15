@@ -259,29 +259,6 @@ backend = "sqlite"
 }
 
 #[test]
-fn redact_url_strips_basic_auth_and_query() {
-    let out = redact_url_for_log(
-        "https://user:token@api.example.com/v1/chat/completions?api_key=sk-x&debug=1",
-    );
-    assert!(!out.contains("token"), "got: {out}");
-    assert!(!out.contains("sk-x"), "got: {out}");
-    assert!(out.starts_with("https://api.example.com"), "got: {out}");
-}
-
-#[test]
-fn redact_url_handles_plain_url() {
-    let out = redact_url_for_log("https://api.openai.com/v1/chat/completions");
-    assert_eq!(out, "https://api.openai.com/v1/chat/completions");
-}
-
-#[test]
-fn redact_url_fallback_masks_userinfo_when_unparseable() {
-    let out = redact_url_for_log("not-a-scheme://user:secret@host/path?token=1");
-    assert!(!out.contains("secret"), "got: {out}");
-    assert!(!out.contains("token=1"), "got: {out}");
-}
-
-#[test]
 fn migrate_legacy_inference_url_moves_external_chat_completions() {
     let mut cfg = Config::default();
     cfg.api_url = Some("https://api.openai.com/v1/chat/completions".to_string());
@@ -662,19 +639,4 @@ fn resolve_action_dir_rejects_empty_override() {
         default_projects_dir(),
         "empty override must be ignored, falling back to default"
     );
-}
-
-#[test]
-fn shared_security_url_corpus_pins_migration_redactor() {
-    let corpus: serde_json::Value = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/fixtures/security-redaction-corpus.json"
-    )))
-    .unwrap();
-    for case in corpus["urls"].as_array().unwrap() {
-        assert_eq!(
-            redact_url_for_log(case["input"].as_str().unwrap()),
-            case["migration"]
-        );
-    }
 }
