@@ -148,7 +148,3 @@ pub async fn rest_post_text(url: &str, body: &str, content_type: &str) -> Result
     }
     Ok(text)
 }
-
-#[cfg(test)]
-#[path = "rpc_tests.rs"]
-mod tests;

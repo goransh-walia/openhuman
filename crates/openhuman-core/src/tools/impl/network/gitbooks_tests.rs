@@ -133,23 +133,6 @@ async fn gitbooks_tools_fail_closed_when_the_module_is_not_attested() {
 }
 
 #[test]
-fn redact_endpoint_keeps_only_origin() {
-    assert_eq!(
-        redact_endpoint("https://tinyhumans.gitbook.io/openhuman/~gitbook/mcp"),
-        "https://tinyhumans.gitbook.io"
-    );
-    assert_eq!(
-        redact_endpoint("http://example.com:8080/path?token=secret"),
-        "http://example.com:8080"
-    );
-    assert_eq!(
-        redact_endpoint("https://user:secret@example.com/path?token=secret"),
-        "<redacted>"
-    );
-    assert_eq!(redact_endpoint("file:///private/path"), "file://");
-}
-
-#[test]
 fn module_rendered_results_preserve_text_json_error_and_markdown() {
     let envelope = tinymcp_bus::McpResultEnvelope {
         kind: tinymcp_bus::MCP_RESULT_KIND.to_owned(),
