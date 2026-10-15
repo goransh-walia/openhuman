@@ -75,8 +75,8 @@ pub(crate) fn rebind_with(
     if next == current {
         return Ok(None);
     }
-    let redacted_from = crate::config::schema::storage::redact_url(&current);
-    let redacted_to = crate::config::schema::storage::redact_url(&next);
+    let redacted_from = crate::core::log_redaction::scrub_secrets(&current);
+    let redacted_to = crate::core::log_redaction::scrub_secrets(&next);
     tracing::info!(
         target: "openhuman::storage",
         from = %redacted_from,

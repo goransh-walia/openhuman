@@ -19,7 +19,7 @@ pub fn snapshot_config_json(config: &Config) -> Result<serde_json::Value, String
     // A storage URL may carry database credentials; show it redacted.
     if let Some(url) = config.storage.url.as_deref() {
         value["storage"]["url"] =
-            serde_json::Value::String(crate::config::schema::storage::redact_url(url));
+            serde_json::Value::String(crate::core::log_redaction::scrub_secrets(url));
     }
     #[cfg(feature = "modules")]
     let browser_billing_route = crate::modules::desktop::billing_route(config);
