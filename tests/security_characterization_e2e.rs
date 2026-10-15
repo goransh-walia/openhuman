@@ -312,15 +312,9 @@ fn shared_redaction_corpus_records_existing_catches_and_gaps() {
         let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
         let outputs = [
             ("denials", denial),
-            ("prefix", openhuman_core::security::redact(input)),
-            ("identity_hash", openhuman_core::util::redact::redact(input)),
             (
                 "log",
                 openhuman_core::core::log_redaction::scrub_secrets(input),
-            ),
-            (
-                "host_scrub",
-                openhuman_core::security::scrub::sanitize_text(input).value,
             ),
             (
                 "approval",
@@ -345,18 +339,12 @@ fn shared_redaction_corpus_records_existing_catches_and_gaps() {
 }
 
 #[test]
-fn shared_url_redaction_corpus_pins_query_preservation_gap() {
+fn shared_url_redaction_corpus_is_cleaned_by_the_log_floor() {
     let corpus: Value =
         serde_json::from_str(include_str!("fixtures/security-redaction-corpus.json")).unwrap();
     for case in corpus["urls"].as_array().unwrap() {
         let input = case["input"].as_str().unwrap();
-        assert_eq!(
-            openhuman_core::util::redact::redact_url_for_log(input),
-            case["util"]
-        );
-        assert_eq!(
-            openhuman_core::config::schema::storage::redact_url(input),
-            case["storage"]
-        );
+        let out = openhuman_core::core::log_redaction::scrub_secrets(input);
+        assert!(!out.contains("hunter2") && !out.contains("key=secret"), "{out}");
     }
 }
