@@ -44,10 +44,6 @@
   "denials"
  ],
  [
-  "password_in_connection_string",
-  "host_scrub"
- ],
- [
   "private_key_block",
   "approval"
  ],
