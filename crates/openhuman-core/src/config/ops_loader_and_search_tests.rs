@@ -360,7 +360,7 @@ fn snapshot_config_json_redacts_the_storage_url_credentials() {
     assert!(!snapshot.to_string().contains("hunter2"));
     assert_eq!(
         snapshot["config"]["storage"]["url"],
-        "mongodb://***@db.internal/openhuman"
+        "mongodb://[REDACTED]@db.internal/openhuman"
     );
 }
 
