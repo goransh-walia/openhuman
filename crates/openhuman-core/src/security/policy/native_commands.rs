@@ -72,6 +72,7 @@ mod sealed {
     pub trait Sealed {}
 }
 
+#[cfg(test)]
 pub(crate) use sealed::Sealed;
 
 /// Answers command questions for a policy. The default is the native module.

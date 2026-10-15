@@ -1,5 +1,4 @@
 use super::*;
-use tinybox_bus::CommandClass;
 
 // -- AutonomyLevel ------------------------------------------------
 
