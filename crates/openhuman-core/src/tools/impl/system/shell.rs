@@ -81,8 +81,9 @@ impl ShellTool {
         }
     }
 
-    /// Builds a shell tool whose command facts come from the configured
-    /// TinyBox module before host authorization and execution.
+    /// Builds a shell tool bound to the module configuration it runs commands
+    /// under (TinyBox execution, Docker, sandbox). Whether a command may run is
+    /// the security module's answer, asked through the policy either way.
     pub fn with_config(
         security: Arc<SecurityPolicy>,
         runtime: Arc<dyn RuntimeAdapter>,
@@ -231,9 +232,9 @@ impl Tool for ShellTool {
     /// and the structural guard are enforced in `run_with_security`.
     fn external_effect_with_args(&self, args: &serde_json::Value) -> bool {
         let command = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
-        // This synchronous declaration cannot consult TinyBox. Be
-        // conservative here; the host authorization gate uses the exact
-        // per-call TinyBox analysis and applies the configured tier.
+        // This synchronous declaration cannot know the command's class. Be
+        // conservative here; the host authorization gate asks the security
+        // module about the exact per-call command and applies its tier.
         !command.is_empty()
     }
 
