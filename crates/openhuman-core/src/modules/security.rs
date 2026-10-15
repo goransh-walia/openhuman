@@ -535,11 +535,10 @@ async fn call_host_path(
 pub(crate) const MAX_SCOPES: usize = 1024;
 
 /// The id for `policy`, marking it most recently used.
-pub(crate) fn lru_lookup<P: PartialEq, I: Clone>(
-    cache: &mut Vec<(P, I)>,
-    policy: &P,
-) -> Option<I> {
-    let at = cache.iter().position(|(registered, _)| registered == policy)?;
+pub(crate) fn lru_lookup<P: PartialEq, I: Clone>(cache: &mut Vec<(P, I)>, policy: &P) -> Option<I> {
+    let at = cache
+        .iter()
+        .position(|(registered, _)| registered == policy)?;
     let entry = cache.remove(at);
     let id = entry.1.clone();
     cache.push(entry);

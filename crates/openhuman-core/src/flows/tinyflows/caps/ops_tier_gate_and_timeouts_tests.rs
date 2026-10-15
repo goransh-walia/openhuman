@@ -14,7 +14,8 @@ async fn http_request_node_tier_gate_blocks_readonly_allows_higher() {
         &policy(AutonomyLevel::ReadOnly),
         CommandClass::Network,
         "http_request",
-    ).await
+    )
+    .await
     .expect_err("read-only must block a Network-class http_request node");
     if let EngineError::Capability(msg) = err {
         assert!(
@@ -31,13 +32,15 @@ async fn http_request_node_tier_gate_blocks_readonly_allows_higher() {
         &policy(AutonomyLevel::Supervised),
         CommandClass::Network,
         "http_request"
-    ).await
+    )
+    .await
     .is_ok());
     assert!(enforce_node_tier_gate(
         &policy(AutonomyLevel::Full),
         CommandClass::Network,
         "http_request"
-    ).await
+    )
+    .await
     .is_ok());
 }
 
@@ -51,16 +54,20 @@ async fn code_node_tier_gate_blocks_readonly_allows_full() {
         &policy(AutonomyLevel::ReadOnly),
         CommandClass::Write,
         "code"
-    ).await
+    )
+    .await
     .is_err());
     assert!(enforce_node_tier_gate(
         &policy(AutonomyLevel::Supervised),
         CommandClass::Write,
         "code"
-    ).await
+    )
+    .await
     .is_ok());
     assert!(
-        enforce_node_tier_gate(&policy(AutonomyLevel::Full), CommandClass::Write, "code").await.is_ok()
+        enforce_node_tier_gate(&policy(AutonomyLevel::Full), CommandClass::Write, "code")
+            .await
+            .is_ok()
     );
 }
 
@@ -142,7 +149,8 @@ async fn composio_read_action_allowed_under_readonly_tier() {
     let class = classify_composio_action_for_tier("TWITTER_RECENT_SEARCH").await;
     assert_eq!(class, CommandClass::Read);
     assert_eq!(
-        enforce_node_tier_gate(&policy(AutonomyLevel::ReadOnly), class, "tool_call").await
+        enforce_node_tier_gate(&policy(AutonomyLevel::ReadOnly), class, "tool_call")
+            .await
             .expect("a curated Read action must not be blocked under ReadOnly"),
         GateDecision::Allow
     );
@@ -181,7 +189,8 @@ async fn composio_read_action_does_not_prompt_under_supervised_tier() {
     let class = classify_composio_action_for_tier("TWITTER_RECENT_SEARCH").await;
     assert_eq!(class, CommandClass::Read);
     assert_eq!(
-        enforce_node_tier_gate(&policy(AutonomyLevel::Supervised), class, "tool_call").await
+        enforce_node_tier_gate(&policy(AutonomyLevel::Supervised), class, "tool_call")
+            .await
             .expect("a curated Read action must not be blocked under Supervised"),
         GateDecision::Allow,
         "a curated read must resolve to Allow, never Prompt, under Supervised"
@@ -222,7 +231,8 @@ async fn composio_write_action_still_prompts_under_supervised_tier() {
             "slug {slug} must classify as Network"
         );
         assert_eq!(
-            enforce_node_tier_gate(&policy(AutonomyLevel::Supervised), class, "tool_call").await
+            enforce_node_tier_gate(&policy(AutonomyLevel::Supervised), class, "tool_call")
+                .await
                 .expect("a Network-class action is not blocked (only prompted) under Supervised"),
             GateDecision::Prompt,
             "slug {slug} must still require a Supervised-tier approval prompt"
@@ -241,11 +251,16 @@ async fn composio_unknown_slug_prompts_under_supervised_tier() {
     let class = classify_composio_action_for_tier("UNKNOWN_SERVICE_DO_THING").await;
     assert_eq!(class, CommandClass::Network);
     assert_eq!(
-        enforce_node_tier_gate(&policy(AutonomyLevel::Supervised), class, "tool_call").await
+        enforce_node_tier_gate(&policy(AutonomyLevel::Supervised), class, "tool_call")
+            .await
             .expect("Network-class is prompted, not blocked, under Supervised"),
         GateDecision::Prompt
     );
-    assert!(enforce_node_tier_gate(&policy(AutonomyLevel::ReadOnly), class, "tool_call").await.is_err());
+    assert!(
+        enforce_node_tier_gate(&policy(AutonomyLevel::ReadOnly), class, "tool_call")
+            .await
+            .is_err()
+    );
 }
 
 /// Unit coverage of the classifier itself, independent of the gate: a
@@ -599,9 +614,13 @@ async fn node_tier_gate_is_answered_by_the_released_module() {
     let released = Released::new();
     let at = |level| released.policy(level, 100);
 
-    let err = enforce_node_tier_gate(&at(AutonomyLevel::ReadOnly), CommandClass::Network, "http_request")
-        .await
-        .expect_err("read-only blocks the network");
+    let err = enforce_node_tier_gate(
+        &at(AutonomyLevel::ReadOnly),
+        CommandClass::Network,
+        "http_request",
+    )
+    .await
+    .expect_err("read-only blocks the network");
     match err {
         EngineError::Capability(message) => assert!(message.contains(POLICY_BLOCKED_MARKER)),
         other => panic!("expected a capability error, got {other:?}"),
@@ -625,9 +644,13 @@ async fn node_tier_gate_is_answered_by_the_released_module() {
         GateDecision::Allow
     );
     assert_eq!(
-        enforce_node_tier_gate(&at(AutonomyLevel::Full), CommandClass::Network, "http_request")
-            .await
-            .unwrap(),
+        enforce_node_tier_gate(
+            &at(AutonomyLevel::Full),
+            CommandClass::Network,
+            "http_request"
+        )
+        .await
+        .unwrap(),
         GateDecision::Prompt
     );
 }

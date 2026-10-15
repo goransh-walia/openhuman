@@ -436,9 +436,21 @@ fn a_full_scope_cache_evicts_the_least_recently_used_scope() {
     for key in MAX_SCOPES as u32..MAX_SCOPES as u32 + 5 {
         lru_insert(&mut cache, key, key + 10_000);
     }
-    assert_eq!(cache.len(), MAX_SCOPES, "the cache never grows past its cap");
-    assert_eq!(lru_lookup(&mut cache, &0), Some(10_000), "recently used scope kept");
-    assert_eq!(lru_lookup(&mut cache, &1), None, "oldest unused scope evicted");
+    assert_eq!(
+        cache.len(),
+        MAX_SCOPES,
+        "the cache never grows past its cap"
+    );
+    assert_eq!(
+        lru_lookup(&mut cache, &0),
+        Some(10_000),
+        "recently used scope kept"
+    );
+    assert_eq!(
+        lru_lookup(&mut cache, &1),
+        None,
+        "oldest unused scope evicted"
+    );
     assert_eq!(
         lru_lookup(&mut cache, &(MAX_SCOPES as u32 + 4)),
         Some(MAX_SCOPES as u32 + 4 + 10_000)
@@ -466,7 +478,9 @@ async fn released_module_still_answers_after_the_scope_cache_fills() {
     let mut native = Native::start().await;
     let host = policy(AutonomyLevel::Supervised, true);
     let first = scope(&host, CommandFlow::Harness, CommandStage::Authorize);
-    native.ask(first.clone(), "ls", None, CommandOp::Classify).await;
+    native
+        .ask(first.clone(), "ls", None, CommandOp::Classify)
+        .await;
     for budget in 0..1_100u32 {
         let mut distinct = first.clone();
         distinct.max_actions_per_hour = 10_000 + budget;
@@ -482,7 +496,10 @@ async fn released_module_still_answers_after_the_scope_cache_fills() {
         )
         .await;
     }
-    assert!(!native.state.faulted, "a refused request must not latch the client");
+    assert!(
+        !native.state.faulted,
+        "a refused request must not latch the client"
+    );
     assert!(native.state.commands.len() <= super::super::MAX_SCOPES);
     let decision = native.ask(first, "ls", None, CommandOp::Classify).await;
     assert_eq!(decision.class, CommandClass::Read);

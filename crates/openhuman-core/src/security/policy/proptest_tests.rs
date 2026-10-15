@@ -31,7 +31,9 @@ mod command_translation {
     };
     use super::super::types::{AutonomyLevel, SecurityPolicy};
     use proptest::prelude::*;
-    use tinysecurity_bus::{CommandClass, CommandDecision, CommandDenial, CommandGate, CommandRisk};
+    use tinysecurity_bus::{
+        CommandClass, CommandDecision, CommandDenial, CommandGate, CommandRisk,
+    };
 
     fn class() -> impl Strategy<Value = CommandClass> {
         prop_oneof![

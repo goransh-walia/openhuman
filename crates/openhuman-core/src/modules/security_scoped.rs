@@ -252,7 +252,9 @@ pub(crate) async fn activate_on(
     let command_id = match cached_command {
         Some(id) => id,
         None => {
-            let id = register_command_policy(proxy, command).await.map_err(String::from)?;
+            let id = register_command_policy(proxy, command)
+                .await
+                .map_err(String::from)?;
             state.lock().await.commands.insert(command_key, id.clone());
             id
         }

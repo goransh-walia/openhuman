@@ -299,12 +299,8 @@ async fn the_shell_decision_comes_from_the_released_module() {
     use crate::modules::security::released_support::Released;
 
     let released = Released::new();
-    let gate = |autonomy| {
-        OpenHumanSecurityGate::new(
-            Arc::new(released.policy(autonomy, 100)),
-            registry(),
-        )
-    };
+    let gate =
+        |autonomy| OpenHumanSecurityGate::new(Arc::new(released.policy(autonomy, 100)), registry());
     let decide = |gate: OpenHumanSecurityGate, command: &'static str| async move {
         gate.authorize_tool(&req(SHELL_TOOL, json!({ "command": command })))
             .await
@@ -321,5 +317,8 @@ async fn the_shell_decision_comes_from_the_released_module() {
         .contains(tinytools::status::POLICY_BLOCKED_MARKER));
     let hidden = decide(gate(AutonomyLevel::Supervised), "echo $(whoami)").await;
     assert!(!hidden.is_allowed());
-    assert!(!hidden.denial_reason().unwrap_or_default().contains("whoami"));
+    assert!(!hidden
+        .denial_reason()
+        .unwrap_or_default()
+        .contains("whoami"));
 }

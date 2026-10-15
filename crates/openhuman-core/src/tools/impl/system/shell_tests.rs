@@ -103,7 +103,9 @@ async fn shell_tool_gates_commands_on_the_released_module() {
     let read_only = tool(AutonomyLevel::ReadOnly, 100);
     let (allowed, result) = read_only.run_with_security(&ctx, "ls", None).await;
     assert!(allowed, "a read runs in read-only mode: {result:?}");
-    let (allowed, result) = read_only.run_with_security(&ctx, "touch refused", None).await;
+    let (allowed, result) = read_only
+        .run_with_security(&ctx, "touch refused", None)
+        .await;
     assert!(!allowed, "a write is refused in read-only mode");
     assert!(
         format!("{:?}", result.content).contains(tinytools::status::POLICY_BLOCKED_MARKER),
