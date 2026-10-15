@@ -64,7 +64,7 @@ pub struct ShellTool {
     security: Arc<SecurityPolicy>,
     runtime: Arc<dyn RuntimeAdapter>,
     audit: Arc<AuditLogger>,
-    analysis_config: Option<Arc<Config>>,
+    module_config: Option<Arc<Config>>,
 }
 
 impl ShellTool {
@@ -77,7 +77,7 @@ impl ShellTool {
             security,
             runtime,
             audit,
-            analysis_config: None,
+            module_config: None,
         }
     }
 
@@ -94,7 +94,7 @@ impl ShellTool {
             security,
             runtime,
             audit,
-            analysis_config: Some(config),
+            module_config: Some(config),
         }
     }
 
@@ -412,7 +412,7 @@ impl ShellTool {
         if let Some((mut request, mount_workspace)) =
             self.runtime.build_docker_request(command, &action_dir)
         {
-            let Some(config) = self.analysis_config.as_deref() else {
+            let Some(config) = self.module_config.as_deref() else {
                 return (
                     false,
                     ToolResult::error("Docker module execution is unavailable."),
@@ -557,7 +557,7 @@ impl ShellTool {
             unbounded = explicit_timeout.is_none(),
             "[shell] starting command through TinyBox"
         );
-        let config = match self.analysis_config.as_deref() {
+        let config = match self.module_config.as_deref() {
             Some(config) => config.clone(),
             None => match ctx.load_config().await {
                 Ok(config) => config,
