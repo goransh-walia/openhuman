@@ -276,10 +276,12 @@ async fn keyring_round_trip_through_the_served_consent_callback() {
     use crate::security::keyring_consent::policy;
     let config = crypto_config(fx_dir().path());
     let fx = super::super::native_tests::native_fixture_with(Some(config.clone())).await;
-    register_keyring_backend(&config);
-    crate::modules::security_host::install(&fx.client)
-        .await
-        .unwrap();
+    crate::modules::security_host::install(
+        &fx.client,
+        config.keyring.as_ref().map(|k| k.backend.clone()),
+    )
+    .await
+    .unwrap();
     policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
     let name = "user:token-7328";
 
@@ -319,10 +321,12 @@ async fn declined_keyring_consent_refuses_the_store_through_the_module() {
     use crate::security::keyring_consent::policy;
     let config = crypto_config(fx_dir().path());
     let fx = super::super::native_tests::native_fixture_with(Some(config.clone())).await;
-    register_keyring_backend(&config);
-    crate::modules::security_host::install(&fx.client)
-        .await
-        .unwrap();
+    crate::modules::security_host::install(
+        &fx.client,
+        config.keyring.as_ref().map(|k| k.backend.clone()),
+    )
+    .await
+    .unwrap();
     let name = "user:declined-7328";
 
     policy::apply_consent(&policy::build_consent_preference("declined"));

@@ -252,14 +252,13 @@ async fn production_client_gates_shell_and_network_on_the_released_archive() {
     assert_eq!(from_thread, Ok(GateDecision::Block));
 }
 
-/// The production keyring on the released archive: `module_config` configures
-/// the module's encrypted-file store and registers its backend for the consent
-/// callback, which the real module runtime serves. A declined answer refuses
-/// the store (whatever the host OS keyring probes as), an explicit
-/// local-encrypted answer admits it, and nothing is written in between.
+/// The production keyring on the released archive: none is configured, so the
+/// module denies every keyring call whatever consent is recorded, and no store
+/// directory is created. Consent through a configured backend is covered by the
+/// `security_crypto` fixture tests.
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn production_keyring_follows_recorded_consent_on_the_released_archive() {
+async fn production_keyring_is_denied_and_creates_no_store_on_the_released_archive() {
     use crate::security::keyring_consent::policy;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();
@@ -284,28 +283,17 @@ async fn production_keyring_follows_recorded_consent_on_the_released_archive() {
         origin: tinysecurity_bus::Origin::Operator,
         tier: tinysecurity_bus::AccessTier::Full,
     };
-    let name = "user:production-keyring";
-
-    policy::apply_consent(&policy::build_consent_preference("declined"));
-    let refused = crypto::keyring_set(&proxy, caller(), "store", name, b"v".to_vec()).await;
-    assert!(refused.is_err(), "declined consent must refuse the store");
 
     policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
-    assert_eq!(
-        crypto::keyring_get(&proxy, caller(), "read", name)
-            .await
-            .unwrap(),
-        None,
-        "a refused store must not have reached the backend"
-    );
-    crypto::keyring_set(&proxy, caller(), "store", name, b"v".to_vec())
-        .await
-        .expect("explicit local-encrypted consent admits the store");
-    assert_eq!(
-        crypto::keyring_get(&proxy, caller(), "read", name)
-            .await
-            .unwrap(),
-        Some(b"v".to_vec())
-    );
+    let refused = crypto::keyring_set(
+        &proxy,
+        caller(),
+        "store",
+        "user:production-keyring",
+        b"v".to_vec(),
+    )
+    .await;
     policy::initialize(None);
+    assert!(refused.is_err(), "no keyring is configured in production");
+    assert!(!config.workspace_dir.join("security-keyring").exists());
 }

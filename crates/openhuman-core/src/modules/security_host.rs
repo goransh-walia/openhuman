@@ -12,8 +12,7 @@ use tinybus::{
     BusName, CallContext, Connection, Interface, InterfaceName, MemberName, ObjectPath, Result,
 };
 use tinysecurity_bus::{
-    callback_names2, names, KeyringBackend2,
-    KeyringConsentRequest2, KeyringConsentResponse2,
+    callback_names2, names, KeyringBackend2, KeyringConsentRequest2, KeyringConsentResponse2,
 };
 
 const LOG_PREFIX: &str = "[security-host]";

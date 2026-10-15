@@ -54,6 +54,11 @@ pub fn initialize(consent: Option<ConsentPreference>) -> bool {
 }
 
 /// Check whether the caller is allowed to proceed with secret storage.
+///
+/// Proceeds whenever the host OS keyring is available, before reading recorded
+/// consent. That is right for OS-keyring stores only. A module-backed
+/// encrypted-file store must answer from [`recorded_consent_decision`]
+/// (`modules::security_crypto::consent_decision`), never from this.
 pub fn check_secret_access() -> PolicyDecision {
     if crate::security::secret_storage::is_available() {
         return PolicyDecision::Proceed;
