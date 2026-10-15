@@ -6,6 +6,7 @@ use crate::agent::host_runtime::RuntimeAdapter;
 use crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool;
 use crate::config::Config;
 use crate::core::runtime::DispatchCtx;
+use crate::security::policy::{CommandFlow, CommandQuery, CommandStage};
 use crate::security::{AuditLogger, CommandExecutionLog, SecurityPolicy};
 use async_trait::async_trait;
 use serde_json::json;
@@ -326,12 +327,11 @@ impl ShellTool {
         // budget; this is the call that admits the run (and spends one action
         // of the hourly budget), and it keeps direct and workflow execution on
         // the same contract. A module that disappeared after approval denies.
-        let declared = None;
         if let Err(reason) = self
             .security
             .check_command(CommandQuery {
                 command,
-                declared,
+                declared: None,
                 flow: CommandFlow::Harness,
                 stage: CommandStage::Execute,
             })
