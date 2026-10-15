@@ -230,6 +230,24 @@ pub(crate) fn open_public_policy(
     owner: tinysecurity_bus::SubjectScope,
     privacy: tinysecurity_bus::PrivacyMode,
 ) -> EgressPolicy {
+    policy_for(owner, privacy, Vec::new())
+}
+
+/// [`open_public_policy`] that also accepts a verdict-only `Browser` preflight:
+/// the browser module performs the navigation and the host cannot pin its
+/// sockets, so the module's answer is a verdict, not a grant to connect.
+pub(crate) fn browser_preflight_policy(
+    owner: tinysecurity_bus::SubjectScope,
+    privacy: tinysecurity_bus::PrivacyMode,
+) -> EgressPolicy {
+    policy_for(owner, privacy, vec![EgressTransport::Browser])
+}
+
+fn policy_for(
+    owner: tinysecurity_bus::SubjectScope,
+    privacy: tinysecurity_bus::PrivacyMode,
+    preflight_transports: Vec<EgressTransport>,
+) -> EgressPolicy {
     EgressPolicy {
         owner,
         ceiling: tinysecurity_bus::AccessTier::Full,
@@ -239,7 +257,7 @@ pub(crate) fn open_public_policy(
         local_capabilities: Vec::new(),
         validity_ms: 30_000,
         open_public: true,
-        preflight_transports: Vec::new(),
+        preflight_transports,
     }
 }
 
@@ -298,6 +316,34 @@ pub(crate) async fn authorize_tool_destination(
     workspace_dir: &std::path::Path,
     destination: &ToolDestination<'_>,
 ) -> Result<Vec<std::net::SocketAddr>, String> {
+    authorize(workspace_dir, destination, EgressTransport::PinnedDirect)
+        .await
+        .map(|auth| auth.addresses)
+}
+
+/// Ask the module whether a browser navigation to `url` may proceed (a verdict,
+/// not a grant: the browser module connects on its own). A denial or an
+/// unavailable module refuses the navigation.
+pub(crate) async fn authorize_browser_navigation(
+    workspace_dir: &std::path::Path,
+    url: &str,
+) -> Result<(), String> {
+    let destination = ToolDestination {
+        url,
+        method: "GET",
+        headers: &[],
+        body: None,
+    };
+    authorize(workspace_dir, &destination, EgressTransport::Browser)
+        .await
+        .map(|_| ())
+}
+
+async fn authorize(
+    workspace_dir: &std::path::Path,
+    destination: &ToolDestination<'_>,
+    transport: EgressTransport,
+) -> Result<TransportAuthorization, String> {
     let unavailable = || {
         format!(
             "{} TinySecurity egress authorization unavailable; request denied",
@@ -321,18 +367,21 @@ pub(crate) async fn authorize_tool_destination(
     let privacy = super::policy_translation::privacy_mode(
         crate::security::live_policy::current_privacy_mode(),
     );
-    let policy_id = cached_policy_id(&config, open_public_policy(owner.clone(), privacy))
-        .await
-        .map_err(|error| {
-            log::warn!("[security][egress] policy registration failed: {error}");
-            unavailable()
-        })?;
-    let request = tool_request(policy_id, owner, destination);
+    let policy = match transport {
+        EgressTransport::Browser => browser_preflight_policy(owner.clone(), privacy),
+        _ => open_public_policy(owner.clone(), privacy),
+    };
+    let policy_id = cached_policy_id(&config, policy).await.map_err(|error| {
+        log::warn!("[security][egress] policy registration failed: {error}");
+        unavailable()
+    })?;
+    let mut request = tool_request(policy_id, owner, destination);
+    request.transport = transport;
     let proxy = egress_proxy(&config).await.map_err(|_| unavailable())?;
     let auth = match scoped_url_guard_on(&proxy, request.clone()).await {
         Ok(EgressOutcome::Authorized(auth)) => *auth,
         Ok(EgressOutcome::Denied(denial)) => {
-            log::debug!("[security][egress] tool destination denied reason={denial:?}");
+            log::debug!("[security][egress] destination denied reason={denial:?}");
             return Err(format!(
                 "{} Destination refused by the security module ({denial:?}). Do not retry this URL.",
                 tinytools::status::POLICY_BLOCKED_MARKER
@@ -343,13 +392,15 @@ pub(crate) async fn authorize_tool_destination(
             return Err(unavailable());
         }
     };
-    consume_on(&proxy, request, auth.clone())
-        .await
-        .map_err(|error| {
-            log::warn!("[security][egress] grant not accepted: {error}");
-            unavailable()
-        })?;
-    Ok(auth.addresses)
+    if transport == EgressTransport::PinnedDirect {
+        consume_on(&proxy, request, auth.clone())
+            .await
+            .map_err(|error| {
+                log::warn!("[security][egress] grant not accepted: {error}");
+                unavailable()
+            })?;
+    }
+    Ok(auth)
 }
 
 #[cfg(test)]
