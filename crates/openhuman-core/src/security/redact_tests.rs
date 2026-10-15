@@ -87,12 +87,6 @@ async fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
         "security-redaction-extended-corpus.json",
     ] {
         for case in corpus(name)["text"].as_array().unwrap() {
-            let removed_by: Vec<&str> = case["removed_by"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|v| v.as_str())
-                .collect();
             let input: String = match case["input_parts"].as_array() {
                 Some(parts) => parts.iter().map(|p| p.as_str().unwrap()).collect(),
                 None => case["input"].as_str().unwrap().to_string(),
@@ -106,7 +100,7 @@ async fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
             .unwrap();
             if case["case"] == "ordinary_text" {
                 assert_eq!(out, input, "ordinary text must pass through");
-            } else if removed_by.iter().any(|sink| *sink == "host_scrub") {
+            } else {
                 assert!(!out.contains(needle), "case {} leaked: {out}", case["case"]);
             }
             let inside = text(&input);
