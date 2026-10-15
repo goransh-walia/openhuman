@@ -29,14 +29,28 @@ pub(crate) fn released_config() -> ((), crate::config::Config) {
 
 #[cfg(feature = "security-module")]
 /// Load the module and arm the log bridge through an ordinary async call.
+///
+/// The first call downloads and starts the archive, which can outlast the
+/// client's load budget; the load carries on in the background and the client
+/// stays retryable, so ask again until it answers.
+#[cfg(feature = "security-module")]
 pub(crate) async fn arm(config: &crate::config::Config) {
-    crate::modules::security::text::redact(
-        config,
-        crate::modules::security::text::RedactMode::Text,
-        "Bearer abcdefghijklmnopqrstuvwxyz0123456789",
-    )
-    .await
-    .expect("the released module must answer a redaction");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    loop {
+        let answer = crate::modules::security::text::redact(
+            config,
+            crate::modules::security::text::RedactMode::Text,
+            "Bearer abcdefghijklmnopqrstuvwxyz0123456789",
+        )
+        .await;
+        match answer {
+            Ok(_) => return,
+            Err(error) if std::time::Instant::now() < deadline && error.contains("loading") => {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+            Err(error) => panic!("the released module must answer a redaction: {error:?}"),
+        }
+    }
 }
 
 #[cfg(feature = "security-module")]
