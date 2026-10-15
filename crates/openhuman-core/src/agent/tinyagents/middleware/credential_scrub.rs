@@ -11,10 +11,7 @@ const MODULE_PLACEHOLDER: &str = "[REDACTED]";
 
 /// What a tool result becomes when the security module cannot check it: the
 /// result is withheld whole. An unchecked result is never passed on.
-pub(crate) const WITHHELD_NOTICE: &str =
-    "[credential_scrub] this tool result was withheld because the security module could not \
-     check it for credentials. Re-running this tool will not help, so do not retry; tell the \
-     user the result could not be checked.";
+pub(crate) const WITHHELD_NOTICE: &str = "[withheld: the security module could not check this tool result for credentials, so it was not passed on]";
 
 /// The module's `CredentialsOnly` answer for `text`, or `None` when it cannot
 /// answer.
