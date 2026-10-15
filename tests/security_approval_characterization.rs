@@ -26,8 +26,7 @@ use openhuman_core::{
             gate::ApprovalGate,
             is_unanswered_approval_reason, store,
             types::{ApprovalDecision, GateOutcome, PendingApproval},
-            ApprovalChatContext, FlowRunContext, APPROVAL_CHAT_CONTEXT,
-            APPROVAL_COPILOT_STREAM_CONTEXT, APPROVAL_FLOW_RUN_CONTEXT,
+            ApprovalChatContext, ApprovalTurnContext, FlowRunContext,
         },
         live_policy, SecurityPolicy,
     },
@@ -126,17 +125,17 @@ async fn park_and_approve(
     let gate = fx.gate.clone();
     let g = gate.clone();
     let handle = tokio::spawn(async move {
-        let fut = g.intercept(tool, "characterize", json!({"k": "v"}));
+        let mut turn = if with_ctx {
+            ApprovalTurnContext::chat(chat_ctx())
+        } else {
+            ApprovalTurnContext::default()
+        };
+        if with_ctx && copilot {
+            turn = turn.with_copilot_stream();
+        }
         turn_origin::with_origin(origin, async move {
-            match (with_ctx, copilot) {
-                (true, true) => {
-                    APPROVAL_CHAT_CONTEXT
-                        .scope(chat_ctx(), APPROVAL_COPILOT_STREAM_CONTEXT.scope((), fut))
-                        .await
-                }
-                (true, false) => APPROVAL_CHAT_CONTEXT.scope(chat_ctx(), fut).await,
-                _ => fut.await,
-            }
+            g.intercept(&turn, tool, "characterize", json!({"k": "v"}))
+                .await
         })
         .await
     });
@@ -188,7 +187,12 @@ async fn detached_subagent_park_is_clamped_to_180s_and_marked_detached() {
     let handle = tokio::spawn(async move {
         turn_origin::with_origin(
             web_origin(),
-            g.intercept("char_ttl_subagent", "child", json!({})),
+            g.intercept(
+                &ApprovalTurnContext::default(),
+                "char_ttl_subagent",
+                "child",
+                json!({}),
+            ),
         )
         .await
     });
@@ -208,9 +212,11 @@ async fn unanswered_park_expires_fail_closed_with_the_unanswered_reason() {
     std::env::set_var("OPENHUMAN_APPROVAL_TTL_SECS", "1");
     let outcome = turn_origin::with_origin(
         web_origin(),
-        APPROVAL_CHAT_CONTEXT.scope(
-            chat_ctx(),
-            fx.gate.intercept("char_expiry", "wait", json!({})),
+        fx.gate.intercept(
+            &ApprovalTurnContext::chat(chat_ctx()),
+            "char_expiry",
+            "wait",
+            json!({}),
         ),
     )
     .await;
@@ -285,12 +291,25 @@ async fn cron_and_unknown_origins_deny_external_effects_without_a_row() {
         job_id: "cron-char".into(),
         source: TrustedAutomationSource::Cron,
     };
-    let outcome =
-        turn_origin::with_origin(cron, fx.gate.intercept("char_cron", "post", json!({}))).await;
+    let outcome = turn_origin::with_origin(
+        cron,
+        fx.gate.intercept(
+            &ApprovalTurnContext::default(),
+            "char_cron",
+            "post",
+            json!({}),
+        ),
+    )
+    .await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
     let outcome = turn_origin::with_origin(
         AgentTurnOrigin::Unknown,
-        fx.gate.intercept("char_cron", "post", json!({})),
+        fx.gate.intercept(
+            &ApprovalTurnContext::default(),
+            "char_cron",
+            "post",
+            json!({}),
+        ),
     )
     .await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
@@ -303,9 +322,16 @@ async fn cron_and_unknown_origins_deny_external_effects_without_a_row() {
 
     // Local, user-driven origins pass without a prompt.
     for origin in [AgentTurnOrigin::Cli] {
-        let outcome =
-            turn_origin::with_origin(origin, fx.gate.intercept("char_cron", "local", json!({})))
-                .await;
+        let outcome = turn_origin::with_origin(
+            origin,
+            fx.gate.intercept(
+                &ApprovalTurnContext::default(),
+                "char_cron",
+                "local",
+                json!({}),
+            ),
+        )
+        .await;
         assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
     }
 }
@@ -332,7 +358,12 @@ async fn bypass_outcome_with_auto_approve_all(tool: &str) -> GateOutcome {
     live_policy::install(Arc::new(policy), ws.clone(), ws.clone());
     let outcome = turn_origin::with_origin(
         web_origin(),
-        APPROVAL_CHAT_CONTEXT.scope(chat_ctx(), fx.gate.intercept(tool, "bypass", json!({}))),
+        fx.gate.intercept(
+            &ApprovalTurnContext::chat(chat_ctx()),
+            tool,
+            "bypass",
+            json!({}),
+        ),
     )
     .await;
     live_policy::install(Arc::new(SecurityPolicy::default()), ws.clone(), ws);
@@ -368,7 +399,12 @@ async fn auto_approve_all_allows_without_parking_and_writes_no_audit_row_today()
     );
     let unknown = turn_origin::with_origin(
         AgentTurnOrigin::Unknown,
-        fx.gate.intercept("char_auto_all", "x", json!({})),
+        fx.gate.intercept(
+            &ApprovalTurnContext::default(),
+            "char_auto_all",
+            "x",
+            json!({}),
+        ),
     )
     .await;
     live_policy::install(Arc::new(SecurityPolicy::default()), ws.clone(), ws);
@@ -398,8 +434,12 @@ async fn flow_trust_is_scoped_to_the_exact_flow_and_tool() {
     // A trust root (require_approval false) runs without a prompt or a row.
     let outcome = turn_origin::with_origin(
         flow_origin("flow-root", false),
-        fx.gate
-            .intercept("char_flow_tool", "pre-declared", json!({})),
+        fx.gate.intercept(
+            &ApprovalTurnContext::default(),
+            "char_flow_tool",
+            "pre-declared",
+            json!({}),
+        ),
     )
     .await;
     assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
@@ -419,9 +459,11 @@ async fn flow_trust_is_scoped_to_the_exact_flow_and_tool() {
     };
     let allowed = turn_origin::with_origin(
         flow_origin("flow-trusted", true),
-        APPROVAL_FLOW_RUN_CONTEXT.scope(
-            ctx(),
-            fx.gate.intercept("char_flow_tool", "trusted", json!({})),
+        fx.gate.intercept(
+            &ApprovalTurnContext::default().with_flow_run(ctx()),
+            "char_flow_tool",
+            "trusted",
+            json!({}),
         ),
     )
     .await;
@@ -438,9 +480,11 @@ async fn flow_trust_is_scoped_to_the_exact_flow_and_tool() {
     let handle = tokio::spawn(async move {
         turn_origin::with_origin(
             flow_origin("flow-trusted", true),
-            APPROVAL_FLOW_RUN_CONTEXT.scope(
-                ctx(),
-                g.intercept("char_flow_other", "untrusted", json!({})),
+            g.intercept(
+                &ApprovalTurnContext::default().with_flow_run(ctx()),
+                "char_flow_other",
+                "untrusted",
+                json!({}),
             ),
         )
         .await

@@ -272,7 +272,12 @@ async fn auto_approve_all_writes_audit_row() {
 
     let outcome = turn_origin::with_origin(
         web_origin(),
-        gate.intercept("openhuman_test_aaa_audit", "noop", serde_json::json!({})),
+        gate.intercept(
+            &ApprovalTurnContext::default(),
+            "openhuman_test_aaa_audit",
+            "noop",
+            serde_json::json!({}),
+        ),
     )
     .await;
     assert!(matches!(outcome, GateOutcome::Allow));
