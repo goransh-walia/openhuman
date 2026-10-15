@@ -65,25 +65,8 @@
       "test": "n/a"
     },
     {
-      "file": "crates/openhuman-core/src/config/ops/sandbox.rs",
-      "spawns": 2,
-      "trust": "host-probe",
-      "plan": "n/a",
-      "executor": "n/a",
-      "test": "n/a"
-    },
-    {
-      "file": "crates/openhuman-core/src/cron/scheduler/shell_job.rs",
-      "spawns": 1,
-      "trust": "untrusted",
-      "plan": "agent-authored cron shell job -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
-      "executor": "direct",
-      "test": "pending",
-      "note": "migration backlog: route through the tinybox jail (issue 7328 phase 5)"
-    },
-    {
       "file": "crates/openhuman-core/src/hooks/shell.rs",
-      "spawns": 2,
+      "spawns": 3,
       "trust": "untrusted",
       "plan": "hook commands from config and skills -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
       "executor": "direct",
@@ -162,6 +145,14 @@
       "executor": "direct",
       "test": "pending",
       "note": "migration backlog: route through the tinybox jail (issue 7328 phase 5)"
+    },
+    {
+      "file": "crates/openhuman-core/src/sandbox/untrusted.rs",
+      "spawns": 1,
+      "trust": "unclassified",
+      "plan": "",
+      "executor": "n/a",
+      "test": ""
     },
     {
       "file": "crates/openhuman-core/src/security/secret_storage/encrypted_store.rs",
