@@ -37,7 +37,10 @@ async fn an_untrusted_command_never_runs_when_the_jail_is_unreachable() {
     let result = run(shell(&config, &command)).await;
 
     assert!(result.is_err(), "the jail is unreachable: {result:?}");
-    assert!(!marker.exists(), "a refused spawn must never run the command");
+    assert!(
+        !marker.exists(),
+        "a refused spawn must never run the command"
+    );
 }
 
 /// The operator's own opt-out is the only unjailed path in a single-user host.
@@ -62,7 +65,8 @@ const SAAS_CHILD: &str = "OPENHUMAN_UNTRUSTED_SAAS_TEST_CHILD";
 #[tokio::test]
 async fn saas_refuses_an_untrusted_command_even_when_the_operator_opted_out() {
     let module = module_path!().split_once("::").expect("crate module").1;
-    let test = format!("{module}::saas_refuses_an_untrusted_command_even_when_the_operator_opted_out");
+    let test =
+        format!("{module}::saas_refuses_an_untrusted_command_even_when_the_operator_opted_out");
     if std::env::var(SAAS_CHILD).as_deref() == Ok(test.as_str()) {
         crate::core::runtime::mode::lock_mode(crate::core::runtime::Mode::Saas).unwrap();
         let tmp = tempfile::tempdir().unwrap();
@@ -165,8 +169,16 @@ async fn untrusted_gate_follows_the_released_jail() {
         }
         _ => {
             let error = inside.expect_err("a jail below the floor must refuse");
-            assert!(error.downcast_ref::<super::super::ops::IsolationFloor>().is_some(), "{error}");
-            assert!(!workspace.join("inside.txt").exists(), "the refused command ran");
+            assert!(
+                error
+                    .downcast_ref::<super::super::ops::IsolationFloor>()
+                    .is_some(),
+                "{error}"
+            );
+            assert!(
+                !workspace.join("inside.txt").exists(),
+                "the refused command ran"
+            );
             assert!(escaped.is_err());
         }
     }

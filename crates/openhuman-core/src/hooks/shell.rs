@@ -91,11 +91,7 @@ pub(super) fn command(command: &str) -> tokio::process::Command {
     build(selection, crate::core::runtime::is_saas(), command)
 }
 
-fn build(
-    selection: Option<ShellInvocation>,
-    saas: bool,
-    command: &str,
-) -> tokio::process::Command {
+fn build(selection: Option<ShellInvocation>, saas: bool, command: &str) -> tokio::process::Command {
     let process = match selection {
         _ if saas => {
             log::warn!("[hooks] command hooks are refused under SaaS: no unjailed spawn");

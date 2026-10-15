@@ -78,7 +78,10 @@ fn retired_sandbox_backends_become_auto_with_a_notice() {
         let text = format!("[sandbox]\nbackend = \"{legacy}\"\nfirejail_args = [\"--net=none\"]\n");
         let mut d = doc(&text);
         let notices = rewrite_document(&mut d);
-        assert!(notices.contains(&Notice::RetiredSandboxBackend { table: "sandbox", from }));
+        assert!(notices.contains(&Notice::RetiredSandboxBackend {
+            table: "sandbox",
+            from
+        }));
         assert!(notices.contains(&Notice::DroppedFirejailArgs { table: "sandbox" }));
         let config = crate::config::schema::config_from_toml_str(&text).unwrap();
         assert!(matches!(

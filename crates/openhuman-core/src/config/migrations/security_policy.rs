@@ -42,7 +42,10 @@ pub(crate) enum Notice {
 }
 
 /// Retire the sandbox backends and arguments that never had an executor.
-fn retire_sandbox_keys(table: &mut toml::map::Map<String, Value>, name: &'static str) -> Vec<Notice> {
+fn retire_sandbox_keys(
+    table: &mut toml::map::Map<String, Value>,
+    name: &'static str,
+) -> Vec<Notice> {
     let mut notices = Vec::new();
     if table.remove("firejail_args").is_some() {
         notices.push(Notice::DroppedFirejailArgs { table: name });

@@ -340,7 +340,7 @@ pub async fn execute_in_sandbox(
     extra_env: HashMap<OsString, OsString>,
     timeout: Duration,
 ) -> anyhow::Result<SandboxExecResult> {
-    execute_in_sandbox_metered(&ctx, policy, command, working_dir, extra_env, timeout, None).await
+    execute_in_sandbox_metered(ctx, policy, command, working_dir, extra_env, timeout, None).await
 }
 
 /// [`execute_in_sandbox`] that feeds `meter` with the command's output as it
