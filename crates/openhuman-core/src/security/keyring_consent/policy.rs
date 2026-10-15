@@ -121,7 +121,7 @@ fn consent_mode(cached: Option<&ConsentPreference>) -> StorageMode {
 /// identity** first and availability second.
 ///
 /// Split out of [`current_status`] as a pure function so every combination can
-/// be asserted without touching the process-global backend `OnceLock` (which
+/// be asserted without touching the process-global `BACKEND` `OnceLock` (which
 /// is set once and cannot be replaced).
 ///
 /// This used to branch on `available` alone, which was wrong for every
