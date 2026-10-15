@@ -71,7 +71,7 @@ impl CodeRunner for OpenHumanCode {
         // acting adapters.
         let action = json!({ "language": format!("{language:?}"), "source": source });
         let summary = crate::security::approval::summarize_action("flows_code", &action);
-        let redacted = crate::security::approval::redact_args(&action);
+        let redacted = crate::security::redact::arguments(&action);
         let (gate_outcome, audit_id) = gate_call_for_tier(
             &self.approval,
             tier_decision,

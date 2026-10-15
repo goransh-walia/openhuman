@@ -425,7 +425,7 @@ fn injected_secret_never_reaches_the_audit_redaction() {
 
     let mut request = json!({ "method": "GET", "url": "https://api.example.com" });
     // Pre-injection redaction — what the approval UI / audit trail sees.
-    let redacted = crate::security::approval::redact_args(&request);
+    let redacted = crate::security::redact::arguments(&request);
     assert!(!serde_json::to_string(&redacted).unwrap().contains(secret));
 
     inject_http_credential(&mut request, &cred).unwrap();

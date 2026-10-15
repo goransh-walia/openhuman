@@ -47,7 +47,7 @@ use crate::flows::{
 use crate::memory::types::{FetchParams, RecallParams};
 use crate::memory::MemoryError;
 use crate::security::approval::{
-    redact_args, summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome,
+    summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome,
 };
 use crate::security::SecurityPolicy;
 use tinybox_bus::CommandClass;
@@ -143,7 +143,7 @@ impl OpenHumanMemory {
         let tool_name = format!("flows_memory_{op}");
         let tier_decision = enforce_node_tier_gate(&self.security, CommandClass::Write, op).await?;
         let summary = summarize_action(&tool_name, action);
-        let redacted = redact_args(action);
+        let redacted = crate::security::redact::arguments(action);
         let (outcome, audit_id) = gate_call_for_tier(
             &self.approval,
             tier_decision,

@@ -15,7 +15,7 @@
 
 mod flow_surface;
 pub mod gate;
-pub mod redact;
+pub mod summary;
 mod registration_scope;
 pub use registration_scope::ApprovalScope;
 pub mod rpc;
@@ -30,7 +30,7 @@ pub use gate::{
     is_detached_request, is_unanswered_approval_reason, parse_approval_reply, ApprovalChatContext,
     ApprovalError, ApprovalGate, ApprovalTurnContext, FlowRunContext, APPROVAL_UNANSWERED_PHRASE,
 };
-pub use redact::{redact_args, summarize_action};
+pub use summary::summarize_action;
 pub use schemas::all_controller_schemas as all_approval_controller_schemas;
 pub use schemas::all_registered_controllers as all_approval_registered_controllers;
 pub use types::{

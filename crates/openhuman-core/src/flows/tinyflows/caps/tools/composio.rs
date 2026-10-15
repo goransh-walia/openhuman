@@ -168,7 +168,7 @@ impl ToolBackend for ComposioToolBackend {
         // a different path than the one this fix closes at the tier gate.
         // Refining Rule 2 itself to be scope-aware is a deferred follow-up.
         let summary = crate::security::approval::summarize_action(slug, &args);
-        let redacted = crate::security::approval::redact_args(&args);
+        let redacted = crate::security::redact::arguments(&args);
         let (outcome, audit_id) = if tier_decision == GateDecision::Allow {
             (crate::security::approval::GateOutcome::Allow, None)
         } else {

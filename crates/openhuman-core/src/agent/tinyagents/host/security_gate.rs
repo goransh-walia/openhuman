@@ -84,7 +84,7 @@ use tinyagents_harness::host::security_gate::{GateDecision, ToolCallRequest};
 
 use crate::agent::tinyagents::policy_denial::PolicyDenial;
 use crate::security::approval::{
-    redact_args, summarize_action, ApprovalGate, ApprovalTurnContext, GateOutcome,
+    summarize_action, ApprovalGate, ApprovalTurnContext, GateOutcome,
 };
 use crate::security::policy::{
     CommandFlow, CommandQuery, CommandStage, GateDecision as PolicyGateDecision, SecurityPolicy,
@@ -384,7 +384,7 @@ impl OpenHumanSecurityGate {
         call: &ToolCallRequest,
     ) -> GateDecision {
         let summary = summarize_action(&call.tool_name, &call.arguments);
-        let redacted = redact_args(&call.arguments);
+        let redacted = crate::security::redact::arguments(&call.arguments);
         tracing::debug!(
             target: "tinyagents",
             tool = %call.tool_name,

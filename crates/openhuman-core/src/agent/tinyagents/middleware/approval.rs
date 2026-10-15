@@ -12,7 +12,7 @@ use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::ToolResult as TaToolResult;
 
 use crate::security::approval::{
-    redact_args, summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome,
+    summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome,
 };
 use tinytools::Tool;
 
@@ -144,7 +144,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
             "[tinyagents::mw] routing external-effect tool through approval gate"
         );
         let summary = summarize_action(&call.name, &call.arguments);
-        let redacted = redact_args(&call.arguments);
+        let redacted = crate::security::redact::arguments(&call.arguments);
         let (outcome, request_id) = gate
             .intercept_audited(
                 &ctx.data.approval,
