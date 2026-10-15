@@ -4,14 +4,14 @@
 //! This is `docs/specs/plan-agents.md` Phase 4 for the most policy-sensitive
 //! seam in the set. The tinyagents runtime holds *no* authority: it asks, and
 //! obeys. Everything it would otherwise have to guess at lives on this side —
-//! the autonomy tier, policy over TinyBox's command facts, the per-channel tool policy, the
+//! the autonomy tier, the security module's shell verdict, the per-channel tool policy, the
 //! human-in-the-loop approval park, and the prompt-injection screen.
 //!
 //! # Domains adapted
 //!
 //! - [`crate::security::policy`] — [`SecurityPolicy`], its
-//!   [`SecurityPolicy::check_gated_command_analysis`] / [`SecurityPolicy::gate_decision`]
-//!   decisions, and [`AutonomyLevel`].
+//!   [`SecurityPolicy::check_command`] (the module's shell verdict) and
+//!   [`AutonomyLevel`].
 //! - [`crate::approval`] — the process-global [`ApprovalGate`],
 //!   [`GateOutcome`], and the `summarize_action` / `redact_args` pair that keep
 //!   raw arguments out of the approval card.

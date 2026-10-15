@@ -236,34 +236,6 @@ impl Tool for ShellTool {
         !command.is_empty()
     }
 
-    async fn prepare_authorization(
-        &self,
-        args: &serde_json::Value,
-    ) -> anyhow::Result<Option<serde_json::Value>> {
-        #[cfg(feature = "modules")]
-        {
-            let config = self
-                .analysis_config
-                .as_deref()
-                .ok_or_else(|| anyhow::anyhow!("command analysis is unavailable"))?;
-            let command = args
-                .get("command")
-                .and_then(serde_json::Value::as_str)
-                .ok_or_else(|| anyhow::anyhow!("command analysis is unavailable"))?;
-            let analysis = crate::modules::tinybox::analyze_command(config, command.to_owned())
-                .await
-                .map_err(|_| anyhow::anyhow!("command analysis is unavailable"))?;
-            let analysis = serde_json::to_value(analysis)
-                .map_err(|_| anyhow::anyhow!("command analysis is unavailable"))?;
-            return Ok(Some(json!({ "analysis": analysis })));
-        }
-        #[cfg(not(feature = "modules"))]
-        {
-            let _ = args;
-            Err(anyhow::anyhow!("command analysis is unavailable"))
-        }
-    }
-
     async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
         self.execute_in_context(&dispatch_ctx_for_tool(None), args, None)
             .await
@@ -349,43 +321,23 @@ impl ShellTool {
         context: Option<&dyn ToolRunContext>,
         meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
-        // Revalidate facts immediately before execution. The authorization
-        // hook supplies the same module-owned parser to the harness gate; this
-        // second call keeps direct/workflow execution on the same contract and
-        // fails closed if the module disappeared after approval.
-        #[cfg(feature = "modules")]
-        if let Some(config) = self.analysis_config.as_deref() {
-            let analysis =
-                match crate::modules::tinybox::analyze_command(config, command.to_owned()).await {
-                    Ok(analysis) => analysis,
-                    Err(_) => {
-                        return (false, ToolResult::error("Command analysis is unavailable."))
-                    }
-                };
-            if let Err(reason) = self.security.check_gated_command_analysis(&analysis) {
-                return (false, ToolResult::error(reason));
-            }
-        } else {
-            #[cfg(test)]
-            if let Err(reason) = self.security.check_gated_command(command) {
-                // Unit tests exercise the standalone policy helper without
-                // booting TinyBus. Production constructors always carry the
-                // module config and never use this compatibility path.
-                return (false, ToolResult::error(reason));
-            }
-            #[cfg(not(test))]
-            return (false, ToolResult::error("Command analysis is unavailable."));
-        }
-        #[cfg(not(feature = "modules"))]
+        // Ask the security module again immediately before execution. The
+        // harness gate asked before the approval prompt, without spending
+        // budget; this is the call that admits the run (and spends one action
+        // of the hourly budget), and it keeps direct and workflow execution on
+        // the same contract. A module that disappeared after approval denies.
+        let declared = None;
+        if let Err(reason) = self
+            .security
+            .check_command(CommandQuery {
+                command,
+                declared,
+                flow: CommandFlow::Harness,
+                stage: CommandStage::Execute,
+            })
+            .await
         {
-            let _ = &self.analysis_config;
-            let _ = command;
-            #[cfg(test)]
-            if let Err(reason) = self.security.check_gated_command(command) {
-                return (false, ToolResult::error(reason));
-            }
-            #[cfg(not(test))]
-            return (false, ToolResult::error("Command analysis is unavailable."));
+            return (false, ToolResult::error(reason));
         }
 
         let _cwd = self.effective_action_dir_for_context(context);
