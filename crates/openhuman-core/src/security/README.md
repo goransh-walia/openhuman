@@ -37,6 +37,17 @@ production release pins. Shell policy,
 approvals, redaction, and crypto continue to use their existing host engines
 until their own migration phases are implemented and verified.
 
+Host latency budget (committed). The host path-policy gate runs
+`OPENHUMAN_SECURITY_PERF_BUDGET=1 scripts/ci/security-native-fixture.sh` (a
+`--release` build against the released v0.7.0 archive, warmed scope
+registration, 200 turns of 5 checks: 3 reads, 1 parent-create, 1 denied probe).
+Measured on Linux 7.0 x86_64, Rust 1.99.0, 2026-10-15: per call p50 81 us,
+p99 116 us; per turn (5 calls) p50 376 us, p99 493 us. The enforced budget is
+the owner's p50 <= 1 ms / p99 <= 10 ms per call (`security_native_tests.rs`),
+about 12x and 85x headroom over the measurement for noisy hosted runners. The
+`latency-budget` job in `.github/workflows/security-native.yml` records each
+run's JSON as an artifact; tighten the constants if a controlled runner is added.
+
 Crypto (contract 1.14): `modules/security_crypto.rs` calls the confidential
 `PasswordCrypt2`, `KeyringAccess2` and `PairingControl2` members, and
 `modules/security_host.rs` serves the `KeyringConsent2` callback from the
