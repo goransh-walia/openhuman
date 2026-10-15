@@ -43,9 +43,14 @@ pub(crate) fn composio_secrets(config: &Config) -> Vec<String> {
     secrets
 }
 
-/// Strings shorter than this cannot contain a configured key (see
-/// `MIN_SECRET_LEN`) and are not sent to the module.
-const MIN_CHECKED_LEN: usize = MIN_SECRET_LEN;
+/// Only a string that actually contains one of the call's keys is sent to the
+/// module. This decides whether to ask, never what to remove: the module still
+/// removes the key (and anything else it recognizes) from every string it is
+/// given. Most results never mention the key, so most results cost no module
+/// call at all.
+fn mentions_a_key(text: &str, secrets: &[String]) -> bool {
+    secrets.iter().any(|secret| text.contains(secret.as_str()))
+}
 
 /// What a result becomes when the module could not check it.
 pub(crate) const WITHHELD: &str = "Composio result withheld: the security module could not check it for credentials. Do not retry; tell the user the result could not be checked.";
@@ -53,7 +58,7 @@ pub(crate) const WITHHELD: &str = "Composio result withheld: the security module
 /// Every string the outcome carries that could contain a key: text, JSON string
 /// values and object keys, follow-up content, the markdown rendering and the
 /// metadata.
-fn strings_of(result: &ToolResult) -> Vec<String> {
+fn strings_of(result: &ToolResult, secrets: &[String]) -> Vec<String> {
     fn json(value: &Value, out: &mut Vec<String>) {
         match value {
             Value::String(text) => out.push(text.clone()),
@@ -83,14 +88,14 @@ fn strings_of(result: &ToolResult) -> Vec<String> {
     if let Some(metadata) = &result.metadata {
         json(metadata, &mut out);
     }
-    out.retain(|text| text.len() >= MIN_CHECKED_LEN);
+    out.retain(|text| mentions_a_key(text, secrets));
     out.sort();
     out.dedup();
     out
 }
 
 /// Write `answers` (original string to redacted string) back into `result`.
-/// A string without an answer is left as it is (it was too short to check).
+/// A string without an answer is left as it is (it never mentioned a key).
 fn apply_answers(result: &mut ToolResult, answers: &HashMap<String, String>) {
     let map = |text: &str| answers.get(text).cloned().unwrap_or_else(|| text.to_owned());
     fn json(value: &mut Value, map: &dyn Fn(&str) -> String) {
@@ -142,10 +147,11 @@ fn apply_answers(result: &mut ToolResult, answers: &HashMap<String, String>) {
 pub(crate) type Answers = Result<HashMap<String, String>, String>;
 
 /// [`redact_composio_outcome`] over an explicit redactor, so the walk is
-/// testable without a module. An outcome the redactor could not check is
-/// withheld.
+/// testable without a module. An outcome that mentions a key and that the
+/// redactor could not check is withheld.
 pub(crate) async fn redact_outcome_with<R, Fut>(
     outcome: anyhow::Result<ToolResult>,
+    secrets: &[String],
     redactor: R,
 ) -> anyhow::Result<ToolResult>
 where
@@ -154,7 +160,7 @@ where
 {
     match outcome {
         Ok(mut result) => {
-            let strings = strings_of(&result);
+            let strings = strings_of(&result, secrets);
             if strings.is_empty() {
                 return Ok(result);
             }
@@ -171,7 +177,7 @@ where
         }
         Err(error) => {
             let rendered = format!("{error:#}");
-            if rendered.len() < MIN_CHECKED_LEN {
+            if !mentions_a_key(&rendered, secrets) {
                 return Err(error);
             }
             match redactor(vec![rendered.clone()]).await {
@@ -211,7 +217,7 @@ async fn module_answers(config: &Config, secrets: &[String], strings: Vec<String
 /// and return that same redacted copy for the caller's own error text.
 pub(crate) async fn redact_and_report(config: &Config, operation: &str, rendered: &str) -> String {
     let secrets = composio_secrets(config);
-    let redacted = if secrets.is_empty() {
+    let redacted = if !mentions_a_key(rendered, &secrets) {
         rendered.to_string()
     } else {
         match crate::modules::security::text::redact_credentials_with(config, rendered, &secrets)
@@ -238,5 +244,8 @@ pub(crate) async fn redact_composio_outcome(
     if secrets.is_empty() {
         return outcome;
     }
-    redact_outcome_with(outcome, |strings| module_answers(config, &secrets, strings)).await
+    redact_outcome_with(outcome, &secrets, |strings| {
+        module_answers(config, &secrets, strings)
+    })
+    .await
 }
