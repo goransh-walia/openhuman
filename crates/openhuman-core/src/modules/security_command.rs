@@ -73,7 +73,7 @@ pub(crate) async fn command_decision(
             );
             // Only a channel failure latches; one refused request does not.
             if error.fault {
-                state.faulted = true;
+                state.latch();
             }
             Err(error.message)
         }

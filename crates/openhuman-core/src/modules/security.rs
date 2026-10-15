@@ -80,6 +80,22 @@ struct ClientState {
         tinysecurity_bus::CommandPolicyId,
     )>,
     faulted: bool,
+    /// The last [`proxy`] attempt failed while loading the module, before any
+    /// peer answered. Nothing was attested, so nothing a peer said was
+    /// distrusted: the next call may try again. Consumed by [`Self::latch`].
+    load_failed: bool,
+}
+
+impl ClientState {
+    /// Latch the client as faulted, unless the failure was only that the module
+    /// had not finished loading (a slow first load must not poison the process).
+    fn latch(&mut self) {
+        if std::mem::take(&mut self.load_failed) {
+            log::warn!("[security][client] module not loaded yet; client stays retryable");
+            return;
+        }
+        self.faulted = true;
+    }
 }
 
 /// A failed module call, and whether it must latch the shared client.
@@ -158,12 +174,19 @@ async fn proxy(config: &Config, state: &mut ClientState) -> Result<tinybus::Prox
     if let Some(proxy) = &state.proxy {
         return Ok(proxy.clone());
     }
-    super::ops::ensure_loaded_within(config, MODULE_ID, Some(LOAD_TIMEOUT))
-        .await
-        .map_err(super::ops::load_error_message)?;
-    let runtime = super::runtime::runtime()
-        .await
-        .map_err(|_| "TinySecurity bus unavailable")?;
+    state.load_failed = false;
+    if let Err(error) = super::ops::ensure_loaded_within(config, MODULE_ID, Some(LOAD_TIMEOUT)).await
+    {
+        state.load_failed = true;
+        return Err(super::ops::load_error_message(error));
+    }
+    let runtime = match super::runtime::runtime().await {
+        Ok(runtime) => runtime,
+        Err(_) => {
+            state.load_failed = true;
+            return Err("TinySecurity bus unavailable".into());
+        }
+    };
     // Built only after the runtime is started: `trusted_host` is this host's own
     // bus connection, and a refresh sent without it would drop the privileged
     // peer binding and deny RegisterPathPolicy.
@@ -308,7 +331,7 @@ pub async fn policy_info(config: &Config) -> Result<PolicyInfo, String> {
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        state.latch();
     }
     result
 }
@@ -339,7 +362,7 @@ pub(crate) async fn evaluate(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        state.latch();
     }
     result
 }
@@ -375,7 +398,7 @@ pub(crate) async fn check(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        state.latch();
     }
     result
 }
@@ -405,7 +428,7 @@ pub(crate) async fn register_path_policy(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        state.latch();
     }
     result
 }
@@ -442,7 +465,7 @@ async fn validate_native_path(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        state.latch();
     }
     result
 }
@@ -472,7 +495,7 @@ pub(crate) async fn check_path(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        state.latch();
     }
     result
 }
@@ -495,7 +518,7 @@ pub(crate) async fn validate_host_path(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        state.latch();
     }
     result
 }
