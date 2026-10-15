@@ -140,8 +140,8 @@ fn callers_over_the_limit_are_refused_and_permits_are_returned() {
         })
         .collect();
     let results: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
-    assert!(results.iter().any(|r| *r == Err(SeamError::Saturated)));
-    assert!(results.iter().any(|r| *r == Ok(1)));
+    assert!(results.contains(&Err(SeamError::Saturated)));
+    assert!(results.contains(&Ok(1)));
     assert_eq!(gate.load(Ordering::SeqCst), 0);
 }
 
