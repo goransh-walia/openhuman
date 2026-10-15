@@ -74,7 +74,7 @@ impl Tool for ComposioListToolsTool {
         options: ToolCallOptions,
     ) -> anyhow::Result<ToolResult> {
         let (config, outcome) = Box::pin(self.execute_unredacted(args, options)).await;
-        redact_composio_outcome(&config, outcome)
+        redact_composio_outcome(&config, outcome).await
     }
 
     fn supports_markdown(&self) -> bool {

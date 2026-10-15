@@ -102,7 +102,7 @@ impl Tool for ComposioExecuteTool {
     }
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
         let (config, outcome) = Box::pin(self.execute_unredacted(args, None, None, None)).await;
-        redact_composio_outcome(&config, outcome)
+        redact_composio_outcome(&config, outcome).await
     }
     async fn execute_with_context(
         &self,
@@ -119,7 +119,7 @@ impl Tool for ComposioExecuteTool {
                 .as_ref(),
         ))
         .await;
-        redact_composio_outcome(&config, outcome)
+        redact_composio_outcome(&config, outcome).await
     }
 }
 

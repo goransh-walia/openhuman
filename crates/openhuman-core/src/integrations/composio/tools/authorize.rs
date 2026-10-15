@@ -59,7 +59,7 @@ impl Tool for ComposioAuthorizeTool {
     }
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
         let outcome = Box::pin(self.execute_unredacted(args)).await;
-        redact_composio_outcome(&self.config, outcome)
+        redact_composio_outcome(&self.config, outcome).await
     }
 }
 
