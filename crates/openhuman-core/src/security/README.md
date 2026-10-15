@@ -95,17 +95,15 @@ answer when it is off:
 | Function | File | Disabled result |
 | --- | --- | --- |
 | `gate_decision` | [`policy/command_checks.rs`](./policy/command_checks.rs) | `GateDecision::Allow` |
-| `check_gated_command` | `policy/command_checks.rs` | `Ok(class)`, no structural guard |
-| `validate_command_execution` | `policy/command_checks.rs` | `Ok(risk)`, no allowlist |
-| `is_command_allowed` | `policy/command_checks.rs` | `true` |
+| `check_command` | [`policy/native_commands.rs`](./policy/native_commands.rs) | the module answers with the policy disabled: `Allow`, no structural guard, no allowlist; the protected-path floor still refuses |
 | `can_act` | `policy/enforcement.rs` | `true` |
 | `record_action`, `is_rate_limited` | `policy/enforcement.rs` | never limited |
 | `is_path_string_allowed` | [`policy/path_checks.rs`](./policy/path_checks.rs) | `true` after the floor checks |
 | `is_resolved_path_allowed_for` | `policy/path_checks.rs` | `true` after the floor check |
 | `check_resolved_against_forbidden` | `policy/path_checks.rs` | `Ok(())` after the floor check |
 
-So with the policy disabled, command classification still runs (callers get a
-`CommandClass` back) but nothing is gated on it: no approval prompt, no
+So with the policy disabled, command classification still runs in the security
+module (callers get a `CommandClass` back) but nothing is gated on it: no approval prompt, no
 command allowlist, no hourly action budget, and no `workspace_only`,
 `forbidden_paths`, trusted-root or workspace-internal containment.
 
@@ -139,25 +137,38 @@ classified, then gated by tier:
  shell command string
         |
         v
- strip_quoted_heredoc_bodies      quoted heredoc body is data, blanked
-        |
+ SecurityPolicy::check_command    one CheckCommand bus call to the TinySecurity
+        |                         module, which blanks quoted heredoc bodies,
+        |                         classifies (highest class across ; | && ||
+        |                         segments, redirect or tee lifts to >= Write),
+        |                         raises the class with the model's declared
+        |                         category (never lowers it), and applies the
+        |                         autonomy tier, hidden-execution defence and
+        |                         protected-path floor
         v
- classify_command                 highest class across ; | && || segments,
-        |                         redirect or tee lifts to >= Write
-        v
- class.max(declared)              model may raise the class, never lower it
-        |
-        v
- gate_decision(class)
+ CommandGate
         |
    +----+--------------+-------------------+
    v                   v                   v
- Allow               Prompt              Block
- run the tool        ApprovalGate park   refused with
-                     (10 min TTL)        POLICY_BLOCKED_MARKER
+ Allow               Prompt              Refusal
+ run the tool        ApprovalGate park   POLICY_BLOCKED_MARKER message
+                     (10 min TTL)        (or "Rate limit exceeded")
 ```
 
-The tier matrix in `gate_decision`: `ReadOnly` allows only `Read` and blocks
+The host asks twice and the module counts once. The harness gate asks before
+the approval prompt (`CommandStage::Authorize`, an unbudgeted scope), and the
+tool asks again immediately before it spawns (`CommandStage::Execute`, the
+scope that carries `max_actions_per_hour`), so an allowed run spends one action
+of the module's hourly budget and a prompt that is declined spends none. The
+scheduler asks under the legacy rule (`CommandFlow::Scheduled`: the curated
+allowlist plus the configured risk restrictions) when a job is created or
+edited, and again when it runs. A module that is missing, untrusted, faulted
+or slow refuses the command (`Refusal::Unavailable`); there is no host
+classifier to fall back on. Embedders that cannot load the native module install
+their own fail-closed `CommandGateway` on the policy.
+
+The tier matrix (the module's, which `gate_decision` still mirrors for the flow
+nodes until they move; a module-backed test pins the two together): `ReadOnly` allows only `Read` and blocks
 everything else; `Supervised` allows `Read` and prompts on every acting class;
 `Full` runs `Read` and `Write` silently and prompts on `Network`, `Install` and
 `Destructive`.
@@ -176,21 +187,24 @@ The invariants that hold with the policy enabled:
   prefixes, per-artifact directories under `artifacts/` (but not
   `artifacts/tool-results/`), and the account `config.toml` beside the
   workspace. A trusted-root grant does not weaken this.
-- Unknown commands classify as writes. `classify_command` is fail-closed: a
-  command that is not provably read-only is at least `CommandClass::Write`.
-  The body of a quoted heredoc (`<< 'EOF' ... EOF`) is blanked first by
-  `strip_quoted_heredoc_bodies`, since the shell expands nothing there. An
-  unquoted delimiter (`<< EOF`) is expanded and is still scanned.
-- Outside `Full`, `check_gated_command` rejects hidden execution (command or
-  process substitution, backticks, background `&`) that could smuggle a
-  command past the approval the human read.
+- Unknown commands classify as writes. The module's classifier is fail-closed:
+  a command that is not provably read-only is at least `CommandClass::Write`.
+  The body of a quoted heredoc (`<< 'EOF' ... EOF`) is blanked first, since the
+  shell expands nothing there. An unquoted delimiter (`<< EOF`) is expanded
+  and is still scanned.
+- Outside `Full`, the module rejects hidden execution (command or process
+  substitution, backticks, background `&`) that could smuggle a command past
+  the approval the human read (`Refusal::Hidden`).
 - Interactive approval requests expire as denied after ten minutes
   (`DEFAULT_APPROVAL_TTL` in [`approval/gate.rs`](./approval/gate.rs); the Flow Canvas copilot path
   uses a three-minute window).
 
-The TinyBox module owns shell-string scanning and returns `CommandAnalysis`
-facts over the `tinybox-bus` contract. [`policy/command_checks.rs`](./policy/command_checks.rs)
-applies the host's autonomy tier and protected-path policy to those facts.
+The TinySecurity module owns shell-string scanning, classification, the
+allowlist, the risk score and the protected-path floor. [`policy/native_commands.rs`](./policy/native_commands.rs)
+translates the host's settings into the module's immutable `CommandPolicy` and
+projects its content-free answer back into `GateDecision`, `CommandClass` and
+the existing policy-blocked messages. Refusal text is fixed per reason; it
+never repeats the command, whose arguments can carry secrets.
 
 ### Hot-swapping the policy
 
@@ -297,9 +311,11 @@ The subfolders register their own namespaces: `approval.*` ([`approval/`](./appr
 - Sandbox backends do not live here. `crates/openhuman-core/src/sandbox/`
   picks a backend per session and delegates native confinement and process
   ownership to the loaded TinyBox module (`vendor/tinybox`).
-- Shell parsing and command classification run inside the loaded TinyBox module;
-  its `CommandAnalysis` response is the bus boundary. Policy over those facts
-  stays here.
+- Shell parsing, command classification and gating run inside the loaded
+  TinySecurity module (`tinysecurity-bus` `CheckCommand` / `ClassifyCommand`).
+  TinyBox still reports generic structural facts (`analyze_command`), but the
+  host no longer applies policy to them. Which settings the module is given,
+  and what a refusal looks like to the agent, stay here.
 - Secret and PII scrubbers are TinyMemory's
   (`tinymemory_integrations::safety`, `vendor/tinymemory`); this folder only
   pins the policy.
