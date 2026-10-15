@@ -99,7 +99,9 @@ async fn released_module_gives_the_answers_the_deleted_host_command_tests_pinned
                         CommandOp::Check,
                     )
                     .await;
-                let allowed = decision.denial.is_none() && decision.gate != CommandGate::Block;
+                // The host asked only the allowlist; the module also applies the
+                // high-risk restriction, which is a separate denial.
+                let allowed = matches!(decision.denial, None | Some(CommandDenial::HighRisk));
                 if allowed != case["expect"].as_bool().unwrap() {
                     mismatches.push(format!("allowed({command:?}) module={allowed}"));
                 }
