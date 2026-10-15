@@ -226,6 +226,8 @@ fn policy_cache() -> &'static std::sync::Mutex<Vec<(EgressPolicy, EgressPolicyId
 /// The open-public policy for `owner` under `privacy`: any `http(s)` destination
 /// that passes the module's address floor and privacy checks. Nothing local is
 /// registered, so a generic tool URL can never reach a host-local capability.
+/// Under `LocalOnly` no destination is registered, so every external one is
+/// refused.
 pub(crate) fn open_public_policy(
     owner: tinysecurity_bus::SubjectScope,
     privacy: tinysecurity_bus::PrivacyMode,
@@ -256,7 +258,9 @@ fn policy_for(
         data_categories: vec![tinysecurity_bus::DataCategory::UserContent],
         local_capabilities: Vec::new(),
         validity_ms: 30_000,
-        open_public: true,
+        // `LocalOnly` registers no destination at all, so the module refuses
+        // every external one; it cannot be combined with open-public egress.
+        open_public: privacy != tinysecurity_bus::PrivacyMode::LocalOnly,
         preflight_transports,
     }
 }

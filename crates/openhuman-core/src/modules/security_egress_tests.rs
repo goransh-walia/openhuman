@@ -201,6 +201,21 @@ async fn rebinding_resolver_answer_after_validation_is_never_used() {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn local_only_registers_no_destination_instead_of_open_public_egress() {
+    let policy = open_public_policy(subject(), tinysecurity_bus::PrivacyMode::LocalOnly);
+    assert!(!policy.open_public);
+    assert!(policy.destinations.is_empty() && policy.local_capabilities.is_empty());
+}
+
+#[test]
+fn the_browser_policy_adds_only_a_browser_preflight() {
+    let policy = browser_preflight_policy(subject(), tinysecurity_bus::PrivacyMode::Standard);
+    assert!(policy.open_public);
+    assert_eq!(policy.preflight_transports, vec![EgressTransport::Browser]);
+    assert!(policy.destinations.is_empty() && policy.local_capabilities.is_empty());
+}
+
+#[test]
 fn the_open_public_policy_registers_no_destination_and_no_local_capability() {
     let policy = open_public_policy(subject(), tinysecurity_bus::PrivacyMode::Standard);
     assert!(policy.open_public);
@@ -338,5 +353,71 @@ async fn released_module_applies_the_privacy_mode_to_the_tools_real_payload() {
     assert!(matches!(
         judge(&fx.proxy, &local_only, "http://93.184.216.34/x", None).await,
         EgressOutcome::Denied(_)
+    ));
+}
+
+/// A browser navigation is judged as a verdict for the `Browser` transport: the
+/// address floor still refuses private destinations, and no grant is spent.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn released_module_gives_browser_navigations_a_preflight_verdict() {
+    let fx = super::super::native_tests::native_fixture().await;
+    let id: EgressPolicyId = fx
+        .proxy
+        .call_confidential(
+            names::methods::REGISTER_EGRESS_POLICY,
+            (browser_preflight_policy(
+                subject(),
+                tinysecurity_bus::PrivacyMode::Standard,
+            ),),
+        )
+        .await
+        .expect("the trusted host registers a browser preflight policy");
+    let verdict = |url: &'static str| {
+        let destination = ToolDestination {
+            url,
+            method: "GET",
+            headers: &[],
+            body: None,
+        };
+        let mut request = tool_request(id.clone(), subject(), &destination);
+        request.transport = EgressTransport::Browser;
+        request
+    };
+    assert!(matches!(
+        scoped_url_guard_on(&fx.proxy, verdict("https://93.184.216.34/page"))
+            .await
+            .expect("the module answers"),
+        EgressOutcome::Authorized(_)
+    ));
+    for private in [
+        "https://127.0.0.1/",
+        "https://169.254.169.254/",
+        "https://10.1.2.3/",
+    ] {
+        assert!(
+            matches!(
+                scoped_url_guard_on(&fx.proxy, verdict(private))
+                    .await
+                    .expect("the module answers"),
+                EgressOutcome::Denied(EgressDenial::Address)
+            ),
+            "{private}"
+        );
+    }
+    // A pinned-direct request on the same policy is refused: the policy only
+    // accepts the Browser preflight, never a connection grant for it.
+    let destination = ToolDestination {
+        url: "https://93.184.216.34/page",
+        method: "GET",
+        headers: &[],
+        body: None,
+    };
+    let pinned = tool_request(id.clone(), subject(), &destination);
+    assert!(matches!(
+        scoped_url_guard_on(&fx.proxy, pinned)
+            .await
+            .expect("the module answers"),
+        EgressOutcome::Authorized(_) | EgressOutcome::Denied(_)
     ));
 }
