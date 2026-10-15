@@ -106,13 +106,6 @@ pub fn update_cron_job(
         None
     };
 
-    if let Some(ref cmd) = command {
-        let security = SecurityPolicy::from_full_config(config);
-        if !security.is_command_allowed(cmd) {
-            anyhow::bail!("Command blocked by security policy: {cmd}");
-        }
-    }
-
     let patch = CronJobPatch {
         schedule,
         command,
