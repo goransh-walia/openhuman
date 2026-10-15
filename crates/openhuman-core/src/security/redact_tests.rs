@@ -132,3 +132,34 @@ fn text_falls_back_to_the_floor_never_the_original_or_a_blank() {
 fn text_prefers_the_module_answer() {
     assert_eq!(answer_or_floor(Some("module said".into()), "raw"), "module said");
 }
+
+/// The moved callers end to end on the released archive: the artifact redactor
+/// reports a secret-bearing body as rewritten without the secret, leaves a clean
+/// body unchanged, and the halt-summary error line loses the secret.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn moved_text_callers_redact_through_the_released_archive() {
+    use tinyagents_harness::artifacts::ArtifactRedactor;
+
+    let (_dir, config) = released_config();
+    arm(&config).await;
+    let redactor = crate::agent::harness::artifact_offload::SanitizingRedactor;
+
+    let secret_body = "result ok\nAuthorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789\n";
+    let rewritten = redactor.redact(secret_body);
+    assert!(rewritten.changed, "a secret-bearing body must be rewritten");
+    assert!(!rewritten.text.contains("abcdefghijklmnopqrstuvwxyz"));
+    assert!(rewritten.text.contains("result ok"), "{}", rewritten.text);
+
+    let clean = redactor.redact("plain output with no secrets\n");
+    assert!(!clean.changed);
+    assert_eq!(clean.text, "plain output with no secrets\n");
+
+    let failure = format!(
+        "request failed: api_key={}-{}",
+        "sk", "live-abcdefghijklmnopqrstuvwxyz0123456789"
+    );
+    let line = crate::agent::session_host::stop_summary::short_error_line(&failure);
+    assert!(!line.contains("abcdefghijklmnopqrstuvwxyz"), "{line}");
+    assert!(line.contains("request failed"), "{line}");
+}
