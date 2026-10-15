@@ -70,6 +70,7 @@ fn rank_puts_an_unassessed_part_above_every_assessed_one() {
 /// Sensitive mode with the real module: a clean payload is assessed clean and
 /// permitted, a credential-bearing one is High and refused, and an unarmed
 /// bridge elsewhere stays Unknown (covered above).
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn sensitive_assessment_on_the_released_archive() {

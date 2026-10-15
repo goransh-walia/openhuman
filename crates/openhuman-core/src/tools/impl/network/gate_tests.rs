@@ -366,6 +366,7 @@ fn other_modes_never_assess_the_arguments() {
 
 /// The released module decides a real network call: a plain GET is permitted
 /// under Sensitive, one whose headers carry a credential is refused.
+#[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn sensitive_network_gate_on_the_released_archive() {
