@@ -18,7 +18,7 @@ fn redactor_reports_a_rewritten_body_as_changed() {
     if out.changed {
         assert_ne!(out.text, with_secret, "changed implies a rewrite");
     } else {
-        // the `security::redact::text` pass's pattern set is the authority here; if it does
+        // The `security::redact::text` pass's pattern set is the authority here; if it does
         // not flag this shape, the adapter is still correct. What must
         // never happen is `changed` set without a rewrite.
         assert_eq!(out.text, with_secret);
