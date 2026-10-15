@@ -122,7 +122,10 @@ fn a_drifted_contract_constant_is_reported_as_a_mismatch() {
 ))]
 #[test]
 fn a_product_feature_build_carries_all_twelve_records() {
-    assert_eq!(ALL.len(), 12);
+    // TinySecurity is a thirteenth, always-on record whenever its module is
+    // built in (`security-module`); it has no component switch.
+    let expected = 12 + usize::from(cfg!(feature = "security-module"));
+    assert_eq!(ALL.len(), expected);
     for id in [
         "tinycomputer",
         "tinysearch",
