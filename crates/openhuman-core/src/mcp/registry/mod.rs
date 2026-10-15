@@ -510,6 +510,8 @@ pub(crate) async fn tools_safe_for_agent_scanned(
                 _ => kept.push(tool),
             }
         }
+        // Needed when `security-module` is on: the fallback tail below is cfg-gated out.
+        #[allow(clippy::needless_return)]
         return kept;
     }
     #[cfg(not(feature = "security-module"))]

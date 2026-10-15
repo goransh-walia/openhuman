@@ -53,7 +53,7 @@ fn scope_preserves_product_internal_state_and_readonly_output_exception() {
         .unwrap();
     assert!(artifacts.children_only);
     let outputs = scope.workspace_dir.join("artifacts/tool-results");
-    assert_eq!(artifacts.exceptions, [outputs.clone()]);
+    assert_eq!(artifacts.exceptions, std::slice::from_ref(&outputs));
     assert_eq!(scope.readonly_paths, [outputs]);
     assert_eq!(
         scope
