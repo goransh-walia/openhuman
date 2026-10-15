@@ -71,6 +71,10 @@ struct ClientState {
     info: Option<PolicyInfo>,
     proxy: Option<tinybus::Proxy>,
     scopes: Vec<(tinysecurity_bus::PathPolicy, tinysecurity_bus::PathPolicyId)>,
+    commands: Vec<(
+        tinysecurity_bus::CommandPolicy,
+        tinysecurity_bus::CommandPolicyId,
+    )>,
     faulted: bool,
 }
 
@@ -551,6 +555,9 @@ pub(crate) mod text;
 
 #[path = "security_egress.rs"]
 pub(crate) mod egress;
+
+#[path = "security_command.rs"]
+pub(crate) mod command;
 
 #[path = "security_crypto.rs"]
 pub(crate) mod crypto;

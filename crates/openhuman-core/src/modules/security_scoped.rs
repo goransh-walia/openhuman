@@ -191,7 +191,7 @@ pub(super) async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, Stri
     result
 }
 
-async fn register_command_policy(
+pub(super) async fn register_command_policy(
     proxy: &tinybus::Proxy,
     policy: CommandPolicy,
 ) -> Result<CommandPolicyId, String> {
