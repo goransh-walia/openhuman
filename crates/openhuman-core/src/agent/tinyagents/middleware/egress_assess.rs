@@ -18,7 +18,7 @@ use tinyinference_llm::model::ModelRequest;
 
 use crate::config::PrivacyMode;
 use crate::security::egress::{
-    assess::assess_for_mode, egress_blocks_message, EgressDescriptor, IdentificationRisk,
+    assess::{assess_for_mode, Assessment}, egress_blocks_message, EgressDescriptor, IdentificationRisk,
 };
 use crate::security::live_policy::current_privacy_mode;
 
@@ -41,24 +41,22 @@ impl EgressAssessMiddleware {
     }
 }
 
-/// The refusal for sending `payload` to `provider`/`model` under `mode`, or
-/// `None` when the call may proceed. Pure over the module's answer so the
-/// decision is testable without a module.
-pub(crate) fn refusal_for(
+/// The refusal for sending a request with the given `assessment` to
+/// `provider`/`model` under `mode`, or `None` when the call may proceed. Pure, so
+/// the decision is testable without a module; `None` assessment means the module
+/// gave no answer.
+pub(crate) fn refusal_with(
     mode: PrivacyMode,
     provider: &str,
     model: &str,
-    payload: Option<&str>,
+    assessment: Option<Assessment>,
 ) -> Option<String> {
     if mode != PrivacyMode::Sensitive {
         return None;
     }
     let mut descriptor = EgressDescriptor::inference(provider, model, true);
-    if let Some(payload) = payload {
-        let assessment = assess_for_mode(mode, payload);
-        if assessment.level != IdentificationRisk::Unknown {
-            descriptor = descriptor.with_risk(assessment.level, assessment.categories);
-        }
+    if let Some(assessment) = assessment.filter(|a| a.level != IdentificationRisk::Unknown) {
+        descriptor = descriptor.with_risk(assessment.level, assessment.categories);
     }
     egress_blocks_message(mode, &descriptor)
 }
@@ -83,8 +81,8 @@ impl ModelMiddleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
             let payload = serde_json::to_string(&request.messages)
                 .ok()
                 .filter(|text| text.len() <= MAX_ASSESSED_BYTES);
-            if let Some(message) = refusal_for(mode, &self.provider, &self.model, payload.as_deref())
-            {
+            let assessment = payload.as_deref().map(|text| assess_for_mode(mode, text));
+            if let Some(message) = refusal_with(mode, &self.provider, &self.model, assessment) {
                 tracing::warn!(
                     provider = %self.provider,
                     model = %self.model,
