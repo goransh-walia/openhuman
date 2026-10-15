@@ -45,7 +45,7 @@ whole lifecycle without a TinyHumans session or a CortexDB key.
 
 Whatever engine is bound, it is wrapped in `guard::ScrubbingEngine`. Every
 text a `StoreItem` carries is scrubbed of secrets and PII under
-`security::scrub::host_policy` before the engine sees it. Wrapping the
+`tinyredact::Policy::corroborated()` before the engine sees it. Wrapping the
 engine, instead of scrubbing at call sites, also covers the writes
 TinyMemory makes through its own types (`AgentMemory::pre_turn`,
 `Brain::ingest`, background ingests). The same wrapper logs one

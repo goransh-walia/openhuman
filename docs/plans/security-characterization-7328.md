@@ -24,9 +24,10 @@ test. Nothing is deleted to go green.
 Redactors that are private to their module are covered beside it, on the same
 corpus: `integrations/composio/tools_tests.rs` and
 `agent/tinyagents/middleware/credential_scrub_tests.rs`. The URL helpers are
-covered in `config/schema/load_migration_tests.rs`,
-`inference/provider/factory_tests.rs` and `web3/wallet/rpc_tests.rs`, plus
-`util::redact` and `config::schema::storage` in the redaction target.
+covered by the floor (`core/log_redaction_tests.rs`) and, for the module's
+endpoint forms, `security/redact_tests.rs` against the released archive. The
+`util::redact`, `security::scrub`, `config::schema::storage` and per-domain
+URL helpers were deleted.
 
 ## Desired-RED tests (open)
 
@@ -34,7 +35,6 @@ covered in `config/schema/load_migration_tests.rs`,
 | --- | --- |
 | `desired_auto_approve_all_records_an_audit_row` | a bypassed call leaves an audit row (none today, accepted in #5634) |
 | `desired_every_required_sink_removes_every_secret_and_pii_shape` | no secret/PII shape survives the log, scrub, denial, approval and pii sinks |
-| `desired_url_log_redaction_removes_secret_query_values` | `redact_url_for_log` drops secret query values |
 | `desired_allowlist_denial_does_not_echo_command_arguments` | a command-policy denial never echoes secret-bearing arguments |
 | `desired_encrypt_refuses_payloads_over_the_binary_limit` | crypto has an explicit binary payload size limit (plan Task 10) |
 

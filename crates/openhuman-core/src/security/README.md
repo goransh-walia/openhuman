@@ -278,9 +278,13 @@ decision. See [approval/README.md](approval/README.md).
   `ensure_openhuman_scratch_dir` ([`policy/enforcement.rs`](./policy/enforcement.rs)).
 - `live_policy::{install, current, reload_from, reload_privacy,
   set_action_dir}` (`live_policy.rs`).
-- `scrub::{sanitize_text, sanitize_json, has_likely_secret}` ([`scrub.rs`](./scrub.rs)):
-  used by the approval store, memory writes, flow memory tools and artifact
-  offload, so they all redact the same way.
+- `redact::{text, endpoint_origin, endpoint_host}` ([`redact.rs`](./redact.rs)):
+  the synchronous redaction entry points, answered by the TinySecurity module
+  (`Text`, `EndpointOrigin`, `EndpointHost`). `text` serves the approval audit
+  rows, halt summaries, failure lines and artifact offload; without the module
+  it applies the fixed `core::log_redaction` floor, never the original text.
+  The endpoint forms answer `[REDACTED:suppressed]` instead of a URL when the
+  module cannot. Whole-URL log fields use `core::log_redaction::scrub_secrets`.
 - `AuditLogger` and `get_or_create_workspace_audit_logger` ([`audit.rs`](./audit.rs)).
 - `is_public_bind` and `ensure_core_rpc_token_for_bind` (`pairing.rs`): refuse
   a non-loopback RPC bind without an `OPENHUMAN_CORE_TOKEN`

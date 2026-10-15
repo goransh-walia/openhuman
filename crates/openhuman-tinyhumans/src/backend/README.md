@@ -62,7 +62,7 @@ OpenHuman backend. Three detectors feed that decision:
 
 The first fallback logs one `warn!` (guarded by `std::sync::Once`) so the
 redirect is visible without repeating on every request. URLs in logs go
-through `redact_url_for_log`.
+through `scrub_secrets` (the core log floor plus the module pass).
 
 ### Attribution headers and clients (`headers.rs`)
 
