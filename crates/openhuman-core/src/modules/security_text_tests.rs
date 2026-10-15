@@ -197,3 +197,74 @@ fn log_redaction_refuses_re_entry_instead_of_recursing() {
     IN_BRIDGE.with(|flag| flag.set(false));
     assert!(result.unwrap_err().contains("re-entered"));
 }
+
+/// Tool-result scrubbing through the real module's `CredentialsOnly` mode: the
+/// shape the corpus pins as a credential goes, source code that talks about
+/// tokens (#6954) and PII-free prose stay.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn credentials_only_scrub_matches_the_corpus_and_keeps_source_code() {
+    use crate::agent::tinyagents::middleware::credential_scrub::scrub_for_tool;
+    let fx = super::super::native_tests::native_fixture().await;
+    let cache = Mutex::new(RedactCache::default());
+    let source = r#"class Tokenizer:
+    def __init__(self):
+        self.eos_token = "<eos>"
+        previous_token: Optional[int] = None
+
+    def decode(self, token_id):
+        token = self.vocab[int(token_id)]
+        if token == self.unk_token:
+            return score / max(token_count, 1)
+        return {"mean_logprob_per_token": -4.73}
+"#;
+    let corpus: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/security-redaction-corpus.json"
+    )))
+    .unwrap();
+    let mut inputs: Vec<String> = vec![
+        source.to_string(),
+        "password=hunter2secret".to_string(),
+        "line one\nline two\n".to_string(),
+    ];
+    for case in corpus["text"].as_array().unwrap() {
+        inputs.push(case["input"].as_str().unwrap().to_string());
+    }
+    let mut answers = std::collections::HashMap::new();
+    for input in &inputs {
+        let out = redact_on(&fx.proxy, &cache, RedactMode::CredentialsOnly, input)
+            .await
+            .unwrap();
+        answers.insert(input.clone(), out);
+    }
+    let redact = |text: &str| answers.get(text).cloned();
+
+    assert!(
+        scrub_for_tool(&redact, "read_file", source).is_none(),
+        "source code was redacted"
+    );
+    let (scrubbed, count) = scrub_for_tool(&redact, "read_file", "password=hunter2secret")
+        .expect("a real credential is still redacted");
+    assert_eq!(count, 1);
+    assert!(!scrubbed.contains("hunter2secret"));
+
+    for case in corpus["text"].as_array().unwrap() {
+        let input = case["input"].as_str().unwrap();
+        let output = scrub_for_tool(&redact, "read_file", input)
+            .map(|(text, _)| text)
+            .unwrap_or_else(|| input.to_owned());
+        let credential = case["removed_by"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|redactor| redactor == "credential_middleware");
+        if credential {
+            assert!(
+                !output.contains(case["needle"].as_str().unwrap()),
+                "{} leaked: {output}",
+                case["case"]
+            );
+        }
+    }
+}

@@ -20,7 +20,7 @@ pub(crate) const WITHHELD_NOTICE: &str =
 
 /// The module's `CredentialsOnly` answer for `text`, or `None` when it cannot
 /// answer.
-type Redactor<'a> = &'a dyn Fn(&str) -> Option<String>;
+pub(crate) type Redactor<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 /// Count the values one pass replaced, not the placeholders the text already
 /// carried (a result may legitimately contain one).
@@ -56,7 +56,7 @@ fn scrub_through(redact: Redactor<'_>, content: &str) -> Option<(String, usize)>
 ///
 /// The token is removed before scrubbing and put back afterwards, so it is
 /// never seen by (or counted against) the scrubber.
-fn scrub_for_tool(redact: Redactor<'_>, tool_name: &str, content: &str) -> Option<(String, usize)> {
+pub(crate) fn scrub_for_tool(redact: Redactor<'_>, tool_name: &str, content: &str) -> Option<(String, usize)> {
     if tool_name != "browser" {
         return scrub_through(redact, content);
     }

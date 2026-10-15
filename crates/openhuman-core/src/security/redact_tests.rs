@@ -262,3 +262,39 @@ async fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {
     let plain = crate::core::log_redaction::scrub_secrets("https://example.com/docs/page");
     assert!(plain.contains("example.com"), "{plain}");
 }
+
+/// A result larger than the module's request bound is answered in line-aligned
+/// chunks and reassembled byte for byte.
+#[test]
+fn credentials_chunk_large_text_on_line_boundaries_and_reassemble() {
+    let line = "x".repeat(99) + "\n";
+    let text = line.repeat(2000); // ~200 KB
+    let mut sizes = Vec::new();
+    let out = credentials_with(&text, |chunk| {
+        sizes.push(chunk.len());
+        assert!(chunk.ends_with('\n'), "chunk split mid-line");
+        Some(chunk.to_string())
+    })
+    .unwrap();
+    assert_eq!(out, text);
+    assert!(sizes.len() > 1);
+    assert!(sizes.iter().all(|n| *n <= CREDENTIAL_CHUNK_BYTES));
+}
+
+#[test]
+fn credentials_split_a_single_huge_line_on_a_char_boundary() {
+    let text = "é".repeat(CREDENTIAL_CHUNK_BYTES); // 2 bytes per char, no newline
+    let out = credentials_with(&text, |chunk| Some(chunk.to_string())).unwrap();
+    assert_eq!(out, text);
+}
+
+#[test]
+fn credentials_fail_when_any_chunk_cannot_be_answered() {
+    let text = "line\n".repeat(CREDENTIAL_CHUNK_BYTES);
+    let mut calls = 0;
+    let out = credentials_with(&text, |chunk| {
+        calls += 1;
+        (calls < 2).then(|| chunk.to_string())
+    });
+    assert!(out.is_none());
+}
