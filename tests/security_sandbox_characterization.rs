@@ -219,8 +219,6 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
     // An explicit operator backend requires a sandbox even for a default agent...
     for backend in [
         SandboxBackend::Landlock,
-        SandboxBackend::Firejail,
-        SandboxBackend::Bubblewrap,
         SandboxBackend::Docker,
     ] {
         let label = format!("{backend:?}");

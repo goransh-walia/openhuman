@@ -13,7 +13,6 @@ fn sandbox_config_default() {
     let sb = SandboxConfig::default();
     assert!(sb.enabled.is_none());
     assert!(matches!(sb.backend, SandboxBackend::Auto));
-    assert!(sb.firejail_args.is_empty());
 }
 
 #[test]

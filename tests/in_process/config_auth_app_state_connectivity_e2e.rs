@@ -23,7 +23,7 @@ use tempfile::{tempdir, TempDir};
 use openhuman_core::config::schema::{
     AuditConfig, CapabilityProviderConfig, CapabilityProviderTrustState, DashboardConfig,
     DingTalkConfig, DiscordConfig, EventStreamConfig, IrcConfig, LarkConfig, MatrixConfig,
-    MemoryConfig, ModelHealthConfig, ProxyConfig, ProxyScope, QQConfig, ResourceLimitsConfig,
+    MemoryConfig, ModelHealthConfig, ProxyConfig, ProxyScope, QQConfig,
     SandboxConfig, SecurityConfig, SlackConfig, TelegramConfig, WebhookConfig, WhatsAppConfig,
 };
 use openhuman_core::config::{
@@ -400,14 +400,8 @@ fn config_schema_defaults_cover_dashboard_capability_memory_and_security_shapes(
 
     let sandbox = SandboxConfig::default();
     assert!(sandbox.enabled.is_none());
-    assert!(sandbox.firejail_args.is_empty());
     let security = SecurityConfig::default();
     assert!(security.audit.enabled);
-    let resources = ResourceLimitsConfig::default();
-    assert_eq!(
-        serde_json::to_value(resources).expect("resource limits to json"),
-        json!({})
-    );
     let audit = AuditConfig::default();
     assert_eq!(audit.log_path, "audit.log");
     assert_eq!(audit.max_size_mb, 100);

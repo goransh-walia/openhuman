@@ -71,3 +71,38 @@ fn rewritten_document_round_trips_through_save_shape() {
     let again = crate::config::schema::config_from_toml_str(&saved).unwrap();
     assert!(again.autonomy.enabled);
 }
+
+#[test]
+fn retired_sandbox_backends_become_auto_with_a_notice() {
+    for (legacy, from) in [("firejail", "firejail"), ("bubblewrap", "bubblewrap")] {
+        let text = format!("[sandbox]\nbackend = \"{legacy}\"\nfirejail_args = [\"--net=none\"]\n");
+        let mut d = doc(&text);
+        let notices = rewrite_document(&mut d);
+        assert!(notices.contains(&Notice::RetiredSandboxBackend { table: "sandbox", from }));
+        assert!(notices.contains(&Notice::DroppedFirejailArgs { table: "sandbox" }));
+        let config = crate::config::schema::config_from_toml_str(&text).unwrap();
+        assert!(matches!(
+            config.sandbox.backend,
+            crate::config::SandboxBackend::Auto
+        ));
+    }
+}
+
+#[test]
+fn retired_sandbox_backend_in_the_security_table_wins_as_auto() {
+    let text = "[sandbox]\nbackend = \"landlock\"\n[security.sandbox]\nbackend = \"bubblewrap\"\n";
+    let config = crate::config::schema::config_from_toml_str(text).unwrap();
+    assert!(matches!(
+        config.sandbox.backend,
+        crate::config::SandboxBackend::Auto
+    ));
+    let saved = toml::to_string(&config).unwrap();
+    assert!(!saved.contains("firejail"));
+    assert!(!saved.contains("bubblewrap"));
+}
+
+#[test]
+fn supported_sandbox_backends_are_left_alone() {
+    let mut d = doc("[sandbox]\nbackend = \"docker\"\n");
+    assert!(rewrite_document(&mut d).is_empty());
+}
