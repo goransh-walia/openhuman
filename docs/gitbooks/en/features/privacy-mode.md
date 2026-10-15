@@ -17,7 +17,7 @@ The `[privacy]` config block defines three modes:
 | --- | --- |
 | `standard` (default) | Normal operation. Managed cloud routing, BYO providers and local models are all available. |
 | `local_only` | No inference leaves the device. Every external chat provider is refused when it is built: the managed cloud, BYO cloud keys, even CLI delegates like Claude Code. Network tools, web search, integrations and cloud embeddings are refused at their egress points. Only local runtimes pass: Ollama, LM Studio, MLX and local OpenAI-compatible endpoints. Voice is the one exception, because no local speech-to-text engine exists. |
-| `sensitive` | The base for an upcoming PII-aware tier (detection, redaction, destination disclosure). Today it behaves like `standard`. |
+| `sensitive` | Content that leaves the device is checked first. An external transfer that carries your content is sent only if the TinySecurity module's redaction check finds nothing to scrub in it. Anything it would change, or anything that could not be checked, is refused. Local runtimes, metadata-only requests and backend control-plane round-trips are not affected. |
 
 ## Why enforcement matters
 
@@ -36,6 +36,14 @@ That makes the guarantee independent of prompts, agents, tools or upstream bugs.
 | Local runtimes (Ollama, LM Studio, MLX, local OpenAI-compatible) | Always permitted, nothing leaves the device               |
 
 One deliberate exemption: backend control-plane round-trips keep flowing. These are sign-in, session, team, billing, and integration connection management and catalog reads. Blocking them breaks the app for no privacy gain. They carry auth tokens, ids and routing metadata, never user content.
+
+## Sensitive mode
+
+`sensitive` is not a switch for a different set of destinations. It asks one question of each outgoing payload: would the module's `Redact` change it? If it would, the payload holds a credential or identifier and the call is refused. If the answer is unknown, because the module is missing, untrusted or too slow, the call is refused as well. A clean answer lets it through.
+
+The check runs where the payload is known: Composio tool arguments, managed-backend JSON bodies, cloud embedding inputs, media-generation prompts, the network tools (URL, headers and body) and the outgoing messages of a chat turn. Multipart uploads and reference media are not inspected, so they count as unchecked and are refused. A local model with an external fallback is not covered for the fallback route. A refusal tells you which service was blocked and that the privacy mode can be changed in Settings. It never includes the payload.
+
+Under `standard` and `local_only` nothing is sent to the module for this purpose.
 
 Voice is not covered. There is no local speech-to-text engine, so dictation and transcription still leave the device under `local_only`. They go to the hosted OpenHuman STT proxy, or to whichever third-party STT provider you configured. If that matters for your threat model, leave voice off.
 

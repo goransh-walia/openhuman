@@ -76,7 +76,9 @@ registers an immutable `CommandPolicy` derived from its configuration and asks
 that is missing, untrusted or slow refuses the command. The flow nodes' tier
 table, the approval engine, the Jev judge, sandbox planning, redaction and the
 keyring and pairing crypto paths still run through their existing host
-implementations. Tracker issue
+implementations. Text redaction and prompt scans (`Redact`, `ScanPrompt`,
+`ScanToolDefinition`) and the Sensitive-mode egress check are module calls too,
+and fail closed. Tracker issue
 #7328 lists the remaining phases; this page describes only what has landed.
 
 ## Resolution order
