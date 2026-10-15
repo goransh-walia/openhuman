@@ -211,3 +211,4 @@ fn arguments_without_an_armed_module_never_return_the_original() {
     let out = arguments(&args).to_string();
     assert!(!out.contains("abcdefghijklmnopqrstuvwxyz"), "{out}");
 }
+
