@@ -247,7 +247,7 @@ impl MemoryProvider for OpenHumanMemory {
             "{LOG_PREFIX} recall: entry"
         );
 
-        self.tier_gate_read(operation)?;
+        self.tier_gate_read(operation).await?;
         let filter = self.scope_filter(scope)?;
 
         let (answer, results): (Option<String>, Vec<Value>) = if operation == "search" {
@@ -310,7 +310,7 @@ impl MemoryProvider for OpenHumanMemory {
     /// Memory v2 keeps no flavoured profiles, so every slug is unknown.
     async fn flavour(&self, slug: &str) -> Result<Value> {
         tracing::debug!(target: "flows", flavour = slug, "{LOG_PREFIX} flavour: unsupported");
-        self.tier_gate_read("flavour")?;
+        self.tier_gate_read("flavour").await?;
         Err(EngineError::Capability(format!(
             "memory node: unknown flavour \"{slug}\" (this host's memory keeps no flavour profiles)"
         )))
@@ -323,7 +323,7 @@ impl MemoryProvider for OpenHumanMemory {
             has_query = query.is_some_and(|q| !q.trim().is_empty()),
             "{LOG_PREFIX} people: unsupported, empty listing"
         );
-        self.tier_gate_read("people")?;
+        self.tier_gate_read("people").await?;
         Ok(json!({ "people": [], "supported": false }))
     }
 
