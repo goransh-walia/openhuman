@@ -191,6 +191,8 @@ pub(crate) fn keyring_consent_response(
     KeyringConsentResponse2 { allowed }
 }
 
+pub(crate) fn register_keyring_backend(_config: &tinysecurity_bus::CryptoConfig2) {}
+
 /// The `Consent` callback body: the host consent policy applied to a request.
 pub(crate) fn handle_keyring_consent(request: &KeyringConsentRequest2) -> KeyringConsentResponse2 {
     keyring_consent_response(
