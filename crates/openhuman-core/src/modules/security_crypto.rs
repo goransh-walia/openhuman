@@ -7,7 +7,7 @@
 //! Messages never carry secret material: errors are fixed strings.
 
 use tinysecurity_bus::{
-    names, CallerContext, CryptoConfig2, KeyringAccess2, KeyringBackend2, KeyringConsentRequest2,
+    names, CallerContext, KeyringAccess2, KeyringBackend2, KeyringConsentRequest2,
     KeyringConsentResponse2, KeyringOperation2, KeyringRequest2, KeyringResponse2,
     PairingOperation2, PairingRequest2, PairingResponse2, PasswordOperation2, PasswordPayload2,
     PasswordRequest2, PasswordResponse2,
@@ -172,27 +172,6 @@ pub(crate) async fn pairing_call(
         .map_err(|_| "TinySecurity PairingControl2 failed".to_string())
 }
 
-/// The keyring backend the module was configured with, recorded by the host
-/// when it builds the module's `CryptoConfig2`. The consent callback is served
-/// before any configuration exists and the request does not name a backend, so
-/// the host answers from what it asked the module to use. Unset means no
-/// keyring was configured, and every consent request is refused.
-static KEYRING_BACKEND: parking_lot::RwLock<Option<KeyringBackend2>> =
-    parking_lot::RwLock::new(None);
-
-/// Records the keyring backend of `config` for the consent callback.
-pub(crate) fn register_keyring_backend(config: &CryptoConfig2) {
-    let backend = config
-        .keyring
-        .as_ref()
-        .map(|keyring| keyring.backend.clone());
-    log::debug!(
-        "{LOG_PREFIX} keyring backend registered kind={}",
-        backend.as_ref().map_or("none", backend_kind)
-    );
-    *KEYRING_BACKEND.write() = backend;
-}
-
 fn backend_kind(backend: &KeyringBackend2) -> &'static str {
     match backend {
         KeyringBackend2::Os => "os",
@@ -242,12 +221,23 @@ pub(crate) fn keyring_consent_response(
 }
 
 /// The `Consent` callback body: the requested backend and the recorded consent.
-pub(crate) fn handle_keyring_consent(request: &KeyringConsentRequest2) -> KeyringConsentResponse2 {
-    let backend = KEYRING_BACKEND.read().clone();
+///
+/// `backend` is the one the module's keyring was configured with, bound to the
+/// served callback object itself (never a process global), so each callback
+/// answers for exactly the module configuration it was installed for. `None`
+/// means no keyring is configured and every request is refused.
+pub(crate) fn handle_keyring_consent(
+    backend: Option<&KeyringBackend2>,
+    request: &KeyringConsentRequest2,
+) -> KeyringConsentResponse2 {
+    log::debug!(
+        "{LOG_PREFIX} keyring consent backend={}",
+        backend.map_or("none", backend_kind)
+    );
     keyring_consent_response(
         request,
         consent_decision(
-            backend.as_ref(),
+            backend,
             crate::security::keyring_consent::policy::recorded_consent_decision,
         ),
     )

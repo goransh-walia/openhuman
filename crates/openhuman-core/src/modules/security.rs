@@ -39,43 +39,20 @@ pub fn module_config(config: &Config) -> ModuleConfig {
     }
 }
 
-/// Production confidential crypto surface. Password crypt is on. The keyring
-/// is the module's encrypted-file store in a module-owned directory under the
-/// workspace, and every operation on it passes the host consent callback, which
-/// answers from the user's recorded consent (`security_crypto`). Pairing stays
-/// unset (denied): the host has no pairing account to register. The host
-/// `secret_storage` still owns the stores production callers use today, so
-/// nothing reads this keyring yet.
-pub(crate) fn production_crypto_config(config: &Config) -> tinysecurity_bus::CryptoConfig2 {
-    let crypto = tinysecurity_bus::CryptoConfig2 {
+/// Production confidential crypto surface. Password crypt is on. The keyring and
+/// pairing stay unset, so the module denies every keyring and pairing call and
+/// creates no store: no production caller reads a module keyring yet (the host
+/// `secret_storage` owns the stores callers use, in a different format), and an
+/// unread store would be surface without a consumer. The consent callback is
+/// bound to the same absence (`runtime::install_callbacks`). Enabling the
+/// keyring belongs with the caller migration that reads it.
+pub(crate) fn production_crypto_config(_config: &Config) -> tinysecurity_bus::CryptoConfig2 {
+    tinysecurity_bus::CryptoConfig2 {
         max_payload_bytes: tinysecurity_bus::MAX_CRYPTO_PAYLOAD_BYTES,
         operations_per_minute: 600,
-        keyring: production_keyring_config(config),
+        keyring: None,
         pairing: None,
-    };
-    crypto::register_keyring_backend(&crypto);
-    crypto
-}
-
-/// Keyring settings, or `None` (every keyring call denied) when the workspace
-/// has no absolute directory the module could own.
-fn production_keyring_config(config: &Config) -> Option<tinysecurity_bus::KeyringConfig2> {
-    let directory = config.workspace_dir.join("security-keyring");
-    if !directory.is_absolute() {
-        log::warn!("[security] keyring disabled: workspace directory is not absolute");
-        return None;
     }
-    if let Err(error) = std::fs::create_dir_all(&directory) {
-        log::warn!("[security] keyring disabled: cannot create its directory: {error}");
-        return None;
-    }
-    Some(tinysecurity_bus::KeyringConfig2 {
-        service: "openhuman".into(),
-        backend: tinysecurity_bus::KeyringBackend2::EncryptedFile {
-            directory: directory.to_string_lossy().into_owned(),
-        },
-        consent_timeout_ms: 10_000,
-    })
 }
 
 /// Caller identity supplied exclusively by trusted host dispatch. This wrapper

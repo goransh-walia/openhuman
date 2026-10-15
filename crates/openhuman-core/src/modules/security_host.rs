@@ -11,12 +11,19 @@ use serde_json::Value;
 use tinybus::{
     BusName, CallContext, Connection, Interface, InterfaceName, MemberName, ObjectPath, Result,
 };
-use tinysecurity_bus::{callback_names2, names, KeyringConsentRequest2, KeyringConsentResponse2};
+use tinysecurity_bus::{
+    callback_names2, names, KeyringBackend2,
+    KeyringConsentRequest2, KeyringConsentResponse2,
+};
 
 const LOG_PREFIX: &str = "[security-host]";
 
+/// Consent callback bound to the keyring backend of the module configuration it
+/// serves. `None` (no keyring configured) refuses every request.
 #[derive(Clone)]
-struct KeyringConsent;
+struct KeyringConsent {
+    backend: Option<KeyringBackend2>,
+}
 
 #[tinybus::interface(name = "ai.tinyhumans.tinysecurity.KeyringConsent2")]
 impl KeyringConsent {
@@ -26,7 +33,10 @@ impl KeyringConsent {
         &self,
         request: KeyringConsentRequest2,
     ) -> tinybus::Result<KeyringConsentResponse2> {
-        Ok(super::security::crypto::handle_keyring_consent(&request))
+        Ok(super::security::crypto::handle_keyring_consent(
+            self.backend.as_ref(),
+            &request,
+        ))
     }
 }
 
@@ -69,13 +79,18 @@ impl<T: Interface> Interface for ModuleOnly<T> {
     }
 }
 
-/// Serves the security callbacks before the module can load.
-pub(super) async fn install(connection: &Connection) -> Result<()> {
+/// Serves the security callbacks before the module can load. `keyring` is the
+/// backend the module's `CryptoConfig2` configures, which the consent callback
+/// answers for.
+pub(super) async fn install(
+    connection: &Connection,
+    keyring: Option<KeyringBackend2>,
+) -> Result<()> {
     connection
         .serve_at(
             ObjectPath::new(callback_names2::OBJECT_PATH)?,
             ModuleOnly {
-                inner: KeyringConsent,
+                inner: KeyringConsent { backend: keyring },
                 connection: connection.clone(),
             },
         )
