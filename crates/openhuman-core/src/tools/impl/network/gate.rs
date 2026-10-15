@@ -7,8 +7,10 @@
 
 use tinytools_std::network::NetGate;
 
+use crate::config::PrivacyMode;
+use crate::security::egress::assess::{assess_payload, Assessment};
 use crate::security::egress::{
-    emit_external_transfer, local_only_tool_block, DataKind, EgressDescriptor,
+    emit_external_transfer, local_only_tool_block, DataKind, EgressDescriptor, IdentificationRisk,
 };
 use crate::security::{GateDecision, SecurityPolicy};
 use tinybox_bus::CommandClass;
@@ -45,16 +47,38 @@ pub(super) fn network_egress_descriptor(
 pub(crate) struct RoutedGate {
     policy: std::sync::Arc<SecurityPolicy>,
     chat: Option<crate::security::approval::ApprovalChatContext>,
+    /// What the call's own arguments (URL, headers, body) were assessed to
+    /// carry, when the live privacy mode needs the answer (Sensitive).
+    payload: Option<Assessment>,
 }
 
 impl RoutedGate {
+    /// A gate for the call with arguments `args`. Under Sensitive the arguments
+    /// are the payload that leaves the device, so the module assesses them once
+    /// here and every descriptor this gate builds carries the answer; under any
+    /// other mode nothing is sent to the module.
     pub(crate) fn new(
         policy: std::sync::Arc<SecurityPolicy>,
         chat: Option<&crate::security::approval::ApprovalChatContext>,
+        args: &serde_json::Value,
     ) -> Self {
+        let payload = (!args.is_null()
+            && crate::security::live_policy::current_privacy_mode() == PrivacyMode::Sensitive)
+            .then(|| assess_payload(&args.to_string()));
         Self {
             policy,
             chat: chat.cloned(),
+            payload,
+        }
+    }
+
+    /// `descriptor` with this call's payload assessment, if there is one.
+    fn assessed(&self, descriptor: EgressDescriptor) -> EgressDescriptor {
+        match &self.payload {
+            Some(a) if a.level != IdentificationRisk::Unknown => {
+                descriptor.with_risk(a.level, a.categories.clone())
+            }
+            _ => descriptor,
         }
     }
 }
@@ -77,13 +101,13 @@ impl NetGate for RoutedGate {
     }
 
     fn local_only_block(&self, host: &str) -> Option<String> {
-        NetGate::local_only_block(&*self.policy, host)
+        local_only_tool_block(&self.assessed(EgressDescriptor::network_fetch(host)))
     }
 
     fn disclose(&self, host: &str, has_body: bool, has_headers: bool) {
         emit_external_transfer(
             self.chat.as_ref(),
-            network_egress_descriptor(host, has_body, has_headers),
+            self.assessed(network_egress_descriptor(host, has_body, has_headers)),
         );
     }
 
