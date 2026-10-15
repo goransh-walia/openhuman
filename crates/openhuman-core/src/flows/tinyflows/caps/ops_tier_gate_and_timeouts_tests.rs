@@ -585,3 +585,48 @@ fn response_fields_from_schema_empty_for_none_or_non_object() {
     assert!(response_fields_from_schema(Some(&json!("not an object"))).is_empty());
     assert!(response_fields_from_schema(Some(&json!({}))).is_empty());
 }
+
+/// The flow-node tier gate on the released module, with no gateway stub:
+/// read-only blocks an acting node with the policy marker, supervised parks it
+/// for approval, full runs a write and still asks for the network.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn node_tier_gate_is_answered_by_the_released_module() {
+    use crate::modules::security::released_support::Released;
+    use crate::security::AutonomyLevel;
+
+    let released = Released::new();
+    let at = |level| released.policy(level, 100);
+
+    let err = enforce_node_tier_gate(&at(AutonomyLevel::ReadOnly), CommandClass::Network, "http_request")
+        .await
+        .expect_err("read-only blocks the network");
+    match err {
+        EngineError::Capability(message) => assert!(message.contains(POLICY_BLOCKED_MARKER)),
+        other => panic!("expected a capability error, got {other:?}"),
+    }
+    assert_eq!(
+        enforce_node_tier_gate(&at(AutonomyLevel::ReadOnly), CommandClass::Read, "memory")
+            .await
+            .unwrap(),
+        GateDecision::Allow
+    );
+    assert_eq!(
+        enforce_node_tier_gate(&at(AutonomyLevel::Supervised), CommandClass::Write, "code")
+            .await
+            .unwrap(),
+        GateDecision::Prompt
+    );
+    assert_eq!(
+        enforce_node_tier_gate(&at(AutonomyLevel::Full), CommandClass::Write, "code")
+            .await
+            .unwrap(),
+        GateDecision::Allow
+    );
+    assert_eq!(
+        enforce_node_tier_gate(&at(AutonomyLevel::Full), CommandClass::Network, "http_request")
+            .await
+            .unwrap(),
+        GateDecision::Prompt
+    );
+}
