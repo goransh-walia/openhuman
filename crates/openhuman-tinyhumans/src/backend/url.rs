@@ -44,7 +44,7 @@ pub use openhuman_embed::__host::config::app_env::{
     app_env_from_env, is_staging_app_env, APP_ENV_VAR, VITE_APP_ENV_VAR,
 };
 pub use openhuman_embed::__host::util::url::{
-    host_is_local, join_url, normalize_api_base_url, normalize_backend_api_base_url,
+    is_private_or_local_host, join_url, normalize_api_base_url, normalize_backend_api_base_url,
 };
 
 // ─── Public constants ────────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ pub fn looks_like_local_ai_endpoint(url: &str) -> bool {
     }
 
     // ── Signal 2: loopback / private host + secondary LLM signal ───────────
-    if !host_is_local(&parsed) {
+    if !parsed.host_str().is_some_and(is_private_or_local_host) {
         return false;
     }
 

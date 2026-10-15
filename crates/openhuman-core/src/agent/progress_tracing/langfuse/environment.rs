@@ -56,12 +56,14 @@ const DEPLOYMENT_DOMAIN: &str = "tinyhumans.ai";
 ///   classified as external, so a working development setup would have
 ///   silently stopped exporting the moment the gate landed.
 ///
-/// Host classification is delegated to [`crate::util::url::host_is_local`],
-/// which already parses the URL and handles IPv4 loopback/unspecified/private,
-/// IPv6 loopback/unspecified, and `localhost` / `*.localhost`. Keeping one
-/// definition matters more than the few lines it saves: two local-host
-/// predicates that disagree is how a gate lets through exactly the case the
-/// other one blocks.
+/// Host classification is delegated to the network tools' shared
+/// `tinytools_std::url_guard::is_private_or_local_host`, which covers loopback,
+/// private, link-local (cloud metadata), CGNAT and IPv6 private ranges plus
+/// `localhost` / `*.localhost` / `*.local`. Keeping one definition matters more
+/// than the few lines it saves: two local-host predicates that disagree is how a
+/// gate lets through exactly the case the other one blocks. The check is
+/// lexical (it labels an environment); every actual push still passes the
+/// module egress guard.
 ///
 /// An unparseable URL is external — the fail-closed default. `ingestion_url`
 /// can return a non-URL placeholder when no backend host resolves, and the
@@ -71,7 +73,10 @@ pub(crate) fn environment_for_base(base: &str) -> &'static str {
     let Ok(parsed) = url::Url::parse(base) else {
         return "external";
     };
-    if crate::util::url::host_is_local(&parsed) {
+    if parsed
+        .host_str()
+        .is_some_and(tinytools_std::url_guard::is_private_or_local_host)
+    {
         return "development";
     }
     if parsed.scheme() != "https" {

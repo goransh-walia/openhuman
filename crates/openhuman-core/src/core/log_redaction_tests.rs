@@ -172,3 +172,36 @@ fn oversized_input_is_suppressed_without_calling_the_module() {
     let big = "a".repeat(FLOOR_MAX_INPUT_BYTES + 1);
     assert_eq!(scrub_with(&big, Some(never)), SUPPRESSED);
 }
+
+/// The shared URL corpus: the floor is the one URL redactor for log fields that
+/// hold a whole URL (the former util, storage and migration helpers), so the
+/// credentials and query of every corpus input must be gone from its output.
+#[test]
+fn shared_url_corpus_loses_userinfo_and_query_but_keeps_plain_urls() {
+    let corpus: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/security-redaction-corpus.json"
+    )))
+    .unwrap();
+    for case in corpus["urls"].as_array().unwrap() {
+        let input = case["input"].as_str().unwrap();
+        let out = scrub_secrets(input);
+        for needle in ["alice", "hunter2", "key=secret", "private"] {
+            assert!(
+                !out.contains(needle),
+                "case {} leaked {needle}: {out}",
+                case["case"]
+            );
+        }
+        if !input.contains('@') && !input.contains('?') {
+            assert_eq!(out, input, "case {}", case["case"]);
+        }
+    }
+}
+
+#[test]
+fn mongodb_style_storage_urls_lose_password_and_option_tokens() {
+    let out = scrub_secrets("mongodb://app:pw@db/x?authMechanismProperties=AWS_SESSION_TOKEN%3Asecret");
+    assert!(!out.contains("pw@") && !out.contains("AWS_SESSION_TOKEN"), "{out}");
+    assert_eq!(scrub_secrets("sqlite:/tmp/x"), "sqlite:/tmp/x");
+}

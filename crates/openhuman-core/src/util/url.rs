@@ -1,5 +1,5 @@
 //! URL helpers shared across domains: base-URL normalisation, safe path
-//! joining and local-host classification. Nothing here knows about any
+//! joining. Nothing here knows about any
 //! particular backend — hosted-backend URL resolution lives with the host that
 //! installs the backend transport (`openhuman-tinyhumans`).
 
@@ -96,28 +96,6 @@ fn fallback_concat(base: &str, path: &str) -> String {
         format!("{base}{path}")
     } else {
         format!("{base}/{path}")
-    }
-}
-
-/// Returns `true` when the parsed URL's host is loopback, unspecified
-/// (`0.0.0.0` / `[::]`), a private RFC 1918 IPv4 range, or `localhost`.
-///
-/// Using typed-host matching (via `url::Host` variants) rather than
-/// `host_str()` string comparison ensures that IPv4-mapped IPv6 addresses
-/// (`::ffff:127.0.0.1`), the bare IPv6 loopback (`::1`), and all three
-/// IPv4 loopback forms classify correctly.
-#[inline]
-pub fn host_is_local(parsed: &::url::Url) -> bool {
-    match parsed.host() {
-        Some(::url::Host::Ipv4(addr)) => {
-            addr.is_loopback() || addr.is_unspecified() || addr.is_private()
-        }
-        Some(::url::Host::Ipv6(addr)) => addr.is_loopback() || addr.is_unspecified(),
-        Some(::url::Host::Domain(name)) => {
-            let h = name.to_ascii_lowercase();
-            h == "localhost" || h.ends_with(".localhost")
-        }
-        None => false,
     }
 }
 

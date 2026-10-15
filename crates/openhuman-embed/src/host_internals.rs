@@ -255,8 +255,9 @@ pub mod util {
     }
     pub mod url {
         pub use openhuman_core::util::url::{
-            host_is_local, join_url, normalize_api_base_url, normalize_backend_api_base_url,
+            join_url, normalize_api_base_url, normalize_backend_api_base_url,
         };
+        pub use tinytools_std::url_guard::is_private_or_local_host;
     }
 }
 
