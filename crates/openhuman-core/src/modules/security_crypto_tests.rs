@@ -232,11 +232,14 @@ fn fx_dir() -> tempfile::TempDir {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn keyring_round_trip_through_the_served_consent_callback() {
-    let fx =
-        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    use crate::security::keyring_consent::policy;
+    let config = crypto_config(fx_dir().path());
+    let fx = super::super::native_tests::native_fixture_with(Some(config.clone())).await;
+    register_keyring_backend(&config);
     crate::modules::security_host::install(&fx.client)
         .await
         .unwrap();
+    policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
     let name = "user:token-7328";
 
     keyring_set(
@@ -262,5 +265,34 @@ async fn keyring_round_trip_through_the_served_consent_callback() {
             .await
             .unwrap(),
         None
+    );
+}
+
+/// A declined host consent never reaches the backend: the store is refused
+/// end to end through the served callback, and nothing was written. The host
+/// OS keyring probing available must not turn a declined answer into consent
+/// for the module's local encrypted-file store.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn declined_keyring_consent_refuses_the_store_through_the_module() {
+    use crate::security::keyring_consent::policy;
+    let config = crypto_config(fx_dir().path());
+    let fx = super::super::native_tests::native_fixture_with(Some(config.clone())).await;
+    register_keyring_backend(&config);
+    crate::modules::security_host::install(&fx.client)
+        .await
+        .unwrap();
+    let name = "user:declined-7328";
+
+    policy::apply_consent(&policy::build_consent_preference("declined"));
+    let refused = keyring_set(&fx.proxy, caller(), "store a token", name, b"v".to_vec()).await;
+    policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
+    let written = keyring_get(&fx.proxy, caller(), "read a token", name).await;
+    policy::initialize(None);
+    assert!(refused.is_err(), "declined consent must refuse the store");
+    assert_eq!(
+        written.unwrap(),
+        None,
+        "a refused store must not have reached the backend"
     );
 }
