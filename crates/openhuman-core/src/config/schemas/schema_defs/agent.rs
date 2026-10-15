@@ -179,7 +179,7 @@ pub(super) fn lookup(function: &str) -> Option<ControllerSchema> {
             function: "update_sandbox_settings",
             description: "Update sandbox execution backend settings: backend selection, Docker image, memory/CPU limits, and env passthrough. Applies to new agent sessions.",
             inputs: vec![
-                optional_string("backend", "Sandbox backend: auto | landlock | firejail | bubblewrap | docker | none."),
+                optional_string("backend", "Sandbox backend: auto | landlock | docker | none."),
                 optional_bool("enabled", "Enable or disable sandbox execution."),
                 optional_string("docker_image", "Docker image for sandboxed execution (e.g. alpine:3.20)."),
                 FieldSchema {
