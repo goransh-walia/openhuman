@@ -58,19 +58,29 @@ pub fn check_secret_access() -> PolicyDecision {
     if crate::security::secret_storage::is_available() {
         return PolicyDecision::Proceed;
     }
+    recorded_consent_decision()
+}
 
+/// The decision the user's recorded consent gives, ignoring whether the host
+/// OS keyring is available.
+///
+/// For a store that is never the OS keyring (the module's encrypted-file
+/// backend) the OS probe says nothing about whether the user agreed to local
+/// encrypted storage, so only the recorded answer counts. No answer publishes
+/// the consent-required event once and refuses.
+pub fn recorded_consent_decision() -> PolicyDecision {
     let cached = CONSENT_CACHE.read().clone();
     match cached {
         Some(ref pref) if pref.storage_mode == "local_encrypted" => {
-            debug!("{LOG_PREFIX} check_secret_access: consent=local_encrypted, proceeding");
+            debug!("{LOG_PREFIX} recorded_consent_decision: consent=local_encrypted, proceeding");
             PolicyDecision::Proceed
         }
         Some(ref pref) if pref.storage_mode == "declined" => {
-            debug!("{LOG_PREFIX} check_secret_access: consent=declined");
+            debug!("{LOG_PREFIX} recorded_consent_decision: consent=declined");
             PolicyDecision::Declined
         }
         _ => {
-            debug!("{LOG_PREFIX} check_secret_access: keyring unavailable, no consent recorded");
+            debug!("{LOG_PREFIX} recorded_consent_decision: no consent recorded");
             if !CONSENT_EVENT_PUBLISHED.swap(true, Ordering::SeqCst) {
                 info!("{LOG_PREFIX} publishing KeyringConsentRequired event");
                 crate::core::bus::BUS

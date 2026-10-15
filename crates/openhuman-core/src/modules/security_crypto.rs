@@ -7,7 +7,7 @@
 //! Messages never carry secret material: errors are fixed strings.
 
 use tinysecurity_bus::{
-    names, CallerContext, KeyringAccess2, KeyringConsentRequest2, KeyringConsentResponse2,
+    names, CallerContext, CryptoConfig2, KeyringAccess2, KeyringBackend2, KeyringConsentRequest2, KeyringConsentResponse2,
     KeyringOperation2, KeyringRequest2, KeyringResponse2, PairingOperation2, PairingRequest2,
     PairingResponse2, PasswordOperation2, PasswordPayload2, PasswordRequest2, PasswordResponse2,
 };
@@ -171,10 +171,56 @@ pub(crate) async fn pairing_call(
         .map_err(|_| "TinySecurity PairingControl2 failed".to_string())
 }
 
-/// Decides one `KeyringConsent2.Consent` request from the host's keychain
-/// consent state. Consent UX stays host-side: when the OS keyring is
-/// unavailable and no answer was recorded, the existing consent-required event
-/// is published and this request is denied.
+/// The keyring backend the module was configured with, recorded by the host
+/// when it builds the module's `CryptoConfig2`. The consent callback is served
+/// before any configuration exists and the request does not name a backend, so
+/// the host answers from what it asked the module to use. Unset means no
+/// keyring was configured, and every consent request is refused.
+static KEYRING_BACKEND: parking_lot::RwLock<Option<KeyringBackend2>> =
+    parking_lot::RwLock::new(None);
+
+/// Records the keyring backend of `config` for the consent callback.
+pub(crate) fn register_keyring_backend(config: &CryptoConfig2) {
+    let backend = config.keyring.as_ref().map(|keyring| keyring.backend.clone());
+    log::debug!(
+        "{LOG_PREFIX} keyring backend registered kind={}",
+        backend.as_ref().map_or("none", backend_kind)
+    );
+    *KEYRING_BACKEND.write() = backend;
+}
+
+fn backend_kind(backend: &KeyringBackend2) -> &'static str {
+    match backend {
+        KeyringBackend2::Os => "os",
+        KeyringBackend2::LinuxKernel => "linux_kernel",
+        KeyringBackend2::SecretService => "secret_service",
+        KeyringBackend2::EncryptedFile { .. } => "encrypted_file",
+    }
+}
+
+/// What consent a request needs, from the backend it will touch.
+///
+/// A platform credential store is the user's own keychain: the platform guards
+/// it and the user chose it by installing the product. The encrypted-file store
+/// is the local fallback the user must explicitly agree to, so only the
+/// recorded answer counts, never whether the OS keyring happens to be
+/// available. No configured backend refuses.
+pub(crate) fn consent_decision(
+    backend: Option<&KeyringBackend2>,
+    recorded: impl FnOnce() -> PolicyDecision,
+) -> PolicyDecision {
+    match backend {
+        None => PolicyDecision::Declined,
+        Some(KeyringBackend2::EncryptedFile { .. }) => recorded(),
+        Some(
+            KeyringBackend2::Os | KeyringBackend2::LinuxKernel | KeyringBackend2::SecretService,
+        ) => PolicyDecision::Proceed,
+    }
+}
+
+/// Decides one `KeyringConsent2.Consent` request. Consent UX stays host-side:
+/// when the encrypted-file store is requested and no answer was recorded, the
+/// existing consent-required event is published and this request is denied.
 pub(crate) fn keyring_consent_response(
     request: &KeyringConsentRequest2,
     decision: PolicyDecision,
@@ -191,13 +237,15 @@ pub(crate) fn keyring_consent_response(
     KeyringConsentResponse2 { allowed }
 }
 
-pub(crate) fn register_keyring_backend(_config: &tinysecurity_bus::CryptoConfig2) {}
-
-/// The `Consent` callback body: the host consent policy applied to a request.
+/// The `Consent` callback body: the requested backend and the recorded consent.
 pub(crate) fn handle_keyring_consent(request: &KeyringConsentRequest2) -> KeyringConsentResponse2 {
+    let backend = KEYRING_BACKEND.read().clone();
     keyring_consent_response(
         request,
-        crate::security::keyring_consent::policy::check_secret_access(),
+        consent_decision(
+            backend.as_ref(),
+            crate::security::keyring_consent::policy::recorded_consent_decision,
+        ),
     )
 }
 
