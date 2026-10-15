@@ -60,7 +60,7 @@ pub use chat_model::{
     create_chat_model_with_model_id, probe_inference_readiness,
 };
 pub(crate) use credentials::openai_bearer_is_oauth;
-pub use credentials::{auth_key_for_slug, lookup_key_for_slug, redact_endpoint};
+pub use credentials::{auth_key_for_slug, lookup_key_for_slug};
 pub(crate) use discovery::model_limits_request;
 pub(crate) use local_runtime::create_local_chat_model_from_string;
 pub(crate) use managed_backend::make_openhuman_backend_model;

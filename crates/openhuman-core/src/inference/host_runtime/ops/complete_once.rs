@@ -41,7 +41,7 @@ impl std::fmt::Debug for CompletionEndpoint {
         f.debug_struct("CompletionEndpoint")
             .field(
                 "base_url",
-                &crate::inference::provider::factory::redact_endpoint(&self.base_url),
+                &crate::security::endpoint_redact::endpoint_origin(&self.base_url),
             )
             .field("api_key", &"<redacted>")
             .field("headers", &self.headers.len())

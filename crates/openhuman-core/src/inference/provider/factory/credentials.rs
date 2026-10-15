@@ -159,19 +159,3 @@ pub fn lookup_key_for_slug(slug: &str, config: &Config) -> anyhow::Result<String
     );
     Ok(String::new())
 }
-
-/// Return a safe-to-log representation of a URL endpoint: `scheme://host` only.
-pub fn redact_endpoint(url: &str) -> String {
-    let trimmed = url.trim();
-    if let Some(rest) = trimmed.split_once("://") {
-        let scheme = rest.0;
-        let authority = rest.1.split('/').next().unwrap_or("");
-        if authority.contains('@') {
-            return "<redacted>".to_string();
-        }
-        let host = authority;
-        let host_no_query = host.split('?').next().unwrap_or(host);
-        return format!("{}://{}", scheme, host_no_query);
-    }
-    "<endpoint>".to_string()
-}

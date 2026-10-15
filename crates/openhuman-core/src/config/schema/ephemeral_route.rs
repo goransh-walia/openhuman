@@ -70,7 +70,7 @@ impl std::fmt::Debug for EphemeralRoute {
         f.debug_struct("EphemeralRoute")
             .field(
                 "endpoint",
-                &crate::inference::provider::factory::redact_endpoint(&self.endpoint),
+                &crate::security::endpoint_redact::endpoint_origin(&self.endpoint),
             )
             .field("api_key", &"[redacted]")
             .field("header_count", &self.headers.len())
@@ -124,7 +124,7 @@ pub fn apply(config: &mut crate::config::Config, route: EphemeralRoute) {
     let Some(model) = model else {
         log::warn!(
             "[config][ephemeral-route] ignoring route to {} — no model resolved for this call",
-            crate::inference::provider::factory::redact_endpoint(&route.endpoint)
+            crate::security::endpoint_redact::endpoint_origin(&route.endpoint)
         );
         return;
     };
@@ -155,7 +155,7 @@ pub fn apply(config: &mut crate::config::Config, route: EphemeralRoute) {
 
     log::info!(
         "[config][ephemeral-route] this call routed to {} model={}",
-        crate::inference::provider::factory::redact_endpoint(&route.endpoint),
+        crate::security::endpoint_redact::endpoint_origin(&route.endpoint),
         model
     );
 
