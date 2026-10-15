@@ -302,6 +302,15 @@ fn redact_through_bridge(
     )
 }
 
+/// Whether the module-backed synchronous bridge has been armed: the module
+/// answered once and a process-wide configuration is bound to it. Before that
+/// (no module in this deployment, a slim or library host, the first moments of
+/// boot) callers fall back to the documented floor; after it, a failed answer
+/// is a refusal, never a quiet downgrade.
+pub(crate) fn bridge_armed() -> bool {
+    LOG_BRIDGE.get().is_some()
+}
+
 /// Redact `text` on `mode` for a log line or diagnostic written by a
 /// synchronous caller that holds no [`Config`] (endpoint and identifier
 /// formatting in `tracing` fields).

@@ -53,8 +53,7 @@ pub fn arguments(args: &serde_json::Value) -> serde_json::Value {
     arguments_from(module_arguments(args), args)
 }
 
-/// Credentials removed from a tool result, or `None` when the module cannot
-/// answer (not armed, faulted, timed out, a chunk refused). Never the original.
+/// Credentials removed from a tool result, or `None` when it must be withheld.
 ///
 /// This is the module's `CredentialsOnly` mode: provider token shapes, JWTs,
 /// PEM keys, cookie headers and labelled values that look like credentials are
@@ -66,12 +65,24 @@ pub fn arguments(args: &serde_json::Value) -> serde_json::Value {
 /// whole; real credentials are far shorter than a chunk and ordinary text has
 /// line breaks.
 ///
-/// Without the `security-module` build there is no module; the harness's own
-/// scrubber answers instead, since a build without the module cannot serve any
-/// other redactor either.
+/// Fail closed once the module is serving: when it was armed and cannot answer
+/// (faulted, timed out, a chunk refused) the result is `None` and the caller
+/// withholds it. Where no module is serving at all (a build without
+/// `security-module`, a host that never loaded it, a unit test) there is no
+/// module to fail, and the harness's own credential scrub answers instead: the
+/// documented floor for tool results, as `core::log_redaction` is for logs.
+/// Neither path ever returns the original text.
 #[must_use]
 pub fn credentials(text: &str) -> Option<String> {
-    credentials_with(text, module_credentials)
+    credentials_with(text, |chunk| {
+        module_credentials(chunk).unwrap_or_else(|| Some(floor_credentials(chunk)))
+    })
+}
+
+/// The floor for tool results where no module serves: the shared credential
+/// scrubber the harness itself uses.
+fn floor_credentials(chunk: &str) -> String {
+    tinyinference_core::sanitize::scrub_credentials(chunk)
 }
 
 /// Largest slice handed to the module in one `CredentialsOnly` call.
@@ -106,21 +117,31 @@ pub(crate) fn credentials_with(
     Some(out)
 }
 
+/// `Some(answer)` when a module is serving (the answer itself may be `None`:
+/// it failed, so the result is withheld), `None` when no module serves and the
+/// floor applies.
 #[cfg(feature = "security-module")]
-fn module_credentials(chunk: &str) -> Option<String> {
-    use crate::modules::security::text::{try_redact, RedactMode};
-    match try_redact(RedactMode::CredentialsOnly, chunk, Some(TEXT_TIMEOUT)) {
-        Ok(redacted) => Some(redacted),
-        Err(error) => {
-            log::debug!("[security][redact] module credential pass unavailable, withheld: {error}");
-            None
-        }
+fn module_credentials(chunk: &str) -> Option<Option<String>> {
+    use crate::modules::security::text::{bridge_armed, try_redact, RedactMode};
+    if !bridge_armed() {
+        return None;
     }
+    Some(
+        match try_redact(RedactMode::CredentialsOnly, chunk, Some(TEXT_TIMEOUT)) {
+            Ok(redacted) => Some(redacted),
+            Err(error) => {
+                log::debug!(
+                    "[security][redact] module credential pass unavailable, withheld: {error}"
+                );
+                None
+            }
+        },
+    )
 }
 
 #[cfg(not(feature = "security-module"))]
-fn module_credentials(chunk: &str) -> Option<String> {
-    Some(tinyinference_core::sanitize::scrub_credentials(chunk))
+fn module_credentials(_chunk: &str) -> Option<Option<String>> {
+    None
 }
 
 /// The module's `answer` as JSON, or the shape-only marker for `args`.
