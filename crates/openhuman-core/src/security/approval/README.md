@@ -94,7 +94,7 @@ stored as JSON strings. With no backend configured (the desktop default)
 - `crate::core::Outcome`: RPC return contract.
 - `crate::config::Config`: workspace dir (DB path) plus the boot-time `autonomy.auto_approve` snapshot; `config::ops::add_auto_approve_tool` persists "Always allow".
 - `crate::security`: `live_policy::current()` for the live "Always allow" list and `POLICY_DENIED_MARKER` for deny reasons.
-- `tinymemory_core::store::safety::sanitize_text`: scrub secrets out of stored execution-error strings.
+- `security::redact::text`: scrub secrets out of stored execution-error strings.
 
 ## Used by
 

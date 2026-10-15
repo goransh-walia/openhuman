@@ -15,7 +15,7 @@
 //!   [`tinyagents_harness::artifacts::render_artifact_pointer`], [`READ_TOOL`], are host vocabulary and are
 //!   passed in.
 //! * **[`policy`] — the two host policies.** `SecurityPolicy`'s workspace
-//!   containment and `sanitize_text`'s credential scrubbing. The crate asks;
+//!   containment and the `security::redact::text` pass's credential scrubbing. The crate asks;
 //!   these answer.
 //!
 //! ## The convention

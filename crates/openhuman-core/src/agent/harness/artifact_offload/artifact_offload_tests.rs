@@ -173,7 +173,7 @@ async fn a_wired_writer_redacts_before_the_bytes_reach_disk() {
         .await
         .expect("read back")
         .expect("stored");
-    // Whether this particular shape trips `sanitize_text` is that function's
+    // Whether this particular shape trips the `security::redact::text` pass is that function's
     // business; what this pins is that the two agree. A redactor reported as
     // having fired must have actually rewritten the stored bytes.
     assert_eq!(

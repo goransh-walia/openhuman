@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tinyagents_harness::artifacts::tool_results::apply_per_result_persistence;
 use tinytools::Tool;
 
-/// End to end through OpenHuman's wiring: the real `sanitize_text` redacts the
+/// End to end through OpenHuman's wiring: the real the `security::redact::text` pass redacts the
 /// stored body and the preview, the body lands on the blob store (nothing in
 /// the project the agent is editing), and the real `file_read` opens it through
 /// the materialised file under the strictest policy shape (enabled,
