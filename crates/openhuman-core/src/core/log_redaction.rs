@@ -146,6 +146,32 @@ fn floor_scrub(input: &str) -> String {
     result
 }
 
+/// The floor applied to a body of any size: split at line boundaries into
+/// pieces of at most half [`FLOOR_MAX_INPUT_BYTES`] so a large artifact or
+/// transcript is scrubbed rather than suppressed whole. A single line over the
+/// piece size is still suppressed ([`SUPPRESSED`] for that line only).
+pub(crate) fn floor_scrub_text(input: &str) -> String {
+    const PIECE: usize = FLOOR_MAX_INPUT_BYTES / 2;
+    if input.len() <= PIECE {
+        return floor_scrub(input);
+    }
+    let mut out = String::with_capacity(input.len());
+    let mut piece = String::new();
+    for line in input.split_inclusive('\n') {
+        if line.len() > PIECE {
+            out.push_str(&floor_scrub(&std::mem::take(&mut piece)));
+            out.push_str(SUPPRESSED);
+            continue;
+        }
+        if piece.len() + line.len() > PIECE {
+            out.push_str(&floor_scrub(&std::mem::take(&mut piece)));
+        }
+        piece.push_str(line);
+    }
+    out.push_str(&floor_scrub(&piece));
+    out
+}
+
 #[cfg(test)]
 #[path = "log_redaction_tests.rs"]
 mod tests;

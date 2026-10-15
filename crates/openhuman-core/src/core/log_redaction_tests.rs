@@ -1,4 +1,4 @@
-use super::{scrub_secrets, scrub_with, FLOOR_MAX_INPUT_BYTES, SUPPRESSED};
+use super::{floor_scrub_text, scrub_secrets, scrub_with, FLOOR_MAX_INPUT_BYTES, SUPPRESSED};
 
 #[test]
 fn scrubs_bearer_token() {
@@ -204,4 +204,27 @@ fn mongodb_style_storage_urls_lose_password_and_option_tokens() {
     let out = scrub_secrets("mongodb://app:pw@db/x?authMechanismProperties=AWS_SESSION_TOKEN%3Asecret");
     assert!(!out.contains("pw@") && !out.contains("AWS_SESSION_TOKEN"), "{out}");
     assert_eq!(scrub_secrets("sqlite:/tmp/x"), "sqlite:/tmp/x");
+}
+
+#[test]
+fn floor_text_scrubs_a_body_larger_than_the_floor_limit_instead_of_suppressing_it() {
+    let line = "ordinary line of output\n";
+    let mut body = line.repeat(FLOOR_MAX_INPUT_BYTES / line.len() + 10);
+    body.push_str("Authorization: Bearer abcdefghijklmnop\n");
+    body.push_str(&line.repeat(100));
+    assert!(body.len() > FLOOR_MAX_INPUT_BYTES);
+    let out = floor_scrub_text(&body);
+    assert!(!out.contains("abcdefghijklmnop"), "secret survived");
+    assert_ne!(out, SUPPRESSED);
+    assert!(out.starts_with(line) && out.ends_with(line));
+}
+
+#[test]
+fn floor_text_suppresses_only_an_oversized_single_line() {
+    let long = "x".repeat(FLOOR_MAX_INPUT_BYTES);
+    let body = format!("keep me\n{long}\nand me\n");
+    let out = floor_scrub_text(&body);
+    assert!(out.contains("keep me\n") && out.contains("and me\n"));
+    assert!(out.contains(SUPPRESSED));
+    assert!(!out.contains(&long));
 }
