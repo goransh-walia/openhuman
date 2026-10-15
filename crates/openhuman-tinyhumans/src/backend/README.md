@@ -105,7 +105,7 @@ process.
 | Path | What it does |
 | --- | --- |
 | [`mod.rs`](mod.rs) | Declares the three modules and re-exports the common names (`ProductIdentity`, `set_product_identity`, `effective_backend_api_url`, `DEFAULT_API_BASE_URL`, and so on). |
-| [`url.rs`](url.rs) | Base-URL resolution, environment overrides, staging default, and the inference-endpoint guard for control-plane calls. Re-exports a few URL helpers from the core (`join_url`, `normalize_api_base_url`, `host_is_local`). |
+| [`url.rs`](url.rs) | Base-URL resolution, environment overrides, staging default, and the inference-endpoint guard for control-plane calls. Re-exports a few URL helpers from the core (`join_url`, `normalize_api_base_url`, `normalize_backend_api_base_url`). |
 | [`headers.rs`](headers.rs) | `attribution_headers`, `backend_client_builder`, `build_backend_client`, `TAURI_VERSION_ENV_VAR`. |
 | [`product.rs`](product.rs) | `ProductIdentity`, `set_product_identity`, `product_identity`, `product_identity_header(s)`, `PRODUCT_IDENTITY_HEADER`, `DEFAULT_PRODUCT_IDENTITY`. |
 

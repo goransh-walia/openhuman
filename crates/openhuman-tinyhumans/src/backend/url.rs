@@ -44,8 +44,9 @@ pub use openhuman_embed::__host::config::app_env::{
     app_env_from_env, is_staging_app_env, APP_ENV_VAR, VITE_APP_ENV_VAR,
 };
 pub use openhuman_embed::__host::util::url::{
-    is_private_or_local_host, join_url, normalize_api_base_url, normalize_backend_api_base_url,
+    join_url, normalize_api_base_url, normalize_backend_api_base_url,
 };
+use openhuman_embed::__host::util::url::is_private_or_local_host;
 
 // ─── Public constants ────────────────────────────────────────────────────────
 

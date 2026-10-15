@@ -39,7 +39,7 @@ copy.
 | [`text.rs`](./text.rs) | Char-count truncation (`truncate_with_ellipsis`, `truncate_with_suffix`), byte-capped truncation with an ellipsis (`truncate_at_byte_boundary`), and byte-index rounding to a char boundary (`floor_char_boundary`, `ceil_char_boundary`, `utf8_safe_prefix_at_byte_boundary`). |
 | [`retry.rs`](./retry.rs) | `retry_with_backoff` (sync, `std::thread::sleep`) and `retry_with_backoff_async` (`tokio::time::sleep`), plus `is_transient_fs_error`. |
 | [`redact.rs`](./redact.rs) | `redact` hashes a string to 8 hex chars for log lines. `redact_url_for_log` replaces URL userinfo with `redacted`. |
-| [`url.rs`](./url.rs) | `normalize_api_base_url`, `normalize_backend_api_base_url`, `join_url`, `host_is_local`. |
+| [`url.rs`](./url.rs) | `normalize_api_base_url`, `normalize_backend_api_base_url`, `join_url`. |
 | [`params.rs`](./params.rs) | `read_required` and `read_optional`, the shared param decoders for controller handlers. |
 | [`types.rs`](./types.rs) | `MaybeSet<T>` (`Set`, `Unset`, `Null`). |
 | [`tls/`](tls/README.md) | `tls_client_builder()`, the platform-conditional TLS backend for `reqwest` clients. |
