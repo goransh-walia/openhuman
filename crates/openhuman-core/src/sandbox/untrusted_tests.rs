@@ -89,3 +89,62 @@ async fn saas_refuses_an_untrusted_command_even_when_the_operator_opted_out() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// Drives the real gate against the released TinyBox archive: the command runs
+/// inside the native jail, so it can write its workspace and cannot write a
+/// sibling directory. Run with
+/// `cargo test -p openhuman --lib untrusted_command_is_confined -- --ignored`
+/// (downloads the pinned archive into a scratch install under `target/tmp`).
+#[cfg(all(feature = "modules", target_os = "linux"))]
+#[tokio::test]
+#[ignore = "requires the released TinyBox archive and a supported Linux jail"]
+async fn untrusted_command_is_confined_by_the_released_native_jail() {
+    let _environment_lock = crate::config::TEST_ENV_LOCK.lock().await;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
+    std::fs::create_dir_all(&root).unwrap();
+    let tmp = tempfile::tempdir_in(&root).unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let workspace = base.join("workspace");
+    let outside = base.join("outside");
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let mut config = Config {
+        workspace_dir: workspace.clone(),
+        action_dir: workspace.clone(),
+        config_path: base.join("config.toml"),
+        ..Config::default()
+    };
+    config.modules.enabled = true;
+    config.modules.allow_download = true;
+    config.modules.install_dir = Some(base.join("modules").display().to_string());
+    let state = base.join("state");
+
+    let inside = run(UntrustedShell {
+        config: &config,
+        command: "echo jailed > inside.txt && cat inside.txt",
+        cwd: &workspace,
+        state_dir: &state,
+        timeout: Duration::from_secs(30),
+        preserve_pipeline_status: false,
+    })
+    .await
+    .expect("the released jail runs a workspace write");
+    assert!(inside.success(), "{inside:?}");
+    assert!(inside.stdout.contains("jailed"), "{}", inside.stdout);
+
+    let escape = outside.join("escaped.txt");
+    let command = format!("echo escaped > '{}'", escape.display());
+    let outcome = run(UntrustedShell {
+        config: &config,
+        command: &command,
+        cwd: &workspace,
+        state_dir: &state,
+        timeout: Duration::from_secs(30),
+        preserve_pipeline_status: false,
+    })
+    .await;
+    assert!(
+        !escape.exists(),
+        "the jail let an untrusted command write outside its workspace: {outcome:?}"
+    );
+}
