@@ -484,7 +484,7 @@ pub(crate) async fn tools_safe_for_agent_scanned(
 ) -> Vec<tinymcp_bus::McpTool> {
     let tools = tools_safe_for_agent(server, tools);
     #[cfg(feature = "security-module")]
-    {
+    return {
         use crate::modules::security::text::{scan_tool_definition, ScanVerdict};
         let Some(config) = crate::core::runtime::CoreContext::current_embedder_config() else {
             return tools;
@@ -510,10 +510,8 @@ pub(crate) async fn tools_safe_for_agent_scanned(
                 _ => kept.push(tool),
             }
         }
-        // Needed when `security-module` is on: the fallback tail below is cfg-gated out.
-        #[allow(clippy::needless_return)]
-        return kept;
-    }
+        kept
+    };
     #[cfg(not(feature = "security-module"))]
     tools
 }

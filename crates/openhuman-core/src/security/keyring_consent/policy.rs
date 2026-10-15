@@ -122,7 +122,7 @@ fn consent_mode(cached: Option<&ConsentPreference>) -> StorageMode {
 ///
 /// Split out of [`current_status`] as a pure function so every combination can
 /// be asserted without touching the process-global backend `OnceLock` (which
-/// `force_backend_for_test` can only set once per test binary).
+/// can only be set once per test binary).
 ///
 /// This used to branch on `available` alone, which was wrong for every
 /// non-`os` backend: `probe_availability` short-circuits to `true` for `file`,
