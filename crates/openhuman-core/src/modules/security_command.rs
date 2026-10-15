@@ -58,9 +58,6 @@ pub(crate) async fn command_decision(
     let mut state = state().lock().await;
     let result = async {
         let proxy = super::proxy(&config, &mut state).await?;
-        // A synchronous tool trait may ask next; it reaches the module bus
-        // through the shared seam.
-        super::sync_seam::arm_module_runtime();
         command_on(&mut state, &proxy, policy, command, declared_class, op).await
     }
     .await;
@@ -147,6 +144,10 @@ pub(crate) fn command_decision_blocking(
     declared_class: Option<CommandClass>,
     op: CommandOp,
 ) -> Result<CommandDecision, String> {
+    // The module bus's own runtime serves the seam: it lives for the process,
+    // so it cannot be a caller runtime that has since shut down. Until the bus
+    // has started there is nothing to ask, and the call below is refused.
+    super::sync_seam::arm_module_runtime();
     let scope = crate::core::runtime::DispatchCtx::ambient().core().cloned();
     let workspace_dir = workspace_dir.to_path_buf();
     let command = command.to_owned();

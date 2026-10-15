@@ -186,7 +186,6 @@ pub(super) async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, Stri
     if result.is_err() {
         state.faulted = true;
     } else {
-        super::sync_seam::arm_module_runtime();
         super::text::arm_log_scrubber(config);
     }
     result
