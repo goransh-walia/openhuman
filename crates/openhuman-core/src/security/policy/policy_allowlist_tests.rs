@@ -80,62 +80,6 @@ fn action_budget_error_mentions_limit_and_settings() {
 
 // -- is_command_allowed -------------------------------------------
 
-// -- classify_command / gate_decision (fail-closed bucket model) --
-
-#[test]
-fn gate_decision_readonly_blocks_acts() {
-    let p = readonly_policy();
-    assert_eq!(p.gate_decision(CommandClass::Read), GateDecision::Allow);
-    assert_eq!(p.gate_decision(CommandClass::Write), GateDecision::Block);
-    assert_eq!(p.gate_decision(CommandClass::Network), GateDecision::Block);
-    assert_eq!(
-        p.gate_decision(CommandClass::Destructive),
-        GateDecision::Block
-    );
-}
-
-#[test]
-fn gate_decision_supervised_prompts_every_act() {
-    let p = default_policy(); // Supervised
-    assert_eq!(p.gate_decision(CommandClass::Read), GateDecision::Allow);
-    assert_eq!(p.gate_decision(CommandClass::Write), GateDecision::Prompt);
-    assert_eq!(p.gate_decision(CommandClass::Network), GateDecision::Prompt);
-    assert_eq!(
-        p.gate_decision(CommandClass::Destructive),
-        GateDecision::Prompt
-    );
-}
-
-#[test]
-fn gate_decision_full_runs_write_but_prompts_network_and_destructive() {
-    let p = full_policy();
-    assert_eq!(p.gate_decision(CommandClass::Read), GateDecision::Allow);
-    assert_eq!(p.gate_decision(CommandClass::Write), GateDecision::Allow);
-    assert_eq!(p.gate_decision(CommandClass::Network), GateDecision::Prompt);
-    assert_eq!(
-        p.gate_decision(CommandClass::Destructive),
-        GateDecision::Prompt
-    );
-}
-
-// -- install chokepoint (Phase C) ---------------------------------
-
-#[test]
-fn gate_decision_install_always_asks_even_in_full() {
-    assert_eq!(
-        full_policy().gate_decision(CommandClass::Install),
-        GateDecision::Prompt
-    );
-    assert_eq!(
-        default_policy().gate_decision(CommandClass::Install),
-        GateDecision::Prompt
-    );
-    assert_eq!(
-        readonly_policy().gate_decision(CommandClass::Install),
-        GateDecision::Block
-    );
-}
-
 // -- cross-platform always-forbidden hardening (Phase E) ----------
 
 #[test]

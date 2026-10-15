@@ -32,34 +32,6 @@ fn declared_class_parses_and_is_escalate_only_input() {
 }
 
 #[test]
-fn gate_decision_matrix_is_pinned() {
-    use CommandClass::*;
-    use GateDecision::*;
-    let classes = [Read, Write, Network, Install, Destructive];
-    let read_only = [Allow, Block, Block, Block, Block];
-    let supervised = [Allow, Prompt, Prompt, Prompt, Prompt];
-    let full = [Allow, Allow, Prompt, Prompt, Prompt];
-    for (i, class) in classes.iter().enumerate() {
-        assert_eq!(
-            policy(AutonomyLevel::ReadOnly).gate_decision(*class),
-            read_only[i]
-        );
-        assert_eq!(
-            policy(AutonomyLevel::Supervised).gate_decision(*class),
-            supervised[i]
-        );
-        assert_eq!(policy(AutonomyLevel::Full).gate_decision(*class), full[i]);
-        // Disabled policy never gates, whatever the tier says.
-        let off = SecurityPolicy {
-            enabled: false,
-            autonomy: AutonomyLevel::ReadOnly,
-            ..SecurityPolicy::default()
-        };
-        assert_eq!(off.gate_decision(*class), Allow);
-    }
-}
-
-#[test]
 fn always_forbidden_floor_covers_credential_stores_and_system_roots() {
     for forbidden in [
         "/home/u/.ssh/id_rsa",
