@@ -97,6 +97,41 @@ fn backend_egress_descriptor_strips_query_and_targets_backend() {
     assert!(desc.is_external);
 }
 
+/// The privacy gate for a body-less round-trip to `path`.
+fn enforce_backend_egress(path: &str) -> anyhow::Result<()> {
+    crate::security::egress::enforce_egress(&backend_egress_for(path, BackendPayload::None))
+}
+
+#[test]
+fn backend_body_makes_the_call_content_bearing_and_opaque_bytes_stay_unassessed() {
+    use crate::config::PrivacyMode;
+    use crate::security::egress::{DataKind, IdentificationRisk};
+    use crate::security::live_policy::test_privacy_scope;
+    let body = serde_json::json!({"query": "weekly plan"});
+    let path = "/agent-integrations/parallel/research";
+
+    // Standard mode: the shape is recorded and nothing is assessed.
+    {
+        let _mode = test_privacy_scope(PrivacyMode::Standard);
+        let with_body = backend_egress_for(path, BackendPayload::Json(&body));
+        assert!(with_body.data_kinds.contains(&DataKind::ToolArguments));
+        assert_eq!(with_body.risk_level, IdentificationRisk::Unknown);
+        let bare = backend_egress_for(path, BackendPayload::None);
+        assert_eq!(bare.data_kinds, vec![DataKind::Metadata]);
+    }
+
+    // Sensitive mode with no module answer: a multipart upload carries file
+    // content that cannot be assessed, so it is refused rather than assumed clean.
+    let _mode = test_privacy_scope(PrivacyMode::Sensitive);
+    let upload = backend_egress_for(path, BackendPayload::Opaque);
+    assert!(upload.data_kinds.contains(&DataKind::FileContent));
+    assert_eq!(upload.risk_level, IdentificationRisk::Unknown);
+    assert!(crate::security::egress::enforce_egress(&upload).is_err());
+    // A body-less call is metadata only and stays permitted.
+    enforce_backend_egress("/agent-integrations/parallel/research")
+        .expect("metadata-only call is permitted under Sensitive");
+}
+
 #[test]
 fn enforce_backend_egress_blocks_user_data_but_allows_control_plane() {
     use crate::config::PrivacyMode;
