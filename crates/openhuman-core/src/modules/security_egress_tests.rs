@@ -315,25 +315,23 @@ async fn released_module_applies_the_privacy_mode_to_the_tools_real_payload() {
     let sensitive = register_open_public(&fx.proxy, tinysecurity_bus::PrivacyMode::Sensitive).await;
     // Built at runtime so no credential-shaped literal sits in the source.
     let secret = format!("{}-{}", "sk", "abcdefghijklmnopqrstuvwxyz123456");
+    // A hostname, not an IP literal: under Sensitive the redactor treats an IP
+    // address in the URL as an identifier, which is correct but not what this
+    // case is about. Privacy is checked before any DNS, so a refused payload
+    // never causes a lookup; a clean one passes the privacy check and may then
+    // be denied only by the resolver of the machine running the test.
+    let url = "http://example.test/x";
     assert!(matches!(
-        judge(
-            &fx.proxy,
-            &sensitive,
-            "http://93.184.216.34/x",
-            Some(&secret)
-        )
-        .await,
+        judge(&fx.proxy, &sensitive, url, Some(&secret)).await,
+        EgressOutcome::Denied(EgressDenial::Privacy)
+    ));
+    assert!(!matches!(
+        judge(&fx.proxy, &sensitive, url, Some("plain words")).await,
         EgressOutcome::Denied(EgressDenial::Privacy)
     ));
     assert!(matches!(
-        judge(
-            &fx.proxy,
-            &sensitive,
-            "http://93.184.216.34/x",
-            Some("plain words")
-        )
-        .await,
-        EgressOutcome::Authorized(_)
+        judge(&fx.proxy, &sensitive, "http://93.184.216.34/x", None).await,
+        EgressOutcome::Denied(EgressDenial::Privacy)
     ));
     let local_only =
         register_open_public(&fx.proxy, tinysecurity_bus::PrivacyMode::LocalOnly).await;
