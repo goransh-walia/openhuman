@@ -5,10 +5,11 @@
 //! credential-scrub middleware, and the four URL helpers in `config`, `inference`
 //! and `web3`) and `security-redaction-extended-corpus.json`, which adds more
 //! secret and PII shapes. Redactors covered here:
-//! `security/core.rs` (prefix), `util/redact.rs` (identity hash and URL),
-//! `approval/redact.rs`, `security/scrub.rs`, `tinymemory_api::safety` (pii),
-//! `core/log_redaction.rs`, `tools/registry/denials.rs` and the storage URL
-//! helper. Each case pins which redactors remove its needle *today*
+//! `approval/redact.rs`, `tinymemory_api::safety` (pii), `core/log_redaction.rs`
+//! (the floor every URL log field now uses) and `tools/registry/denials.rs`. The
+//! prefix, identity-hash, `security/scrub.rs` and URL helpers were deleted in
+//! favour of the module's `security::redact`, which `modules::security` tests
+//! pin against the released archive. Each case pins which redactors remove its needle *today*
 //! (`removed_by`). A secret that a sink still leaks is NOT blessed: the leak is
 //! recorded as a known gap, and `desired_*` tests state the wanted behaviour and
 //! stay red (`should_panic(DESIRED-RED)`) until the module-owned redactor lands.
@@ -31,15 +32,9 @@ fn outputs(input: &str) -> Vec<(&'static str, String)> {
     let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
     vec![
         ("denials", denial),
-        ("prefix", openhuman_core::security::redact(input)),
-        ("identity_hash", openhuman_core::util::redact::redact(input)),
         (
             "log",
             openhuman_core::core::log_redaction::scrub_secrets(input),
-        ),
-        (
-            "host_scrub",
-            openhuman_core::security::scrub::sanitize_text(input).value,
         ),
         (
             "approval",
@@ -92,20 +87,14 @@ fn extended_corpus_pins_which_redactors_remove_each_shape() {
 }
 
 #[test]
-fn extended_url_corpus_pins_util_and_storage_output() {
+fn extended_url_corpus_is_cleaned_by_the_log_floor() {
     let corpus: Value = serde_json::from_str(EXTENDED).unwrap();
     for case in corpus["urls"].as_array().unwrap() {
         let input = case["input"].as_str().unwrap();
-        assert_eq!(
-            openhuman_core::util::redact::redact_url_for_log(input),
-            case["util"].as_str().unwrap(),
-            "util case={}",
-            case["case"]
-        );
-        assert_eq!(
-            openhuman_core::config::schema::storage::redact_url(input),
-            case["storage"].as_str().unwrap(),
-            "storage case={}",
+        let out = openhuman_core::core::log_redaction::scrub_secrets(input);
+        assert!(
+            !out.contains(case["needle"].as_str().unwrap()),
+            "floor kept the secret in {} -> {out}",
             case["case"]
         );
     }
@@ -114,7 +103,7 @@ fn extended_url_corpus_pins_util_and_storage_output() {
 /// Sinks that must scrub each kind of text (the desired contract the module owns).
 fn required_sinks(kind: &str) -> &'static [&'static str] {
     match kind {
-        "secret" => &["log", "host_scrub", "denials", "approval"],
+        "secret" => &["log", "denials", "approval"],
         "pii" => &["pii"],
         _ => &[],
     }
@@ -173,27 +162,12 @@ fn desired_every_required_sink_removes_every_secret_and_pii_shape() {
     );
 }
 
-/// DESIRED: URL helpers drop secret query values, not just userinfo.
-#[test]
-#[should_panic(expected = "DESIRED-RED")]
-fn desired_url_log_redaction_removes_secret_query_values() {
-    let corpus: Value = serde_json::from_str(EXTENDED).unwrap();
-    for case in corpus["urls"].as_array().unwrap() {
-        let out = openhuman_core::util::redact::redact_url_for_log(case["input"].as_str().unwrap());
-        assert!(
-            !out.contains(case["needle"].as_str().unwrap()),
-            "DESIRED-RED: util::redact_url_for_log keeps the secret in {} -> {out}",
-            case["case"]
-        );
-    }
-}
-
 #[test]
 fn ordinary_text_is_never_redacted_by_the_log_scrubber() {
     // False-positive guard: harmless prose passes through the log and denial sinks.
     let outs = outputs("hello world");
     for (name, out) in outs {
-        if matches!(name, "log" | "host_scrub" | "denials") {
+        if matches!(name, "log" | "denials") {
             assert!(
                 out.contains("hello world"),
                 "{name} mangled ordinary text: {out}"

@@ -7,10 +7,7 @@
       "needle": "abcdef0123456789abcdef0123456789",
       "removed_by": [
         "denials",
-        "host_scrub",
-        "identity_hash",
-        "log",
-        "prefix"
+        "log"
       ]
     },
     {
@@ -19,10 +16,7 @@
       "needle": "0123456789abcdefghijklmnopqrstuvwxyzAB",
       "removed_by": [
         "denials",
-        "host_scrub",
-        "identity_hash",
-        "log",
-        "prefix"
+        "log"
       ],
       "input_parts": [
         "token ghp",
@@ -33,11 +27,7 @@
       "case": "aws_access_key_id",
       "kind": "secret",
       "needle": "IOSFODNN7EXAMPLE",
-      "removed_by": [
-        "host_scrub",
-        "identity_hash",
-        "prefix"
-      ],
+      "removed_by": [],
       "input_parts": [
         "AKI",
         "AIOSFODNN7EXAMPLE"
@@ -47,11 +37,7 @@
       "case": "jwt",
       "kind": "secret",
       "needle": "eyJzdWIiOiIxMjM0NTY3ODkwIn0",
-      "removed_by": [
-        "host_scrub",
-        "identity_hash",
-        "prefix"
-      ],
+      "removed_by": [],
       "input_parts": [
         "eyJhb",
         "GciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1rwW1gFWFOEjXk"
@@ -61,11 +47,7 @@
       "case": "slack_bot_token",
       "kind": "secret",
       "needle": "abcdefghijklmnopqrstuvwx",
-      "removed_by": [
-        "host_scrub",
-        "identity_hash",
-        "prefix"
-      ],
+      "removed_by": [],
       "input_parts": [
         "xox",
         "b-123456789012-1234567890123-abcdefghijklmnopqrstuvwx"
@@ -77,10 +59,8 @@
       "input": "postgres://user:hunter2@db.internal/prod",
       "needle": "hunter2",
       "removed_by": [
-        "identity_hash",
         "log",
-        "pii",
-        "prefix"
+        "pii"
       ]
     },
     {
@@ -88,10 +68,7 @@
       "kind": "secret",
       "needle": "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC",
       "removed_by": [
-        "denials",
-        "host_scrub",
-        "identity_hash",
-        "prefix"
+        "denials"
       ],
       "input_parts": [
         "-----",
@@ -104,10 +81,7 @@
       "input": "call +1 415 555 0132 today",
       "needle": "415 555 0132",
       "removed_by": [
-        "host_scrub",
-        "identity_hash",
-        "pii",
-        "prefix"
+        "pii"
       ]
     },
     {
@@ -116,10 +90,7 @@
       "input": "ssn 123-45-6789",
       "needle": "123-45-6789",
       "removed_by": [
-        "host_scrub",
-        "identity_hash",
-        "pii",
-        "prefix"
+        "pii"
       ]
     },
     {
@@ -128,10 +99,7 @@
       "input": "card 4111 1111 1111 1111",
       "needle": "4111 1111 1111 1111",
       "removed_by": [
-        "host_scrub",
-        "identity_hash",
-        "pii",
-        "prefix"
+        "pii"
       ]
     }
   ],
@@ -139,16 +107,12 @@
     {
       "case": "access_token_query",
       "input": "https://api.example.com/v1?access_token=s3cr3t",
-      "needle": "s3cr3t",
-      "util": "https://api.example.com/v1?access_token=s3cr3t",
-      "storage": "https://api.example.com/v1?***"
+      "needle": "s3cr3t"
     },
     {
       "case": "userinfo_only",
       "input": "https://alice:hunter2@api.example.com/",
-      "needle": "hunter2",
-      "util": "https://redacted:redacted@api.example.com",
-      "storage": "https://***@api.example.com/"
+      "needle": "hunter2"
     }
   ]
 }
