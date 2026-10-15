@@ -382,3 +382,35 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
          a failure and re-status every existing job with a pipeline in it: {output}"
     );
 }
+
+/// Scheduled shell authorization and admission on the released module, with no
+/// gateway stub: the allowlist applies, the protected floor refuses, and only
+/// admission (the run) spends the hourly budget.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn scheduled_shell_commands_are_gated_by_the_released_module() {
+    use crate::modules::security::released_support::Released;
+    use crate::security::AutonomyLevel;
+
+    let released = Released::new();
+    let supervised = released.policy(AutonomyLevel::Supervised, 100);
+    authorize_shell_command(&supervised, "ls").await.unwrap();
+    assert_eq!(
+        authorize_shell_command(&supervised, "cat ~/.ssh/id_rsa").await,
+        Err("blocked by security policy: command rejected".to_owned())
+    );
+    assert_eq!(
+        authorize_shell_command(&supervised, "definitely-not-on-the-allowlist --now").await,
+        Err("blocked by security policy: command not allowed".to_owned())
+    );
+
+    let limited = released.policy(AutonomyLevel::Supervised, 1);
+    for _ in 0..3 {
+        authorize_shell_command(&limited, "ls").await.unwrap();
+    }
+    admit_shell_command(&limited, "ls").await.unwrap();
+    assert_eq!(
+        admit_shell_command(&limited, "ls").await,
+        Err("blocked by security policy: rate limit exceeded".to_owned())
+    );
+}

@@ -80,3 +80,47 @@ mod runtime_and_sandbox_tests;
 mod schema_and_env_tests;
 #[path = "shell_tests_timeout_tests.rs"]
 mod timeout_tests;
+
+/// The shell tool's gate on the released module, with no gateway stub: a read
+/// runs in read-only mode, a write and hidden execution are refused before
+/// anything is launched, and the run spends the module's hourly budget.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn shell_tool_gates_commands_on_the_released_module() {
+    use crate::modules::security::released_support::Released;
+
+    let released = Released::new();
+    let ctx = DispatchCtx::ambient();
+    let tool = |autonomy, budget| {
+        ShellTool::new(
+            Arc::new(released.policy(autonomy, budget)),
+            test_runtime(),
+            test_audit(),
+        )
+    };
+
+    let read_only = tool(AutonomyLevel::ReadOnly, 100);
+    let (allowed, result) = read_only.run_with_security(&ctx, "ls", None).await;
+    assert!(allowed, "a read runs in read-only mode: {result:?}");
+    let (allowed, result) = read_only.run_with_security(&ctx, "touch refused", None).await;
+    assert!(!allowed, "a write is refused in read-only mode");
+    assert!(
+        result.content.contains(tinytools::status::POLICY_BLOCKED_MARKER),
+        "{}",
+        result.content
+    );
+    assert!(!released.action.join("refused").exists(), "nothing ran");
+
+    let supervised = tool(AutonomyLevel::Supervised, 100);
+    let (allowed, result) = supervised
+        .run_with_security(&ctx, "echo $(whoami)", None)
+        .await;
+    assert!(!allowed, "hidden execution is refused");
+    assert!(!result.content.contains("whoami"), "{}", result.content);
+
+    let limited = tool(AutonomyLevel::Supervised, 1);
+    assert!(limited.run_with_security(&ctx, "ls", None).await.0);
+    let (allowed, result) = limited.run_with_security(&ctx, "ls", None).await;
+    assert!(!allowed, "the module's hourly budget is spent by the run");
+    assert!(result.content.contains("Rate limit exceeded"), "{}", result.content);
+}

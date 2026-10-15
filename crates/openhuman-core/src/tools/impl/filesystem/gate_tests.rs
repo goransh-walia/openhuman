@@ -363,3 +363,19 @@ async fn git_write_operations_are_policy_blocked_in_read_only_mode() {
         result.output()
     );
 }
+
+/// The filesystem write gate on the released module, with no gateway stub.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn the_write_gate_is_answered_by_the_released_module() {
+    use crate::modules::security::released_support::Released;
+
+    let released = Released::new();
+    let read_only = released.policy(AutonomyLevel::ReadOnly, 100);
+    let supervised = released.policy(AutonomyLevel::Supervised, 100);
+    let full = released.policy(AutonomyLevel::Full, 100);
+
+    assert!(!FsGate::write_needs_approval(&read_only));
+    assert!(FsGate::write_needs_approval(&supervised));
+    assert!(!FsGate::write_needs_approval(&full));
+}

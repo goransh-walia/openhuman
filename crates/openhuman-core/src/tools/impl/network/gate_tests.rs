@@ -283,3 +283,34 @@ fn egress_descriptor_reports_both_body_and_headers() {
     assert!(desc.data_kinds.contains(&DataKind::ToolArguments));
     assert!(desc.data_kinds.contains(&DataKind::Metadata));
 }
+
+/// The network gate on the released module, with no gateway stub, from a
+/// runtime worker and from a plain thread: read-only cannot act, supervised
+/// can and asks for approval.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn the_network_gate_is_answered_by_the_released_module() {
+    use crate::modules::security::released_support::Released;
+
+    let released = Released::new();
+    let read_only = Arc::new(released.policy(AutonomyLevel::ReadOnly, 100));
+    let supervised = Arc::new(released.policy(AutonomyLevel::Supervised, 100));
+
+    assert!(!NetGate::can_act(read_only.as_ref()));
+    assert!(!NetGate::network_needs_approval(read_only.as_ref()));
+    assert!(NetGate::can_act(supervised.as_ref()));
+    assert!(NetGate::network_needs_approval(supervised.as_ref()));
+
+    let (can_act, needs_approval) = {
+        let supervised = supervised.clone();
+        std::thread::spawn(move || {
+            (
+                NetGate::can_act(supervised.as_ref()),
+                NetGate::network_needs_approval(supervised.as_ref()),
+            )
+        })
+        .join()
+        .unwrap()
+    };
+    assert!(can_act && needs_approval);
+}

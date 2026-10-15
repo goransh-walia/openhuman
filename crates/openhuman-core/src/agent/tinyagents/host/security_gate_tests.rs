@@ -287,3 +287,38 @@ async fn a_module_prompt_is_reported_as_a_prompt_and_an_allow_as_an_allow() {
 
 #[path = "security_gate_screen_and_policy_tests.rs"]
 mod screen_and_policy;
+
+/// The harness gate's shell decision on the released module, with no gateway
+/// stub: a read is allowed in read-only mode, a write is denied there with the
+/// policy marker, a supervised write waits for a human, and hidden execution is
+/// denied.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn the_shell_decision_comes_from_the_released_module() {
+    use crate::modules::security::released_support::Released;
+
+    let released = Released::new();
+    let gate = |autonomy| {
+        OpenHumanSecurityGate::new(
+            Arc::new(released.policy(autonomy, 100)),
+            registry(),
+        )
+    };
+    let decide = |gate: OpenHumanSecurityGate, command: &'static str| async move {
+        gate.authorize_tool(&req(SHELL_TOOL, json!({ "command": command })))
+            .await
+            .expect("authorization result")
+    };
+
+    let read_only = decide(gate(AutonomyLevel::ReadOnly), "ls").await;
+    assert_eq!(read_only, GateDecision::Allow);
+    let write = decide(gate(AutonomyLevel::ReadOnly), "touch f").await;
+    assert!(!write.is_allowed());
+    assert!(write
+        .denial_reason()
+        .expect("denial reason")
+        .contains(tinytools::status::POLICY_BLOCKED_MARKER));
+    let hidden = decide(gate(AutonomyLevel::Supervised), "echo $(whoami)").await;
+    assert!(!hidden.is_allowed());
+    assert!(!hidden.denial_reason().unwrap_or_default().contains("whoami"));
+}
