@@ -1,6 +1,7 @@
 //! Sandbox / Docker runtime config operations.
 
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 use crate::core::Outcome;
 
 use super::loader::{load_config_with_timeout, snapshot_config_json};
@@ -16,8 +17,8 @@ pub struct SandboxSettingsPatch {
     pub env_passthrough: Option<Vec<String>>,
 }
 
-pub async fn get_sandbox_settings() -> Result<Outcome<serde_json::Value>, String> {
-    let config = load_config_with_timeout().await?;
+pub async fn get_sandbox_settings(ctx: &DispatchCtx) -> Result<Outcome<serde_json::Value>, String> {
+    let config = ctx.load_config().await?;
     let sandbox = &config.sandbox;
     let docker = &config.runtime.docker;
 
@@ -121,9 +122,10 @@ pub async fn apply_sandbox_settings(
 }
 
 pub async fn load_and_apply_sandbox_settings(
+    ctx: &DispatchCtx,
     update: SandboxSettingsPatch,
 ) -> Result<Outcome<serde_json::Value>, String> {
-    let mut config = load_config_with_timeout().await?;
+    let mut config = ctx.load_config().await?;
     apply_sandbox_settings(&mut config, update).await
 }
 

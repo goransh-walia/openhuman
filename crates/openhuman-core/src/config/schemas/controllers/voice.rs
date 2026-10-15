@@ -11,14 +11,14 @@ use super::super::helpers::{
 };
 
 pub(super) fn handle_get_dictation_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async { to_json(config_rpc::get_dictation_settings().await?) })
+    Box::pin(async move { to_json(config_rpc::get_dictation_settings(&ctx).await?) })
 }
 
 pub(super) fn handle_update_dictation_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -31,15 +31,15 @@ pub(super) fn handle_update_dictation_settings(
             streaming: update.streaming,
             streaming_interval_ms: update.streaming_interval_ms,
         };
-        to_json(config_rpc::load_and_apply_dictation_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_dictation_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_get_voice_server_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async { to_json(config_rpc::get_voice_server_settings().await?) })
+    Box::pin(async move { to_json(config_rpc::get_voice_server_settings(&ctx).await?) })
 }
 
 pub(super) fn handle_update_voice_server_settings(
@@ -60,7 +60,7 @@ pub(super) fn handle_update_voice_server_settings(
             wake_word: update.wake_word,
             stt_engine: update.stt_engine,
         };
-        let result = config_rpc::load_and_apply_voice_server_settings(patch).await?;
+        let result = config_rpc::load_and_apply_voice_server_settings(&ctx, patch).await?;
         // Apply the always-on toggle live (start/idle the capture loop) so the
         // Settings switch takes effect without a restart. Don't fail the RPC if
         // the reload hiccups, but DO surface it — otherwise the saved setting

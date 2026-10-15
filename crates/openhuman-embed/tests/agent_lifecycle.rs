@@ -145,6 +145,7 @@ fn removing_an_agent_releases_everything_it_held() {
             );
             for owner in [None, Some("closing")] {
                 assert!(openhuman_core::security::approval::rpc::approval_decide(
+                    &openhuman_core::core::runtime::DispatchCtx::process_default(),
                     &closing_request.request_id,
                     openhuman_embed::ApprovalDecision::ApproveOnce,
                     owner,

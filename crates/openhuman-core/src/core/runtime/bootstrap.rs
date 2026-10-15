@@ -6,6 +6,7 @@
 //! [`CoreRuntime::start_services`](super::CoreRuntime::start_services)
 //! once a transport has bound, or directly when there is none.
 
+use crate::core::runtime::DispatchCtx;
 /// Initializes long-lived socket/event-bus infrastructure.
 ///
 /// `host_kind` identifies the embedding process (Tauri desktop shell vs
@@ -86,7 +87,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // meant to gate the first tool call of the first turn has to be loaded
     // before any session exists, and the alternative — loading lazily on the
     // first event — would let that first call through while the file is read.
-    crate::hooks::init(&cfg).await;
+    crate::hooks::init(&DispatchCtx::ambient(), &cfg).await;
 
     // --- Turn-state recovery -------------------------------------------
     // Any per-thread turn snapshots left on disk from a previous process

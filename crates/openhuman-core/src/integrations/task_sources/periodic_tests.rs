@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 use crate::integrations::task_sources::types::{
     provider_can_fetch, FilterSpec, ProviderSlug, SourceTarget,
 };
@@ -159,7 +160,7 @@ async fn a_tick_over_an_unfetchable_source_records_nothing() {
 
     CoreContext::scope(
         CoreContext::for_test_with_config(DomainSet::full(), config.clone()),
-        run_one_tick(),
+        run_one_tick(&DispatchCtx::process_default()),
     )
     .await
     .expect("a tick must not fail");

@@ -178,11 +178,12 @@ fn handle_get_settings(ctx: DispatchCtx, _params: Map<String, Value>) -> Control
     })
 }
 
-fn handle_update_settings(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_update_settings(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<UpdateSettingsParams>(params)?;
         to_json(
             super::rpc::update_settings(
+                &ctx,
                 p.provider,
                 p.model,
                 p.dimensions,

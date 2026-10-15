@@ -17,6 +17,7 @@ use tinyagents_definition::SandboxMode;
 
 use openhuman_core::{
     config::{Config, RuntimeConfig, SandboxBackend},
+    core::runtime::DispatchCtx,
     sandbox::{
         command_requires_sandbox, create_sandbox_backend, resolve_sandbox_policy,
         SandboxBackendKind, SandboxStatus,
@@ -178,23 +179,39 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
     let _ws = env_guard::EnvVarGuard::set_path("OPENHUMAN_WORKSPACE", dir.path());
     {
         let _off = env_guard::EnvVarGuard::unset("OPENHUMAN_SANDBOX");
-        assert!(!command_requires_sandbox(None).await.unwrap());
-        assert!(!command_requires_sandbox(Some(SandboxMode::None))
-            .await
-            .unwrap());
-        assert!(!command_requires_sandbox(Some(SandboxMode::ReadOnly))
-            .await
-            .unwrap());
-        assert!(command_requires_sandbox(Some(SandboxMode::Sandboxed))
-            .await
-            .unwrap());
+        assert!(
+            !command_requires_sandbox(&DispatchCtx::process_default(), None)
+                .await
+                .unwrap()
+        );
+        assert!(!command_requires_sandbox(
+            &DispatchCtx::process_default(),
+            Some(SandboxMode::None)
+        )
+        .await
+        .unwrap());
+        assert!(!command_requires_sandbox(
+            &DispatchCtx::process_default(),
+            Some(SandboxMode::ReadOnly)
+        )
+        .await
+        .unwrap());
+        assert!(command_requires_sandbox(
+            &DispatchCtx::process_default(),
+            Some(SandboxMode::Sandboxed)
+        )
+        .await
+        .unwrap());
     }
     // The host off switch beats the agent's own request.
     {
         let _off = env_guard::EnvVarGuard::set("OPENHUMAN_SANDBOX", "off");
-        assert!(!command_requires_sandbox(Some(SandboxMode::Sandboxed))
-            .await
-            .unwrap());
+        assert!(!command_requires_sandbox(
+            &DispatchCtx::process_default(),
+            Some(SandboxMode::Sandboxed)
+        )
+        .await
+        .unwrap());
     }
     drop(_ws);
     drop(dir);
@@ -210,9 +227,14 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
         let (dir, _config) = scratch_config(backend, None).await;
         let _ws = env_guard::EnvVarGuard::set_path("OPENHUMAN_WORKSPACE", dir.path());
         let _off = env_guard::EnvVarGuard::unset("OPENHUMAN_SANDBOX");
-        assert!(command_requires_sandbox(None).await.unwrap(), "{label}");
         assert!(
-            command_requires_sandbox(Some(SandboxMode::None))
+            command_requires_sandbox(&DispatchCtx::process_default(), None)
+                .await
+                .unwrap(),
+            "{label}"
+        );
+        assert!(
+            command_requires_sandbox(&DispatchCtx::process_default(), Some(SandboxMode::None))
                 .await
                 .unwrap(),
             "{label}"
@@ -223,17 +245,20 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
     let (dir, _config) = scratch_config(SandboxBackend::Docker, Some(false)).await;
     let _ws = env_guard::EnvVarGuard::set_path("OPENHUMAN_WORKSPACE", dir.path());
     let _off = env_guard::EnvVarGuard::unset("OPENHUMAN_SANDBOX");
-    assert!(!command_requires_sandbox(None).await.unwrap());
+    assert!(
+        !command_requires_sandbox(&DispatchCtx::process_default(), None)
+            .await
+            .unwrap()
+    );
 }
 
 #[tokio::test]
 async fn backend_handles_report_a_defined_status() {
     let _lock = env_guard::env_lock_async().await;
-    let none = create_sandbox_backend(&resolve(
-        SandboxMode::None,
-        &RuntimeConfig::default(),
-        false,
-    ))
+    let none = create_sandbox_backend(
+        &DispatchCtx::process_default(),
+        &resolve(SandboxMode::None, &RuntimeConfig::default(), false),
+    )
     .await;
     assert_eq!(none.kind, SandboxBackendKind::None);
     assert_eq!(none.status, SandboxStatus::Ready);
@@ -242,11 +267,10 @@ async fn backend_handles_report_a_defined_status() {
     // The local jail is Ready where the OS provides one that is suitable for
     // untrusted code and Inactive otherwise (the Noop floor); never Error and
     // never silently Ready without a jail.
-    let local = create_sandbox_backend(&resolve(
-        SandboxMode::Sandboxed,
-        &RuntimeConfig::default(),
-        false,
-    ))
+    let local = create_sandbox_backend(
+        &DispatchCtx::process_default(),
+        &resolve(SandboxMode::Sandboxed, &RuntimeConfig::default(), false),
+    )
     .await;
     assert_eq!(local.kind, SandboxBackendKind::Local);
     assert!(

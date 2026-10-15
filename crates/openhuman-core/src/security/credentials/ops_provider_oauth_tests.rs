@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 // ── clear_session ──────────────────────────────────────────────
 
@@ -14,7 +15,9 @@ async fn clear_session_on_empty_store_reports_removed_false() {
     let tmp = TempDir::new().unwrap();
     let _home = EnvVarGuard::set("HOME", tmp.path());
     let config = test_config(&tmp);
-    let result = clear_session(&config).await.unwrap();
+    let result = clear_session(&DispatchCtx::process_default(), &config)
+        .await
+        .unwrap();
     assert_eq!(result.value["removed"], false);
 }
 
@@ -398,7 +401,9 @@ async fn clear_session_on_one_account_does_not_affect_another() {
     .unwrap();
 
     // Clearing the session for account A must not wipe account B's credentials.
-    clear_session(&config_a).await.unwrap();
+    clear_session(&DispatchCtx::process_default(), &config_a)
+        .await
+        .unwrap();
 
     let listed_b = list_provider_credentials(&config_b, None)
         .await

@@ -130,11 +130,11 @@ fn handle_check(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFut
     Box::pin(async { to_json(crate::platform::update::rpc::update_check().await) })
 }
 
-fn handle_run(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async { to_json(crate::platform::update::rpc::update_run().await) })
+fn handle_run(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { to_json(crate::platform::update::rpc::update_run(&ctx).await) })
 }
 
-fn handle_apply(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_apply(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let download_url = params
             .get("download_url")
@@ -152,7 +152,8 @@ fn handle_apply(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutu
             .map(|s| s.to_string());
 
         to_json(
-            crate::platform::update::rpc::update_apply(download_url, asset_name, staging_dir).await,
+            crate::platform::update::rpc::update_apply(&ctx, download_url, asset_name, staging_dir)
+                .await,
         )
     })
 }

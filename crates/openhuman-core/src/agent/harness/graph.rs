@@ -62,6 +62,9 @@ pub(crate) async fn run_channel_turn_via_graph(
     memory_identity: crate::memory::scope::MemoryIdentity,
 ) -> Result<crate::agent::tinyagents::TinyagentsTurnOutcome> {
     let extra_arc = Arc::new(extra_tools);
+    // A channel/CLI turn is entered without a run context: bind the calling
+    // task's context here, once, and carry it on the turn's run context.
+    let dispatch = crate::core::runtime::DispatchCtx::ambient();
 
     // The callable set is the visibility whitelist. The runner advertises each via
     // its own `spec()`, deduped by name (extras shadow the registry).
@@ -102,9 +105,7 @@ pub(crate) async fn run_channel_turn_via_graph(
                 anyhow::bail!("attachments are disabled for this channel input");
             }
             if attachment_config.is_none() {
-                let mut config = crate::config::rpc::load_config_with_timeout()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let mut config = dispatch.load_config().await.map_err(anyhow::Error::msg)?;
                 config.multimodal = multimodal.clone();
                 config.multimodal_files = multimodal_files.clone();
                 attachment_config = Some(config);
@@ -140,7 +141,8 @@ pub(crate) async fn run_channel_turn_via_graph(
         "[channel:graph] routing channel turn through tinyagents harness"
     );
     let turn_origin = origin.clone();
-    let mut run_context = crate::agent::tinyagents::host::OpenHumanRunContext::new();
+    let mut run_context =
+        crate::agent::tinyagents::host::OpenHumanRunContext::new().with_core(dispatch.into_core());
     run_context.origin = origin;
     run_context.approval = approval;
     run_context.memory_identity = Some(memory_identity);

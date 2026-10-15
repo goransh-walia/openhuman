@@ -190,6 +190,7 @@ pub(in super::super) async fn run_subagent_via_graph(
     // dispatch boundary. Reusing that owned value preserves its immediate
     // parent-ledger link; forking again here would hide nested child usage in a
     // second, unreachable ledger.
+    let dispatch = run_context.dispatch_ctx();
     let mut child_context = run_context;
     // A parallel task may omit `thread_id`; that means inherit the parent
     // conversation, not erase it. Only an explicit task thread may replace
@@ -262,8 +263,10 @@ pub(in super::super) async fn run_subagent_via_graph(
             let thread_id = trace_session_group.clone();
             let agent_id = agent_id.to_string();
             let task_id = task_id.to_string();
+            let dispatch = dispatch.clone();
             tokio::spawn(async move {
                 crate::agent::progress_tracing::export_subagent_journal_trace(
+                    &dispatch,
                     &config,
                     &journal_run_id,
                     thread_id.as_deref(),

@@ -309,6 +309,9 @@ pub struct OpenHumanRunContext {
     pub prepared_context_sources: Arc<Vec<AgentContextPreparedSource>>,
     /// Who the run acts as on memory; `None` is the root identity.
     pub memory_identity: Option<crate::memory::scope::MemoryIdentity>,
+    /// The context the turn runs under, read by tools, middleware and the
+    /// provider factory instead of the ambient scope. Children inherit it.
+    pub core: Option<std::sync::Weak<crate::core::runtime::CoreContext>>,
     /// File-state identity used to detect stale parent reads after child writes.
     pub file_state_agent_id: Option<String>,
     /// Host-owned artifact index for tool-result references.
@@ -409,43 +412,13 @@ pub(crate) struct HarnessHostPolicy {
     pub(crate) tool_call_cap: Option<usize>,
 }
 
-pub(crate) use super::operation_context::{
-    approval_for_tool, memory_identity_for_tool, parent_agent_id_for_tool, sandbox_mode_for_tool,
-    HostOperationContext,
-};
 #[cfg(test)]
 pub(crate) use super::operation_context::tool_context_with_approval;
-
-/// OpenHuman product values that tools read from the run through
-/// `ToolExecutionContext::host::<OpenHumanRunExt>()`, installed by
-/// [`OpenHumanRunContext::into_tinyagents`] with `RunContext::with_host`.
-/// It replaces the former per-value task-locals, which do not cross a module
-/// boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct OpenHumanRunExt {
-    /// Recency window narrowing integration task-fetch tools (morning
-    /// briefing only); `None` leaves them unbounded.
-    pub task_recency_window: Option<Duration>,
-}
-
-/// Reads the run's task-recency window from the explicit tool carrier.
-/// Direct tool dispatch (CLI, JSON-RPC, tests) has none.
-pub(crate) fn task_recency_window_for_tool(
-    context: Option<&dyn tinytools::ToolRunContext>,
-) -> Option<Duration> {
-    let window = context
-        .and_then(tinytools::ToolRunContext::host_extension)
-        .and_then(|extension| {
-            extension.downcast_ref::<tinyagents_harness::tool::ToolExecutionContext>()
-        })
-        .and_then(|context| context.host::<OpenHumanRunExt>())
-        .and_then(|ext| ext.task_recency_window);
-    tracing::trace!(
-        has_window = window.is_some(),
-        "[composio][task-window] read run window"
-    );
-    window
-}
+pub use super::operation_context::OpenHumanRunExt;
+pub(crate) use super::operation_context::{
+    approval_for_tool, dispatch_ctx_for_tool, memory_identity_for_tool, parent_agent_id_for_tool,
+    sandbox_mode_for_tool, task_recency_window_for_tool, HostOperationContext,
+};
 
 impl Default for OpenHumanRunContext {
     fn default() -> Self {
@@ -472,6 +445,7 @@ impl OpenHumanRunContext {
             parent: None,
             prepared_context_sources: Arc::new(Vec::new()),
             memory_identity: None,
+            core: None,
             file_state_agent_id: None,
             tool_result_artifact_index: None,
             attachment_placeholders: Arc::new(Vec::new()),
@@ -510,6 +484,24 @@ impl OpenHumanRunContext {
     ) -> Self {
         self.tool_dialect = dialect;
         self
+    }
+
+    /// Binds the context this run acts under, held weakly so a run kept past its turn never pins the tenant.
+    #[must_use]
+    pub fn with_core(mut self, core: Option<Arc<crate::core::runtime::CoreContext>>) -> Self {
+        self.core = core.as_ref().map(Arc::downgrade);
+        self
+    }
+
+    /// The dispatch context this run's readers use: its own `core`, else the
+    /// calling task's (a run assembled by a caller that did not bind one).
+    pub fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
+        crate::core::runtime::DispatchCtx::from_weak(self.core.as_ref())
+    }
+
+    /// The connected-identities prompt section, read under this run's context.
+    pub(crate) fn connected_identities_md(&self) -> String {
+        crate::agent::prompts::render_connected_identities(&self.dispatch_ctx())
     }
 
     /// Sets the direct TinyTools workspace descriptor for this run.
@@ -593,6 +585,7 @@ impl OpenHumanRunContext {
         self.turn_deadline = env.turn_deadline.or(self.turn_deadline);
         self.tool_call_limit = env.tool_call_limit.or(self.tool_call_limit);
         self.memory_identity = env.memory_identity.clone().or(self.memory_identity);
+        self.core = env.core.clone().or(self.core);
         self.stop_hooks
             .extend(env.hooks.stop_hooks().iter().cloned());
         self.tool_hooks
@@ -684,6 +677,7 @@ impl OpenHumanRunContext {
                 .as_ref()
                 .map(|parent| parent.agent_definition_id.clone()),
             memory_identity: self.memory_identity.clone(),
+            core: self.core.clone(),
         });
         let context = tinyagents_harness::context::RunContext::new(config, self)
             .with_cancellation(cancellation)

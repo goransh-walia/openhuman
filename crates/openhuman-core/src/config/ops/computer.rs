@@ -2,6 +2,7 @@
 //! rescue models the module runs a task with.
 
 use crate::config::{ComputerConfig, Config, DecisionModel};
+use crate::core::runtime::DispatchCtx;
 use crate::core::Outcome;
 
 use super::loader::{load_config_with_timeout, snapshot_config_json};
@@ -94,9 +95,10 @@ pub async fn apply_computer_settings(
 
 /// Load the configuration, update `[computer]`, and save it.
 pub async fn load_and_apply_computer_settings(
+    ctx: &DispatchCtx,
     update: ComputerSettingsPatch,
 ) -> Result<Outcome<serde_json::Value>, String> {
-    let mut config = load_config_with_timeout().await?;
+    let mut config = ctx.load_config().await?;
     apply_computer_settings(&mut config, update).await
 }
 

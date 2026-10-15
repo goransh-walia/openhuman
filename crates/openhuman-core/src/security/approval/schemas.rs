@@ -209,7 +209,7 @@ fn handle_get_gate_state(_ctx: DispatchCtx, _params: Map<String, Value>) -> Cont
     })
 }
 
-fn handle_decide(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_decide(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let request_id = read_required_string(&params, "request_id")?;
         let decision_str = read_required_string(&params, "decision")?;
@@ -221,7 +221,7 @@ fn handle_decide(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFut
         })?;
         let agent_id = read_optional_string(&params, "agent_id")?;
         let outcome =
-            approval_rpc::approval_decide(request_id.trim(), decision, agent_id.as_deref())
+            approval_rpc::approval_decide(&ctx, request_id.trim(), decision, agent_id.as_deref())
                 .await
                 .map_err(|e| e.to_string())?;
         to_json(outcome)

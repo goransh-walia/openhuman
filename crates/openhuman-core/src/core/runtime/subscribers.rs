@@ -6,6 +6,7 @@
 //! [`DomainGroup`](crate::core::all::DomainGroup) registers the first time a
 //! boot enables it.
 
+use crate::core::runtime::DispatchCtx;
 /// Per-`DomainGroup` gating decision for each event-bus subscriber that
 /// [`register_domain_subscribers`] conditionally registers. Extracted as a
 /// pure value so the subscriber→group mapping has a single source of truth
@@ -174,7 +175,7 @@ pub(super) fn register_domain_subscribers(
         if std::env::var_os(crate::security::credentials::BACKEND_SESSION_TOKEN_ENV).is_some() {
             let config = config.clone();
             tokio::spawn(async move {
-                crate::security::credentials::seed_session_from_env(&config).await;
+                crate::security::credentials::seed_session_from_env(&DispatchCtx::ambient(), &config).await;
             });
         }
 

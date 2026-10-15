@@ -3,7 +3,9 @@ use super::shell_description::{command_param_description, shell_description};
 use super::shell_support::container_environment;
 use super::shell_support::{command_failure, exec_result, python_utf8_env, tool_timeout_message};
 use crate::agent::host_runtime::RuntimeAdapter;
+use crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool;
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 use crate::security::{AuditLogger, CommandExecutionLog, SecurityPolicy};
 use async_trait::async_trait;
 use serde_json::json;
@@ -263,7 +265,8 @@ impl Tool for ShellTool {
     }
 
     async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
-        self.execute_in_context(args, None).await
+        self.execute_in_context(&dispatch_ctx_for_tool(None), args, None)
+            .await
     }
 
     async fn execute_with_context(
@@ -272,13 +275,15 @@ impl Tool for ShellTool {
         _options: ToolCallOptions,
         context: Option<&dyn ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
-        self.execute_in_context(args, context).await
+        self.execute_in_context(&dispatch_ctx_for_tool(context), args, context)
+            .await
     }
 }
 
 impl ShellTool {
     async fn execute_in_context(
         &self,
+        ctx: &DispatchCtx,
         args: serde_json::Value,
         context: Option<&dyn ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
@@ -297,7 +302,9 @@ impl ShellTool {
         let (allowed, result) = crate::sandbox::shell_progress::with_shell_progress(
             context,
             crate::sandbox::shell_progress::HEARTBEAT_INTERVAL,
-            |meter| self.run_with_security_in_context(command, requested_timeout, context, meter),
+            |meter| {
+                self.run_with_security_in_context(&ctx, command, requested_timeout, context, meter)
+            },
         )
         .await;
         let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -326,15 +333,17 @@ impl ShellTool {
     /// identically to workflow-triggered commands.
     pub(crate) async fn run_with_security(
         &self,
+        ctx: &DispatchCtx,
         command: &str,
         requested_timeout: Option<u64>,
     ) -> (bool, ToolResult) {
-        self.run_with_security_in_context(command, requested_timeout, None, None)
+        self.run_with_security_in_context(&ctx, command, requested_timeout, None, None)
             .await
     }
 
     async fn run_with_security_in_context(
         &self,
+        ctx: &DispatchCtx,
         command: &str,
         requested_timeout: Option<u64>,
         context: Option<&dyn ToolRunContext>,
@@ -409,7 +418,7 @@ impl ShellTool {
             let action_dir = saas_action_dir;
             return match resolved {
                 Ok(policy) => {
-                    self.run_in_policy(policy, command, requested_timeout, &action_dir, meter)
+                    self.run_in_policy(&ctx, policy, command, requested_timeout, &action_dir, meter)
                         .await
                 }
                 Err(why) => {
@@ -423,6 +432,7 @@ impl ShellTool {
         // A sandboxed agent or an explicit operator backend uses the sandbox
         // execution path. Security checks above still apply.
         let sandbox_required = match crate::sandbox::command_requires_sandbox(
+            &ctx,
             crate::agent::tinyagents::host::run_context::sandbox_mode_for_tool(context),
         )
         .await
@@ -438,7 +448,7 @@ impl ShellTool {
         if sandbox_required {
             let action_dir = self.effective_action_dir_for_context(context);
             return self
-                .run_sandboxed(command, requested_timeout, &action_dir, meter)
+                .run_sandboxed(&ctx, command, requested_timeout, &action_dir, meter)
                 .await;
         }
 
@@ -596,7 +606,7 @@ impl ShellTool {
         );
         let config = match self.analysis_config.as_deref() {
             Some(config) => config.clone(),
-            None => match crate::config::ops::load_config_with_timeout().await {
+            None => match ctx.load_config().await {
                 Ok(config) => config,
                 Err(e) => {
                     return (
@@ -624,6 +634,7 @@ impl ShellTool {
     /// agent's `SandboxMode` is `Sandboxed`.
     async fn run_sandboxed(
         &self,
+        ctx: &DispatchCtx,
         command: &str,
         requested_timeout: Option<u64>,
         action_dir: &Path,
@@ -637,13 +648,14 @@ impl ShellTool {
             &config,
             false,
         );
-        self.run_in_policy(policy, command, requested_timeout, action_dir, meter)
+        self.run_in_policy(&ctx, policy, command, requested_timeout, action_dir, meter)
             .await
     }
 
     /// Execute a command under a resolved sandbox `policy`.
     async fn run_in_policy(
         &self,
+        ctx: &DispatchCtx,
         policy: crate::sandbox::SandboxPolicy,
         command: &str,
         requested_timeout: Option<u64>,
@@ -681,7 +693,7 @@ impl ShellTool {
         );
 
         let result = sandbox::ops::execute_in_sandbox_metered(
-            &policy, command, action_dir, extra_env, effective, meter,
+            &ctx, &policy, command, action_dir, extra_env, effective, meter,
         )
         .await;
         (true, exec_result(result, effective))

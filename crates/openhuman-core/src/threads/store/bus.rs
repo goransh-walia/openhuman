@@ -21,6 +21,7 @@
 //! promise, and this file's behaviour is untouched by the move — which matters,
 //! because it decides the id under which channel turns are persisted.
 
+use crate::core::runtime::DispatchCtx;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock};
 
@@ -241,6 +242,7 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                     return;
                 }
                 if let Err(error) = persist_channel_turn(
+                    &DispatchCtx::ambient(),
                     &my_workspace,
                     ChannelTurnDescriptor {
                         channel,
@@ -299,6 +301,7 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                     return;
                 }
                 if let Err(error) = persist_channel_turn(
+                    &DispatchCtx::ambient(),
                     &my_workspace,
                     ChannelTurnDescriptor {
                         channel,
@@ -348,6 +351,7 @@ struct ChannelTurnDescriptor<'a> {
 }
 
 async fn persist_channel_turn(
+    ctx: &DispatchCtx,
     workspace_dir: &Path,
     descriptor: ChannelTurnDescriptor<'_>,
 ) -> Result<(), String> {
@@ -356,7 +360,7 @@ async fn persist_channel_turn(
     let client = crate::channels::module_fixture::client().await;
     #[cfg(not(all(test, feature = "channels", feature = "modules")))]
     let client = {
-        let config = crate::config::rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         if config.workspace_dir != workspace_dir {
             return Err("channel workspace changed".into());
         }

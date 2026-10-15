@@ -9,6 +9,7 @@
 //! user's directory, persist the profile, rebind its process globals, start
 //! the credential-gated services, open the scheduler gate and scope Sentry.
 
+use crate::core::runtime::DispatchCtx;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -181,6 +182,7 @@ fn resolve(request: SetCredentialRequest) -> Result<Resolved, String> {
 /// signed out first so `active_user.toml` never points at one user while
 /// another's profile exists.
 pub async fn set_credential(
+    ctx: &DispatchCtx,
     config: &Config,
     request: SetCredentialRequest,
 ) -> Result<Outcome<AuthStateResponse>, String> {
@@ -269,7 +271,7 @@ pub async fn set_credential(
             operation = "set_credential",
             "{LOG_PREFIX} credential names a different user than the stored one; clearing the previous session first"
         );
-        let cleared = clear_session_credential(config).await?;
+        let cleared = clear_session_credential(&ctx, config).await?;
         logs.extend(cleared.logs);
     }
     metadata.insert("user_id".to_string(), user_id.clone());
@@ -296,9 +298,9 @@ pub async fn set_credential(
         logs.extend(activate_user_scope(&user_id)?);
         // Reload so auth-profiles.json, the encryption key and the workspace
         // resolve to the user-scoped location before the profile is written.
-        let effective = reload_config_or(config).await?;
+        let effective = reload_config_or(&ctx, config).await?;
         if resolved.kind == CredentialKind::Local {
-            match crate::config::ops::set_onboarding_completed(false).await {
+            match crate::config::ops::set_onboarding_completed(&ctx, false).await {
                 Ok(_) => {
                     logs.push("onboarding left incomplete for local session setup".to_string())
                 }
@@ -377,6 +379,7 @@ pub async fn set_credential(
 /// A session (or local) removal runs the sign-out teardown; an API-key removal
 /// only closes the scheduler gate when no other credential remains.
 pub async fn clear_credential(
+    ctx: &DispatchCtx,
     config: &Config,
     kind: Option<CredentialKind>,
 ) -> Result<Outcome<Value>, String> {
@@ -411,14 +414,14 @@ pub async fn clear_credential(
         kind,
         None | Some(CredentialKind::Session) | Some(CredentialKind::Local)
     ) {
-        let outcome = clear_session_credential(config).await?;
+        let outcome = clear_session_credential(&ctx, config).await?;
         removed_session = outcome.value;
         logs.extend(outcome.logs);
 
         if removed_session {
             // Follow the same process globals the teardown just rebound to,
             // so the api-key checks below agree with `auth.get_state`.
-            effective_config = reload_config_or(config).await?;
+            effective_config = reload_config_or(&ctx, config).await?;
             if let Some(key) = source_api_key.as_deref() {
                 if matches!(
                     kind,
@@ -505,7 +508,10 @@ pub async fn clear_credential(
 /// teardown, user-dir deactivation, service stop, rebind to the signed-out
 /// workspace, and Sentry / identity clear. Callers hold
 /// [`CREDENTIAL_MUTATION_LOCK`].
-async fn clear_session_credential(config: &Config) -> Result<Outcome<bool>, String> {
+async fn clear_session_credential(
+    ctx: &DispatchCtx,
+    config: &Config,
+) -> Result<Outcome<bool>, String> {
     let mut logs = Vec::new();
     crate::cron::scheduler_gate::set_signed_out(true);
     #[cfg(feature = "web3")]
@@ -551,7 +557,7 @@ async fn clear_session_credential(config: &Config) -> Result<Outcome<bool>, Stri
     // Every process-global store must follow the now-active pre-login
     // workspace, or a signed-out caller keeps reading the previous account's
     // context until the process restarts.
-    match crate::config::load_config_with_timeout().await {
+    match ctx.load_config().await {
         Ok(signed_out_config) => {
             logs.extend(rebind_after_credential_change(
                 &signed_out_config,
@@ -573,12 +579,14 @@ async fn clear_session_credential(config: &Config) -> Result<Outcome<bool>, Stri
 /// Historical entry point: install a session (or local) credential from a
 /// bare token. Same as [`set_credential`] with the kind classified by shape.
 pub async fn store_session(
+    ctx: &DispatchCtx,
     config: &Config,
     token: &str,
     user_id: Option<String>,
     user: Option<Value>,
 ) -> Result<Outcome<AuthStateResponse>, String> {
     set_credential(
+        &ctx,
         config,
         SetCredentialRequest {
             token: token.to_string(),
@@ -593,8 +601,8 @@ pub async fn store_session(
 
 /// Historical entry point: sign the session out. Same as
 /// [`clear_credential`] for the session kind.
-pub async fn clear_session(config: &Config) -> Result<Outcome<Value>, String> {
-    clear_credential(config, Some(CredentialKind::Session)).await
+pub async fn clear_session(ctx: &DispatchCtx, config: &Config) -> Result<Outcome<Value>, String> {
+    clear_credential(&ctx, config, Some(CredentialKind::Session)).await
 }
 
 /// A process-wide credential is a single-user concept: installing one

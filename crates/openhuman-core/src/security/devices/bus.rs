@@ -7,6 +7,7 @@
 //! - Persisting the `PairedDevice` record after a successful handshake.
 //! - Publishing `DomainEvent::DevicePaired / DevicePeerOnline / DevicePeerOffline`.
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::{Arc, OnceLock};
 
 use crate::core::bus::BUS;
@@ -94,11 +95,13 @@ impl EventHandler<DomainEvent> for DeviceTunnelSubscriber {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .get(channel_id.as_str())
                     .cloned();
-                match super::owner::owner_of(channel_id, pending.as_ref()).await {
+                match super::owner::owner_of(&DispatchCtx::ambient(), channel_id, pending.as_ref())
+                    .await
+                {
                     Ok(owner) => {
                         let handled = crate::storage::agents::within_agent(
                             owner.as_deref(),
-                            handle_tunnel_frame(channel_id, payload_b64),
+                            handle_tunnel_frame(&DispatchCtx::ambient(), channel_id, payload_b64),
                         )
                         .await;
                         // Fail closed: no context can act for the owner.
@@ -176,7 +179,7 @@ fn handle_peer_offline(channel_id: &str) {
 /// Handle an incoming `tunnel:frame` — first frame from the device contains its
 /// X25519 public key sealed to the core's public key. After successful decryption
 /// we derive the shared secret and persist the `PairedDevice`.
-async fn handle_tunnel_frame(channel_id: &str, payload_b64: &str) {
+async fn handle_tunnel_frame(ctx: &DispatchCtx, channel_id: &str, payload_b64: &str) {
     log::debug!(
         "[devices/bus] tunnel:frame channel_id={} payload_len={}",
         channel_id,
@@ -393,7 +396,7 @@ async fn handle_tunnel_frame(channel_id: &str, payload_b64: &str) {
 
     // Load config from global env (best-effort; pairing persists even if config
     // loading is slow — the UI will see the device on next list call).
-    if let Ok(config) = crate::config::rpc::load_config_with_timeout().await {
+    if let Ok(config) = ctx.load_config().await {
         match store::insert_device(
             &config,
             channel_id,

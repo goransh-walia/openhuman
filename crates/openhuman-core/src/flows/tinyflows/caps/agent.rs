@@ -509,15 +509,18 @@ impl OpenHumanAgentRunner {
         conn: Option<&str>,
     ) -> Result<Value> {
         // Resolve + validate the requested agent kind against the registry.
-        let entry = crate::agent::registry::get_agent(agent_ref)
-            .await
-            .map_err(EngineError::Capability)?
-            .ok_or_else(|| {
-                EngineError::Capability(format!(
-                    "agent node: unknown agent_ref '{agent_ref}' (neither a harness definition nor \
+        let entry = crate::agent::registry::get_agent(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            agent_ref,
+        )
+        .await
+        .map_err(EngineError::Capability)?
+        .ok_or_else(|| {
+            EngineError::Capability(format!(
+                "agent node: unknown agent_ref '{agent_ref}' (neither a harness definition nor \
                      a custom agent registry entry)"
-                ))
-            })?;
+            ))
+        })?;
         if !entry.enabled {
             return Err(EngineError::Capability(format!(
                 "agent node: agent_ref '{agent_ref}' is disabled"

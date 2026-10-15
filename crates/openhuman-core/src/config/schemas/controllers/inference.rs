@@ -11,20 +11,17 @@ use super::super::helpers::{
     RuntimeSettingsUpdate,
 };
 
-pub(super) fn handle_get_config(
-    _ctx: DispatchCtx,
-    _params: Map<String, Value>,
-) -> ControllerFuture {
-    Box::pin(async { to_json(config_rpc::load_and_get_config_snapshot().await?) })
+pub(super) fn handle_get_config(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { to_json(config_rpc::load_and_get_config_snapshot(&ctx).await?) })
 }
 
 pub(super) fn handle_get_client_config(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         log::debug!("[config][rpc] get_client_config enter");
-        match config_rpc::load_and_get_client_config_snapshot().await {
+        match config_rpc::load_and_get_client_config_snapshot(&ctx).await {
             Ok(snapshot) => to_json(snapshot),
             Err(err) => {
                 log::warn!("[config][rpc] get_client_config load failed: {err}");
@@ -35,7 +32,7 @@ pub(super) fn handle_get_client_config(
 }
 
 pub(super) fn handle_update_model_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -173,12 +170,12 @@ pub(super) fn handle_update_model_settings(
             memory_provider: update.memory_provider,
             embeddings_provider: update.embeddings_provider,
         };
-        to_json(config_rpc::load_and_apply_model_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_model_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_update_memory_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -188,12 +185,12 @@ pub(super) fn handle_update_memory_settings(
             embedding_model: update.embedding_model,
             embedding_dimensions: update.embedding_dimensions,
         };
-        to_json(config_rpc::load_and_apply_memory_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_memory_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_update_runtime_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -204,12 +201,12 @@ pub(super) fn handle_update_runtime_settings(
             reasoning_effort: update.reasoning_effort,
             reasoning_effort_model: update.reasoning_effort_model,
         };
-        to_json(config_rpc::load_and_apply_runtime_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_runtime_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_update_local_ai_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -230,15 +227,15 @@ pub(super) fn handle_update_local_ai_settings(
             usage_embeddings: update.usage_embeddings,
             api_key: update.api_key,
         };
-        to_json(config_rpc::load_and_apply_local_ai_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_local_ai_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_resolve_api_url(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async { to_json(config_rpc::load_and_resolve_api_url().await?) })
+    Box::pin(async move { to_json(config_rpc::load_and_resolve_api_url(&ctx).await?) })
 }
 
 pub(super) fn handle_get_runtime_flags(

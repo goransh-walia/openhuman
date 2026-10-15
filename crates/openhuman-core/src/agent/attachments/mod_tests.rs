@@ -318,6 +318,7 @@ async fn hard_zero_and_count_gate_precede_reads() {
 #[tokio::test]
 async fn vision_without_explicit_references_fails_before_configuration_or_inference() {
     assert!(!has_resolvable_image(
+        &crate::core::runtime::DispatchCtx::ambient(),
         "Describe a filename mentioned only in prose: picture.png",
         None,
         None
@@ -325,6 +326,7 @@ async fn vision_without_explicit_references_fails_before_configuration_or_infere
     .await
     .unwrap());
     assert!(delegation_prompt(
+        &crate::core::runtime::DispatchCtx::ambient(),
         "task",
         &serde_json::json!({ "image_paths": [42] }),
         None,

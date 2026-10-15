@@ -30,11 +30,12 @@ fn optional_text(params: &Map<String, Value>, key: &str) -> Option<String> {
 
 /// Run one role tool and shape the response for RPC callers.
 async fn run_role_tool(
+    ctx: &DispatchCtx,
     tool: &'static str,
     arguments: Value,
     method: &str,
 ) -> Result<Value, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     run_role_tool_with(&config, tool, arguments, method).await
 }
 
@@ -151,20 +152,27 @@ fn search_arguments(params: &Map<String, Value>, provider: Option<&str>) -> Resu
     Ok(arguments)
 }
 
-pub(super) fn handle_web_search(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_web_search(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let arguments = search_arguments(&params, None)?;
-        run_role_tool(tinysearch_bus::tools::WEB_SEARCH, arguments, "web_search").await
+        run_role_tool(
+            &ctx,
+            tinysearch_bus::tools::WEB_SEARCH,
+            arguments,
+            "web_search",
+        )
+        .await
     })
 }
 
 pub(super) fn handle_searxng_search(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let arguments = search_arguments(&params, Some("searxng"))?;
         run_role_tool(
+            &ctx,
             tinysearch_bus::tools::WEB_SEARCH,
             arguments,
             "searxng_search",
@@ -173,7 +181,7 @@ pub(super) fn handle_searxng_search(
     })
 }
 
-pub(super) fn handle_web_answer(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_web_answer(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let query = required_text(&params, "query")?;
         let mut arguments = json!({ "query": query });
@@ -190,12 +198,18 @@ pub(super) fn handle_web_answer(_ctx: DispatchCtx, params: Map<String, Value>) -
             query_len = query.chars().count(),
             "[rpc][tools.web_answer] request"
         );
-        run_role_tool(tinysearch_bus::tools::WEB_ANSWER, arguments, "web_answer").await
+        run_role_tool(
+            &ctx,
+            tinysearch_bus::tools::WEB_ANSWER,
+            arguments,
+            "web_answer",
+        )
+        .await
     })
 }
 
 pub(super) fn handle_web_contents(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -212,6 +226,7 @@ pub(super) fn handle_web_contents(
         }
         tracing::debug!(urls = urls.len(), "[rpc][tools.web_contents] request");
         run_role_tool(
+            &ctx,
             tinysearch_bus::tools::WEB_CONTENTS,
             arguments,
             "web_contents",

@@ -86,7 +86,7 @@ pub(super) fn handle_set_api_key(ctx: DispatchCtx, params: Map<String, Value>) -
         let config = ctx.load_config().await?;
         let api_key = read_required_non_empty(&params, "api_key")?;
         let activate_direct = read_optional::<bool>(&params, "activate_direct")?.unwrap_or(false);
-        to_json(ops::composio_set_api_key(&config, &api_key, activate_direct).await?)
+        to_json(ops::composio_set_api_key(&ctx, &config, &api_key, activate_direct).await?)
     })
 }
 
@@ -97,6 +97,6 @@ pub(super) fn handle_clear_api_key(
     Box::pin(async move {
         tracing::debug!("[composio-direct] rpc clear_api_key entry");
         let config = ctx.load_config().await?;
-        to_json(ops::composio_clear_api_key(&config).await?)
+        to_json(ops::composio_clear_api_key(&ctx, &config).await?)
     })
 }

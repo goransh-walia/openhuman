@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 fn host(tmp: &tempfile::TempDir, max_open: usize, idle_secs: u64) -> ProfileHost {
     let mut saas = SaasConfig::new(tmp.path());
@@ -394,10 +395,10 @@ async fn the_operators_cron_limits_bind_every_profile_whatever_its_config_says()
     .unwrap();
     let forced = host.provisioned_config(&id).await.unwrap();
     let opened = host.open(&id).await.unwrap();
-    let loaded = CoreContext::scope(Arc::clone(opened.context()), async {
-        crate::config::ops::load_current_or_init().await.unwrap()
-    })
-    .await;
+    let loaded =
+        crate::config::ops::load_current_or_init(&DispatchCtx::new(Arc::clone(opened.context())))
+            .await
+            .unwrap();
     for config in [&forced, &opened.config, &loaded] {
         assert!(config.cron.agent_jobs_only);
         assert_eq!(config.cron.min_interval_secs, 900);

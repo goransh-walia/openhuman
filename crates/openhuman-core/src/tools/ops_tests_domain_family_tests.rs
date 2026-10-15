@@ -119,7 +119,13 @@ async fn readonly_acting_tools_carry_policy_blocked_marker() {
             serde_json::json!({ "url": "https://example.com" }),
         ),
         (
-            Box::new(http_request_tool(sec.clone(), vec![], 0, 0)),
+            Box::new(http_request_tool(
+                &crate::core::runtime::DispatchCtx::ambient(),
+                sec.clone(),
+                vec![],
+                0,
+                0,
+            )),
             serde_json::json!({ "url": "https://example.com" }),
         ),
     ];

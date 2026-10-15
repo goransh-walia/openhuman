@@ -25,6 +25,7 @@ pub(crate) mod shell_job;
 mod tests;
 
 #[allow(unused_imports)]
+use crate::core::runtime::DispatchCtx;
 use agent_run::*;
 #[allow(unused_imports)]
 use delivery::*;
@@ -118,8 +119,9 @@ impl LiveAgentSchedulers {
             .retain(|id, _| live.iter().any(|(live_id, _)| live_id == id));
         for (agent_id, ctx) in live {
             let scheduler = &mut self.by_agent;
+            let dispatch = crate::core::runtime::DispatchCtx::new(ctx.clone());
             crate::core::runtime::CoreContext::scope(ctx, async move {
-                let config = match crate::config::ops::load_current_or_init().await {
+                let config = match crate::config::ops::load_current_or_init(&dispatch).await {
                     Ok(config) => config,
                     Err(error) => {
                         tracing::debug!(agent = %agent_id, %error, "[cron:scheduler] agent config unavailable");

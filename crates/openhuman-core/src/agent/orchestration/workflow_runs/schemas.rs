@@ -212,6 +212,7 @@ fn handle_start(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutur
             .map(str::to_string);
         log::debug!(target: "workflow_run_rpc", "[workflow_run_rpc][{cid}] start.definition={definition_id}");
         let run = super::engine::start_workflow_run(
+            &ctx,
             &config,
             &definition_id,
             input,
@@ -262,7 +263,7 @@ fn handle_resume(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutu
             .and_then(|v| v.as_str())
             .ok_or_else(|| "missing required param: id".to_string())?;
         log::debug!(target: "workflow_run_rpc", "[workflow_run_rpc][{cid}] resume.id={id}");
-        let run = super::engine::resume_workflow_run(&config, id).await.map_err(|e| {
+        let run = super::engine::resume_workflow_run(&ctx, &config, id).await.map_err(|e| {
             let s = e.to_string();
             log::warn!(target: "workflow_run_rpc", "[workflow_run_rpc][{cid}] resume.error id={id} err={s}");
             s

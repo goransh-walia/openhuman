@@ -51,6 +51,8 @@ pub async fn route_enriched(
 async fn dispatch_triage(source: &TaskSource, enriched: &EnrichedTask) -> Result<(), String> {
     // Respect background-AI throttling. When the gate denies capacity
     // (Off / paused), we keep the card but skip the proactive turn.
+    // Entry point of a scheduler-driven turn: bind the calling task's context once.
+    let ctx = crate::core::runtime::DispatchCtx::ambient();
     let Some(_permit) = scheduler_gate::wait_for_capacity().await else {
         tracing::info!(
             source_id = %source.id,
@@ -76,7 +78,7 @@ async fn dispatch_triage(source: &TaskSource, enriched: &EnrichedTask) -> Result
         payload,
     );
 
-    let outcome = run_triage(&envelope)
+    let outcome = run_triage(&ctx, &envelope)
         .await
         .map_err(|e| format!("[task_sources:route] triage evaluation failed: {e}"))?;
 
@@ -85,7 +87,7 @@ async fn dispatch_triage(source: &TaskSource, enriched: &EnrichedTask) -> Result
             // Remote payload: the task arrived from an external board, so the
             // dispatch parks rather than running on a trust root (#5634).
             let origin = remote_trigger_origin(&envelope);
-            with_origin(origin, apply_decision(run, &envelope))
+            with_origin(origin, apply_decision(&ctx, run, &envelope))
                 .await
                 .map_err(|e| format!("[task_sources:route] apply_decision failed: {e}"))?;
             tracing::debug!(

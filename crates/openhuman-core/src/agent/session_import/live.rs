@@ -7,6 +7,7 @@
 //! key-value store, registered on each turn's `RunContext.stores` under
 //! [`TINYAGENTS_SESSION_KV_STORE`].
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 use tinyagents_harness::store::Store;
@@ -21,12 +22,12 @@ pub const TINYAGENTS_SESSION_KV_STORE: &str = "openhuman_sessions";
 ///
 /// Best-effort: `None` when the config (hence workspace) cannot be resolved and
 /// no store is installed.
-pub async fn session_kv_store() -> Option<Arc<dyn Store>> {
+pub async fn session_kv_store(ctx: &DispatchCtx) -> Option<Arc<dyn Store>> {
     if let Some(stores) = crate::agent::session_store::current() {
         log::debug!("[session-store] registering the host session store's kv on RunContext.stores");
         return Some(stores.kv);
     }
-    let cfg = match crate::config::ops::load_current_or_init().await {
+    let cfg = match crate::config::ops::load_current_or_init(ctx).await {
         Ok(cfg) => cfg,
         Err(err) => {
             log::warn!("[session-store] cannot resolve config for store registration: {err:#}");

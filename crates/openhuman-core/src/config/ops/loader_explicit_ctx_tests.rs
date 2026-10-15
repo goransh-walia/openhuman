@@ -58,3 +58,29 @@ async fn the_ambient_loader_reads_the_scoped_context() {
         .expect("loads");
     assert_eq!(loaded.default_model.as_deref(), Some("ambient-model"));
 }
+
+/// An op that takes its context (not just the handler) reads that context's
+/// config: two tenants snapshotting at once, interleaved at await points, each
+/// get their own, and the task's scope does not leak in.
+#[tokio::test(flavor = "current_thread")]
+async fn a_config_op_snapshots_the_context_it_is_handed() {
+    let a = DispatchCtx::new(tenant("snapshot-tenant-a"));
+    let b = DispatchCtx::new(tenant("snapshot-tenant-b"));
+    let intruder = tenant("snapshot-scoped-intruder");
+    let snapshot = |ctx: DispatchCtx| async move {
+        tokio::task::yield_now().await;
+        let out = load_and_get_config_snapshot(&ctx).await.expect("snapshot");
+        out.value.to_string()
+    };
+    let (sa, sb) =
+        CoreContext::scope(intruder, async { tokio::join!(snapshot(a), snapshot(b)) }).await;
+    assert!(
+        sa.contains("snapshot-tenant-a") && !sa.contains("snapshot-tenant-b"),
+        "{sa}"
+    );
+    assert!(
+        sb.contains("snapshot-tenant-b") && !sb.contains("snapshot-tenant-a"),
+        "{sb}"
+    );
+    assert!(!sa.contains("scoped-intruder") && !sb.contains("scoped-intruder"));
+}

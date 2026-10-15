@@ -4,6 +4,7 @@
 use crate::env_guard::{env_lock, env_lock_async, EnvVarGuard};
 use crate::rpc_auth::ensure_rpc_auth;
 use crate::rpc_harness::{ok, payload, rpc, schema};
+use openhuman_core::core::runtime::DispatchCtx;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{
@@ -1096,11 +1097,13 @@ async fn config_default_path_loader_ignores_workspace_override_and_projects_dir_
     let root = home.join(".openhuman");
     let user_dir = root.join("users").join("default-loader-user");
     let workspace_override = tmp.path().join("workspace-override");
-    let _guards = [EnvVarGuard::set_to_path("HOME", &home),
+    let _guards = [
+        EnvVarGuard::set_to_path("HOME", &home),
         EnvVarGuard::unset(APP_ENV_VAR),
         EnvVarGuard::unset(VITE_APP_ENV_VAR),
         EnvVarGuard::set_to_path("OPENHUMAN_WORKSPACE", &workspace_override),
-        EnvVarGuard::set("OPENHUMAN_MODEL", " default-loader-model ")];
+        EnvVarGuard::set("OPENHUMAN_MODEL", " default-loader-model "),
+    ];
 
     let missing = Config::load_from_default_paths()
         .await
@@ -2675,17 +2678,25 @@ async fn config_auto_approve_public_helper_persists_once_and_is_idempotent() {
     let _lock = env_lock_async().await;
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path().join("home");
-    let _guards = [EnvVarGuard::set_to_path("HOME", &home),
+    let _guards = [
+        EnvVarGuard::set_to_path("HOME", &home),
         EnvVarGuard::unset("OPENHUMAN_WORKSPACE"),
         EnvVarGuard::unset(APP_ENV_VAR),
-        EnvVarGuard::unset(VITE_APP_ENV_VAR)];
+        EnvVarGuard::unset(VITE_APP_ENV_VAR),
+    ];
 
-    openhuman_core::config::add_auto_approve_tool("tool.config.round10")
-        .await
-        .expect("add auto approve tool");
-    openhuman_core::config::add_auto_approve_tool("tool.config.round10")
-        .await
-        .expect("idempotent auto approve tool");
+    openhuman_core::config::add_auto_approve_tool(
+        &DispatchCtx::process_default(),
+        "tool.config.round10",
+    )
+    .await
+    .expect("add auto approve tool");
+    openhuman_core::config::add_auto_approve_tool(
+        &DispatchCtx::process_default(),
+        "tool.config.round10",
+    )
+    .await
+    .expect("idempotent auto approve tool");
 
     let loaded = Config::load_or_init()
         .await

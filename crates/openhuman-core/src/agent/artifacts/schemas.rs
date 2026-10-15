@@ -303,6 +303,7 @@ fn handle_regenerate(ctx: DispatchCtx, params: Map<String, Value>) -> Controller
         let client_id = read_required::<String>(&params, "client_id")?;
         to_json(
             crate::agent::artifacts::ops::ai_regenerate(
+                &ctx,
                 &config,
                 artifact_id.trim(),
                 thread_id.trim(),

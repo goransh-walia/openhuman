@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 #[test]
 fn name_is_stable() {
@@ -38,6 +39,7 @@ async fn session_expired_in_saas_returns_before_any_teardown() {
     tokio::time::timeout(
         std::time::Duration::from_secs(1),
         s.handle_with(
+            &DispatchCtx::process_default(),
             true,
             &DomainEvent::SessionExpired {
                 source: "test".into(),

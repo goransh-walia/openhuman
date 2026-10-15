@@ -48,7 +48,7 @@ fn chat(thread: &str) -> ApprovalChatContext {
 }
 
 fn tool() -> PerCallTool<Probe> {
-    PerCallTool::new(|chat| Probe {
+    PerCallTool::new(|chat, _ctx| Probe {
         built_for: chat.cloned(),
     })
 }
@@ -111,4 +111,45 @@ fn static_metadata_comes_from_the_prototype() {
     assert_eq!(tool.name(), "probe");
     assert_eq!(tool.permission_level(), PermissionLevel::Write);
     assert!(tool.external_effect());
+}
+
+#[tokio::test]
+async fn each_call_is_built_around_its_runs_dispatch_context() {
+    use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
+    use std::sync::{Arc, Mutex};
+
+    let seen: Arc<Mutex<Vec<Option<Arc<CoreContext>>>>> = Arc::default();
+    let sink = Arc::clone(&seen);
+    let tool = PerCallTool::new(move |chat, ctx: &DispatchCtx| {
+        sink.lock().unwrap().push(ctx.core().cloned());
+        Probe {
+            built_for: chat.cloned(),
+        }
+    });
+    seen.lock().unwrap().clear();
+
+    let core = CoreContext::for_test(DomainSet::full(), None);
+    let ambient = CoreContext::for_test(DomainSet::full(), None);
+    let run =
+        crate::agent::tinyagents::host::OpenHumanRunContext::new().with_core(Some(core.clone()));
+    let run = run.into_tinyagents(tinyagents_harness::context::RunConfig::new("per-call-ctx"));
+    let context = tinyagents_harness::tool::ToolExecutionContext::from_run_context(
+        &run,
+        tinyagents_harness::ids::CallId::new("per-call-ctx-call"),
+    );
+
+    CoreContext::scope(ambient, async {
+        tool.execute_with_context(
+            serde_json::json!({}),
+            tinytools::ToolCallOptions::default(),
+            Some(&context),
+        )
+        .await
+        .unwrap();
+    })
+    .await;
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 1);
+    assert!(Arc::ptr_eq(seen[0].as_ref().expect("bound"), &core));
 }

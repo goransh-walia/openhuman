@@ -19,6 +19,7 @@
 
 use crate::agent::harness::fork_context::ParentExecutionContext;
 use crate::agent::todos::ops::{self, TodoScope};
+use crate::core::runtime::DispatchCtx;
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -59,7 +60,7 @@ impl ToolDispatch<(), crate::agent::tinyagents::host::OpenHumanRunContext> for T
         let context = ToolExecutionContext::from_run_context(parent, call_id);
         let workspace_dir = match parent.data.parent.as_ref() {
             Some(parent_ctx) => parent_ctx.workspace_dir.clone(),
-            None => crate::config::ops::load_current_or_init()
+            None => crate::config::ops::load_current_or_init(&parent.data.dispatch_ctx())
                 .await
                 .map(|c| c.workspace_dir)
                 .map_err(|e| anyhow::anyhow!("[tool][todo] load config: {e}"))?,

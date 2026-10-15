@@ -5,6 +5,7 @@ use tinytools::Tool;
 
 fn fetch() -> WebFetchTool {
     web_fetch_tool(
+        &crate::core::runtime::DispatchCtx::ambient(),
         Arc::new(SecurityPolicy::default()),
         vec!["example.com".into()],
         None,
@@ -92,16 +93,25 @@ async fn tinyjuice_detects_and_converts_html() {
         return;
     }
     let page = "<!DOCTYPE html><html><body><p>hi</p></body></html>";
-    assert!(TinyJuiceHtml.looks_like_html(page).await.unwrap());
-    assert!(!TinyJuiceHtml
-        .looks_like_html("# Just a README\n\nSome prose.\n")
-        .await
-        .unwrap());
-    assert!(TinyJuiceHtml
-        .to_markdown(page)
-        .await
-        .unwrap()
-        .contains("hi"));
+    assert!(TinyJuiceHtml {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
+    }
+    .looks_like_html(page)
+    .await
+    .unwrap());
+    assert!(!TinyJuiceHtml {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
+    }
+    .looks_like_html("# Just a README\n\nSome prose.\n")
+    .await
+    .unwrap());
+    assert!(TinyJuiceHtml {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
+    }
+    .to_markdown(page)
+    .await
+    .unwrap()
+    .contains("hi"));
 }
 
 #[cfg(feature = "web3")]

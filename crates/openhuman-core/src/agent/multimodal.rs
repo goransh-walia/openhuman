@@ -4,6 +4,7 @@
 //! the acting workspace and provider bytes are prepared only on request copies.
 //! The older stash remains readable so existing conversations can resume.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -99,10 +100,14 @@ fn remote_client() -> Client {
 ///
 /// Claims `application/pdf` and nothing else. The native module runs in the
 /// core process; a wait deadline does not cancel its blocking parser work.
-pub struct DocumentsTextExtractor;
+pub struct DocumentsTextExtractor<'a> {
+    /// The context the extraction reads its config under.
+    #[cfg_attr(not(feature = "documents"), allow(dead_code))]
+    pub ctx: &'a DispatchCtx,
+}
 
 #[async_trait]
-impl TextExtractor for DocumentsTextExtractor {
+impl TextExtractor for DocumentsTextExtractor<'_> {
     fn handles(&self, mime: &str) -> bool {
         mime == "application/pdf"
     }
@@ -125,7 +130,7 @@ impl TextExtractor for DocumentsTextExtractor {
         use crate::modules::documents;
 
         match tokio::time::timeout(PDF_EXTRACTION_TIMEOUT, async {
-            let config = crate::config::ops::load_current_or_init()
+            let config = crate::config::ops::load_current_or_init(self.ctx)
                 .await
                 .map_err(|error| format!("config unavailable for pdf extraction: {error}"))?;
             documents::extract_text(&config, bytes)
@@ -196,6 +201,7 @@ fn latest_user_message(messages: &[TranscriptMessage]) -> Option<&TranscriptMess
 /// Counts are checked against the raw markers before any read happens: a cap
 /// enforced after the fetch is not a cap.
 pub async fn prepare_messages_for_provider(
+    ctx: &DispatchCtx,
     messages: &[TranscriptMessage],
     image_config: &MultimodalConfig,
     file_config: &MultimodalFileConfig,
@@ -294,7 +300,7 @@ pub async fn prepare_messages_for_provider(
                     max_file_bytes,
                     max_extracted_text_chars,
                     &client,
-                    &DocumentsTextExtractor,
+                    &DocumentsTextExtractor { ctx },
                 )
                 .await?,
             );
@@ -346,7 +352,11 @@ fn data_uri_uses_base64(reference: &str) -> bool {
 /// scanned for prompt injection — so the multi-MB base64 data URI never
 /// survives past the front door. Idempotent: a message with no `[FILE:` marker
 /// (already-rewritten `[FILE-EXTRACTED]` text included) is returned unchanged.
-pub async fn inline_file_attachments(message: &str, file_config: &MultimodalFileConfig) -> String {
+pub async fn inline_file_attachments(
+    ctx: &DispatchCtx,
+    message: &str,
+    file_config: &MultimodalFileConfig,
+) -> String {
     if !message.contains(markers::FILE_MARKER_PREFIX) {
         return message.to_string();
     }
@@ -380,7 +390,7 @@ pub async fn inline_file_attachments(message: &str, file_config: &MultimodalFile
             max_file_bytes,
             max_extracted_text_chars,
             &client,
-            &DocumentsTextExtractor,
+            &DocumentsTextExtractor { ctx },
         )
         .await
         {

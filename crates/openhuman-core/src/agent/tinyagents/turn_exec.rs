@@ -313,7 +313,9 @@ async fn drive_turn(
     }
     // `session_kv_store` self-gates on the dual-write flag (config default ON +
     // env kill switch), returning `None` when disabled or unresolvable.
-    if let Some(session_kv) = crate::agent::session_import::live::session_kv_store().await {
+    if let Some(session_kv) =
+        crate::agent::session_import::live::session_kv_store(&run_context.dispatch_ctx()).await
+    {
         stores.get_or_insert_with(StoreRegistry::new).register(
             crate::agent::session_import::live::TINYAGENTS_SESSION_KV_STORE,
             session_kv,
@@ -400,8 +402,14 @@ async fn drive_turn(
     let journal_thread_id = subagent_scope
         .as_ref()
         .map(|scope| tinyagents_harness::ids::ThreadId::new(scope.task_id.clone()));
-    let turn_journal =
-        journal::attach_turn_journal(&sink, model, journal_run_id.clone(), journal_thread_id).await;
+    let turn_journal = journal::attach_turn_journal(
+        &run_context.dispatch_ctx(),
+        &sink,
+        model,
+        journal_run_id.clone(),
+        journal_thread_id,
+    )
+    .await;
     if !is_subagent {
         if let Some(crate::agent::turn_origin::AgentTurnOrigin::WebChat {
             request_id: Some(request_id),

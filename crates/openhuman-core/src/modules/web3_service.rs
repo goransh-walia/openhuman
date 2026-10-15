@@ -1,5 +1,6 @@
 //! User-scoped lifecycle and host transport for TinyWallet Web3 quotes.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -245,7 +246,7 @@ pub(crate) async fn execute(
         WalletChain::Solana => crate::web3::wallet::WalletChain::Solana,
         WalletChain::Tron => crate::web3::wallet::WalletChain::Tron,
     };
-    let stored = crate::web3::wallet::secret_material(chain)
+    let stored = crate::web3::wallet::secret_material(&DispatchCtx::ambient(), chain)
         .await
         .map_err(|error| wallet::WalletCallError::Failed(error.to_string()))?;
     let mnemonic =

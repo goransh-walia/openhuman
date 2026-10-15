@@ -56,12 +56,12 @@ pub(super) fn handle_messages_list(
 }
 
 pub(super) fn handle_message_append(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<AppendConversationMessageRequest>(params)?;
-        to_json(ops::message_append(p).await?)
+        to_json(ops::message_append(&ctx, p).await?)
     })
 }
 
@@ -115,10 +115,10 @@ pub(super) fn handle_message_update(
     })
 }
 
-pub(super) fn handle_delete(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_delete(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<DeleteConversationThreadRequest>(params)?;
-        to_json(ops::thread_delete(p).await?)
+        to_json(ops::thread_delete(&ctx, p).await?)
     })
 }
 

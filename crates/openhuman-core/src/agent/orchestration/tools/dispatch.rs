@@ -251,6 +251,7 @@ pub(crate) async fn dispatch_subagent_with_live_parent(
 
     if agent_id == "vision_agent" {
         match crate::agent::attachments::has_resolvable_image(
+            &run_context.dispatch_ctx(),
             prompt,
             parent_workspace_descriptor.as_ref(),
             run_context.origin.as_ref(),

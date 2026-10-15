@@ -288,7 +288,7 @@ fn handle_build(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutur
         let req: crate::flows::agents::workflow_builder::builder_prompt::BuilderRequest =
             serde_json::from_value(Value::Object(params))
                 .map_err(|e| format!("invalid flows.build params: {e}"))?;
-        to_json(ops::flows_build(&config, req, stream).await?)
+        to_json(ops::flows_build(&ctx, &config, req, stream).await?)
     })
 }
 
@@ -309,7 +309,7 @@ fn handle_discover(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFu
         // Optional streaming target for the Flow Scout run (Phase B) — same
         // `thread_id`/`request_id` convention as `flows.build`.
         let stream = read_flow_stream_target(&params);
-        to_json(ops::flows_discover(&config, stream).await?)
+        to_json(ops::flows_discover(&ctx, &config, stream).await?)
     })
 }
 

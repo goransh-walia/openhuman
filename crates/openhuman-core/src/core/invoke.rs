@@ -34,7 +34,7 @@ pub async fn invoke_method(
     method: &str,
     params: Value,
 ) -> Result<Value, String> {
-    let mut result = invoke_scoped(ctx, state, method, params).await;
+    let mut result = invoke_scoped(ctx.clone(), state, method, params).await;
 
     // Session auto-cleanup: if the OpenHuman auth session is explicitly
     // expired, publish a `SessionExpired` event. The credentials subscriber
@@ -51,7 +51,7 @@ pub async fn invoke_method(
             // local credential cannot use. This extra config read happens only
             // on a classified session-expiry error, never on the normal path.
             let local =
-                crate::security::credentials::session_support::current_session_is_local().await;
+                crate::security::credentials::session_support::current_session_is_local(&ctx).await;
             if should_publish_session_expired(msg, local) {
                 log::warn!(
                     "[jsonrpc] confirmed session expiry for method='{}' — publishing SessionExpired: {}",
@@ -97,8 +97,9 @@ async fn invoke_scoped(
     params: Value,
 ) -> Result<Value, String> {
     let core = ctx.core().cloned();
-    let call: std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send + '_>> =
-        Box::pin(invoke_method_inner(ctx, state, method, params));
+    let call: std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Value, String>> + Send + '_>,
+    > = Box::pin(invoke_method_inner(ctx, state, method, params));
     match core {
         Some(core) => CoreContext::scope(core, call).await,
         None => call.await,

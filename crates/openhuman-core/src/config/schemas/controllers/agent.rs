@@ -13,14 +13,14 @@ use super::super::helpers::{
 };
 
 pub(crate) fn handle_get_autonomy_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async move { to_json(config_rpc::get_autonomy_settings().await?) })
+    Box::pin(async move { to_json(config_rpc::get_autonomy_settings(&ctx).await?) })
 }
 
 pub(crate) fn handle_update_autonomy_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -37,35 +37,35 @@ pub(crate) fn handle_update_autonomy_settings(
             auto_approve: update.auto_approve,
             auto_approve_all: update.auto_approve_all,
         };
-        to_json(config_rpc::load_and_apply_autonomy_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_autonomy_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_get_privacy_mode(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async move { to_json(config_rpc::get_privacy_mode().await?) })
+    Box::pin(async move { to_json(config_rpc::get_privacy_mode(&ctx).await?) })
 }
 
 pub(super) fn handle_set_privacy_mode(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let update = deserialize_params::<PrivacyModeUpdate>(params)?;
         let patch = config_rpc::PrivacySettingsPatch { mode: update.mode };
-        to_json(config_rpc::load_and_apply_privacy_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_privacy_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_get_agent_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async {
+    Box::pin(async move {
         log::debug!("[config][rpc] get_agent_settings enter");
-        match config_rpc::get_agent_settings().await {
+        match config_rpc::get_agent_settings(&ctx).await {
             Ok(outcome) => {
                 log::debug!("[config][rpc] get_agent_settings ok");
                 to_json(outcome)
@@ -79,7 +79,7 @@ pub(super) fn handle_get_agent_settings(
 }
 
 pub(super) fn handle_update_agent_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -96,7 +96,7 @@ pub(super) fn handle_update_agent_settings(
             chat_agent_id: update.chat_agent_id,
             tool_dispatcher: update.tool_dispatcher,
         };
-        match config_rpc::load_and_apply_agent_settings(patch).await {
+        match config_rpc::load_and_apply_agent_settings(&ctx, patch).await {
             Ok(outcome) => {
                 log::debug!("[config][rpc] update_agent_settings ok");
                 to_json(outcome)
@@ -110,7 +110,7 @@ pub(super) fn handle_update_agent_settings(
 }
 
 pub(super) fn handle_update_browser_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -129,12 +129,12 @@ pub(super) fn handle_update_browser_settings(
             task_timeout_secs: update.task_timeout_secs,
             learn_from_tasks: update.learn_from_tasks,
         };
-        to_json(config_rpc::load_and_apply_browser_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_browser_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_update_computer_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -146,7 +146,7 @@ pub(super) fn handle_update_computer_settings(
             rescue_model: update.rescue_model,
             max_rescues: update.max_rescues,
         };
-        to_json(config_rpc::load_and_apply_computer_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_computer_settings(&ctx, patch).await?)
     })
 }
 
@@ -161,14 +161,14 @@ pub(super) fn handle_set_browser_allow_all(
 }
 
 pub(super) fn handle_get_sandbox_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async move { to_json(config_rpc::get_sandbox_settings().await?) })
+    Box::pin(async move { to_json(config_rpc::get_sandbox_settings(&ctx).await?) })
 }
 
 pub(super) fn handle_update_sandbox_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -181,6 +181,6 @@ pub(super) fn handle_update_sandbox_settings(
             docker_cpu_limit: update.docker_cpu_limit,
             env_passthrough: update.env_passthrough,
         };
-        to_json(config_rpc::load_and_apply_sandbox_settings(patch).await?)
+        to_json(config_rpc::load_and_apply_sandbox_settings(&ctx, patch).await?)
     })
 }

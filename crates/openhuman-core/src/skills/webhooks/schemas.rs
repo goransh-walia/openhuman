@@ -289,7 +289,7 @@ fn handle_register_agent(_ctx: DispatchCtx, params: Map<String, Value>) -> Contr
     })
 }
 
-fn handle_trigger_agent(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_trigger_agent(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload = deserialize_params::<WebhookTriggerAgentParams>(params)?;
         let source = payload.source.as_deref().unwrap_or("external");
@@ -297,6 +297,7 @@ fn handle_trigger_agent(_ctx: DispatchCtx, params: Map<String, Value>) -> Contro
         let trigger_payload = payload.payload.unwrap_or_else(|| serde_json::json!({}));
         to_json(
             crate::skills::webhooks::ops::trigger_agent(
+                &ctx,
                 source,
                 &payload.caller_id,
                 reason,

@@ -6,7 +6,12 @@ pub(super) async fn host_config(workspace: &std::path::Path, saas: bool) -> Resu
     if !saas {
         return match crate::core::runtime::CoreContext::current_embedder_config() {
             Some(config) => Ok(config),
-            None => crate::config::ops::load_config_for_workspace_with_timeout(workspace).await,
+            None => {
+                // Transitional (#7801): the module seam has no dispatch context
+                // of its own yet, so it reads the task's ambient one.
+                let ctx = crate::core::runtime::DispatchCtx::ambient();
+                crate::config::ops::load_config_for_workspace_with_timeout(&ctx, workspace).await
+            }
         };
     }
     let context = crate::core::runtime::CoreContext::scoped()

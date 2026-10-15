@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use tinymcp_bus::ToolCallError;
@@ -215,7 +216,7 @@ async fn validate_tool_arguments(
         }
     };
 
-    let config = crate::config::ops::load_current_or_init()
+    let config = crate::config::ops::load_current_or_init(&DispatchCtx::ambient())
         .await
         .map_err(|_| ToolCallError::Internal("MCP argument validation is unavailable".into()))?;
     let client = crate::mcp::module_client::McpConfiguredClient::for_config(&config)

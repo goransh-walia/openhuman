@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Copilot / scout streaming (Phase B) — bridge a builder/scout turn's live
@@ -91,6 +92,7 @@ pub(super) fn attach_flow_progress_bridge(
 /// `chat_error`. Broadcast as `"system"` so any viewer of the thread receives
 /// it (frontend keys by `thread_id`).
 pub(super) async fn finalize_flow_stream(
+    ctx: &DispatchCtx,
     target: &FlowStreamTarget,
     result: &Result<String, String>,
     prompt: &str,
@@ -140,7 +142,7 @@ pub(super) async fn finalize_flow_stream(
     // left non-terminal makes `threads_turn_state_get` report the turn as still
     // running, so re-entering the thread paints a permanent "Thinking..."
     // indicator under a reply that already landed.
-    if let Ok(config) = crate::config::rpc::load_config_with_timeout().await {
+    if let Ok(config) = ctx.load_config().await {
         let lifecycle = if result.is_ok() {
             tinyagents_session::turn_state::TurnLifecycle::Completed
         } else {

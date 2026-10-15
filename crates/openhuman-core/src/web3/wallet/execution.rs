@@ -3,6 +3,7 @@
 //! algorithms and user-scoped service state remain in the compiled module.
 
 use crate::config::rpc as config_rpc;
+use crate::core::runtime::DispatchCtx;
 use crate::core::Outcome;
 use crate::modules::{wallet as wallet_module, wallet_service};
 use tinywallet_bus::names::methods;
@@ -19,8 +20,10 @@ use tinywallet_bus::wire::{EvmNetwork, WalletNetworkDefaults};
 use super::ops::WalletChain;
 
 /// Default row for every supported network, with the host's endpoints.
-pub async fn network_defaults() -> Result<Outcome<Vec<WalletNetworkDefaults>>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+pub async fn network_defaults(
+    ctx: &DispatchCtx,
+) -> Result<Outcome<Vec<WalletNetworkDefaults>>, String> {
+    let config = ctx.load_config().await?;
     let result = wallet_service::with_native_wallet(&config, |service| async {
         wallet_module::call(
             &config,
@@ -38,8 +41,8 @@ pub async fn network_defaults() -> Result<Outcome<Vec<WalletNetworkDefaults>>, S
 }
 
 /// Every asset the wallet catalogues.
-pub async fn supported_assets() -> Result<Outcome<Vec<SupportedAsset>>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+pub async fn supported_assets(ctx: &DispatchCtx) -> Result<Outcome<Vec<SupportedAsset>>, String> {
+    let config = ctx.load_config().await?;
     let result = wallet_service::with_native_wallet(&config, |service| async {
         wallet_module::call(
             &config,
@@ -57,8 +60,8 @@ pub async fn supported_assets() -> Result<Outcome<Vec<SupportedAsset>>, String> 
 }
 
 /// Which chains have an account and a provider.
-pub async fn chain_status() -> Result<Outcome<Vec<ChainStatus>>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+pub async fn chain_status(ctx: &DispatchCtx) -> Result<Outcome<Vec<ChainStatus>>, String> {
+    let config = ctx.load_config().await?;
     let result = wallet_service::with_native_wallet(&config, |service| async {
         wallet_module::call(
             &config,
@@ -76,8 +79,8 @@ pub async fn chain_status() -> Result<Outcome<Vec<ChainStatus>>, String> {
 }
 
 /// Live native balances.
-pub async fn balances() -> Result<Outcome<Vec<BalanceInfo>>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+pub async fn balances(ctx: &DispatchCtx) -> Result<Outcome<Vec<BalanceInfo>>, String> {
+    let config = ctx.load_config().await?;
     let result = wallet_service::with_native_wallet(&config, |service| async {
         wallet_module::call(
             &config,
@@ -96,10 +99,11 @@ pub async fn balances() -> Result<Outcome<Vec<BalanceInfo>>, String> {
 
 /// Validate a transfer and store a quote for it.
 pub async fn prepare_transfer(
+    ctx: &DispatchCtx,
     params: PrepareTransferParams,
     owner: Option<tinywallet_bus::wire::QuoteOwner>,
 ) -> Result<Outcome<PreparedTransaction>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     let quote = wallet_service::prepare_native_transfer(&config, owner, params)
         .await
         .map_err(|error| error.to_string())?;
@@ -111,10 +115,11 @@ pub async fn prepare_transfer(
 
 /// Confirm and execute a prepared transfer.
 pub async fn execute_prepared(
+    ctx: &DispatchCtx,
     params: ExecutePreparedParams,
     owner: Option<tinywallet_bus::wire::QuoteOwner>,
 ) -> Result<Outcome<ExecutionResult>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     let result = wallet_service::execute_native_transfer(&config, owner, params)
         .await
         .map_err(|error| error.to_string())?;
@@ -126,11 +131,12 @@ pub async fn execute_prepared(
 
 /// Check the on-chain lifecycle state of a broadcast transaction.
 pub async fn tx_status(
+    ctx: &DispatchCtx,
     chain: WalletChain,
     evm_network: Option<EvmNetwork>,
     hash: &str,
 ) -> Result<Outcome<TxStatusInfo>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     let result = wallet_service::with_native_wallet(&config, |service| async {
         wallet_module::call(
             &config,
@@ -154,11 +160,12 @@ pub async fn tx_status(
 
 /// Fetch the receipt of a broadcast transaction.
 pub async fn tx_receipt(
+    ctx: &DispatchCtx,
     chain: WalletChain,
     evm_network: Option<EvmNetwork>,
     hash: &str,
 ) -> Result<Outcome<TxReceiptInfo>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     let result = wallet_service::with_native_wallet(&config, |service| async {
         wallet_module::call(
             &config,
@@ -182,11 +189,12 @@ pub async fn tx_receipt(
 
 /// Look up the raw transaction payload by hash.
 pub async fn lookup_tx(
+    ctx: &DispatchCtx,
     chain: WalletChain,
     evm_network: Option<EvmNetwork>,
     hash: &str,
 ) -> Result<Outcome<TxLookupInfo>, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     let result = wallet_service::with_native_wallet(&config, |service| async {
         wallet_module::call(
             &config,
@@ -209,8 +217,12 @@ pub async fn lookup_tx(
 }
 
 /// Encode ERC-20 transfer calldata in the loaded wallet module.
-pub async fn encode_erc20_transfer(to_address: &str, amount_raw: &str) -> Result<String, String> {
-    let config = config_rpc::load_config_with_timeout().await?;
+pub async fn encode_erc20_transfer(
+    ctx: &DispatchCtx,
+    to_address: &str,
+    amount_raw: &str,
+) -> Result<String, String> {
+    let config = ctx.load_config().await?;
     wallet_module::encode_erc20_transfer(&config, to_address, amount_raw)
         .await
         .map_err(|error| error.to_string())

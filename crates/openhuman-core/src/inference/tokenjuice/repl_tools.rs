@@ -1,6 +1,7 @@
 //! Thin query adapters for the module-owned CCR store and REPL algorithms.
 //! OpenHuman authorizes tool-result artifacts; only their content crosses the bus.
 
+use crate::core::runtime::DispatchCtx;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -41,7 +42,7 @@ impl QuerySource for ModuleSource {
     async fn query(&self, request: QueryRequest) -> Result<QueryResponse, String> {
         match &self.config {
             Some(config) => super::query_for_config(config, request).await,
-            None => super::query(request).await,
+            None => super::query(&DispatchCtx::ambient(), request).await,
         }
     }
 }

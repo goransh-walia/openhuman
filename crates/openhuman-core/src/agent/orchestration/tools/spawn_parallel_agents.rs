@@ -244,7 +244,10 @@ impl Tool for SpawnParallelAgentsTool {
             args,
             tinyagents_harness::CancellationToken::new(),
             workspace_descriptor,
-            crate::agent::tinyagents::host::OpenHumanRunContext::new(),
+            crate::agent::tinyagents::host::OpenHumanRunContext::new().with_core(
+                crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context)
+                    .into_core(),
+            ),
             None,
             parent_call_id,
         )

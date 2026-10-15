@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Flow Scout — workflow discovery + suggestion lifecycle
@@ -36,6 +37,7 @@ const FLOW_DISCOVER_PROMPT: &str = "Discover the most useful automations you cou
 /// Turning a suggestion into a real flow is the user's separate "Build this"
 /// action, which routes to `workflow_builder`.
 pub async fn flows_discover(
+    ctx: &DispatchCtx,
     config: &Config,
     stream: Option<FlowStreamTarget>,
 ) -> Result<Outcome<Vec<FlowSuggestion>>, String> {
@@ -108,7 +110,7 @@ pub async fn flows_discover(
     // Emit the terminal chat event so a client viewing the thread finalizes the
     // assistant bubble instead of spinning (the bridge only streams deltas).
     if let Some(target) = &stream {
-        finalize_flow_stream(target, &outcome, FLOW_DISCOVER_PROMPT).await;
+        finalize_flow_stream(&ctx, target, &outcome, FLOW_DISCOVER_PROMPT).await;
     }
 
     let suggestions = store::list_suggestions(config, Some(SuggestionStatus::New), 50)

@@ -1,5 +1,6 @@
 //! Deferred desktop tools. Only their names and descriptions enter discovery.
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -180,7 +181,7 @@ impl Tool for DesktopTool {
                 Err(error) => Err(error.into()),
             },
             DesktopToolKind::Goal => {
-                let live_config = match crate::config::rpc::load_config_with_timeout().await {
+                let live_config = match DispatchCtx::ambient().load_config().await {
                     Ok(config) => config,
                     Err(error) => {
                         return Ok(ToolResult::error(format!(

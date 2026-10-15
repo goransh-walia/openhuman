@@ -203,6 +203,7 @@ fn production_read_tools() -> Vec<Box<dyn tinytools::Tool>> {
     let security = std::sync::Arc::new(SecurityPolicy::default());
     let tools: Vec<Box<dyn tinytools::Tool>> = vec![
         Box::new(crate::tools::implementations::network::web_fetch_tool(
+            &crate::core::runtime::DispatchCtx::ambient(),
             security.clone(),
             vec!["example.com".into()],
             None,

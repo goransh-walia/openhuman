@@ -281,7 +281,7 @@ pub(crate) async fn run_subagent_direct(
 
         // Loaded once per spawn (see `LoadedConfig`), after the tier gate so a
         // rejected spawn never initialises config on first run.
-        let loaded_config: LoadedConfig = Box::pin(crate::config::ops::load_current_or_init())
+        let loaded_config: LoadedConfig = Box::pin(crate::config::ops::load_current_or_init_ambient())
             .await
             .map(std::sync::Arc::new)
             .map_err(|e| e.to_string());
@@ -772,7 +772,7 @@ async fn run_typed_mode(
         visible_tool_names: &visible_tool_names,
         tool_call_format: prompt_tool_call_format,
         connected_integrations: &connected_integrations_for_prompt,
-        connected_identities_md: crate::agent::prompts::render_connected_identities(),
+        connected_identities_md: options.run_context.connected_identities_md(),
         user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
         personality_roster: vec![],
         agents_md_global: agents_md.global.clone(),

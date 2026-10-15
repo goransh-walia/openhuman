@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -86,7 +87,7 @@ async fn clear_session_invalidates_old_channels_and_opens_a_fresh_generation() {
     };
     let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(false);
     let old_session = channel_session();
-    crate::security::credentials::ops::clear_session(&config)
+    crate::security::credentials::ops::clear_session(&DispatchCtx::process_default(), &config)
         .await
         .unwrap();
     assert!(old_session.is_cancelled());

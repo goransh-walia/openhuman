@@ -75,6 +75,7 @@
 //! permission returns [`GateDecision::Deny`], including an unrecognised tool
 //! name.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -151,6 +152,9 @@ pub struct OpenHumanSecurityGate {
     /// The owning turn's approval context (chat routing, copilot flag, flow
     /// run), read from the turn's explicit run context when the gate is built.
     approval: ApprovalTurnContext,
+    /// The owning turn's dispatch context, read from the turn's run context
+    /// when the gate is built; `None` falls back to the calling task's.
+    dispatch: Option<std::sync::Weak<crate::core::runtime::CoreContext>>,
 }
 
 impl OpenHumanSecurityGate {
@@ -169,7 +173,14 @@ impl OpenHumanSecurityGate {
             pending_audit: Mutex::new(HashMap::new()),
             screens_input: true,
             approval: ApprovalTurnContext::default(),
+            dispatch: None,
         }
+    }
+
+    /// Binds the owning turn's dispatch context.
+    pub fn with_dispatch(mut self, dispatch: DispatchCtx) -> Self {
+        self.dispatch = dispatch.downgrade();
+        self
     }
 
     /// Binds the owning turn's approval context, so a parked approval is routed
@@ -413,7 +424,13 @@ impl OpenHumanSecurityGate {
         let policy = self.effective_policy();
         #[cfg(feature = "modules")]
         let desktop_approval_disabled = match self.resolve_tool(&call.tool_name) {
-            Some(tool) => crate::desktop::control::approvals_disabled_for(tool).await,
+            Some(tool) => {
+                crate::desktop::control::approvals_disabled_for(
+                    &DispatchCtx::from_weak(self.dispatch.as_ref()),
+                    tool,
+                )
+                .await
+            }
             None => false,
         };
         #[cfg(not(feature = "modules"))]

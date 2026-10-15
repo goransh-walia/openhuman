@@ -304,9 +304,9 @@ fn handle_server_status(_ctx: DispatchCtx, _params: Map<String, Value>) -> Contr
     Box::pin(async { to_json(config_rpc::agent_server_status()) })
 }
 
-fn handle_list_definitions(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async {
-        let defs = crate::agent::library::list_definition_metadata().await?;
+fn handle_list_definitions(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let defs = crate::agent::library::list_definition_metadata(&ctx).await?;
         Ok(serde_json::json!({ "definitions": defs }))
     })
 }
@@ -356,7 +356,7 @@ struct TriageEvaluateParams {
     dry_run: Option<bool>,
 }
 
-fn handle_triage_evaluate(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_triage_evaluate(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<TriageEvaluateParams>(params)?;
 
@@ -421,7 +421,7 @@ fn handle_triage_evaluate(_ctx: DispatchCtx, params: Map<String, Value>) -> Cont
             "[rpc][agent] running triage pipeline"
         );
 
-        let outcome = crate::agent::triage::run_triage(&envelope)
+        let outcome = crate::agent::triage::run_triage(&ctx, &envelope)
             .await
             .map_err(|e| format!("triage evaluation failed: {e}"))?;
 
@@ -436,7 +436,7 @@ fn handle_triage_evaluate(_ctx: DispatchCtx, params: Map<String, Value>) -> Cont
                     let origin = crate::agent::triage::local_trigger_origin();
                     crate::agent::turn_origin::with_origin(
                         origin,
-                        crate::agent::triage::apply_decision(run.clone(), &envelope),
+                        crate::agent::triage::apply_decision(&ctx, run.clone(), &envelope),
                     )
                     .await
                     .map_err(|e| format!("apply_decision failed: {e}"))?;
@@ -687,11 +687,11 @@ fn handle_registry_snapshot(ctx: DispatchCtx, _params: Map<String, Value>) -> Co
     })
 }
 
-fn handle_context_breakdown(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_context_breakdown(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p =
             deserialize_params::<crate::agent::context_breakdown::ContextBreakdownParams>(params)?;
-        to_json(crate::agent::context_breakdown::context_breakdown(p).await?)
+        to_json(crate::agent::context_breakdown::context_breakdown(&ctx, p).await?)
     })
 }
 

@@ -9,7 +9,7 @@ use crate::core::all::ControllerFuture;
 use super::super::helpers::{deserialize_params, to_json, ComposioTriggerSettingsUpdate};
 
 pub(super) fn handle_update_search_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -21,7 +21,7 @@ pub(super) fn handle_update_search_settings(
                 return Err(err);
             }
         };
-        match config_rpc::load_and_apply_search_settings(patch).await {
+        match config_rpc::load_and_apply_search_settings(&ctx, patch).await {
             Ok(outcome) => {
                 log::debug!("[config][rpc] update_search_settings ok");
                 to_json(outcome)
@@ -35,12 +35,12 @@ pub(super) fn handle_update_search_settings(
 }
 
 pub(super) fn handle_get_search_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async {
+    Box::pin(async move {
         log::debug!("[config][rpc] get_search_settings enter");
-        match config_rpc::get_search_settings().await {
+        match config_rpc::get_search_settings(&ctx).await {
             Ok(outcome) => {
                 log::debug!("[config][rpc] get_search_settings ok");
                 to_json(outcome)
@@ -54,7 +54,7 @@ pub(super) fn handle_get_search_settings(
 }
 
 pub(super) fn handle_update_composio_trigger_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
@@ -70,7 +70,7 @@ pub(super) fn handle_update_composio_trigger_settings(
             triage_disabled: update.triage_disabled,
             triage_disabled_toolkits: update.triage_disabled_toolkits,
         };
-        match config_rpc::load_and_apply_composio_trigger_settings(patch).await {
+        match config_rpc::load_and_apply_composio_trigger_settings(&ctx, patch).await {
             Ok(outcome) => {
                 log::debug!("[config][rpc] update_composio_trigger_settings ok");
                 to_json(outcome)
@@ -84,12 +84,12 @@ pub(super) fn handle_update_composio_trigger_settings(
 }
 
 pub(super) fn handle_get_composio_trigger_settings(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async {
+    Box::pin(async move {
         log::debug!("[config][rpc] get_composio_trigger_settings enter");
-        match config_rpc::get_composio_trigger_settings().await {
+        match config_rpc::get_composio_trigger_settings(&ctx).await {
             Ok(outcome) => {
                 log::debug!("[config][rpc] get_composio_trigger_settings ok");
                 to_json(outcome)

@@ -1,5 +1,6 @@
 //! JSON-RPC / CLI controller surface for security policy introspection.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::json;
 
 use crate::config::Config;
@@ -60,8 +61,10 @@ async fn module_section(_config: &Config) -> serde_json::Value {
     json!({ "status": "not_built" })
 }
 
-pub async fn load_and_get_security_policy_info() -> Result<Outcome<serde_json::Value>, String> {
-    let config = crate::config::ops::load_config_with_timeout().await?;
+pub async fn load_and_get_security_policy_info(
+    ctx: &DispatchCtx,
+) -> Result<Outcome<serde_json::Value>, String> {
+    let config = ctx.load_config().await?;
     let mut outcome = security_policy_info_for_config(&config);
     if let Some(object) = outcome.value.as_object_mut() {
         object.insert("module".to_owned(), module_section(&config).await);

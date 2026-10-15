@@ -233,10 +233,10 @@ fn handle_emit(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutur
     })
 }
 
-fn handle_connect_with_session(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+fn handle_connect_with_session(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let mgr = require_manager()?;
-        let state = super::ops::connect_with_session(mgr).await?;
+        let state = super::ops::connect_with_session(&ctx, mgr).await?;
         Ok(status_payload(&state))
     })
 }

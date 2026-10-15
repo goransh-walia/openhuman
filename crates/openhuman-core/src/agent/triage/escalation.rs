@@ -16,6 +16,7 @@
 //! carried explicitly into [`run_subagent`] so it can inherit the provider
 //! and tools.
 
+use crate::core::runtime::DispatchCtx;
 use anyhow::{anyhow, Context};
 
 use crate::agent::harness::fork_context::ParentExecutionContext;
@@ -37,7 +38,11 @@ use super::events;
 /// 3. If the action is `React` or `Escalate`, dispatching the appropriate
 ///    sub-agent (`trigger_reactor` or `orchestrator`).
 /// 4. Publishing `TriggerEscalated` or `TriggerEscalationFailed` events.
-pub async fn apply_decision(run: TriageRun, envelope: &TriggerEnvelope) -> anyhow::Result<()> {
+pub async fn apply_decision(
+    ctx: &DispatchCtx,
+    run: TriageRun,
+    envelope: &TriggerEnvelope,
+) -> anyhow::Result<()> {
     // Always publish `TriggerEvaluated` — it's the single source of
     // truth for dashboards, counts every trigger regardless of action.
     events::publish_evaluated(
@@ -160,7 +165,7 @@ pub async fn apply_decision(run: TriageRun, envelope: &TriggerEnvelope) -> anyho
                 }
             }
 
-            let dispatch_result = dispatch_target_agent(target, prompt).await;
+            let dispatch_result = dispatch_target_agent(ctx, target, prompt).await;
             // Record terminal status on the approval audit row
             // (#2135). Best-effort: write errors are logged inside
             // record_execution and never propagate to the caller.
@@ -235,7 +240,11 @@ async fn build_triage_parent(
     Ok(parent_ctx)
 }
 
-async fn dispatch_target_agent(agent_id: &str, prompt: &str) -> anyhow::Result<String> {
+async fn dispatch_target_agent(
+    ctx: &DispatchCtx,
+    agent_id: &str,
+    prompt: &str,
+) -> anyhow::Result<String> {
     #[cfg(test)]
     if agent_id.starts_with("missing-agent-") {
         return Err(anyhow!(
@@ -243,7 +252,7 @@ async fn dispatch_target_agent(agent_id: &str, prompt: &str) -> anyhow::Result<S
         ));
     }
 
-    let config = crate::config::ops::load_current_or_init()
+    let config = crate::config::ops::load_current_or_init(ctx)
         .await
         .context("loading config for sub-agent dispatch")?;
 
@@ -269,6 +278,7 @@ async fn dispatch_target_agent(agent_id: &str, prompt: &str) -> anyhow::Result<S
         prompt,
         SubagentRunOptions {
             run_context: crate::agent::tinyagents::host::OpenHumanRunContext::new()
+                .with_core(ctx.core().cloned())
                 .with_host_env(&parent_ctx.host_env)
                 .with_parent(parent_ctx),
             ..Default::default()

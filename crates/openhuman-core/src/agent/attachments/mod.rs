@@ -427,6 +427,7 @@ pub(crate) async fn stage(
 /// Explicit image forwarding for delegation. A filename mentioned in prose
 /// grants no read; only the typed argument or a legacy image marker does.
 pub(crate) async fn delegation_prompt(
+    ctx: &crate::core::runtime::DispatchCtx,
     prompt: &str,
     args: &serde_json::Value,
     workspace: Option<&tinytools::WorkspaceDescriptor>,
@@ -454,9 +455,7 @@ pub(crate) async fn delegation_prompt(
     ) {
         anyhow::bail!("local attachment reads are disabled for external channel input");
     }
-    let mut config = crate::config::rpc::load_config_with_timeout()
-        .await
-        .map_err(anyhow::Error::msg)?;
+    let mut config = ctx.load_config().await.map_err(anyhow::Error::msg)?;
     if let Some(workspace) = workspace {
         config.action_dir = workspace.root.clone();
     }
@@ -469,6 +468,7 @@ pub(crate) async fn delegation_prompt(
 
 /// Validate a vision task's explicit references before constructing inference.
 pub(crate) async fn has_resolvable_image(
+    ctx: &crate::core::runtime::DispatchCtx,
     prompt: &str,
     workspace: Option<&tinytools::WorkspaceDescriptor>,
     origin: Option<&crate::agent::turn_origin::AgentTurnOrigin>,
@@ -487,9 +487,7 @@ pub(crate) async fn has_resolvable_image(
     if paths.is_empty() {
         return Ok(false);
     }
-    let mut config = crate::config::rpc::load_config_with_timeout()
-        .await
-        .map_err(anyhow::Error::msg)?;
+    let mut config = ctx.load_config().await.map_err(anyhow::Error::msg)?;
     if matches!(
         origin,
         Some(crate::agent::turn_origin::AgentTurnOrigin::ExternalChannel { .. })

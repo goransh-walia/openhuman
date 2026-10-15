@@ -1,15 +1,17 @@
 use crate::agent::harness::host_definition::{AgentDefinition, AgentDefinitionRegistry};
-use crate::config::rpc as config_rpc;
+use crate::core::runtime::DispatchCtx;
 use tinyagents_definition::{
     AgentTier, DefinitionSource, ModelSpec, SandboxMode, SubagentEntry, ToolScope,
 };
 
 use super::types::{AgentDefinitionDisplay, AgentDefinitionModel, AgentDefinitionSource};
 
-pub async fn list_definition_metadata() -> Result<Vec<AgentDefinitionDisplay>, String> {
+pub async fn list_definition_metadata(
+    ctx: &DispatchCtx,
+) -> Result<Vec<AgentDefinitionDisplay>, String> {
     tracing::debug!("[rpc][agent_library][entry] list_definitions");
     if AgentDefinitionRegistry::global().is_none() {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         AgentDefinitionRegistry::init_global(&config.workspace_dir)
             .map_err(|e| format!("failed to initialise AgentDefinitionRegistry: {e}"))?;
     }

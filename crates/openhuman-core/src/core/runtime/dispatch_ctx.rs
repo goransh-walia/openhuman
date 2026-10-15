@@ -48,15 +48,21 @@ impl DispatchCtx {
         }
     }
 
-    /// The ambient context of the calling task, or unbound.
+    /// The ambient context of the calling task, or unbound. In SaaS only the
+    /// task's own scope counts.
     ///
     /// Transitional (#7801): for a caller that has no context of its own to
     /// hand over yet. Every use is a reader still to be moved onto an explicit
     /// carrier, and the function goes away with the ambient context.
     pub fn ambient() -> Self {
-        Self {
-            core: CoreContext::current(),
-        }
+        // SaaS reads only the task's own scope, never the process default, so
+        // work that lost its tenant fails closed instead of acting as the operator.
+        let core = if super::is_saas() {
+            CoreContext::scoped()
+        } else {
+            CoreContext::current()
+        };
+        Self { core }
     }
 
     /// The context readers act under: the bound one, else (outside SaaS) the
@@ -87,6 +93,24 @@ impl DispatchCtx {
     /// [`load_config_in`](crate::config::ops::load_config_in).
     pub async fn load_config(&self) -> Result<crate::config::Config, String> {
         crate::config::ops::load_config_in(self).await
+    }
+
+    /// A non-owning handle on the bound context, for state that outlives the
+    /// call (a session, a built turn). The tenant lease is the strong count of
+    /// the context ([`CoreContext::tenant_in_use`]), so a long-lived holder
+    /// must not keep it alive.
+    pub fn downgrade(&self) -> Option<std::sync::Weak<CoreContext>> {
+        self.core.as_ref().map(Arc::downgrade)
+    }
+
+    /// Dispatch under the context `weak` still points at, else the calling
+    /// task's ambient one (a holder that was never bound, or whose tenant is
+    /// gone).
+    pub fn from_weak(weak: Option<&std::sync::Weak<CoreContext>>) -> Self {
+        match weak.and_then(std::sync::Weak::upgrade) {
+            Some(core) => Self::new(core),
+            None => Self::ambient(),
+        }
     }
 
     /// The context this call runs under, if any.

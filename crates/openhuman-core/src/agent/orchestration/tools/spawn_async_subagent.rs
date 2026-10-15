@@ -243,7 +243,10 @@ impl Tool for SpawnAsyncSubagentTool {
             args,
             options,
             tool_context,
-            crate::agent::tinyagents::host::OpenHumanRunContext::new(),
+            crate::agent::tinyagents::host::OpenHumanRunContext::new().with_core(
+                crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context)
+                    .into_core(),
+            ),
             None,
         )
         .await

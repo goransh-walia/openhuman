@@ -1,6 +1,7 @@
 //! Loading persisted config with a timeout, anchored reloads, and the
 //! in-memory normalization that runs on every load.
 
+use crate::core::runtime::DispatchCtx;
 use std::path::Path;
 
 use crate::config::Config;
@@ -85,10 +86,8 @@ pub async fn load_config_in(ctx: &crate::core::runtime::DispatchCtx) -> Result<C
 /// The context-aware counterpart of [`Config::load_or_init`] for code that
 /// runs inside a turn: [`load_config_with_timeout`] with the context's
 /// inference route applied.
-pub async fn load_current_or_init() -> anyhow::Result<Config> {
-    let mut config = load_config_with_timeout()
-        .await
-        .map_err(anyhow::Error::msg)?;
+pub async fn load_current_or_init(ctx: &DispatchCtx) -> anyhow::Result<Config> {
+    let mut config = ctx.load_config().await.map_err(anyhow::Error::msg)?;
     if let Some(route) = config.ephemeral_route.clone() {
         tracing::trace!(
             agent = crate::core::runtime::agent_scope::current_agent_id()
@@ -99,6 +98,12 @@ pub async fn load_current_or_init() -> anyhow::Result<Config> {
         crate::config::schema::ephemeral_route::apply(&mut config, route);
     }
     Ok(config)
+}
+
+/// [`load_current_or_init`] for a caller with no context of its own yet: reads
+/// the task's ambient one. Transitional (#7801), like `DispatchCtx::ambient`.
+pub async fn load_current_or_init_ambient() -> anyhow::Result<Config> {
+    load_current_or_init(&crate::core::runtime::DispatchCtx::ambient()).await
 }
 
 /// Loads the config that belongs to `workspace_dir`, rather than whichever one
@@ -120,6 +125,7 @@ pub async fn load_current_or_init() -> anyhow::Result<Config> {
 /// the process-global load with `workspace_dir` re-anchored — the previous
 /// behaviour, and still correct for a single-workspace host.
 pub async fn load_config_for_workspace_with_timeout(
+    ctx: &DispatchCtx,
     workspace_dir: &Path,
 ) -> Result<Config, String> {
     let candidate = [
@@ -157,7 +163,7 @@ pub async fn load_config_for_workspace_with_timeout(
         workspace = %workspace_dir.display(),
         "[config] no config.toml beside workspace; falling back to the process-global load"
     );
-    let mut config = load_config_with_timeout().await?;
+    let mut config = ctx.load_config().await?;
     config.workspace_dir = workspace_dir.to_path_buf();
     Ok(config)
 }

@@ -1,5 +1,6 @@
 //! Serialized, user-scoped access to the module-owned native wallet service.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
@@ -231,7 +232,7 @@ async fn signing_secret(
         tinywallet_bus::wire::WalletChain::Solana => crate::web3::wallet::WalletChain::Solana,
         tinywallet_bus::wire::WalletChain::Tron => crate::web3::wallet::WalletChain::Tron,
     };
-    let stored = crate::web3::wallet::secret_material(local_chain)
+    let stored = crate::web3::wallet::secret_material(&DispatchCtx::ambient(), local_chain)
         .await
         .map_err(WalletCallError::Failed)?;
     let mnemonic =

@@ -1,5 +1,6 @@
 //! User-scoped lifecycle for the module-owned x402 ledger.
 
+use crate::core::runtime::DispatchCtx;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
@@ -77,7 +78,7 @@ async fn signing_secret(
     config: &Config,
     chain: crate::web3::wallet::WalletChain,
 ) -> Result<tinywallet_bus::wire::SecretMaterial, WalletCallError> {
-    let stored = crate::web3::wallet::secret_material(chain)
+    let stored = crate::web3::wallet::secret_material(&DispatchCtx::ambient(), chain)
         .await
         .map_err(WalletCallError::Failed)?;
     let phrase =

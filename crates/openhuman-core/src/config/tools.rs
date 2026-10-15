@@ -12,6 +12,7 @@
 //! as a follow-up. They would all ship default-OFF (and autonomy is privilege
 //! escalation), so leaving them out keeps this PR's surface read-only and safe.
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -49,7 +50,7 @@ macro_rules! read_tool {
             }
             async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
                 log::debug!(concat!("[tool][config] ", $name, " invoked"));
-                emit!(ops::$fn().await, $name)
+                emit!(ops::$fn(&crate::core::runtime::DispatchCtx::ambient()).await, $name)
             }
             fn is_concurrency_safe(&self, _args: &serde_json::Value) -> bool {
                 true

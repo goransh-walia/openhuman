@@ -77,6 +77,7 @@ async fn direct_upload_requires_runtime_authority_and_external_input_cannot_crea
 async fn delegation_rejects_malformed_explicit_paths_and_external_reads_before_configuration() {
     assert_eq!(
         delegation_prompt(
+            &crate::core::runtime::DispatchCtx::ambient(),
             "mention picture.png in prose",
             &serde_json::json!({}),
             None,
@@ -94,6 +95,7 @@ async fn delegation_rejects_malformed_explicit_paths_and_external_reads_before_c
         serde_json::json!(["picture\u{0}.png"]),
     ] {
         assert!(delegation_prompt(
+            &crate::core::runtime::DispatchCtx::ambient(),
             "task",
             &serde_json::json!({"image_paths": image_paths}),
             None,
@@ -103,6 +105,7 @@ async fn delegation_rejects_malformed_explicit_paths_and_external_reads_before_c
         .is_err());
     }
     let error = delegation_prompt(
+        &crate::core::runtime::DispatchCtx::ambient(),
         "task",
         &serde_json::json!({"image_paths": ["picture.png"]}),
         None,

@@ -187,15 +187,39 @@ async fn delete_missing_id_error() {
 async fn regenerate_rejects_empty_id() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    assert!(ai_regenerate(&config, "", "t", "c").await.is_err());
+    assert!(ai_regenerate(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "",
+        "t",
+        "c"
+    )
+    .await
+    .is_err());
 }
 
 #[tokio::test]
 async fn regenerate_requires_thread_and_client() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    assert!(ai_regenerate(&config, "id", "", "c").await.is_err());
-    assert!(ai_regenerate(&config, "id", "t", "").await.is_err());
+    assert!(ai_regenerate(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "id",
+        "",
+        "c"
+    )
+    .await
+    .is_err());
+    assert!(ai_regenerate(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "id",
+        "t",
+        ""
+    )
+    .await
+    .is_err());
 }
 
 #[tokio::test]
@@ -228,7 +252,15 @@ async fn regenerate_rejects_non_presentation_kind() {
         .await
         .unwrap();
 
-    let err = ai_regenerate(&config, "doc-1", "t", "c").await.unwrap_err();
+    let err = ai_regenerate(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "doc-1",
+        "t",
+        "c",
+    )
+    .await
+    .unwrap_err();
     assert!(
         err.contains("only supported for presentations"),
         "unexpected error: {err}"
@@ -259,9 +291,15 @@ async fn regenerate_errors_when_args_missing() {
     )
     .await
     .unwrap();
-    let err = ai_regenerate(&config, &meta.id, "t", "c")
-        .await
-        .unwrap_err();
+    let err = ai_regenerate(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &meta.id,
+        "t",
+        "c",
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("not regenerable"), "unexpected error: {err}");
 }
 
@@ -298,9 +336,15 @@ async fn regenerate_reruns_producer_and_reuses_id() {
         .await
         .unwrap();
 
-    let outcome = ai_regenerate(&config, &meta.id, "thread-1", "client-1")
-        .await
-        .unwrap();
+    let outcome = ai_regenerate(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &meta.id,
+        "thread-1",
+        "client-1",
+    )
+    .await
+    .unwrap();
     let value = outcome.into_cli_compatible_json().unwrap();
     assert_eq!(value["artifact_id"], meta.id);
     assert_eq!(value["regenerated"], true);
@@ -371,7 +415,9 @@ async fn get_returns_the_files_folder_path() {
     .await
     .unwrap();
     std::fs::write(&path, b"plan").unwrap();
-    finalize_artifact(tmp.path(), &meta.id, 4, None).await.unwrap();
+    finalize_artifact(tmp.path(), &meta.id, 4, None)
+        .await
+        .unwrap();
 
     let value = ai_get_artifact(&config, &meta.id)
         .await
@@ -403,7 +449,9 @@ async fn get_reports_a_ready_file_removed_outside_openhuman() {
     .await
     .unwrap();
     std::fs::write(&path, b"plan").unwrap();
-    finalize_artifact(tmp.path(), &meta.id, 4, None).await.unwrap();
+    finalize_artifact(tmp.path(), &meta.id, 4, None)
+        .await
+        .unwrap();
     std::fs::remove_file(&path).unwrap();
 
     let err = ai_get_artifact(&config, &meta.id).await.unwrap_err();

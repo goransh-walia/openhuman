@@ -115,8 +115,12 @@ pub(super) async fn shadow_compare_journal_projection(
         return None;
     };
 
-    let observations = match crate::agent::tinyagents::journal::read_run_events(&journal_run_id, 0)
-        .await
+    let observations = match crate::agent::tinyagents::journal::read_run_events(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &journal_run_id,
+        0,
+    )
+    .await
     {
         Ok(observations) => observations,
         Err(err) => {

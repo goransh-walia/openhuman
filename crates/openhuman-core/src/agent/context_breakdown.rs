@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::agent::debug::prompt_size::{PromptSizeReport, SectionSize, ToolSize};
 use crate::agent::debug::DumpPromptOptions;
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 use crate::core::Outcome;
 
 /// Default agent whose prompt is measured when the caller names none — the
@@ -179,9 +180,10 @@ fn tools_section(tools: &[ToolSize]) -> ContextSection {
 /// prompt sections, one rolled-up `tools` section, and (when `thread_id` is
 /// given) a `history` section.
 pub async fn context_breakdown(
+    ctx: &DispatchCtx,
     params: ContextBreakdownParams,
 ) -> Result<Outcome<ContextBreakdownResponse>, String> {
-    let config = crate::config::rpc::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     let agent_id = params
         .agent_id
         .as_deref()

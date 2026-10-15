@@ -198,7 +198,7 @@ fn handle_auth_set_credential(ctx: DispatchCtx, params: Map<String, Value>) -> C
         let config = ctx.load_config().await?;
         let payload =
             deserialize_params::<crate::security::credentials::SetCredentialRequest>(params)?;
-        to_json(crate::security::credentials::rpc::set_credential(&config, payload).await?)
+        to_json(crate::security::credentials::rpc::set_credential(&ctx, &config, payload).await?)
     })
 }
 
@@ -218,7 +218,7 @@ fn handle_auth_clear_credential(ctx: DispatchCtx, params: Map<String, Value>) ->
             ),
             None => None,
         };
-        to_json(crate::security::credentials::rpc::clear_credential(&config, kind).await?)
+        to_json(crate::security::credentials::rpc::clear_credential(&ctx, &config, kind).await?)
     })
 }
 

@@ -1,5 +1,6 @@
 //! Agent tool adapters that route Web3 operations through the TinyWallet bus.
 
+use crate::core::runtime::DispatchCtx;
 use async_trait::async_trait;
 use serde_json::Value;
 use tinytools::{Tool, ToolCallOptions, ToolExposure, ToolResult};
@@ -35,7 +36,7 @@ impl Tool for Web3ModuleTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.run(args, None).await
+        self.run(&DispatchCtx::ambient(), args, None).await
     }
 
     async fn execute_with_context(
@@ -45,7 +46,8 @@ impl Tool for Web3ModuleTool {
         context: Option<&dyn tinytools::ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
         let approval = crate::agent::tinyagents::host::run_context::approval_for_tool(context);
-        self.run(args, approval.chat.as_ref()).await
+        self.run(&DispatchCtx::ambient(), args, approval.chat.as_ref())
+            .await
     }
 
     async fn execute_with_options(
@@ -61,11 +63,12 @@ impl Web3ModuleTool {
     /// Runs the tool for a turn whose approval context is `chat`.
     pub(crate) async fn run(
         &self,
+        ctx: &DispatchCtx,
         args: Value,
         chat: Option<&crate::security::approval::ApprovalChatContext>,
     ) -> anyhow::Result<ToolResult> {
         let owner = crate::modules::web3_service::owner_of(chat);
-        let config = match crate::config::rpc::load_config_with_timeout().await {
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => return Ok(ToolResult::error(error)),
         };

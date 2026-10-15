@@ -17,18 +17,18 @@
 /// `block_in_place` + current-runtime-handle bridge. Best-effort: no runtime, a
 /// single-threaded runtime, or a config-load/driver failure all render an
 /// empty section rather than panicking or blocking a prompt on a memory read.
-pub fn render_connected_identities() -> String {
+pub fn render_connected_identities(ctx: &crate::core::runtime::DispatchCtx) -> String {
     let Ok(handle) = tokio::runtime::Handle::try_current() else {
         return String::new();
     };
     if handle.runtime_flavor() != tokio::runtime::RuntimeFlavor::MultiThread {
         return String::new();
     }
-    tokio::task::block_in_place(|| handle.block_on(render_section()))
+    tokio::task::block_in_place(|| handle.block_on(render_section(ctx)))
 }
 
-async fn render_section() -> String {
-    let config = match crate::config::rpc::load_config_with_timeout().await {
+async fn render_section(ctx: &crate::core::runtime::DispatchCtx) -> String {
+    let config = match ctx.load_config().await {
         Ok(config) => config,
         Err(error) => {
             tracing::debug!(%error, "[prompts] render_connected_identities: config load failed");

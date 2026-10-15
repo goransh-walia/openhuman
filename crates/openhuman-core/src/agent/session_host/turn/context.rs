@@ -58,7 +58,9 @@ impl OpenHumanSessionHost {
             visible_tool_names: &prompt_visible_tool_names,
             tool_call_format: self.tool_dispatcher.tool_call_format(),
             connected_integrations: &self.connected_integrations,
-            connected_identities_md: crate::agent::prompts::render_connected_identities(),
+            connected_identities_md: crate::agent::prompts::render_connected_identities(
+                &self.dispatch_ctx(),
+            ),
             user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
             personality_roster: vec![], // TODO: build_personality_roster(&workspace_dir)
             agents_md_global: agents_md.global,

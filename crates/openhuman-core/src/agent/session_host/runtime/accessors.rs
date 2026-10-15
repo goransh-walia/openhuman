@@ -278,6 +278,12 @@ impl OpenHumanSessionHost {
         self.host_env = env;
     }
 
+    /// The context this session's turns run under: the one its host
+    /// environment carries, else the calling task's.
+    pub(crate) fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
+        crate::core::runtime::DispatchCtx::from_weak(self.host_env.core.as_ref())
+    }
+
     /// The host environment installed with [`Self::set_host_env`].
     pub fn host_env(&self) -> &crate::agent::turn_env::HostTurnEnv {
         &self.host_env

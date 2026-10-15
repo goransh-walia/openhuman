@@ -158,6 +158,7 @@ pub async fn ai_delete_artifact(
 /// The returned value is a thin ack — the card's live state is driven by
 /// the socket events the re-run publishes, not by this RPC's result.
 pub async fn ai_regenerate(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     artifact_id: &str,
     thread_id: &str,
@@ -185,7 +186,7 @@ pub async fn ai_regenerate(
         ));
     }
 
-    regenerate_presentation(config, artifact_id, thread_id, client_id).await
+    regenerate_presentation(ctx, config, artifact_id, thread_id, client_id).await
 }
 
 /// Re-run the presentation producer tool against an existing artifact id.
@@ -194,6 +195,7 @@ pub async fn ai_regenerate(
 /// a thin, always-compiled RPC handler.
 #[cfg(feature = "documents")]
 async fn regenerate_presentation(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     artifact_id: &str,
     thread_id: &str,
@@ -223,7 +225,7 @@ async fn regenerate_presentation(
         request_id: None,
     };
 
-    let result = tool.run(args, Some(&chat_ctx)).await;
+    let result = tool.run(args, Some(&chat_ctx), ctx).await;
 
     match result {
         Ok(tool_result) => {
@@ -253,6 +255,7 @@ async fn regenerate_presentation(
 /// limitation rather than pretend to regenerate.
 #[cfg(not(feature = "documents"))]
 async fn regenerate_presentation(
+    _ctx: &crate::core::runtime::DispatchCtx,
     _config: &Config,
     artifact_id: &str,
     _thread_id: &str,

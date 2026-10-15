@@ -57,6 +57,13 @@ pub struct HostTurnEnv {
     /// root identity. Unlike `approval` it follows delegation, so runs started
     /// from a parent snapshot keep the parent's team.
     pub memory_identity: Option<crate::memory::scope::MemoryIdentity>,
+    /// The [`CoreContext`](crate::core::runtime::CoreContext) the turn runs
+    /// under (the tenant's, an embedded agent's, or the host's own), held
+    /// weakly: the env outlives a turn, and a strong handle would keep the
+    /// tenant in use. The session copies it onto the turn's run context, from
+    /// which tools, middleware and the provider factory read it; `None` leaves
+    /// the session to bind the calling task's context when the turn starts.
+    pub core: Option<std::sync::Weak<crate::core::runtime::CoreContext>>,
 }
 
 impl std::fmt::Debug for HostTurnEnv {
@@ -71,6 +78,7 @@ impl std::fmt::Debug for HostTurnEnv {
             .field("fresh_tool_snapshot", &self.fresh_tool_snapshot)
             .field("approval", &self.approval)
             .field("memory_identity", &self.memory_identity)
+            .field("core", &self.core.is_some())
             .finish()
     }
 }
