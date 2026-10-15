@@ -140,11 +140,30 @@ async fn released_module_gives_the_answers_the_deleted_host_command_tests_pinned
     );
 }
 
-/// The tier table the host's own `gate_decision` still serves (flow nodes) is
-/// the module's: every autonomy, enabled flag and class gives the same gate.
+/// The tier table, spelled out case by case so it is not derived from code.
+fn expected_tier_gate(
+    autonomy: AutonomyLevel,
+    enabled: bool,
+    class: tinybox_bus::CommandClass,
+) -> GateDecision {
+    use tinybox_bus::CommandClass::*;
+    use AutonomyLevel::*;
+    use GateDecision::*;
+    match (enabled, autonomy, class) {
+        (false, _, _) => Allow,
+        (true, _, Read) => Allow,
+        (true, ReadOnly, _) => Block,
+        (true, Supervised, _) => Prompt,
+        (true, Full, Write) => Allow,
+        (true, Full, Network | Install | Destructive) => Prompt,
+    }
+}
+
+/// The module's tier table is the one written out below (and in the test
+/// stub): every autonomy, enabled flag and class gives that gate.
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn released_module_tier_gate_matches_the_host_gate_table() {
+async fn released_module_tier_gate_matches_the_inlined_table() {
     let mut native = Native::start().await;
     for autonomy in [
         AutonomyLevel::ReadOnly,
@@ -171,7 +190,7 @@ async fn released_module_tier_gate_matches_the_host_gate_table() {
                 let projected = crate::security::policy::native_commands::host_gate(decision.gate);
                 assert_eq!(
                     projected,
-                    host.gate_decision(class),
+                    expected_tier_gate(autonomy, enabled, class),
                     "{autonomy:?} enabled={enabled} {class:?}"
                 );
             }

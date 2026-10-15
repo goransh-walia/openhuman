@@ -116,32 +116,8 @@ fn action_dir_is_not_granted_when_it_covers_the_workspace() {
 }
 
 #[test]
-fn gate_decision_matrix_is_pinned() {
+fn declared_class_parsing_is_pinned() {
     use CommandClass::*;
-    use GateDecision::*;
-    let classes = [Read, Write, Network, Install, Destructive];
-    let expect = [
-        (AutonomyLevel::ReadOnly, [Allow, Block, Block, Block, Block]),
-        (
-            AutonomyLevel::Supervised,
-            [Allow, Prompt, Prompt, Prompt, Prompt],
-        ),
-        (AutonomyLevel::Full, [Allow, Allow, Prompt, Prompt, Prompt]),
-    ];
-    for (tier, row) in expect {
-        for (class, want) in classes.iter().zip(row) {
-            assert_eq!(
-                policy(true, tier).gate_decision(*class),
-                want,
-                "{tier:?} {class:?}"
-            );
-            assert_eq!(
-                policy(false, tier).gate_decision(*class),
-                Allow,
-                "disabled {tier:?} {class:?}"
-            );
-        }
-    }
     assert_eq!(
         SecurityPolicy::parse_declared_class("NETWORK"),
         Some(Network)

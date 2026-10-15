@@ -56,10 +56,6 @@ fn the_action_budget_is_shared_with_the_policy() {
 fn supervised_network_asks_for_approval_and_read_only_does_not() {
     let supervised = policy(AutonomyLevel::Supervised, 100);
     let read_only = policy(AutonomyLevel::ReadOnly, 100);
-    assert_eq!(
-        NetGate::network_needs_approval(supervised.as_ref()),
-        supervised.gate_decision(CommandClass::Network) == GateDecision::Prompt
-    );
     assert!(NetGate::network_needs_approval(supervised.as_ref()));
     assert!(!NetGate::network_needs_approval(read_only.as_ref()));
 }

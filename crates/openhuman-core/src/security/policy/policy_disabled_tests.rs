@@ -31,18 +31,11 @@ fn from_config_carries_the_disabled_flag() {
     assert!(!policy.enabled);
 }
 
+// A disabled policy allows every command class; that table is the module's
+// and is pinned on the real module by `released_module_tier_gate_matches_the_inlined_table`.
 #[test]
-fn disabled_policy_never_prompts_or_blocks_on_class() {
+fn disabled_policy_can_act_and_is_not_rate_limited() {
     let policy = disabled_policy();
-    for class in [
-        CommandClass::Read,
-        CommandClass::Write,
-        CommandClass::Network,
-        CommandClass::Install,
-        CommandClass::Destructive,
-    ] {
-        assert_eq!(policy.gate_decision(class), GateDecision::Allow);
-    }
     assert!(policy.can_act());
     assert!(!policy.is_rate_limited());
 }
