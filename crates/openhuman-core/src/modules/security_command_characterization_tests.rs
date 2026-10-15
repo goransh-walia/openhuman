@@ -237,7 +237,10 @@ async fn released_module_allowlist_per_tier_and_executor_rules() {
     assert!(m.allowlisted(&sup, "git status && ls").await);
     assert!(!m.allowlisted(&sup, "python3 x.py").await);
     assert!(!m.allowlisted(&sup, "ls && python3 x.py").await);
-    assert!(!m.allowlisted(&sup, "ls > out.txt").await, "redirects are structural");
+    assert!(
+        !m.allowlisted(&sup, "ls > out.txt").await,
+        "redirects are structural"
+    );
     assert!(!m.allowlisted(&sup, "echo $(id)").await);
     let ro = with_allowlist(AutonomyLevel::ReadOnly, &["ls"]);
     assert!(!m.allowlisted(&ro, "ls").await);
@@ -269,8 +272,20 @@ async fn released_module_allowlist_per_tier_and_executor_rules() {
     let executors = with_allowlist(
         AutonomyLevel::Supervised,
         &[
-            "echo", "xargs", "awk", "perl", "python", "python3", "python3.12", "python.EXE",
-            "pythonw3", "pythonw3.12.exe", "ruby", "bash", "sh", "env",
+            "echo",
+            "xargs",
+            "awk",
+            "perl",
+            "python",
+            "python3",
+            "python3.12",
+            "python.EXE",
+            "pythonw3",
+            "pythonw3.12.exe",
+            "ruby",
+            "bash",
+            "sh",
+            "env",
         ],
     );
     for command in [
@@ -303,7 +318,10 @@ async fn released_module_allowlist_per_tier_and_executor_rules() {
     ] {
         assert!(!m.allowlisted(&default, command).await, "{command}");
     }
-    assert!(m.allowlisted(&default, "git ls-remote ssh://example.com").await);
+    assert!(
+        m.allowlisted(&default, "git ls-remote ssh://example.com")
+            .await
+    );
 
     // Quoted semicolons do not split; an unquoted one after them still does.
     let sqlite = with_allowlist(AutonomyLevel::Supervised, &["sqlite3"]);
@@ -360,7 +378,11 @@ async fn released_module_risk_levels_and_approval_requirements() {
         "C:\\Python312\\pythonw3.12.exe -c 'print(1)'",
         "/usr/bin/env python3 -c 'print(1)'",
     ] {
-        assert_eq!(m.risk(&default, command).await, CommandRisk::Medium, "{command}");
+        assert_eq!(
+            m.risk(&default, command).await,
+            CommandRisk::Medium,
+            "{command}"
+        );
     }
 
     let touch = SecurityPolicy {
@@ -372,7 +394,10 @@ async fn released_module_risk_levels_and_approval_requirements() {
         require_approval_for_medium_risk: true,
         ..with_allowlist(AutonomyLevel::Full, &["touch"])
     };
-    assert_eq!(m.validate(&touch_full, "touch test.txt").await, (false, false));
+    assert_eq!(
+        m.validate(&touch_full, "touch test.txt").await,
+        (false, false)
+    );
 
     let rm = with_allowlist(AutonomyLevel::Supervised, &["rm"]);
     assert_eq!(m.validate(&rm, "rm -rf /tmp/test").await.0, true);
@@ -400,10 +425,14 @@ async fn released_module_refusals_do_not_echo_command_arguments() {
             flow,
             stage: CommandStage::Authorize,
         };
-        let projected = crate::security::policy::native_commands::project(&query, false, Ok(decision.clone()));
+        let projected =
+            crate::security::policy::native_commands::project(&query, false, Ok(decision.clone()));
         if let Err(refusal) = projected {
             let text = refusal.to_string();
-            assert!(!text.contains("hunter2") && !text.contains("psql"), "{text}");
+            assert!(
+                !text.contains("hunter2") && !text.contains("psql"),
+                "{text}"
+            );
         }
         assert!(
             decision.denial.is_some() || flow == CommandFlow::Harness,

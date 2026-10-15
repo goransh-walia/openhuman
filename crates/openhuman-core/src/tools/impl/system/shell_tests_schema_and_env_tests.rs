@@ -14,7 +14,10 @@ async fn configured_shell_fails_closed_when_the_security_module_cannot_answer() 
         .execute(json!({"command": "cat ~/.ssh/id_rsa"}))
         .await
         .unwrap();
-    assert!(result.is_error, "an unanswered question must not run the command");
+    assert!(
+        result.is_error,
+        "an unanswered question must not run the command"
+    );
     assert!(result.output().contains("authorization unavailable"));
     assert_eq!(gateway.asked().len(), 1);
 }
@@ -55,7 +58,11 @@ async fn a_refused_shell_command_never_reaches_the_runtime_and_carries_the_reaso
             .await
             .unwrap();
         assert!(result.is_error, "{reason:?}");
-        assert!(result.output().contains(needle), "{reason:?}: {}", result.output());
+        assert!(
+            result.output().contains(needle),
+            "{reason:?}: {}",
+            result.output()
+        );
         assert!(!marker.exists(), "{reason:?} must not run the command");
     }
 }
@@ -137,7 +144,10 @@ async fn shell_emits_audit_line_on_denial() {
     use crate::security::AuditEvent;
     let (audit, tmp) = audit_with_tempdir();
     let tool = ShellTool::new(
-        gated_security(AutonomyLevel::ReadOnly, StubGateway::refuse(Refusal::ReadOnly)),
+        gated_security(
+            AutonomyLevel::ReadOnly,
+            StubGateway::refuse(Refusal::ReadOnly),
+        ),
         test_runtime(),
         audit,
     );

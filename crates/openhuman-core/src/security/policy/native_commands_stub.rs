@@ -26,8 +26,9 @@ pub(crate) struct Asked {
     pub stage: CommandStage,
 }
 
-type Answer =
-    Box<dyn Fn(&SecurityPolicy, &CommandQuery<'_>) -> Result<CommandVerdict, Refusal> + Send + Sync>;
+type Answer = Box<
+    dyn Fn(&SecurityPolicy, &CommandQuery<'_>) -> Result<CommandVerdict, Refusal> + Send + Sync,
+>;
 
 pub(crate) struct StubGateway {
     answer: Answer,

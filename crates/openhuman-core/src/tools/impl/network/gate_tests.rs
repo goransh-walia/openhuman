@@ -72,14 +72,18 @@ fn the_network_gate_asks_the_module_for_the_network_class() {
     let asked = gateway.asked();
     assert_eq!(asked.len(), 1);
     assert_eq!(asked[0].declared, Some(CommandClass::Network));
-    assert!(asked[0].command.is_empty(), "a class question has no command");
+    assert!(
+        asked[0].command.is_empty(),
+        "a class question has no command"
+    );
 }
 
 #[test]
 fn a_module_that_cannot_answer_refuses_the_call_and_asks_for_approval() {
     // Fail closed: an unanswered tier question must neither run the request nor
     // read as "no approval needed".
-    let security = SecurityPolicy::default().with_gateway(StubGateway::refuse(Refusal::Unavailable));
+    let security =
+        SecurityPolicy::default().with_gateway(StubGateway::refuse(Refusal::Unavailable));
     assert!(!NetGate::can_act(&security));
     assert!(NetGate::network_needs_approval(&security));
 }

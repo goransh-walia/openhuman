@@ -312,10 +312,22 @@ async fn scheduled_shell_refusals_keep_their_messages_and_stages() {
     let base =
         SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
     for (reason, message) in [
-        (Refusal::Protected, "blocked by security policy: command rejected"),
-        (Refusal::RateLimit, "blocked by security policy: rate limit exceeded"),
-        (Refusal::NotAllowed, "blocked by security policy: command not allowed"),
-        (Refusal::HighRisk, "blocked by security policy: command not allowed"),
+        (
+            Refusal::Protected,
+            "blocked by security policy: command rejected",
+        ),
+        (
+            Refusal::RateLimit,
+            "blocked by security policy: rate limit exceeded",
+        ),
+        (
+            Refusal::NotAllowed,
+            "blocked by security policy: command not allowed",
+        ),
+        (
+            Refusal::HighRisk,
+            "blocked by security policy: command not allowed",
+        ),
     ] {
         let security = base.clone().with_gateway(StubGateway::refuse(reason));
         assert_eq!(

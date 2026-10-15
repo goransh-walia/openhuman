@@ -121,7 +121,8 @@ impl NetGate for SecurityPolicy {
     fn can_act(&self) -> bool {
         // The module's gate for network-class actions: a tier that blocks them
         // (read-only), or a module that cannot answer, refuses the call.
-        SecurityPolicy::can_act(self) && network_gate(self).is_some_and(|gate| gate != GateDecision::Block)
+        SecurityPolicy::can_act(self)
+            && network_gate(self).is_some_and(|gate| gate != GateDecision::Block)
     }
 
     fn is_rate_limited(&self) -> bool {

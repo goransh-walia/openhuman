@@ -178,4 +178,3 @@ fn read_only_tier_blocks_acts_before_the_budget() {
     assert_eq!(p.tracker.count(), 0);
     assert!(p.enforce_write_tier("memory").is_err());
 }
-

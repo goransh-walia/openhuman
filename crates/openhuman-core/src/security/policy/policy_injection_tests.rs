@@ -376,4 +376,3 @@ const MEAL_PLAN_HEREDOC: &str = r#"cat > out/meal_plan.md << 'EOF'
 ## Day 3 — Spinach & Feta Stuffed Chicken
 ## Day 5 — Shrimp & Vegetable Mediterranean Pasta
 EOF"#;
-

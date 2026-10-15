@@ -24,16 +24,23 @@ fn every_refusal_names_the_policy_marker_and_none_echoes_a_command() {
     for refusal in all {
         let text = refusal.to_string();
         assert!(text.contains(POLICY_BLOCKED_MARKER), "{refusal:?}: {text}");
-        assert!(text.len() < 400, "{refusal:?} message is not a fixed sentence");
+        assert!(
+            text.len() < 400,
+            "{refusal:?} message is not a fixed sentence"
+        );
     }
     // The rate limit keeps its established wording.
-    assert!(Refusal::RateLimit.to_string().starts_with("Rate limit exceeded"));
+    assert!(Refusal::RateLimit
+        .to_string()
+        .starts_with("Rate limit exceeded"));
 }
 
 #[cfg(feature = "security-module")]
 mod projection {
     use super::*;
-    use tinysecurity_bus::{CommandClass as Bus, CommandDecision, CommandDenial, CommandGate, CommandRisk};
+    use tinysecurity_bus::{
+        CommandClass as Bus, CommandDecision, CommandDenial, CommandGate, CommandRisk,
+    };
 
     fn decision(class: Bus, gate: CommandGate, denial: Option<CommandDenial>) -> CommandDecision {
         CommandDecision {
@@ -55,7 +62,11 @@ mod projection {
             })
         );
         assert_eq!(
-            project(&q, false, Ok(decision(Bus::Install, CommandGate::Prompt, None))),
+            project(
+                &q,
+                false,
+                Ok(decision(Bus::Install, CommandGate::Prompt, None))
+            ),
             Ok(CommandVerdict {
                 class: CommandClass::Install,
                 gate: GateDecision::Prompt
@@ -66,14 +77,46 @@ mod projection {
     #[test]
     fn denials_map_to_the_refusal_for_the_flow_that_asked() {
         let cases = [
-            (CommandDenial::Protected, CommandFlow::Harness, Refusal::Protected),
-            (CommandDenial::Protected, CommandFlow::Scheduled, Refusal::Protected),
-            (CommandDenial::ReadOnly, CommandFlow::Harness, Refusal::ReadOnly),
-            (CommandDenial::ReadOnly, CommandFlow::Scheduled, Refusal::NotAllowed),
-            (CommandDenial::Command, CommandFlow::Harness, Refusal::Hidden),
-            (CommandDenial::Command, CommandFlow::Scheduled, Refusal::NotAllowed),
-            (CommandDenial::HighRisk, CommandFlow::Harness, Refusal::HighRisk),
-            (CommandDenial::RateLimit, CommandFlow::Scheduled, Refusal::RateLimit),
+            (
+                CommandDenial::Protected,
+                CommandFlow::Harness,
+                Refusal::Protected,
+            ),
+            (
+                CommandDenial::Protected,
+                CommandFlow::Scheduled,
+                Refusal::Protected,
+            ),
+            (
+                CommandDenial::ReadOnly,
+                CommandFlow::Harness,
+                Refusal::ReadOnly,
+            ),
+            (
+                CommandDenial::ReadOnly,
+                CommandFlow::Scheduled,
+                Refusal::NotAllowed,
+            ),
+            (
+                CommandDenial::Command,
+                CommandFlow::Harness,
+                Refusal::Hidden,
+            ),
+            (
+                CommandDenial::Command,
+                CommandFlow::Scheduled,
+                Refusal::NotAllowed,
+            ),
+            (
+                CommandDenial::HighRisk,
+                CommandFlow::Harness,
+                Refusal::HighRisk,
+            ),
+            (
+                CommandDenial::RateLimit,
+                CommandFlow::Scheduled,
+                Refusal::RateLimit,
+            ),
         ];
         for (denial, flow, expected) in cases {
             let answer = decision(Bus::Write, CommandGate::Block, Some(denial));
@@ -87,7 +130,11 @@ mod projection {
 
     #[test]
     fn a_denial_wins_even_if_the_gate_says_allow() {
-        let answer = decision(Bus::Read, CommandGate::Allow, Some(CommandDenial::Protected));
+        let answer = decision(
+            Bus::Read,
+            CommandGate::Allow,
+            Some(CommandDenial::Protected),
+        );
         assert_eq!(
             project(&query("x", CommandFlow::Harness), false, Ok(answer)),
             Err(Refusal::Protected)
@@ -98,7 +145,11 @@ mod projection {
     fn a_block_without_a_reason_is_a_refusal_for_a_command_and_a_block_for_a_class() {
         let answer = decision(Bus::Network, CommandGate::Block, None);
         assert_eq!(
-            project(&query("curl x", CommandFlow::Harness), false, Ok(answer.clone())),
+            project(
+                &query("curl x", CommandFlow::Harness),
+                false,
+                Ok(answer.clone())
+            ),
             Err(Refusal::Category)
         );
         assert_eq!(

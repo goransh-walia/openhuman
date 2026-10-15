@@ -63,9 +63,16 @@ impl Native {
         declared: Option<CommandClass>,
         op: CommandOp,
     ) -> CommandDecision {
-        command_on(&mut self.state, &self.fixture.proxy, policy, command, declared, op)
-            .await
-            .expect("module answered")
+        command_on(
+            &mut self.state,
+            &self.fixture.proxy,
+            policy,
+            command,
+            declared,
+            op,
+        )
+        .await
+        .expect("module answered")
     }
 }
 
@@ -126,7 +133,11 @@ async fn released_module_gives_the_answers_the_deleted_host_command_tests_pinned
             other => panic!("unknown op {other}"),
         }
     }
-    assert!(mismatches.is_empty(), "{} mismatches: {mismatches:#?}", mismatches.len());
+    assert!(
+        mismatches.is_empty(),
+        "{} mismatches: {mismatches:#?}",
+        mismatches.len()
+    );
 }
 
 /// The tier table the host's own `gate_decision` still serves (flow nodes) is
@@ -202,7 +213,12 @@ async fn released_module_enforces_the_command_floor_and_structure_rules() {
 
     // Disabled policy: ordinary shell syntax, hidden execution included, runs.
     let plain = native
-        .ask(harness(&off), "echo $(date) | tee out.txt &", None, CommandOp::Check)
+        .ask(
+            harness(&off),
+            "echo $(date) | tee out.txt &",
+            None,
+            CommandOp::Check,
+        )
         .await;
     assert_eq!((plain.gate, plain.denial), (CommandGate::Allow, None));
 
@@ -307,7 +323,11 @@ async fn released_module_scheduled_flow_applies_the_allowlist() {
         .ask(scheduled.clone(), "git status", None, CommandOp::Check)
         .await;
     assert_eq!(allowed.denial, None);
-    for command in ["curl http://example.com", "git config core.editor vi", "ls > out"] {
+    for command in [
+        "curl http://example.com",
+        "git config core.editor vi",
+        "ls > out",
+    ] {
         let decision = native
             .ask(scheduled.clone(), command, None, CommandOp::Check)
             .await;

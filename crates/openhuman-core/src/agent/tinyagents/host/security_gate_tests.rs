@@ -1,10 +1,10 @@
 use super::*;
 use crate::security::policy::native_commands_stub::{Asked, StubGateway};
 use crate::security::policy::{AutonomyLevel, CommandFlow, CommandStage, Refusal};
-use tinybox_bus::CommandClass;
 use async_trait::async_trait;
 use serde_json::json;
 use tinyagents_harness::host::security_gate::{ContentOrigin, ScreenOutcome, SecurityGate};
+use tinybox_bus::CommandClass;
 use tinytools::ToolResult;
 
 /// Minimal registered tool. `execute` is unreachable: this adapter answers
@@ -164,7 +164,10 @@ fn shell_gate(
         ..SecurityPolicy::default()
     }
     .with_gateway(gateway.clone());
-    (OpenHumanSecurityGate::new(Arc::new(policy), registry()), gateway)
+    (
+        OpenHumanSecurityGate::new(Arc::new(policy), registry()),
+        gateway,
+    )
 }
 
 #[tokio::test]
@@ -243,8 +246,14 @@ async fn shell_authorization_denies_a_call_without_a_command_and_never_asks() {
 async fn the_declared_category_reaches_the_module_as_an_escalate_only_hint() {
     let policy = SecurityPolicy::default().with_gateway(StubGateway::prompt());
     let cases = [
-        (json!({"command": "ls", "category": "destructive"}), Some(CommandClass::Destructive)),
-        (json!({"command": "ls", "category": "READ"}), Some(CommandClass::Read)),
+        (
+            json!({"command": "ls", "category": "destructive"}),
+            Some(CommandClass::Destructive),
+        ),
+        (
+            json!({"command": "ls", "category": "READ"}),
+            Some(CommandClass::Read),
+        ),
         (json!({"command": "ls", "category": "bogus"}), None),
         (json!({"command": "ls"}), None),
     ];

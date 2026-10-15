@@ -14,17 +14,18 @@ mod path_checks;
 mod types;
 
 pub use enforcement::validate_path_within_root;
-pub use native_commands::{
-    CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, Refusal, SharedCommandGateway,
-};
 pub use enforcement::{ensure_openhuman_scratch_dir, openhuman_scratch_dir};
+pub use native_commands::{
+    CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, Refusal,
+    SharedCommandGateway,
+};
 #[cfg(feature = "modules")]
 pub(crate) use path_checks::{
     ALWAYS_FORBIDDEN_PREFIXES, SENSITIVE_COMPONENTS, SENSITIVE_FILES, SENSITIVE_PAIRS,
 };
 pub use types::{
-    tool_result_artifacts_dir, ActionTracker, AutonomyLevel, GateDecision,
-    SecurityPolicy, ToolOperation, TrustedAccess, TrustedRoot,
+    tool_result_artifacts_dir, ActionTracker, AutonomyLevel, GateDecision, SecurityPolicy,
+    ToolOperation, TrustedAccess, TrustedRoot,
 };
 
 #[cfg(test)]

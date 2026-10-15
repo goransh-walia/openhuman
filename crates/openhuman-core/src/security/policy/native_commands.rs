@@ -149,7 +149,9 @@ fn block_on_gateway<T: Send + 'static>(
 /// The agent-facing message for a refused command.
 pub(crate) fn refusal_message(denial: Refusal) -> String {
     match denial {
-        Refusal::Protected => format!("{POLICY_BLOCKED_MARKER} Command references a protected path"),
+        Refusal::Protected => {
+            format!("{POLICY_BLOCKED_MARKER} Command references a protected path")
+        }
         Refusal::ReadOnly => format!(
             "{POLICY_BLOCKED_MARKER} Security policy: read-only mode — only read commands are \
              permitted. Do not retry this command; use a read-only approach or report that it \
@@ -396,7 +398,10 @@ pub(crate) fn project(
             CommandDenial::HighRisk => Refusal::HighRisk,
             CommandDenial::RateLimit => Refusal::RateLimit,
         };
-        log::debug!("[security][command] refused flow={:?} reason={refusal:?}", query.flow);
+        log::debug!(
+            "[security][command] refused flow={:?} reason={refusal:?}",
+            query.flow
+        );
         return Err(refusal);
     }
     // A class question reports a blocked tier as such; for a real command a
