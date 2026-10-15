@@ -16,7 +16,8 @@ use std::sync::Mutex;
 
 use sha2::{Digest, Sha256};
 use tinysecurity_bus::{
-    names, RedactRequest, RedactResponse, ScanPromptRequest, ScanToolDefinitionRequest,
+    names, RedactRequest, RedactResponse, RedactWithRequest, ScanPromptRequest,
+    ScanToolDefinitionRequest, Secret,
 };
 pub(crate) use tinysecurity_bus::{RedactMode, ScanResponse, ScanVerdict};
 
@@ -105,6 +106,56 @@ pub(crate) async fn redact_on(
         cache.put(&mode, text, &response.text);
     }
     Ok(response.text)
+}
+
+/// Redact `text` on `mode` with `secrets` as exact credentials for this call
+/// only (`RedactWith`): a tenant's own key is removed from that tenant's output
+/// without reinitializing the module for everyone. Not cached, since the key
+/// set is part of the request.
+pub(crate) async fn redact_with_on(
+    proxy: &tinybus::Proxy,
+    mode: RedactMode,
+    text: &str,
+    secrets: &[String],
+) -> Result<String, String> {
+    let response: RedactResponse = proxy
+        .call_confidential(
+            names::methods::REDACT_WITH,
+            (RedactWithRequest {
+                text: text.to_string(),
+                mode,
+                secrets: secrets.iter().cloned().map(Secret).collect(),
+            },),
+        )
+        .await
+        .map_err(|_| "TinySecurity RedactWith failed")?;
+    Ok(response.text)
+}
+
+/// Credentials removed from `text` (`CredentialsOnly`) with `secrets` as exact
+/// credentials for this call, in chunks the module accepts. Any chunk the module
+/// cannot answer fails the whole call; the original is never returned.
+pub(crate) async fn credentials_with_on(
+    proxy: &tinybus::Proxy,
+    text: &str,
+    secrets: &[String],
+) -> Result<String, String> {
+    let mut out = String::with_capacity(text.len());
+    for chunk in crate::security::redact::credential_chunks(text) {
+        out.push_str(&redact_with_on(proxy, RedactMode::CredentialsOnly, chunk, secrets).await?);
+    }
+    Ok(out)
+}
+
+/// [`credentials_with_on`] through the live module.
+pub(crate) async fn redact_credentials_with(
+    config: &Config,
+    text: &str,
+    secrets: &[String],
+) -> Result<String, String> {
+    super::require_enabled(config)?;
+    let proxy = super::scoped_client::module_proxy(config).await?;
+    credentials_with_on(&proxy, text, secrets).await
 }
 
 /// Redact through the live module. Errors are returned so callers that must
