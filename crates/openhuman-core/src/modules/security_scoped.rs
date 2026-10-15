@@ -184,7 +184,7 @@ pub(super) async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, Stri
     let mut state = state().lock().await;
     let result = super::proxy(config, &mut state).await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security_scoped.rs", std::thread::current().name()); state.faulted = true; }
     } else {
         super::text::arm_log_scrubber(config);
     }

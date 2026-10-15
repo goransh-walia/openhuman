@@ -255,7 +255,7 @@ pub async fn policy_info(config: &Config) -> Result<PolicyInfo, String> {
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }
@@ -286,7 +286,7 @@ pub(crate) async fn evaluate(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }
@@ -322,7 +322,7 @@ pub(crate) async fn check(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }
@@ -352,7 +352,7 @@ pub(crate) async fn register_path_policy(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }
@@ -389,7 +389,7 @@ async fn validate_native_path(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }
@@ -419,7 +419,7 @@ pub(crate) async fn check_path(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }
@@ -442,7 +442,7 @@ pub(crate) async fn validate_host_path(
     }
     .await;
     if result.is_err() {
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }

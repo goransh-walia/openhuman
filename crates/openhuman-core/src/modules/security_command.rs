@@ -63,7 +63,7 @@ pub(crate) async fn command_decision(
     .await;
     if let Err(error) = &result {
         log::warn!("[security][command] module call failed op={op:?}: {error}");
-        state.faulted = true;
+        { eprintln!("TMPDBG-FAULT {} {:?}", "security_command.rs", std::thread::current().name()); state.faulted = true; }
     }
     result
 }
