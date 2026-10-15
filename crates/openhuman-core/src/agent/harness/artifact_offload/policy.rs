@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use tinyagents_harness::artifacts::{ArtifactPathPolicy, ArtifactRedactor, Redacted};
 
-use crate::security::scrub::sanitize_text;
 use crate::security::SecurityPolicy;
 
 /// Refuses artifact writes that reach the core's internal `workspace_dir`.
@@ -65,11 +64,11 @@ pub struct SanitizingRedactor;
 
 impl ArtifactRedactor for SanitizingRedactor {
     fn redact(&self, content: &str) -> Redacted {
-        let sanitized = sanitize_text(content);
-        if sanitized.report.changed() {
-            Redacted::rewritten(sanitized.value)
+        let sanitized = crate::security::redact::text(content);
+        if sanitized != content {
+            Redacted::rewritten(sanitized)
         } else {
-            Redacted::unchanged(sanitized.value)
+            Redacted::unchanged(sanitized)
         }
     }
 }

@@ -175,7 +175,7 @@ fn to_audit(stored: &Versioned<Value>) -> Option<ApprovalAuditEntry> {
 /// sanitize first, so truncation can never split a secret past the redactor.
 fn audit_error(error: Option<&str>) -> Option<String> {
     error.map(|raw| {
-        let sanitized = crate::security::scrub::sanitize_text(raw).value;
+        let sanitized = crate::security::redact::text(raw);
         if sanitized.chars().count() > 512 {
             let head: String = sanitized.chars().take(511).collect();
             format!("{head}…")

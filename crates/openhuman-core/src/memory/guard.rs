@@ -78,7 +78,7 @@ pub fn scrub(item: StoreItem) -> StoreItem {
     let kind = item.kind();
     let scrubbed = tinymemory_integrations::safety::scrub_item_with(
         item,
-        crate::security::scrub::host_policy(),
+        tinyredact::Policy::corroborated(),
     );
     if scrubbed.report.changed() {
         tracing::debug!(
