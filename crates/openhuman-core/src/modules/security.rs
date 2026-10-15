@@ -606,6 +606,12 @@ mod production_tests;
 #[path = "security_tenant_tests.rs"]
 mod tenant_tests;
 
+/// Policies bound to the released archive, for the ignored production-path
+/// tests of the callers that moved onto the module.
+#[cfg(test)]
+#[path = "security_released_support.rs"]
+pub(crate) mod released_support;
+
 #[path = "security_config.rs"]
 mod config;
 
