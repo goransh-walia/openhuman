@@ -71,7 +71,7 @@
       "plan": "hook commands from config and skills -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
       "executor": "direct",
       "test": "pending",
-      "note": "migration backlog: route through the tinybox jail (issue 7328 phase 5)"
+      "note": "blocked: the hook engine (tinyagents_runtime::command_hooks) spawns the process through a synchronous shell factory, so jailing needs an async spawner seam upstream; tinyagents main is 142 commits past the host pin. Refused under SaaS (shell_tests.rs)"
     },
     {
       "file": "crates/openhuman-core/src/inference/host_runtime/service/speech.rs",
@@ -144,15 +144,16 @@
       "plan": "model shell tool, host fallback (sandbox off / Noop) -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
       "executor": "direct",
       "test": "pending",
-      "note": "migration backlog: route through the tinybox jail (issue 7328 phase 5)"
+      "note": "the only direct spawn is the unsandboxed backend an operator or agent mode `none` selects; SaaS refuses it at execute_in_sandbox (ops_tests.rs saas_refuses_an_unsandboxed_spawn)"
     },
     {
       "file": "crates/openhuman-core/src/sandbox/untrusted.rs",
       "spawns": 1,
-      "trust": "unclassified",
-      "plan": "",
-      "executor": "n/a",
-      "test": ""
+      "trust": "untrusted",
+      "plan": "operator-authorized scheduled shell job -> jail policy resolved by sandbox::ops (native jail or Docker), refused below the isolation floor",
+      "executor": "jailed",
+      "test": "crates/openhuman-core/src/sandbox/untrusted_tests.rs",
+      "note": "the one gate (sandbox::untrusted::run); its only direct spawn is the operator opt-out (OPENHUMAN_SANDBOX=off, [sandbox] enabled=false), never reachable under SaaS"
     },
     {
       "file": "crates/openhuman-core/src/security/secret_storage/encrypted_store.rs",
@@ -173,11 +174,11 @@
     {
       "file": "crates/openhuman-core/src/skills/runtime/ops.rs",
       "spawns": 1,
-      "trust": "untrusted",
-      "plan": "skill-declared runtime command probe -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
-      "executor": "direct",
-      "test": "pending",
-      "note": "migration backlog: route through the tinybox jail (issue 7328 phase 5)"
+      "trust": "host-probe",
+      "plan": "n/a",
+      "executor": "n/a",
+      "test": "n/a",
+      "note": "fixed argv: `node --version` / `python3 --version`, no skill-supplied text reaches the command"
     },
     {
       "file": "crates/openhuman-core/src/tools/impl/system/install_tool.rs",
@@ -186,7 +187,7 @@
       "plan": "model-chosen install_tool package commands -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
       "executor": "direct",
       "test": "pending",
-      "note": "migration backlog: route through the tinybox jail (issue 7328 phase 5)"
+      "note": "operator-approved host mutation by design (interactive human approval + allow_tool_install, fixed manager argv, validated package name); a jail would block the global prefix it exists to write. Refused under SaaS (install_tool_tests.rs). Owner decision whether to scope it to a per-manager prefix"
     },
     {
       "file": "crates/openhuman-core/src/voice/always_on/transcribe.rs",
