@@ -104,11 +104,10 @@ async fn code_adapter_javascript_runs_when_isolated_and_refuses_when_isolation_i
     }
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let security = Arc::new(SecurityPolicy::from_config(
-        &config.autonomy,
-        &config.workspace_dir,
-        &config.action_dir,
-    ));
+    let security = Arc::new(
+        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
+            .with_gateway(crate::security::policy::native_commands_stub::StubGateway::tiered()),
+    );
     let runner = OpenHumanCode {
         config,
         security,
