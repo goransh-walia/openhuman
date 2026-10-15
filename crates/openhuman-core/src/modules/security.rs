@@ -175,7 +175,8 @@ async fn proxy(config: &Config, state: &mut ClientState) -> Result<tinybus::Prox
         return Ok(proxy.clone());
     }
     state.load_failed = false;
-    if let Err(error) = super::ops::ensure_loaded_within(config, MODULE_ID, Some(LOAD_TIMEOUT)).await
+    if let Err(error) =
+        super::ops::ensure_loaded_within(config, MODULE_ID, Some(LOAD_TIMEOUT)).await
     {
         state.load_failed = true;
         return Err(super::ops::load_error_message(error));

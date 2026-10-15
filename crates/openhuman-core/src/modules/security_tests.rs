@@ -235,8 +235,14 @@ fn a_load_failure_leaves_the_client_retryable_but_a_channel_fault_latches() {
         ..Default::default()
     };
     state.latch();
-    assert!(!state.faulted, "a load that did not finish must stay retryable");
-    assert!(!state.load_failed, "the exemption covers exactly one failure");
+    assert!(
+        !state.faulted,
+        "a load that did not finish must stay retryable"
+    );
+    assert!(
+        !state.load_failed,
+        "the exemption covers exactly one failure"
+    );
 
     // The next failure after the module answered is a real fault.
     state.latch();
