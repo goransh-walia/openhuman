@@ -33,9 +33,14 @@ pub fn endpoint_host(url: &str) -> String {
 /// original text is never returned unfiltered.
 #[must_use]
 pub fn text(text: &str) -> String {
-    match module_text(text) {
+    answer_or_floor(module_text(text), text)
+}
+
+/// The module's `answer` when it gave one, otherwise the floor over `input`.
+fn answer_or_floor(answer: Option<String>, input: &str) -> String {
+    match answer {
         Some(redacted) => redacted,
-        None => crate::core::log_redaction::floor_scrub_text(text),
+        None => crate::core::log_redaction::floor_scrub_text(input),
     }
 }
 

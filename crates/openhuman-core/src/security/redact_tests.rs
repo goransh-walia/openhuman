@@ -126,3 +126,15 @@ async fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
     let card = text("card 4111 1111 1111 1111 on file");
     assert!(!card.contains("4111 1111 1111 1111"), "{card}");
 }
+
+#[test]
+fn text_falls_back_to_the_floor_never_the_original_or_a_blank() {
+    let out = answer_or_floor(None, "retry failed: Authorization: Bearer abcdefghijklmnop\nok");
+    assert!(!out.contains("abcdefghijklmnop"), "{out}");
+    assert!(out.starts_with("retry failed:") && out.ends_with("\nok"), "{out}");
+}
+
+#[test]
+fn text_prefers_the_module_answer() {
+    assert_eq!(answer_or_floor(Some("module said".into()), "raw"), "module said");
+}

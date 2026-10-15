@@ -162,3 +162,38 @@ fn blocking_redact_without_a_module_runtime_never_returns_the_text() {
     );
     assert!(out.is_err(), "{out:?}");
 }
+
+#[test]
+fn log_redaction_without_an_armed_bridge_is_suppressed_never_the_original() {
+    let secret = "https://user:hunter2@example.com/path?token=abc";
+    assert_eq!(
+        redact_for_log_with(None, RedactMode::EndpointOrigin, secret, None),
+        SUPPRESSED
+    );
+    assert!(try_redact_with(None, RedactMode::Text, secret, None).is_err());
+}
+
+#[test]
+fn log_redaction_with_a_disabled_module_is_suppressed() {
+    let mut config = Config::default();
+    config.modules.enabled = false;
+    let bridge = LogBridge { config };
+    let out = redact_for_log_with(
+        Some(&bridge),
+        RedactMode::EndpointHost,
+        "https://user:hunter2@example.com/",
+        Some(std::time::Duration::from_millis(50)),
+    );
+    assert_eq!(out, SUPPRESSED);
+}
+
+#[test]
+fn log_redaction_refuses_re_entry_instead_of_recursing() {
+    let mut config = Config::default();
+    config.modules.enabled = false;
+    let bridge = LogBridge { config };
+    IN_BRIDGE.with(|flag| flag.set(true));
+    let result = try_redact_with(Some(&bridge), RedactMode::Text, "secret", None);
+    IN_BRIDGE.with(|flag| flag.set(false));
+    assert!(result.unwrap_err().contains("re-entered"));
+}
