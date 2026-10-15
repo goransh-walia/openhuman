@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use tinysecurity_bus::{
     names, ConsumeEgressAuthorizationRequest, EgressDenial, EgressPolicy, EgressPolicyId,
-    ScopedEgressRequest, ScopedEgressResponse, TransportAuthorization,
+    EgressTransport, ScopedEgressRequest, ScopedEgressResponse, TransportAuthorization,
 };
 
 use crate::config::Config;
