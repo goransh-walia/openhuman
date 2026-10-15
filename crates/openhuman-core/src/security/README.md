@@ -285,6 +285,45 @@ decision. See [approval/README.md](approval/README.md).
   it applies the fixed `core::log_redaction` floor, never the original text.
   The endpoint forms answer `[REDACTED:suppressed]` instead of a URL when the
   module cannot. Whole-URL log fields use `core::log_redaction::scrub_secrets`.
+  `redact::arguments` answers structured tool-call arguments (approval prompts and
+  rows, flow audit records) in the module's `StructuredArguments` mode and
+  withholds them (a shape-only marker) when the module cannot answer; there is no
+  host-side structured redactor to fall back to.
+
+  Behaviour notes (decisions recorded for #7328 phase 3):
+  - The module answers only after its bridge is armed by the first successful
+    module call, and the bridge is process-global. Endpoint log fields written
+    before that read `[REDACTED:suppressed]`; this fails closed and is accepted.
+  - `redact::text` waits up to 5 s (artifact bodies) and the log bridge 250 ms per
+    call. A runtime worker uses `block_in_place`; a current-thread runtime that
+    owns the module is refused rather than deadlocked. `security::redact::text`
+    is the one place production can take the host boot floor
+    (`core::log_redaction::floor_scrub_text`) instead of the module: it never
+    returns the original text and is not gated on `cfg(test)`.
+  - A scheme-less `user:pass@host` DSN passes the floor but is removed by the
+    module pass (pinned on the released archive by
+    `whole_url_log_fields_lose_their_credentials_with_the_module_armed`).
+  - Lexical host classification (Langfuse environment, turn policy, the
+    TinyHumans backend URL guard) uses `tinytools_std::url_guard::
+    is_private_or_local_host`. These callers label an endpoint for routing and
+    run no resolve-time check, so the module's scoped `ScopedUrlGuard`
+    (destination registry, DNS pinning, one-shot grant) is not the right tool
+    for them.
+  - `modules/browser.rs` uses the same lexical guard as a pre-filter.
+    `ScopedUrlGuard` refuses the `Browser` transport (no verified per-hop
+    enforcement), so resolved-address enforcement for browser navigation belongs
+    to TinyComputer, which performs the connection.
+  - Redactors deliberately left, with owners: Composio exact-key replacement
+    (`integrations/composio/tools/redact.rs`, the module registry is init-only and
+    the key can change at runtime, needs a reinit-on-credential-change hook),
+    `agent/tinyagents/middleware/credential_scrub.rs` and the harness scrubber
+    (credential-only scrub of tool results; the module's `Text` mode also removes
+    emails/IPs and rewrites source code that mentions tokens, so a credential-only
+    mode is needed upstream in tinysecurity first), the memory write guard
+    (`tinymemory_api::safety`, tinymemory-owned), the `denials` log
+    (`tinytools`, upstream), and the rpc client / app deep-link `redact_url_for_log`
+    copies (they run where no module exists: a remote-core client and the
+    deep-link forwarding process).
 - `AuditLogger` and `get_or_create_workspace_audit_logger` ([`audit.rs`](./audit.rs)).
 - `is_public_bind` and `ensure_core_rpc_token_for_bind` (`pairing.rs`): refuse
   a non-loopback RPC bind without an `OPENHUMAN_CORE_TOKEN`

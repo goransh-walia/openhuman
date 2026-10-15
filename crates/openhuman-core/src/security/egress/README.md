@@ -10,6 +10,7 @@ plus the `LocalOnly` enforcement chokepoint built on top of it.
 | --- | --- |
 | [`types.rs`](./types.rs) | `EgressDescriptor`, `DataKind`, `EgressReason`, `IdentificationRisk`: the descriptor contract |
 | [`emit.rs`](./emit.rs) | `emit_external_transfer`, the single publish chokepoint, plus per-turn dedup |
+| [`assess.rs`](./assess.rs) | `assess_payload`, `EgressDescriptor::assessed[_parts]`: fills the risk fields from the real outgoing payload via the module's `Redact` (Sensitive mode only) |
 | [`enforce.rs`](./enforce.rs) | `local_only_blocks` (pure decision) and its two side-effecting wrappers, `enforce_egress` / `local_only_tool_block` |
 
 ## Public surface
@@ -49,6 +50,27 @@ Both `enforce_egress` and `local_only_tool_block` read the live mode via
 `security::live_policy::current_privacy_mode`, which defaults to
 `PrivacyMode::Standard` (no restriction) when no session policy is installed
 (CLI / cron / background), so enforcement is a correct no-op there.
+
+## Payload assessment (S5)
+
+A descriptor is built where the destination is known; the payload exists only at
+the send. Sites that hold the payload fill the risk fields with
+`EgressDescriptor::assessed(payload)` / `assessed_parts(parts)`: the module's
+`Redact` (`Text`) is asked whether it would change the payload, the same test its
+own Sensitive egress rule applies. Unchanged is `IdentificationRisk::None`;
+changed is `High` with category `credential_or_identifier`; no answer is
+`Unknown`, which Sensitive refuses. Only `Sensitive` depends on the answer, so
+under every other mode nothing is sent to the module and the risk stays
+`Unknown`.
+
+Sites: Composio execute (arguments), managed-backend round-trips (JSON body;
+multipart uploads stay `Unknown`), cloud embeddings (inputs), media generation
+(prompt; reference media stays `Unknown`), the network tools (the call's URL,
+headers and body, assessed once per call by `RoutedGate`) and chat inference (the
+outgoing messages, by `EgressAssessMiddleware` as a model wrap). The inference
+destination is still disclosed once per turn when the model is built; the wrap
+only enforces. A local primary with an external fallback route is not covered by
+the wrap, which is installed when the primary leaves the device.
 
 ## Relates to
 
