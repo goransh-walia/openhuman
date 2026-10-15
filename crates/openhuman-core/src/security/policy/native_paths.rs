@@ -110,9 +110,9 @@ fn project_native_result(
             PathErrorCategory::Resolution => Err(format!("Failed to resolve path '{path}'")),
             PathErrorCategory::InvalidPath => Err(format!("Invalid path: {path}")),
         },
-        Err(_) => Err(format!(
+        Err(error) => { eprintln!("DEBUGPATH {error}"); Err(format!(
             "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
-        )),
+        )) },
     }
 }
 
