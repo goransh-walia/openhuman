@@ -127,3 +127,127 @@ async fn sync_seam_redacts_through_the_released_archive_from_inside_and_outside_
     );
     assert!(refused.is_err() || refused.as_deref() == Ok("fresh uncached text 1"));
 }
+
+/// Shell and network gates on the production path: `SecurityPolicy` ->
+/// `command_decision` -> `host_config` -> `proxy` (the module loaded from the
+/// published archive by the real module runtime, with the host named as the
+/// trusted peer by `module_config`) -> `RegisterCommandPolicy` / `CheckCommand` /
+/// `ClassifyCommand`. The class gate is also asked from a plain thread and from
+/// a runtime worker through the sync seam, as the network and filesystem tool
+/// traits do.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn production_client_gates_shell_and_network_on_the_released_archive() {
+    use crate::security::policy::{CommandFlow, CommandQuery, CommandStage, Refusal};
+    use crate::security::{AutonomyLevel, GateDecision, SecurityPolicy};
+    use tinybox_bus::CommandClass;
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
+    std::fs::create_dir_all(&root).unwrap();
+    let dir = tempfile::tempdir_in(&root).unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let workspace = base.join("workspace");
+    let action = base.join("action");
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::create_dir_all(&action).unwrap();
+    std::fs::write(
+        base.join("config.toml"),
+        format!(
+            "[modules]\nenabled = true\nallow_download = true\ninstall_dir = {:?}\n",
+            base.join("modules").to_string_lossy()
+        ),
+    )
+    .unwrap();
+
+    let policy = |autonomy, max_actions_per_hour| SecurityPolicy {
+        enabled: true,
+        autonomy,
+        workspace_dir: workspace.clone(),
+        action_dir: action.clone(),
+        max_actions_per_hour,
+        ..SecurityPolicy::default()
+    };
+    let ask = |policy: &SecurityPolicy, command: &'static str, stage| {
+        let policy = policy.clone();
+        async move {
+            policy
+                .check_command(CommandQuery {
+                    command,
+                    declared: None,
+                    flow: CommandFlow::Harness,
+                    stage,
+                })
+                .await
+        }
+    };
+
+    // The read-only tier lets a read through and refuses a write with its reason.
+    let read_only = policy(AutonomyLevel::ReadOnly, 100);
+    let verdict = ask(&read_only, "ls", CommandStage::Authorize)
+        .await
+        .expect("a read runs in read-only mode");
+    assert_eq!(
+        (verdict.class, verdict.gate),
+        (CommandClass::Read, GateDecision::Allow)
+    );
+    assert_eq!(
+        ask(&read_only, "touch f", CommandStage::Authorize).await,
+        Err(Refusal::ReadOnly)
+    );
+
+    // Supervised prompts on a write and refuses hidden execution.
+    let supervised = policy(AutonomyLevel::Supervised, 100);
+    let verdict = ask(&supervised, "touch f", CommandStage::Authorize)
+        .await
+        .unwrap();
+    assert_eq!(
+        (verdict.class, verdict.gate),
+        (CommandClass::Write, GateDecision::Prompt)
+    );
+    assert_eq!(
+        ask(&supervised, "echo $(whoami)", CommandStage::Authorize).await,
+        Err(Refusal::Hidden)
+    );
+    // The credential-store floor holds even with the policy disabled.
+    let disabled = SecurityPolicy {
+        enabled: false,
+        ..supervised.clone()
+    };
+    assert_eq!(
+        ask(&disabled, "cat ~/.ssh/id_rsa", CommandStage::Authorize).await,
+        Err(Refusal::Protected)
+    );
+
+    // The run spends the module budget; asking before it does not.
+    let limited = policy(AutonomyLevel::Supervised, 1);
+    for _ in 0..3 {
+        ask(&limited, "ls", CommandStage::Authorize).await.unwrap();
+    }
+    ask(&limited, "ls", CommandStage::Execute).await.unwrap();
+    assert_eq!(
+        ask(&limited, "ls", CommandStage::Execute).await,
+        Err(Refusal::RateLimit)
+    );
+
+    // Class gates, async and through the sync seam (plain thread and worker).
+    assert_eq!(
+        supervised.command_class_gate(CommandClass::Network).await,
+        Ok(GateDecision::Prompt)
+    );
+    let from_worker = supervised.command_class_gate_blocking(CommandClass::Network);
+    assert_eq!(from_worker, Ok(GateDecision::Prompt));
+    let from_thread = {
+        let supervised = supervised.clone();
+        std::thread::spawn(move || supervised.command_class_gate_blocking(CommandClass::Write))
+            .join()
+            .unwrap()
+    };
+    assert_eq!(from_thread, Ok(GateDecision::Prompt));
+    let from_thread = {
+        let read_only = read_only.clone();
+        std::thread::spawn(move || read_only.command_class_gate_blocking(CommandClass::Network))
+            .join()
+            .unwrap()
+    };
+    assert_eq!(from_thread, Ok(GateDecision::Block));
+}
