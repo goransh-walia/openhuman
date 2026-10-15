@@ -101,6 +101,7 @@ async fn disabled_tinybox_module_never_falls_back_to_host_execution() -> anyhow:
         &HashMap::new(),
         Duration::from_secs(5),
         false,
+        false,
         None,
     )
     .await;
@@ -213,6 +214,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
         &HashMap::new(),
         Duration::from_secs(10),
         false,
+        false,
         None,
     )
     .await?;
@@ -227,6 +229,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
         workspace.path(),
         &HashMap::new(),
         Duration::from_secs(10),
+        false,
         false,
         None,
     )
