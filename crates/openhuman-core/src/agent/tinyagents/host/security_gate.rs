@@ -413,11 +413,7 @@ impl OpenHumanSecurityGate {
         }
         decision_for_outcome(&call.tool_name, outcome)
     }
-    async fn authorize_tool_with_facts(
-        &self,
-        call: &ToolCallRequest,
-        authorization_context: Option<&serde_json::Value>,
-    ) -> TaResult<GateDecision> {
+    async fn authorize_tool_inner(&self, call: &ToolCallRequest) -> TaResult<GateDecision> {
         // A nested call (made by a running tool, not the model) can never be
         // parked for a human, and the stages below prompt. Fail closed rather
         // than prompt or guess which stages would have: nested calls are off
