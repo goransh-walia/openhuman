@@ -354,10 +354,8 @@ fn handle_add(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture 
             "shell" => {
                 let cmd = command.ok_or("'command' is required for shell jobs")?;
                 let security = crate::security::SecurityPolicy::from_full_config(&config);
-                crate::cron::scheduler::shell_job::authorize_shell_command(
-                    &config, &security, &cmd,
-                )
-                .await?;
+                crate::cron::scheduler::shell_job::authorize_shell_command(&security, &cmd)
+                    .await?;
                 crate::cron::store::add_shell_job(&config, name, schedule, &cmd)
                     .map_err(|e| e.to_string())?
             }
