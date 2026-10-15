@@ -78,6 +78,55 @@ struct ClientState {
     faulted: bool,
 }
 
+/// A failed module call, and whether it must latch the shared client.
+///
+/// Only a failure of the channel (transport, attestation, timeout, a vanished
+/// peer) latches: nothing it says can be trusted afterwards. The module
+/// answering that it refused this one request does not, so one hostile or odd
+/// request cannot disable the module for everyone.
+#[derive(Debug)]
+pub(crate) struct CallError {
+    pub(crate) message: String,
+    pub(crate) fault: bool,
+}
+
+impl CallError {
+    /// A host-side refusal of one request; the client stays usable.
+    pub(crate) fn refused(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            fault: false,
+        }
+    }
+
+    /// A channel failure.
+    pub(crate) fn faulted(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            fault: true,
+        }
+    }
+
+    /// Classify a bus error: a method that ran and failed, or arguments the
+    /// module could not accept, refuse the request; anything else faults.
+    pub(crate) fn from_bus(message: &'static str, error: &tinybus::Error) -> Self {
+        let refused = matches!(
+            error,
+            tinybus::Error::MethodFailed { .. } | tinybus::Error::BadArguments { .. }
+        );
+        Self {
+            message: message.to_owned(),
+            fault: !refused,
+        }
+    }
+}
+
+impl From<CallError> for String {
+    fn from(error: CallError) -> Self {
+        error.message
+    }
+}
+
 fn state() -> &'static tokio::sync::Mutex<ClientState> {
     static STATE: OnceLock<tokio::sync::Mutex<ClientState>> = OnceLock::new();
     STATE.get_or_init(|| tokio::sync::Mutex::new(ClientState::default()))
@@ -452,18 +501,11 @@ async fn register_cached_scope(
     proxy: &tinybus::Proxy,
     policy: tinysecurity_bus::PathPolicy,
 ) -> Result<tinysecurity_bus::PathPolicyId, String> {
-    if let Some((_, id)) = state
-        .scopes
-        .iter()
-        .find(|(registered, _)| registered == &policy)
-    {
-        return Ok(id.clone());
-    }
-    if state.scopes.len() >= 1024 {
-        return Err("TinySecurity host path scope limit reached".into());
+    if let Some(id) = lru_lookup(&mut state.scopes, &policy) {
+        return Ok(id);
     }
     let id = call_register_path_policy(proxy, policy.clone()).await?;
-    state.scopes.push((policy, id.clone()));
+    lru_insert(&mut state.scopes, policy, id.clone());
     Ok(id)
 }
 
@@ -484,6 +526,32 @@ async fn call_host_path(
         names::methods::VALIDATE_PATH
     };
     call_validate_path(proxy, id, path.to_owned(), member).await
+}
+
+/// Registered scopes the host retains per cache. A full cache forgets its
+/// least recently used scope (registering an equal policy again is idempotent
+/// in the module) instead of refusing, so a stream of distinct per-run scopes
+/// never disables the client.
+pub(crate) const MAX_SCOPES: usize = 1024;
+
+/// The id for `policy`, marking it most recently used.
+pub(crate) fn lru_lookup<P: PartialEq, I: Clone>(
+    cache: &mut Vec<(P, I)>,
+    policy: &P,
+) -> Option<I> {
+    let at = cache.iter().position(|(registered, _)| registered == policy)?;
+    let entry = cache.remove(at);
+    let id = entry.1.clone();
+    cache.push(entry);
+    Some(id)
+}
+
+/// Remember `policy`, evicting the least recently used scope at capacity.
+pub(crate) fn lru_insert<P, I>(cache: &mut Vec<(P, I)>, policy: P, id: I) {
+    if cache.len() >= MAX_SCOPES {
+        cache.remove(0);
+    }
+    cache.push((policy, id));
 }
 
 pub(super) async fn call_register_path_policy(

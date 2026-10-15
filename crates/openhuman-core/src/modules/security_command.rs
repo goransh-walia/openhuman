@@ -13,8 +13,10 @@
 //! * [`CommandOp::Classify`] is informational: no budget, no admission.
 //!
 //! Errors deny. A faulted transport latches the shared client (no in-process
-//! retry, no fallback classifier); a malformed request does not, so a hostile
-//! oversize command cannot disable the module for everyone.
+//! retry, no fallback classifier); a request the module refuses does not, and
+//! a full scope cache evicts its least recently used scope, so neither a hostile
+//! command nor a stream of distinct per-run scopes can disable the module for
+//! everyone.
 
 use std::path::Path;
 use std::time::Duration;
@@ -23,12 +25,10 @@ use tinysecurity_bus::{
     names, CommandClass, CommandDecision, CommandPolicy, CommandPolicyId, CommandRequest,
 };
 
-use super::{config, require_enabled, state, ClientState};
+use super::{config, lru_insert, lru_lookup, require_enabled, state, CallError, ClientState};
 
 /// Longest command text the module accepts (it refuses larger input).
 pub(crate) const MAX_COMMAND_BYTES: usize = 1_048_576;
-/// Registered scopes the host retains; the module caps its registry at 1024.
-const MAX_SCOPES: usize = 1024;
 /// A synchronous caller waits this long for a class gate before it is denied.
 const BLOCKING_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -57,15 +57,27 @@ pub(crate) async fn command_decision(
     require_enabled(&config)?;
     let mut state = state().lock().await;
     let result = async {
-        let proxy = super::proxy(&config, &mut state).await?;
+        let proxy = super::proxy(&config, &mut state)
+            .await
+            .map_err(CallError::faulted)?;
         command_on(&mut state, &proxy, policy, command, declared_class, op).await
     }
     .await;
-    if let Err(error) = &result {
-        log::warn!("[security][command] module call failed op={op:?}: {error}");
-        state.faulted = true;
+    match result {
+        Ok(decision) => Ok(decision),
+        Err(error) => {
+            log::warn!(
+                "[security][command] module call failed op={op:?} fault={}: {}",
+                error.fault,
+                error.message
+            );
+            // Only a channel failure latches; one refused request does not.
+            if error.fault {
+                state.faulted = true;
+            }
+            Err(error.message)
+        }
     }
-    result
 }
 
 /// The registration cache plus one confidential call, shared by the production
@@ -77,7 +89,7 @@ pub(super) async fn command_on(
     command: &str,
     declared_class: Option<CommandClass>,
     op: CommandOp,
-) -> Result<CommandDecision, String> {
+) -> Result<CommandDecision, CallError> {
     let policy_id = register_cached_command_scope(state, proxy, policy).await?;
     call_command(proxy, policy_id, command, declared_class, op).await
 }
@@ -86,23 +98,16 @@ async fn register_cached_command_scope(
     state: &mut ClientState,
     proxy: &tinybus::Proxy,
     policy: CommandPolicy,
-) -> Result<CommandPolicyId, String> {
-    if let Some((_, id)) = state
-        .commands
-        .iter()
-        .find(|(registered, _)| registered == &policy)
-    {
-        return Ok(id.clone());
-    }
-    if state.commands.len() >= MAX_SCOPES {
-        return Err("TinySecurity host command scope limit reached".into());
+) -> Result<CommandPolicyId, CallError> {
+    if let Some(id) = lru_lookup(&mut state.commands, &policy) {
+        return Ok(id);
     }
     let id = super::scoped_client::register_command_policy(proxy, policy.clone()).await?;
     log::debug!(
         "[security][command] registered command scope count={}",
         state.commands.len() + 1
     );
-    state.commands.push((policy, id.clone()));
+    lru_insert(&mut state.commands, policy, id.clone());
     Ok(id)
 }
 
@@ -112,7 +117,7 @@ async fn call_command(
     command: &str,
     declared_class: Option<CommandClass>,
     op: CommandOp,
-) -> Result<CommandDecision, String> {
+) -> Result<CommandDecision, CallError> {
     let member = match op {
         CommandOp::Check => names::methods::CHECK_COMMAND,
         CommandOp::Classify => names::methods::CLASSIFY_COMMAND,
@@ -127,9 +132,14 @@ async fn call_command(
             },),
         )
         .await
-        .map_err(|_| match op {
-            CommandOp::Check => "TinySecurity CheckCommand failed".to_owned(),
-            CommandOp::Classify => "TinySecurity ClassifyCommand failed".to_owned(),
+        .map_err(|error| {
+            CallError::from_bus(
+                match op {
+                    CommandOp::Check => "TinySecurity CheckCommand failed",
+                    CommandOp::Classify => "TinySecurity ClassifyCommand failed",
+                },
+                &error,
+            )
         })
 }
 

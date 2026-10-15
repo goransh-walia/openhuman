@@ -194,13 +194,17 @@ pub(super) async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, Stri
 pub(super) async fn register_command_policy(
     proxy: &tinybus::Proxy,
     policy: CommandPolicy,
-) -> Result<CommandPolicyId, String> {
+) -> Result<CommandPolicyId, super::CallError> {
     let id: CommandPolicyId = proxy
         .call_confidential(names::methods::REGISTER_COMMAND_POLICY, (policy,))
         .await
-        .map_err(|_| "TinySecurity RegisterCommandPolicy failed")?;
+        .map_err(|error| {
+            super::CallError::from_bus("TinySecurity RegisterCommandPolicy failed", &error)
+        })?;
     if id.0.is_empty() {
-        return Err("TinySecurity returned an empty command scope".into());
+        return Err(super::CallError::faulted(
+            "TinySecurity returned an empty command scope",
+        ));
     }
     Ok(id)
 }
@@ -248,7 +252,7 @@ pub(crate) async fn activate_on(
     let command_id = match cached_command {
         Some(id) => id,
         None => {
-            let id = register_command_policy(proxy, command).await?;
+            let id = register_command_policy(proxy, command).await.map_err(String::from)?;
             state.lock().await.commands.insert(command_key, id.clone());
             id
         }
