@@ -52,6 +52,7 @@ pub(crate) async fn execute(
     extra_env: &HashMap<OsString, OsString>,
     timeout: Duration,
     explicitly_requested: bool,
+    preserve_pipeline_status: bool,
     meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
     #[cfg(feature = "modules")]
@@ -71,6 +72,7 @@ pub(crate) async fn execute(
                 &extra_env,
                 timeout,
                 explicitly_requested,
+                preserve_pipeline_status,
                 meter,
             )
             .await
@@ -88,6 +90,7 @@ pub(crate) async fn execute(
             extra_env,
             timeout,
             explicitly_requested,
+            preserve_pipeline_status,
             meter,
         );
         anyhow::bail!("TinyBox module support is disabled; native jail execution is unavailable")
@@ -103,13 +106,13 @@ async fn execute_owned(
     extra_env: &HashMap<OsString, OsString>,
     timeout: Duration,
     explicitly_requested: bool,
+    preserve_pipeline_status: bool,
     meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
     let status = tinybox::jail_status(config)
         .await
         .map_err(|_| anyhow::anyhow!("TinyBox native jail status is unavailable"))?;
-    super::ops::require_untrusted_isolation(status.available, status.suitable_for_untrusted_code)
-        .map_err(|error| anyhow::anyhow!(error))?;
+    super::ops::require_untrusted_isolation(status.available, status.suitable_for_untrusted_code)?;
     if explicitly_requested && status.backend != "landlock" {
         anyhow::bail!("requested Landlock sandbox is unavailable");
     }
@@ -119,6 +122,7 @@ async fn execute_owned(
     run.workspace = policy.workspace_root.clone();
     run.env = approved_environment(extra_env)?;
     run.isolate_network = true;
+    run.preserve_pipeline_status = preserve_pipeline_status;
     run.meter = meter;
     // TinyBox adds its own per-call scratch directory to the writable grants and
     // points TMPDIR, TMP and TEMP at it unless the caller overrides them.

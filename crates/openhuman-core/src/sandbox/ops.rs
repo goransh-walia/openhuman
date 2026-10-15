@@ -434,6 +434,7 @@ pub(crate) async fn execute_in_sandbox_metered(
                 &extra_env,
                 timeout,
                 explicitly_requested,
+                false,
                 meter,
             )
             .await
