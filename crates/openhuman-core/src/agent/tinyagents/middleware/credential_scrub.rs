@@ -5,8 +5,11 @@
 //! which is minted by the host and must survive the scrubber.
 
 use tinyagents_harness::middleware::{
-    redaction_notice, CredentialScrubMiddleware, ToolScrubber, REDACTION_PLACEHOLDER,
+    redaction_notice, CredentialScrubMiddleware, ToolScrubber,
 };
+
+/// What the module writes where it removed a credential.
+const MODULE_PLACEHOLDER: &str = "[REDACTED]";
 
 /// What a tool result becomes when the security module cannot check it: the
 /// result is withheld whole. An unchecked result is never passed on.
@@ -23,9 +26,9 @@ type Redactor<'a> = &'a dyn Fn(&str) -> Option<String>;
 /// carried (a result may legitimately contain one).
 fn count_redactions(before: &str, after: &str) -> usize {
     after
-        .matches(REDACTION_PLACEHOLDER)
+        .matches(MODULE_PLACEHOLDER)
         .count()
-        .saturating_sub(before.matches(REDACTION_PLACEHOLDER).count())
+        .saturating_sub(before.matches(MODULE_PLACEHOLDER).count())
 }
 
 /// Scrub `content` through `redact`: `None` when nothing changed, the scrubbed
