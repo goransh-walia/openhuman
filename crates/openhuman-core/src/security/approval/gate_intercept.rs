@@ -731,29 +731,3 @@ impl ApprovalGate {
         outcome
     }
 }
-
-/// The gate's outcome in SaaS, `None` outside it. SaaS has no per-user approval
-/// surface, so the gate never parks there; the verdict comes from the
-/// deployment's allowlisted tool groups.
-pub(crate) fn saas_outcome_with(
-    ctx: &crate::core::runtime::DispatchCtx,
-    saas: bool,
-    tool_name: &str,
-) -> Option<GateOutcome> {
-    if !saas {
-        return None;
-    }
-    Some(saas_outcome(crate::profiles::tools::gate_verdict(
-        ctx, tool_name,
-    )))
-}
-
-/// Maps a SaaS gate verdict to a [`GateOutcome`].
-pub(crate) fn saas_outcome(verdict: Result<(), String>) -> GateOutcome {
-    match verdict {
-        Ok(()) => GateOutcome::Allow,
-        Err(why) => GateOutcome::Deny {
-            reason: format!("{POLICY_DENIED_MARKER} {why}"),
-        },
-    }
-}
