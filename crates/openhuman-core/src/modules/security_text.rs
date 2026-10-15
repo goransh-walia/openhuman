@@ -266,7 +266,7 @@ fn bridge_scrub(text: &str) -> Option<String> {
 /// [`bridge_scrub`] for an explicit bridge (`None` when it was never armed).
 fn scrub_with_bridge(bridge: Option<&LogBridge>, text: &str) -> Option<String> {
     let bridge = bridge?;
-    match redact_through_bridge(bridge, RedactMode::Text, text) {
+    match redact_through_bridge(bridge, RedactMode::Text, text, None) {
         Ok(redacted) => Some(redacted),
         Err(_) => {
             log::debug!("[security][floor] module redact unavailable; floor result stands");
@@ -282,6 +282,7 @@ fn redact_through_bridge(
     bridge: &LogBridge,
     mode: RedactMode,
     text: &str,
+    timeout: Option<std::time::Duration>,
 ) -> Result<String, String> {
     if IN_BRIDGE.with(|flag| flag.replace(true)) {
         return Err("TinySecurity log redaction re-entered".into());
@@ -293,7 +294,12 @@ fn redact_through_bridge(
         }
     }
     let _reset = Reset;
-    redact_blocking(&bridge.config, mode, text, LOG_BRIDGE_TIMEOUT)
+    redact_blocking(
+        &bridge.config,
+        mode,
+        text,
+        timeout.unwrap_or(LOG_BRIDGE_TIMEOUT),
+    )
 }
 
 /// Redact `text` on `mode` for a log line or diagnostic written by a
@@ -303,16 +309,25 @@ fn redact_through_bridge(
 /// The module answers when it is armed ([`arm_log_scrubber`]); otherwise, and on
 /// every error, the result is [`SUPPRESSED`]. The original text is never
 /// returned.
-pub(crate) fn redact_for_log(mode: RedactMode, text: &str) -> String {
-    redact_for_log_with(LOG_BRIDGE.get(), mode, text)
+pub(crate) fn redact_for_log(
+    mode: RedactMode,
+    text: &str,
+    timeout: Option<std::time::Duration>,
+) -> String {
+    redact_for_log_with(LOG_BRIDGE.get(), mode, text, timeout)
 }
 
-fn redact_for_log_with(bridge: Option<&LogBridge>, mode: RedactMode, text: &str) -> String {
+fn redact_for_log_with(
+    bridge: Option<&LogBridge>,
+    mode: RedactMode,
+    text: &str,
+    timeout: Option<std::time::Duration>,
+) -> String {
     let Some(bridge) = bridge else {
         log::debug!("[security][redact] log bridge not armed; suppressing");
         return SUPPRESSED.to_string();
     };
-    match redact_through_bridge(bridge, mode, text) {
+    match redact_through_bridge(bridge, mode, text, timeout) {
         Ok(redacted) => redacted,
         Err(error) => {
             log::debug!("[security][redact] module unavailable, suppressing: {error}");

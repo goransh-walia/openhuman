@@ -113,7 +113,7 @@ pub(super) fn resolve_cloud_slug<'a>(
         role,
         slug,
         effective_model,
-        crate::security::endpoint_redact::endpoint_origin(&entry.endpoint)
+        crate::security::redact::endpoint_origin(&entry.endpoint)
     );
 
     // #5146 §2.1: a raw "failed to read API key for slug 'anthropic'" is

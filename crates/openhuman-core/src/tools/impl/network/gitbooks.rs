@@ -1,7 +1,7 @@
 //! `gitbooks` — answer questions about OpenHuman through the TinyMCP module's
 //! confidential one-shot tool-call contract.
 
-use crate::{config::Config, security::endpoint_redact::endpoint_origin};
+use crate::{config::Config, security::redact::endpoint_origin};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::time::Duration;

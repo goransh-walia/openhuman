@@ -12,7 +12,7 @@ pub mod approval;
 pub mod credentials;
 pub mod devices;
 pub mod egress;
-pub mod endpoint_redact;
+pub mod redact;
 pub mod encryption;
 pub mod keyring_consent;
 pub mod live_policy;
