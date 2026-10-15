@@ -75,24 +75,24 @@ fn rank_puts_an_unassessed_part_above_every_assessed_one() {
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn sensitive_assessment_on_the_released_archive() {
     crate::security::redact::tests::shared_runtime().block_on(async {
-    let (_dir, config) = crate::security::redact::tests::released_config();
-    crate::security::redact::tests::arm(&config).await;
+        let (_dir, config) = crate::security::redact::tests::released_config();
+        crate::security::redact::tests::arm(&config).await;
 
-    let _scope = test_privacy_scope(PrivacyMode::Sensitive);
-    let clean = EgressDescriptor::composio("TOOL").assessed("summarise the quarterly plan");
-    assert_eq!(clean.risk_level, IdentificationRisk::None);
-    assert!(!sensitive_blocks(PrivacyMode::Sensitive, &clean));
+        let _scope = test_privacy_scope(PrivacyMode::Sensitive);
+        let clean = EgressDescriptor::composio("TOOL").assessed("summarise the quarterly plan");
+        assert_eq!(clean.risk_level, IdentificationRisk::None);
+        assert!(!sensitive_blocks(PrivacyMode::Sensitive, &clean));
 
-    let secret = format!(
-        "send Authorization: Bearer {}",
-        "abcdefghijklmnopqrstuvwxyz0123456789"
-    );
-    let dirty = EgressDescriptor::composio("TOOL").assessed(&secret);
-    assert_eq!(dirty.risk_level, IdentificationRisk::High);
-    assert!(sensitive_blocks(PrivacyMode::Sensitive, &dirty));
+        let secret = format!(
+            "send Authorization: Bearer {}",
+            "abcdefghijklmnopqrstuvwxyz0123456789"
+        );
+        let dirty = EgressDescriptor::composio("TOOL").assessed(&secret);
+        assert_eq!(dirty.risk_level, IdentificationRisk::High);
+        assert!(sensitive_blocks(PrivacyMode::Sensitive, &dirty));
 
-    let batch =
-        EgressDescriptor::embedding("cloud", "m").assessed_parts(["fine text", secret.as_str()]);
-    assert_eq!(batch.risk_level, IdentificationRisk::High);
+        let batch = EgressDescriptor::embedding("cloud", "m")
+            .assessed_parts(["fine text", secret.as_str()]);
+        assert_eq!(batch.risk_level, IdentificationRisk::High);
     });
 }

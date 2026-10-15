@@ -341,26 +341,26 @@ fn non_string_sensitive_values_redact_to_kind_markers_and_nested_values_recurse(
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn approval_argument_contract_holds_on_the_released_archive() {
     super::tests::shared_runtime().block_on(async {
-    let (_dir, config) = super::tests::released_config();
-    super::tests::arm(&config).await;
-    sensitive_string_field_is_replaced_with_marker();
-    plaintext_field_is_redacted_for_encrypted_dm_tools();
-    email_verification_code_is_redacted();
-    network_write_content_fields_are_redacted();
-    profile_update_fields_are_redacted();
-    nested_sensitive_object_fields_are_redacted();
-    case_insensitive_match_on_sensitive_keys();
-    array_field_redacts_to_count_marker();
-    home_path_in_unredacted_string_is_scrubbed();
-    windows_home_path_is_scrubbed();
-    linux_home_path_is_scrubbed();
-    lowercase_windows_home_path_is_scrubbed();
-    uppercase_linux_home_path_is_scrubbed();
-    mixed_case_home_path_is_scrubbed();
-    non_path_string_without_home_marker_is_unchanged();
-    multiple_home_paths_in_same_string_all_scrubbed();
-    file_handoff_links_are_redacted();
-    redact_preserves_toolkit_slug_for_connect_card();
-    non_string_sensitive_values_redact_to_kind_markers_and_nested_values_recurse();
+        let (_dir, config) = super::tests::released_config();
+        super::tests::arm(&config).await;
+        sensitive_string_field_is_replaced_with_marker();
+        plaintext_field_is_redacted_for_encrypted_dm_tools();
+        email_verification_code_is_redacted();
+        network_write_content_fields_are_redacted();
+        profile_update_fields_are_redacted();
+        nested_sensitive_object_fields_are_redacted();
+        case_insensitive_match_on_sensitive_keys();
+        array_field_redacts_to_count_marker();
+        home_path_in_unredacted_string_is_scrubbed();
+        windows_home_path_is_scrubbed();
+        linux_home_path_is_scrubbed();
+        lowercase_windows_home_path_is_scrubbed();
+        uppercase_linux_home_path_is_scrubbed();
+        mixed_case_home_path_is_scrubbed();
+        non_path_string_without_home_marker_is_unchanged();
+        multiple_home_paths_in_same_string_all_scrubbed();
+        file_handoff_links_are_redacted();
+        redact_preserves_toolkit_slug_for_connect_card();
+        non_string_sensitive_values_redact_to_kind_markers_and_nested_values_recurse();
     });
 }

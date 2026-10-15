@@ -84,39 +84,39 @@ fn corpus(name: &str) -> serde_json::Value {
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
     shared_runtime().block_on(async {
-    let (_dir, config) = released_config();
-    arm(&config).await;
-    for name in [
-        "security-redaction-corpus.json",
-        "security-redaction-extended-corpus.json",
-    ] {
-        for case in corpus(name)["urls"].as_array().unwrap() {
-            let input = case["input"].as_str().unwrap();
-            let origin = endpoint_origin(input);
-            let host = endpoint_host(input);
-            for secret in ["alice", "hunter2", "key=secret", "private", "s3cr3t", "/v1"] {
-                assert!(
-                    !origin.contains(secret) && !host.contains(secret),
-                    "case {} leaked {secret}: {origin} / {host}",
-                    case["case"]
-                );
-            }
-            if let Some(expected) = case.get("endpoint").and_then(|v| v.as_str()) {
-                assert_eq!(origin, expected, "origin case {}", case["case"]);
-            }
-            if let Some(expected) = case.get("inference").and_then(|v| v.as_str()) {
-                assert_eq!(host, expected, "host case {}", case["case"]);
+        let (_dir, config) = released_config();
+        arm(&config).await;
+        for name in [
+            "security-redaction-corpus.json",
+            "security-redaction-extended-corpus.json",
+        ] {
+            for case in corpus(name)["urls"].as_array().unwrap() {
+                let input = case["input"].as_str().unwrap();
+                let origin = endpoint_origin(input);
+                let host = endpoint_host(input);
+                for secret in ["alice", "hunter2", "key=secret", "private", "s3cr3t", "/v1"] {
+                    assert!(
+                        !origin.contains(secret) && !host.contains(secret),
+                        "case {} leaked {secret}: {origin} / {host}",
+                        case["case"]
+                    );
+                }
+                if let Some(expected) = case.get("endpoint").and_then(|v| v.as_str()) {
+                    assert_eq!(origin, expected, "origin case {}", case["case"]);
+                }
+                if let Some(expected) = case.get("inference").and_then(|v| v.as_str()) {
+                    assert_eq!(host, expected, "host case {}", case["case"]);
+                }
             }
         }
-    }
-    assert_eq!(
-        endpoint_origin("https://user:pass@example.com/path/secret?apiKey=123"),
-        "https://example.com"
-    );
-    assert_eq!(
-        endpoint_origin("http://example.com:8080/path?token=secret"),
-        "http://example.com:8080"
-    );
+        assert_eq!(
+            endpoint_origin("https://user:pass@example.com/path/secret?apiKey=123"),
+            "https://example.com"
+        );
+        assert_eq!(
+            endpoint_origin("http://example.com:8080/path?token=secret"),
+            "http://example.com:8080"
+        );
     });
 }
 
@@ -127,33 +127,33 @@ fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
     shared_runtime().block_on(async {
-    let (_dir, config) = released_config();
-    arm(&config).await;
-    for name in [
-        "security-redaction-corpus.json",
-        "security-redaction-extended-corpus.json",
-    ] {
-        for case in corpus(name)["text"].as_array().unwrap() {
-            let input: String = match case["input_parts"].as_array() {
-                Some(parts) => parts.iter().map(|p| p.as_str().unwrap()).collect(),
-                None => case["input"].as_str().unwrap().to_string(),
-            };
-            let needle = case["needle"].as_str().unwrap();
-            let out = std::thread::spawn({
-                let input = input.clone();
-                move || text(&input)
-            })
-            .join()
-            .unwrap();
-            if case["case"] == "ordinary_text" {
-                assert_eq!(out, input, "ordinary text must pass through");
-            } else {
-                assert!(!out.contains(needle), "case {} leaked: {out}", case["case"]);
+        let (_dir, config) = released_config();
+        arm(&config).await;
+        for name in [
+            "security-redaction-corpus.json",
+            "security-redaction-extended-corpus.json",
+        ] {
+            for case in corpus(name)["text"].as_array().unwrap() {
+                let input: String = match case["input_parts"].as_array() {
+                    Some(parts) => parts.iter().map(|p| p.as_str().unwrap()).collect(),
+                    None => case["input"].as_str().unwrap().to_string(),
+                };
+                let needle = case["needle"].as_str().unwrap();
+                let out = std::thread::spawn({
+                    let input = input.clone();
+                    move || text(&input)
+                })
+                .join()
+                .unwrap();
+                if case["case"] == "ordinary_text" {
+                    assert_eq!(out, input, "ordinary text must pass through");
+                } else {
+                    assert!(!out.contains(needle), "case {} leaked: {out}", case["case"]);
+                }
+                let inside = text(&input);
+                assert_eq!(inside, out, "case {} differs by thread", case["case"]);
             }
-            let inside = text(&input);
-            assert_eq!(inside, out, "case {} differs by thread", case["case"]);
         }
-    }
     });
 }
 
@@ -164,11 +164,11 @@ fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
     shared_runtime().block_on(async {
-    let (_dir, config) = released_config();
-    arm(&config).await;
-    assert_eq!(text("at 1700000000000 ms"), "at 1700000000000 ms");
-    let card = text("card 4111 1111 1111 1111 on file");
-    assert!(!card.contains("4111 1111 1111 1111"), "{card}");
+        let (_dir, config) = released_config();
+        arm(&config).await;
+        assert_eq!(text("at 1700000000000 ms"), "at 1700000000000 ms");
+        let card = text("card 4111 1111 1111 1111 on file");
+        assert!(!card.contains("4111 1111 1111 1111"), "{card}");
     });
 }
 
@@ -201,29 +201,29 @@ fn text_prefers_the_module_answer() {
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn moved_text_callers_redact_through_the_released_archive() {
     shared_runtime().block_on(async {
-    use tinyagents_harness::artifacts::ArtifactRedactor;
+        use tinyagents_harness::artifacts::ArtifactRedactor;
 
-    let (_dir, config) = released_config();
-    arm(&config).await;
-    let redactor = crate::agent::harness::artifact_offload::SanitizingRedactor;
+        let (_dir, config) = released_config();
+        arm(&config).await;
+        let redactor = crate::agent::harness::artifact_offload::SanitizingRedactor;
 
-    let secret_body = "result ok\nAuthorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789\n";
-    let rewritten = redactor.redact(secret_body);
-    assert!(rewritten.changed, "a secret-bearing body must be rewritten");
-    assert!(!rewritten.text.contains("abcdefghijklmnopqrstuvwxyz"));
-    assert!(rewritten.text.contains("result ok"), "{}", rewritten.text);
+        let secret_body = "result ok\nAuthorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789\n";
+        let rewritten = redactor.redact(secret_body);
+        assert!(rewritten.changed, "a secret-bearing body must be rewritten");
+        assert!(!rewritten.text.contains("abcdefghijklmnopqrstuvwxyz"));
+        assert!(rewritten.text.contains("result ok"), "{}", rewritten.text);
 
-    let clean = redactor.redact("plain output with no secrets\n");
-    assert!(!clean.changed);
-    assert_eq!(clean.text, "plain output with no secrets\n");
+        let clean = redactor.redact("plain output with no secrets\n");
+        assert!(!clean.changed);
+        assert_eq!(clean.text, "plain output with no secrets\n");
 
-    let failure = format!(
-        "request failed: api_key={}-{}",
-        "sk", "live-abcdefghijklmnopqrstuvwxyz0123456789"
-    );
-    let line = crate::agent::session_host::stop_summary::short_error_line(&failure);
-    assert!(!line.contains("abcdefghijklmnopqrstuvwxyz"), "{line}");
-    assert!(line.contains("request failed"), "{line}");
+        let failure = format!(
+            "request failed: api_key={}-{}",
+            "sk", "live-abcdefghijklmnopqrstuvwxyz0123456789"
+        );
+        let line = crate::agent::session_host::stop_summary::short_error_line(&failure);
+        assert!(!line.contains("abcdefghijklmnopqrstuvwxyz"), "{line}");
+        assert!(line.contains("request failed"), "{line}");
     });
 }
 
@@ -290,23 +290,23 @@ fn arguments_without_an_armed_module_never_return_the_original() {
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {
     shared_runtime().block_on(async {
-    let (_dir, config) = released_config();
-    arm(&config).await;
-    let secret = "hunter2pw";
-    for input in [
-        format!("https://alice:{secret}@db.example.com/app?x=1"),
-        format!("redis://:{secret}@cache.internal:6379/0"),
-        format!("postgres://app:{secret}@db.internal:5432/app"),
-        format!("alice:{secret}@db.internal:5432/app"),
-        format!("db.internal:5432/app?password={secret}"),
-        format!("mongodb://app:{secret}@db/x?authSource=admin"),
-    ] {
-        let out = crate::core::log_redaction::scrub_secrets(&input);
-        assert!(!out.contains(secret), "{input} -> {out}");
-    }
-    // An ordinary URL keeps its host and path.
-    let plain = crate::core::log_redaction::scrub_secrets("https://example.com/docs/page");
-    assert!(plain.contains("example.com"), "{plain}");
+        let (_dir, config) = released_config();
+        arm(&config).await;
+        let secret = "hunter2pw";
+        for input in [
+            format!("https://alice:{secret}@db.example.com/app?x=1"),
+            format!("redis://:{secret}@cache.internal:6379/0"),
+            format!("postgres://app:{secret}@db.internal:5432/app"),
+            format!("alice:{secret}@db.internal:5432/app"),
+            format!("db.internal:5432/app?password={secret}"),
+            format!("mongodb://app:{secret}@db/x?authSource=admin"),
+        ] {
+            let out = crate::core::log_redaction::scrub_secrets(&input);
+            assert!(!out.contains(secret), "{input} -> {out}");
+        }
+        // An ordinary URL keeps its host and path.
+        let plain = crate::core::log_redaction::scrub_secrets("https://example.com/docs/page");
+        assert!(plain.contains("example.com"), "{plain}");
     });
 }
 

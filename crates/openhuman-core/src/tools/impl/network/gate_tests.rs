@@ -371,27 +371,27 @@ fn other_modes_never_assess_the_arguments() {
 #[ignore = "requires a released host key (downloads the published archive)"]
 fn sensitive_network_gate_on_the_released_archive() {
     crate::security::redact::tests::shared_runtime().block_on(async {
-    use crate::config::PrivacyMode;
-    use crate::security::live_policy::test_privacy_scope;
-    let (_dir, config) = crate::security::redact::tests::released_config();
-    crate::security::redact::tests::arm(&config).await;
-    let _mode = test_privacy_scope(PrivacyMode::Sensitive);
-    let security = policy(AutonomyLevel::Supervised, 100);
+        use crate::config::PrivacyMode;
+        use crate::security::live_policy::test_privacy_scope;
+        let (_dir, config) = crate::security::redact::tests::released_config();
+        crate::security::redact::tests::arm(&config).await;
+        let _mode = test_privacy_scope(PrivacyMode::Sensitive);
+        let security = policy(AutonomyLevel::Supervised, 100);
 
-    let plain = RoutedGate::new(
-        Arc::clone(&security),
-        None,
-        &json!({"url": "https://example.com/docs", "method": "GET"}),
-    );
-    assert!(plain.local_only_block("example.com").is_none());
+        let plain = RoutedGate::new(
+            Arc::clone(&security),
+            None,
+            &json!({"url": "https://example.com/docs", "method": "GET"}),
+        );
+        assert!(plain.local_only_block("example.com").is_none());
 
-    let secret = format!("Bearer {}", "abcdefghijklmnopqrstuvwxyz0123456789");
-    let leaking = RoutedGate::new(
-        security,
-        None,
-        &json!({"url": "https://example.com/", "headers": {"Authorization": secret}}),
-    );
-    assert!(leaking.local_only_block("example.com").is_some());
+        let secret = format!("Bearer {}", "abcdefghijklmnopqrstuvwxyz0123456789");
+        let leaking = RoutedGate::new(
+            security,
+            None,
+            &json!({"url": "https://example.com/", "headers": {"Authorization": secret}}),
+        );
+        assert!(leaking.local_only_block("example.com").is_some());
     });
 }
 
