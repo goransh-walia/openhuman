@@ -41,10 +41,12 @@ Host latency budget (committed). The host path-policy gate runs
 `OPENHUMAN_SECURITY_PERF_BUDGET=1 scripts/ci/security-native-fixture.sh` (a
 `--release` build against the released v0.7.0 archive, warmed scope
 registration, 200 turns of 5 checks: 3 reads, 1 parent-create, 1 denied probe).
-Measured on Linux 7.0 x86_64, Rust 1.99.0, 2026-10-15: per call p50 81 us,
-p99 116 us; per turn (5 calls) p50 376 us, p99 493 us. The enforced budget is
-the owner's p50 <= 1 ms / p99 <= 10 ms per call (`security_native_tests.rs`),
-about 12x and 85x headroom over the measurement for noisy hosted runners. The
+Measured on Linux 7.0 x86_64, Rust 1.99.0, 2026-10-15, three release runs:
+per call p50 81-90 us, p99 116-185 us; per turn (5 calls) p50 376-423 us, p99
+493-1568 us (p99 varies run to run). The enforced budget is the owner's p50 <=
+1 ms / p99 <= 10 ms per call (`security_native_tests.rs`), at least 11x and 54x
+headroom over the worst run, for noisy hosted runners. It is deliberately not
+tightened to the measurement; the numbers are committed here as the reference. The
 `latency-budget` job in `.github/workflows/security-native.yml` records each
 run's JSON as an artifact; tighten the constants if a controlled runner is added.
 
@@ -362,3 +364,12 @@ Each file has a sibling `<module>_tests.rs`; the policy suites live in
   through the tinysecurity approval path is pending the phase 4 approval
   migration. Tinyskills `ScanReport::verdict()` (`Block`/`Warn`/`Pass`) is
   likewise to be mapped by a host adapter then; no tinyskills change is needed.
+
+Production-path coverage: `modules/security_production_tests.rs` (ignored; run by
+`security-native-fixture.sh`) drives `register_path_policy` / `validate_path`
+through the real module runtime and `ensure_loaded`, so the trusted-host
+binding comes from `module_config` itself. `proxy` builds that configuration
+only after the runtime is started and refuses to refresh without it.
+`web_chat/event_bus_tests.rs` tests of the debug-only
+`fresh_approval_surface_subscription` are `cfg(debug_assertions)` and therefore
+not run by release lib-test profiles.
