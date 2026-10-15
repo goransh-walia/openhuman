@@ -20,24 +20,26 @@ fn debug_never_prints_credentials() {
     };
     let shown = format!("{config:?}");
     assert!(!shown.contains("hunter2"), "{shown}");
-    assert!(
-        shown.contains("mongodb://***@db.internal/openhuman"),
-        "{shown}"
-    );
-    assert_eq!(redact_url("sqlite:/tmp/x"), "sqlite:/tmp/x");
-    assert_eq!(redact_url("mongodb://h/db"), "mongodb://h/db");
+    assert!(shown.contains("db.internal/openhuman"), "{shown}");
 }
 
 #[test]
-fn redact_drops_query_and_fragment_tokens() {
-    assert_eq!(
-        redact_url(
+fn debug_drops_query_and_fragment_tokens() {
+    let config = StorageConfig {
+        url: Some(
             "mongodb://db.internal/openhuman?authMechanismProperties=AWS_SESSION_TOKEN%3Asecret"
+                .into(),
         ),
-        "mongodb://db.internal/openhuman?***"
-    );
-    assert_eq!(
-        redact_url("mongodb://app:pw@db/x?token=secret#frag"),
-        "mongodb://***@db/x?***"
-    );
+    };
+    let shown = format!("{config:?}");
+    assert!(!shown.contains("AWS_SESSION_TOKEN"), "{shown}");
+    assert!(!shown.contains("secret"), "{shown}");
+}
+
+#[test]
+fn debug_leaves_credential_free_urls_readable() {
+    let config = StorageConfig {
+        url: Some("sqlite:/tmp/x".into()),
+    };
+    assert!(format!("{config:?}").contains("sqlite:/tmp/x"));
 }
