@@ -5,6 +5,8 @@
 mod command_checks;
 mod enforcement;
 mod native_commands;
+#[cfg(test)]
+pub(crate) mod native_commands_stub;
 #[cfg(feature = "security-module")]
 pub(crate) use native_commands::host_gate;
 #[cfg(feature = "security-module")]
