@@ -17,6 +17,7 @@ use tinycomputer_bus::browser::{
 use tinycomputer_bus::DesktopResponse;
 
 use crate::config::Config;
+use tinytools_std::url_guard::is_private_or_local_host;
 
 pub const MODULE_ID: &str = super::desktop::MODULE_ID;
 
