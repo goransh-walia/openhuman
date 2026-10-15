@@ -25,6 +25,7 @@ mod deadline_wind_down;
 pub mod discovery;
 mod embeddings;
 pub mod host;
+mod egress_model;
 pub(crate) mod hosted_error;
 pub(crate) mod journal;
 // The tool harness behind a live voice session (`voice::live`).
