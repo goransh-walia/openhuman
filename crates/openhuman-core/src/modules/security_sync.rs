@@ -94,19 +94,21 @@ pub(crate) fn arm_current() -> bool {
 /// Target the module bus's own runtime, once it is up. Returns false while the
 /// module runtime has not started or does not answer in time.
 pub(crate) fn arm_module_runtime() -> bool {
-    if MODULE_TARGET.get().is_some() {
+    super::super::runtime::started().is_some_and(|runtime| arm_slot_from(&MODULE_TARGET, runtime))
+}
+
+/// Fill `slot` with the handle of `runtime`'s own tokio runtime.
+fn arm_slot_from(slot: &OnceLock<Handle>, runtime: &tinybus::module::ModuleRuntime) -> bool {
+    if slot.get().is_some() {
         return true;
     }
-    let Some(runtime) = super::super::runtime::started() else {
-        return false;
-    };
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
     runtime.spawn(async move {
         let _ = tx.send(Handle::current());
     });
     match rx.recv_timeout(Duration::from_secs(1)) {
         Ok(handle) => {
-            let _ = MODULE_TARGET.set(handle);
+            let _ = slot.set(handle);
             true
         }
         Err(_) => false,

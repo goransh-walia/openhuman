@@ -150,18 +150,29 @@ fn the_global_seam_is_unavailable_until_armed_outside_a_runtime() {
     assert!(!arm_current());
 }
 
-/// The module bus's own runtime outlives any caller's, so once it is armed the
-/// global seam answers from a plain thread even when the runtime that first
-/// called the module is gone.
-#[tokio::test]
-async fn the_module_bus_runtime_serves_the_global_seam_from_a_plain_thread() {
-    super::super::super::runtime::runtime()
-        .await
-        .expect("module runtime starts");
-    assert!(arm_module_runtime());
-    assert!(arm_module_runtime(), "arming is idempotent");
-    let answered = std::thread::spawn(|| run(Duration::from_secs(5), ok(7)))
-        .join()
-        .unwrap();
-    assert_eq!(answered, Ok(7));
+/// The module bus's own runtime outlives any caller's, so a seam armed with it
+/// answers from a plain thread no matter which runtime first called the module.
+/// Uses a private bus runtime and slot, not the process-global ones.
+#[test]
+fn a_seam_armed_with_the_module_bus_runtime_answers_from_a_plain_thread() {
+    use tinybus::module::{ModuleRuntime, RuntimeNames};
+
+    let names = RuntimeNames {
+        thread: "seam-test-bus".to_string(),
+        worker: "seam-test-worker".to_string(),
+    };
+    let runtime = ModuleRuntime::start(&names, None).expect("private module runtime starts");
+    let slot = OnceLock::new();
+    let gate = AtomicUsize::new(0);
+    assert_eq!(
+        run_slot(&slot, &gate, 4, SHORT, ok(1)),
+        Err(SeamError::Unavailable)
+    );
+    assert!(arm_slot_from(&slot, &runtime));
+    assert!(arm_slot_from(&slot, &runtime), "arming is idempotent");
+    assert_eq!(
+        run_slot(&slot, &gate, 4, Duration::from_secs(5), ok(7)),
+        Ok(7)
+    );
+    assert_eq!(gate.load(Ordering::SeqCst), 0);
 }
