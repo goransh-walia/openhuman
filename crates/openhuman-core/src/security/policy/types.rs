@@ -330,7 +330,7 @@ impl Default for SecurityPolicy {
             // loader override, SSH/diff helper, preprocessor) — those names
             // must be added to the prefix denylist so that the
             // `KEY=cmd <allowed-binary>` shape cannot bypass allowlisting via
-            // `skip_env_assignments` in `is_command_allowed`. Cross-ref #2636.
+            // `skip_env_assignments` in the module's legacy allowlist. Cross-ref #2636.
             allowed_commands: vec![
                 // Version control
                 "git".into(),
