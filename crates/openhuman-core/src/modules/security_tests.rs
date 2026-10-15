@@ -225,3 +225,20 @@ fn production_config_enables_password_crypt_and_leaves_keyring_and_pairing_denie
     assert!((1..=4096).contains(&crypto.operations_per_minute));
     assert!((1..=tinysecurity_bus::MAX_CRYPTO_PAYLOAD_BYTES).contains(&crypto.max_payload_bytes));
 }
+
+#[test]
+fn a_load_failure_leaves_the_client_retryable_but_a_channel_fault_latches() {
+    // A slow first load (download plus start) can exceed the load budget; that
+    // must not poison the process-global client for every later call.
+    let mut state = ClientState {
+        load_failed: true,
+        ..Default::default()
+    };
+    state.latch();
+    assert!(!state.faulted, "a load that did not finish must stay retryable");
+    assert!(!state.load_failed, "the exemption covers exactly one failure");
+
+    // The next failure after the module answered is a real fault.
+    state.latch();
+    assert!(state.faulted);
+}
