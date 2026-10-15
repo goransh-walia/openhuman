@@ -1,12 +1,22 @@
 //! [`redact_composio_outcome`]: keep a Composio API key out of what a
 //! Composio tool returns to the model.
+//!
+//! Which keys a call can resolve to is host configuration ([`composio_secrets`]).
+//! Removing them is the TinySecurity module's job: every string in the outcome
+//! goes to `RedactWith` with this call's keys as exact credentials, so a tenant's
+//! own key is removed from that tenant's output without a process-wide
+//! reinitialization and without a second redactor here. This file walks the
+//! outcome, hands the module its strings and writes the answers back; a result
+//! the module could not check is withheld, never passed on.
+
+use std::collections::HashMap;
+use std::future::Future;
 
 use serde_json::Value;
 use tinytools::{ToolContent, ToolResult};
 
 use crate::config::Config;
 
-const REDACTED: &str = "[REDACTED]";
 const MIN_SECRET_LEN: usize = 8;
 
 /// The Composio keys `config` can resolve to: a host-pinned key, the inline
@@ -33,84 +43,186 @@ pub(crate) fn composio_secrets(config: &Config) -> Vec<String> {
     secrets
 }
 
-pub(crate) fn redact_text(text: &str, secrets: &[String]) -> String {
-    secrets.iter().fold(text.to_string(), |acc, secret| {
-        acc.replace(secret.as_str(), REDACTED)
-    })
+/// Strings shorter than this cannot contain a configured key (see
+/// `MIN_SECRET_LEN`) and are not sent to the module.
+const MIN_CHECKED_LEN: usize = MIN_SECRET_LEN;
+
+/// What a result becomes when the module could not check it.
+pub(crate) const WITHHELD: &str = "Composio result withheld: the security module could not check it for credentials. Do not retry; tell the user the result could not be checked.";
+
+/// Every string the outcome carries that could contain a key: text, JSON string
+/// values and object keys, follow-up content, the markdown rendering and the
+/// metadata.
+fn strings_of(result: &ToolResult) -> Vec<String> {
+    fn json(value: &Value, out: &mut Vec<String>) {
+        match value {
+            Value::String(text) => out.push(text.clone()),
+            Value::Array(items) => items.iter().for_each(|item| json(item, out)),
+            Value::Object(map) => {
+                for (key, value) in map {
+                    out.push(key.clone());
+                    json(value, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    fn content(block: &ToolContent, out: &mut Vec<String>) {
+        match block {
+            ToolContent::Text { text } => out.push(text.clone()),
+            ToolContent::Json { data } => json(data, out),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    result.content.iter().for_each(|c| content(c, &mut out));
+    result.follow_up.iter().for_each(|c| content(c, &mut out));
+    if let Some(markdown) = &result.markdown_formatted {
+        out.push(markdown.clone());
+    }
+    if let Some(metadata) = &result.metadata {
+        json(metadata, &mut out);
+    }
+    out.retain(|text| text.len() >= MIN_CHECKED_LEN);
+    out.sort();
+    out.dedup();
+    out
 }
 
-fn redact_value(value: &mut Value, secrets: &[String]) {
-    match value {
-        Value::String(s) => {
-            if secrets.iter().any(|secret| s.contains(secret.as_str())) {
-                *s = redact_text(s, secrets);
-            }
-        }
-        Value::Array(items) => items.iter_mut().for_each(|v| redact_value(v, secrets)),
-        Value::Object(map) => {
-            let entries = std::mem::take(map);
-            for (mut key, mut value) in entries {
-                redact_value(&mut value, secrets);
-                if secrets.iter().any(|secret| key.contains(secret.as_str())) {
-                    key = redact_text(&key, secrets);
-                }
-                if map.contains_key(&key) {
-                    let base = key;
-                    let mut suffix = 2;
-                    loop {
-                        key = format!("{base} ({suffix})");
-                        if !map.contains_key(&key) {
-                            break;
+/// Write `answers` (original string to redacted string) back into `result`.
+/// A string without an answer is left as it is (it was too short to check).
+fn apply_answers(result: &mut ToolResult, answers: &HashMap<String, String>) {
+    let map = |text: &str| answers.get(text).cloned().unwrap_or_else(|| text.to_owned());
+    fn json(value: &mut Value, map: &dyn Fn(&str) -> String) {
+        match value {
+            Value::String(text) => *text = map(text),
+            Value::Array(items) => items.iter_mut().for_each(|item| json(item, map)),
+            Value::Object(object) => {
+                let entries = std::mem::take(object);
+                for (key, mut value) in entries {
+                    json(&mut value, map);
+                    let mut key = map(&key);
+                    // Two keys can redact to the same marker; keep both values.
+                    if object.contains_key(&key) {
+                        let base = key.clone();
+                        let mut suffix = 2;
+                        loop {
+                            key = format!("{base} ({suffix})");
+                            if !object.contains_key(&key) {
+                                break;
+                            }
+                            suffix += 1;
                         }
-                        suffix += 1;
                     }
+                    object.insert(key, value);
                 }
-                map.insert(key, value);
+            }
+            _ => {}
+        }
+    }
+    fn content(block: &mut ToolContent, map: &dyn Fn(&str) -> String) {
+        match block {
+            ToolContent::Text { text } => *text = map(text),
+            ToolContent::Json { data } => json(data, map),
+            _ => {}
+        }
+    }
+    result.content.iter_mut().for_each(|c| content(c, &map));
+    result.follow_up.iter_mut().for_each(|c| content(c, &map));
+    if let Some(markdown) = result.markdown_formatted.as_mut() {
+        *markdown = map(markdown);
+    }
+    if let Some(metadata) = result.metadata.as_mut() {
+        json(metadata, &map);
+    }
+}
+
+/// `redactor` receives the strings to check and answers each one, or `Err` when
+/// the module could not.
+pub(crate) type Answers = Result<HashMap<String, String>, String>;
+
+/// [`redact_composio_outcome`] over an explicit redactor, so the walk is
+/// testable without a module. An outcome the redactor could not check is
+/// withheld.
+pub(crate) async fn redact_outcome_with<R, Fut>(
+    outcome: anyhow::Result<ToolResult>,
+    redactor: R,
+) -> anyhow::Result<ToolResult>
+where
+    R: Fn(Vec<String>) -> Fut,
+    Fut: Future<Output = Answers>,
+{
+    match outcome {
+        Ok(mut result) => {
+            let strings = strings_of(&result);
+            if strings.is_empty() {
+                return Ok(result);
+            }
+            match redactor(strings).await {
+                Ok(answers) => {
+                    apply_answers(&mut result, &answers);
+                    Ok(result)
+                }
+                Err(error) => {
+                    tracing::warn!("[composio] result withheld: {error}");
+                    Err(anyhow::anyhow!(WITHHELD))
+                }
             }
         }
-        _ => {}
+        Err(error) => {
+            let rendered = format!("{error:#}");
+            if rendered.len() < MIN_CHECKED_LEN {
+                return Err(error);
+            }
+            match redactor(vec![rendered.clone()]).await {
+                Ok(answers) => match answers.get(&rendered) {
+                    Some(redacted) if *redacted != rendered => {
+                        tracing::debug!("[composio] redacted a credential from a tool error");
+                        Err(anyhow::anyhow!(redacted.clone()))
+                    }
+                    _ => Err(error),
+                },
+                Err(why) => {
+                    tracing::warn!("[composio] error text withheld: {why}");
+                    Err(anyhow::anyhow!(WITHHELD))
+                }
+            }
+        }
     }
 }
 
-fn redact_content(content: &mut ToolContent, secrets: &[String]) {
-    match content {
-        ToolContent::Text { text } => *text = redact_text(text, secrets),
-        ToolContent::Json { data } => redact_value(data, secrets),
-        _ => {}
-    }
-}
-
-pub(crate) fn redact_result(mut result: ToolResult, secrets: &[String]) -> ToolResult {
-    if secrets.is_empty() {
-        return result;
-    }
-    result
-        .content
-        .iter_mut()
-        .for_each(|c| redact_content(c, secrets));
-    result
-        .follow_up
-        .iter_mut()
-        .for_each(|c| redact_content(c, secrets));
-    if let Some(md) = result.markdown_formatted.as_mut() {
-        *md = redact_text(md, secrets);
-    }
-    if let Some(meta) = result.metadata.as_mut() {
-        redact_value(meta, secrets);
-    }
-    result
+/// The module's answer for each of `strings` with `secrets` as this call's exact
+/// credentials.
+async fn module_answers(config: &Config, secrets: &[String], strings: Vec<String>) -> Answers {
+    let answers = futures::future::join_all(strings.iter().map(|text| {
+        crate::modules::security::text::redact_credentials_with(config, text, secrets)
+    }))
+    .await;
+    strings
+        .into_iter()
+        .zip(answers)
+        .map(|(text, answer)| answer.map(|redacted| (text, redacted)))
+        .collect()
 }
 
 /// Redact every Composio secret `config` resolves to from `rendered`, report
 /// the redacted copy via
 /// [`report_composio_op_error`](super::super::ops::report_composio_op_error),
 /// and return that same redacted copy for the caller's own error text.
-pub(crate) fn redact_and_report(config: &Config, operation: &str, rendered: &str) -> String {
+pub(crate) async fn redact_and_report(config: &Config, operation: &str, rendered: &str) -> String {
     let secrets = composio_secrets(config);
     let redacted = if secrets.is_empty() {
         rendered.to_string()
     } else {
-        redact_text(rendered, &secrets)
+        match crate::modules::security::text::redact_credentials_with(config, rendered, &secrets)
+            .await
+        {
+            Ok(redacted) => redacted,
+            Err(error) => {
+                tracing::warn!("[composio] error text withheld: {error}");
+                WITHHELD.to_string()
+            }
+        }
     };
     super::super::ops::report_composio_op_error(operation, &redacted);
     redacted
@@ -118,7 +230,7 @@ pub(crate) fn redact_and_report(config: &Config, operation: &str, rendered: &str
 
 /// Redact every Composio key `config` resolves to from a tool's result or
 /// error before it reaches the model.
-pub(crate) fn redact_composio_outcome(
+pub(crate) async fn redact_composio_outcome(
     config: &Config,
     outcome: anyhow::Result<ToolResult>,
 ) -> anyhow::Result<ToolResult> {
@@ -126,16 +238,5 @@ pub(crate) fn redact_composio_outcome(
     if secrets.is_empty() {
         return outcome;
     }
-    match outcome {
-        Ok(result) => Ok(redact_result(result, &secrets)),
-        Err(error) => {
-            let rendered = format!("{error:#}");
-            if secrets.iter().any(|s| rendered.contains(s.as_str())) {
-                tracing::debug!("[composio] redacted a credential from a tool error");
-                Err(anyhow::anyhow!(redact_text(&rendered, &secrets)))
-            } else {
-                Err(error)
-            }
-        }
-    }
+    redact_outcome_with(outcome, |strings| module_answers(config, &secrets, strings)).await
 }
