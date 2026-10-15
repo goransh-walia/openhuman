@@ -7,6 +7,7 @@
 //! descriptor to the frontend, and by later privacy slices (disclosure S3,
 //! approval S4, identification-risk detector S5, enforcement S7).
 
+pub mod assess;
 pub mod emit;
 pub mod enforce;
 pub mod types;
