@@ -13,5 +13,7 @@ pub mod enforce;
 pub mod types;
 
 pub use emit::{emit_external_transfer, emit_external_transfer_in, EgressLedger};
-pub use enforce::{enforce_egress, local_only_blocks, local_only_tool_block};
+pub use enforce::{
+    egress_blocks_message, enforce_egress, local_only_blocks, local_only_tool_block,
+};
 pub use types::{DataKind, EgressDescriptor, EgressReason, IdentificationRisk};

@@ -198,6 +198,13 @@ fn block_message(mode: PrivacyMode, desc: &EgressDescriptor) -> String {
     )
 }
 
+/// The non-sensitive refusal for `desc` under `mode`, or `None` when permitted.
+/// Pure over `(mode, descriptor)`; for sites that hold their own mode (a decision
+/// made at a payload-time check rather than from the live policy).
+pub fn egress_blocks_message(mode: PrivacyMode, desc: &EgressDescriptor) -> Option<String> {
+    egress_blocks(mode, desc).then(|| block_message(mode, desc))
+}
+
 /// Enforce the live privacy policy for an `anyhow`-returning egress site
 /// (composio tool calls, backend integrations, cloud embeddings). Reads the live
 /// mode (defaulting to `Standard`/allow when no session policy is installed) and
