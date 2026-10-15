@@ -86,14 +86,20 @@ use crate::agent::tinyagents::policy_denial::PolicyDenial;
 use crate::security::approval::{
     redact_args, summarize_action, ApprovalGate, ApprovalTurnContext, GateOutcome,
 };
-use crate::security::policy::{GateDecision as PolicyGateDecision, SecurityPolicy};
+use crate::security::policy::{
+    CommandFlow, CommandQuery, CommandStage, GateDecision as PolicyGateDecision, SecurityPolicy,
+};
 use tinybox_bus::CommandClass;
 use tinytools::{PermissionLevel, Tool};
 use tinytools::{ToolPolicyAction, ToolPolicySession};
 
-#[path = "security_gate_shell_analysis.rs"]
-mod shell_analysis;
-use shell_analysis::{shell_analysis_for_call, SHELL_TOOL};
+/// The tool name whose arguments carry a shell command string.
+///
+/// Command classification is not a generic capability: only `shell` has a
+/// `command` argument for the security module to classify. Every other tool is
+/// classified by its declared permission level and `external_effect_with_args`,
+/// which is what the rest of the harness does too.
+pub(super) const SHELL_TOOL: &str = "shell";
 
 /// The channel tool-policy's verdict for one tool, as three explicit outcomes.
 ///
@@ -273,29 +279,40 @@ impl OpenHumanSecurityGate {
         }
     }
 
-    /// Classifies a `shell` call and maps OpenHuman's three-way policy verdict
+    /// Asks the TinySecurity module about a `shell` call and maps its verdict
     /// onto this trait's.
     ///
-    /// Applies host policy to TinyBox's generic command facts, then raises (never
-    /// lowers) the result with the model's self-declared `category`.
-    #[cfg(feature = "modules")]
-    fn shell_decision(
+    /// The module classifies the command, applies the autonomy tier and the
+    /// hidden-execution and protected-path defences, and raises (never lowers)
+    /// the class with the model's self-declared `category`. A module that cannot
+    /// answer refuses the command. Asking here does not spend the hourly budget;
+    /// the run itself does.
+    async fn shell_decision(
         policy: &SecurityPolicy,
         args: &serde_json::Value,
-        analysis: &serde_json::Value,
     ) -> std::result::Result<PolicyGateDecision, String> {
-        let analysis: crate::modules::tinybox::contract::CommandAnalysis =
-            serde_json::from_value(analysis.clone())
-                .map_err(|_| "TinyBox command analysis is invalid".to_owned())?;
-        let mut class: CommandClass = policy.check_gated_command_analysis(&analysis)?;
-        if let Some(declared) = args
+        let command = args
+            .get("command")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                format!(
+                    "{} Shell command is missing.",
+                    tinytools::status::POLICY_BLOCKED_MARKER
+                )
+            })?;
+        let declared = args
             .get("category")
             .and_then(|v| v.as_str())
-            .and_then(SecurityPolicy::parse_declared_class)
-        {
-            class = class.max(declared);
-        }
-        Ok(policy.gate_decision(class))
+            .and_then(SecurityPolicy::parse_declared_class);
+        let verdict = policy
+            .check_command(CommandQuery {
+                command,
+                declared,
+                flow: CommandFlow::Harness,
+                stage: CommandStage::Authorize,
+            })
+            .await?;
+        Ok(verdict.gate)
     }
 
     /// The allow-shaped answer for a call that reached the end of the stages.
@@ -552,63 +569,43 @@ impl OpenHumanSecurityGate {
         //    which OpenHuman's own `ShellTool` permits. So shell answers here
         //    and returns.
         if call.tool_name == SHELL_TOOL {
-            #[cfg(feature = "modules")]
-            {
-                let Some((effective_arguments, analysis)) =
-                    shell_analysis_for_call(call, authorization_context)
-                else {
-                    return Ok(GateDecision::deny(format!(
-                        "{} Shell authorization facts are unavailable or do not match this call.",
-                        tinytools::status::POLICY_BLOCKED_MARKER
-                    )));
-                };
-                match Self::shell_decision(&policy, &effective_arguments, &analysis) {
-                    Err(raw_reason) => {
-                        tracing::warn!(
-                            target: "tinyagents",
-                            tool = %call.tool_name,
-                            "[tinyagents::host::security] shell command blocked by security policy"
-                        );
-                        return Ok(GateDecision::deny(
-                            PolicyDenial::SecurityPolicyBlocked {
-                                tool: &call.tool_name,
-                                raw_reason: &raw_reason,
-                            }
-                            .render(),
-                        ));
-                    }
-                    Ok(PolicyGateDecision::Block) => {
-                        // `check_gated_command_analysis` already rejects the read-only Block
-                        // case; this arm catches a Block produced by the model's
-                        // escalate-only `category` hint.
-                        let raw = format!(
-                            "{} Security policy: this command's category is not permitted in the \
-                         current access tier.",
-                            tinytools::status::POLICY_BLOCKED_MARKER
-                        );
-                        return Ok(GateDecision::deny(
-                            PolicyDenial::SecurityPolicyBlocked {
-                                tool: &call.tool_name,
-                                raw_reason: &raw,
-                            }
-                            .render(),
-                        ));
-                    }
-                    Ok(PolicyGateDecision::Prompt) => {
-                        return Ok(self.park_once(call, channel_approved).await);
-                    }
-                    Ok(PolicyGateDecision::Allow) => {
-                        return Ok(self.settled(channel_approved));
-                    }
+            match Self::shell_decision(&policy, &call.arguments).await {
+                Err(raw_reason) => {
+                    tracing::warn!(
+                        target: "tinyagents",
+                        tool = %call.tool_name,
+                        "[tinyagents::host::security] shell command blocked by security policy"
+                    );
+                    return Ok(GateDecision::deny(
+                        PolicyDenial::SecurityPolicyBlocked {
+                            tool: &call.tool_name,
+                            raw_reason: &raw_reason,
+                        }
+                        .render(),
+                    ));
                 }
-            }
-            #[cfg(not(feature = "modules"))]
-            {
-                let _ = authorization_context;
-                return Ok(GateDecision::deny(format!(
-                    "{} Shell command analysis is unavailable in this build.",
-                    tinytools::status::POLICY_BLOCKED_MARKER
-                )));
+                Ok(PolicyGateDecision::Block) => {
+                    // The module refuses a blocked command with a reason, so
+                    // this is not expected; refuse it all the same.
+                    let raw = format!(
+                        "{} Security policy: this command's category is not permitted in the \
+                         current access tier.",
+                        tinytools::status::POLICY_BLOCKED_MARKER
+                    );
+                    return Ok(GateDecision::deny(
+                        PolicyDenial::SecurityPolicyBlocked {
+                            tool: &call.tool_name,
+                            raw_reason: &raw,
+                        }
+                        .render(),
+                    ));
+                }
+                Ok(PolicyGateDecision::Prompt) => {
+                    return Ok(self.park_once(call, channel_approved).await);
+                }
+                Ok(PolicyGateDecision::Allow) => {
+                    return Ok(self.settled(channel_approved));
+                }
             }
         }
 
