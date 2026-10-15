@@ -36,6 +36,60 @@ pub fn text(text: &str) -> String {
     answer_or_floor(module_text(text), text)
 }
 
+/// Structured tool-call arguments with content, credentials and home paths
+/// removed, for callers that persist or show them: approval prompts and rows,
+/// flow audit records. The module's `StructuredArguments` mode keeps keys and
+/// ordinary scalars, replaces content fields (`body`, `subject`, `to`, ...) with
+/// a count marker such as `<redacted: string (12 chars)>` and credential fields
+/// with `[REDACTED]`, and cleans every remaining string.
+///
+/// Fail closed: when the module cannot answer (not armed, faulted, timed out,
+/// built without `security-module`) or answers with something that is not JSON,
+/// the arguments are not shown at all; the result is a single marker that
+/// carries only the value's shape. There is no host-side structured redactor to
+/// fall back to, and the original value is never returned.
+#[must_use]
+pub fn arguments(args: &serde_json::Value) -> serde_json::Value {
+    arguments_from(module_arguments(args), args)
+}
+
+/// The module's `answer` as JSON, or the shape-only marker for `args`.
+fn arguments_from(answer: Option<String>, args: &serde_json::Value) -> serde_json::Value {
+    answer
+        .and_then(|redacted| serde_json::from_str(&redacted).ok())
+        .unwrap_or_else(|| unavailable_marker(args))
+}
+
+/// What replaces arguments the module could not redact: the kind and size only.
+fn unavailable_marker(args: &serde_json::Value) -> serde_json::Value {
+    let shape = match args {
+        serde_json::Value::Object(map) => format!("object ({} keys)", map.len()),
+        serde_json::Value::Array(items) => format!("array ({} items)", items.len()),
+        serde_json::Value::String(text) => format!("string ({} chars)", text.chars().count()),
+        serde_json::Value::Null => return serde_json::Value::Null,
+        _ => "scalar".to_string(),
+    };
+    serde_json::Value::String(format!("<redacted: {shape}; arguments unavailable>"))
+}
+
+#[cfg(feature = "security-module")]
+fn module_arguments(args: &serde_json::Value) -> Option<String> {
+    use crate::modules::security::text::{try_redact, RedactMode};
+    let input = serde_json::to_string(args).ok()?;
+    match try_redact(RedactMode::StructuredArguments, &input, Some(TEXT_TIMEOUT)) {
+        Ok(redacted) => Some(redacted),
+        Err(error) => {
+            log::debug!("[security][redact] module argument pass unavailable, withheld: {error}");
+            None
+        }
+    }
+}
+
+#[cfg(not(feature = "security-module"))]
+fn module_arguments(_args: &serde_json::Value) -> Option<String> {
+    None
+}
+
 /// The module's `answer` when it gave one, otherwise the floor over `input`.
 fn answer_or_floor(answer: Option<String>, input: &str) -> String {
     match answer {
