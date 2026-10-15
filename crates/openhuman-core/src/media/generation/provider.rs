@@ -162,9 +162,40 @@ impl Guard {
     /// Local-only enforcement, then the egress disclosure. A blocked call is
     /// neither disclosed nor sent.
     fn admit(&self, route: &str) -> ti_image::Result<()> {
-        let descriptor = crate::security::egress::EgressDescriptor::integration(format!(
+        self.admit_descriptor(Self::descriptor(route))
+    }
+
+    /// The descriptor for a metadata-only call to `route`.
+    fn descriptor(route: &str) -> crate::security::egress::EgressDescriptor {
+        crate::security::egress::EgressDescriptor::integration(format!(
             "{OPENROUTER_PROXY_PATH}/{route}"
-        ));
+        ))
+    }
+
+    /// Admit a generation request: its prompt is content that leaves the device,
+    /// so under Sensitive the module assesses it. Reference images and frames
+    /// are file content the host cannot assess; with any present the call stays
+    /// unassessed, which Sensitive refuses.
+    fn admit_prompt(
+        &self,
+        route: &str,
+        prompt: &str,
+        has_media: bool,
+    ) -> ti_image::Result<()> {
+        use crate::security::egress::DataKind;
+        let descriptor = Self::descriptor(route).with_data_kind(DataKind::Prompt);
+        let descriptor = if has_media {
+            descriptor.with_data_kind(DataKind::FileContent)
+        } else {
+            descriptor.assessed(prompt)
+        };
+        self.admit_descriptor(descriptor)
+    }
+
+    fn admit_descriptor(
+        &self,
+        descriptor: crate::security::egress::EgressDescriptor,
+    ) -> ti_image::Result<()> {
         crate::security::egress::enforce_egress(&descriptor).map_err(|error| {
             tracing::info!(route, %error, "[media_generation] blocked by privacy policy");
             ti_image::Error::Validation(format!("blocked by the privacy policy: {error}"))
@@ -205,7 +236,11 @@ impl ImageGenerator for GuardedImage {
     }
 
     async fn generate(&self, request: ImageRequest) -> ti_image::Result<ImageResponse> {
-        self.guard.admit("images")?;
+        self.guard.admit_prompt(
+            "images",
+            &request.prompt,
+            !request.references.is_empty(),
+        )?;
         self.guard.budget().await?;
         self.inner.generate(request).await
     }
@@ -232,7 +267,15 @@ impl VideoGenerator for GuardedVideo {
     }
 
     async fn submit(&self, request: VideoRequest) -> ti_video::Result<VideoJob> {
-        self.guard.admit("videos")?;
+        self.guard
+            .admit_prompt(
+                "videos",
+                request.prompt.as_deref().unwrap_or_default(),
+                request.first_frame.is_some()
+                    || request.last_frame.is_some()
+                    || !request.references.is_empty(),
+            )
+            .map_err(|error| ti_video::Error::Validation(error.to_string()))?;
         self.guard.budget().await?;
         self.inner.submit(request).await
     }
