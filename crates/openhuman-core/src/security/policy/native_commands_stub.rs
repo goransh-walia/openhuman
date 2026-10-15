@@ -26,6 +26,24 @@ pub(crate) struct Asked {
     pub stage: CommandStage,
 }
 
+/// The autonomy tier's gate for a class of command, written out for tests: a
+/// disabled policy allows everything; read-only allows only `Read`;
+/// supervised prompts on every acting class; full runs `Read`/`Write` and
+/// prompts on the rest. The module owns the real table.
+pub(crate) fn tier_table(policy: &SecurityPolicy, class: CommandClass) -> GateDecision {
+    use super::types::AutonomyLevel;
+    if !policy.enabled {
+        return GateDecision::Allow;
+    }
+    match (policy.autonomy, class) {
+        (_, CommandClass::Read) => GateDecision::Allow,
+        (AutonomyLevel::ReadOnly, _) => GateDecision::Block,
+        (AutonomyLevel::Supervised, _) => GateDecision::Prompt,
+        (AutonomyLevel::Full, CommandClass::Write) => GateDecision::Allow,
+        (AutonomyLevel::Full, _) => GateDecision::Prompt,
+    }
+}
+
 type Answer = Box<
     dyn Fn(&SecurityPolicy, &CommandQuery<'_>) -> Result<CommandVerdict, Refusal> + Send + Sync,
 >;
@@ -71,18 +89,17 @@ impl StubGateway {
         Self::answering(move |_, _| Err(reason))
     }
 
-    /// Answers a class-only question with the policy's own tier table
-    /// ([`SecurityPolicy::gate_decision`], which the flow nodes still use) and
-    /// allows every real command. For tests of what a tool does with each gate;
-    /// that the module's table is this table is pinned by the module-backed
-    /// `released_module_tier_gate_matches_the_host_gate_table`.
+    /// Answers a class-only question with [`tier_table`] and allows every real
+    /// command. For tests of what a caller does with each gate; that the
+    /// module's table is this table is pinned by the module-backed
+    /// `released_module_tier_gate_matches_the_inlined_table`.
     pub(crate) fn tiered() -> Arc<Self> {
         Self::answering(|policy, query| {
             let class = query.declared.unwrap_or(CommandClass::Read);
             Ok(CommandVerdict {
                 class,
                 gate: if query.command.is_empty() {
-                    policy.gate_decision(class)
+                    tier_table(policy, class)
                 } else {
                     GateDecision::Allow
                 },

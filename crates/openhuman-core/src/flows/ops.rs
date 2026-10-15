@@ -102,7 +102,7 @@ const GRAPH_CHANGED_SINCE_PARK_ERROR: &str = "the workflow changed after this ru
 //
 // Before an acting node dispatches, its capability adapter
 // (`crates/openhuman-core/src/flows/tinyflows/caps.rs::enforce_node_tier_gate`) maps the node to a
-// `CommandClass` and consults `SecurityPolicy::gate_decision`. `Block` refuses
+// `CommandClass` and consults `SecurityPolicy::command_class_gate`. `Block` refuses
 // outright (`[policy-blocked]` error, no dispatch); `Prompt`/`Allow` fall through
 // to the process-global `ApprovalGate`, which performs the human round-trip for
 // `Prompt` exactly as the agent tool-loop does. Node → class → per-tier decision:

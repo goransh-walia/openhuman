@@ -559,7 +559,7 @@ impl OpenHumanSecurityGate {
         }
 
         // 3. `shell` is the one tool whose arguments carry a classifiable
-        //    command, and `gate_decision` already encodes the autonomy tier —
+        //    command, and the module's gate already encodes the autonomy tier —
         //    at a finer grain than the tool's coarse `Execute` permission
         //    level. Running stage 4 first would refuse `ls` in read-only mode,
         //    which OpenHuman's own `ShellTool` permits. So shell answers here
