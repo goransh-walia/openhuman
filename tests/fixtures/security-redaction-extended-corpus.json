@@ -78,6 +78,7 @@
       "needle": "hunter2",
       "removed_by": [
         "identity_hash",
+        "log",
         "pii",
         "prefix"
       ]

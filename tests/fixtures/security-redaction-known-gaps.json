@@ -48,10 +48,6 @@
   "host_scrub"
  ],
  [
-  "password_in_connection_string",
-  "log"
- ],
- [
   "private_key_block",
   "approval"
  ],
