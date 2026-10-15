@@ -308,6 +308,10 @@ pub struct SecurityPolicy {
     /// default. `pub(crate)` was an over-tight first cut that broke
     /// `examples/mouse_smoke.rs` with E0451.
     pub canonical_workspace: Arc<OnceCell<PathBuf>>,
+    /// Who answers shell-command questions for this policy. `None` (the
+    /// production value) is the TinySecurity module; a host that cannot load it
+    /// installs its own fail-closed gateway.
+    pub command_gateway: Option<super::native_commands::SharedCommandGateway>,
 }
 
 impl Default for SecurityPolicy {
@@ -416,6 +420,7 @@ impl Default for SecurityPolicy {
             auto_approve_all: false,
             tracker: ActionTracker::new(),
             canonical_workspace: Arc::new(OnceCell::new()),
+            command_gateway: None,
         }
     }
 }

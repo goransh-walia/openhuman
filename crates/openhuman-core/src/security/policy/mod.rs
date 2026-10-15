@@ -4,6 +4,7 @@
 
 mod command_checks;
 mod enforcement;
+mod native_commands;
 #[cfg(feature = "security-module")]
 mod native_paths;
 mod path_checks;
@@ -11,6 +12,9 @@ mod path_checks;
 mod types;
 
 pub use enforcement::validate_path_within_root;
+pub use native_commands::{
+    CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, SharedCommandGateway,
+};
 pub use enforcement::{ensure_openhuman_scratch_dir, openhuman_scratch_dir};
 #[cfg(feature = "modules")]
 pub(crate) use path_checks::{
