@@ -73,6 +73,17 @@ fn is_valid_package_name(pkg: &str) -> bool {
         })
 }
 
+/// The refusal returned to a SaaS tenant, or `None` for a single-user host.
+fn refuse_under_saas(saas: bool) -> Option<ToolResult> {
+    saas.then(|| {
+        tracing::warn!("[install_tool] refused under SaaS");
+        ToolResult::error(
+            "[policy-denied] install_tool is not available in SaaS mode: it would change the \
+             shared host, not the tenant's sandbox.",
+        )
+    })
+}
+
 #[async_trait]
 impl Tool for InstallToolTool {
     fn name(&self) -> &str {
@@ -134,6 +145,11 @@ impl InstallToolTool {
         args: serde_json::Value,
         approval: &crate::security::approval::ApprovalTurnContext,
     ) -> anyhow::Result<ToolResult> {
+        // Gate -1: a package install changes the machine the core runs on, which
+        // under SaaS is shared by every tenant. Never, for any tenant.
+        if let Some(refusal) = refuse_under_saas(crate::core::runtime::is_saas()) {
+            return Ok(refusal);
+        }
         // Gate 0: installs mutate the host (not the workspace), so they must
         // never run without an explicit human Approve. The ApprovalGate only
         // parks for an interactive turn (a chat context on the turn's approval
