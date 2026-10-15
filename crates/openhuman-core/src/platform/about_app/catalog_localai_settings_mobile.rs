@@ -384,10 +384,12 @@ Capability {
         name: "Fail-Closed Security Module",
         domain: "security",
         category: CapabilityCategory::Settings,
-        description: "File access for agent tools is authorized by the TinySecurity native \
-                      module, loaded only from a digest-pinned release. If the module is missing, \
-                      untrusted, slow or answers badly, access is denied rather than falling back \
-                      to a weaker local check. Shell policy, approvals and the optional Jev \
+        description: "File access, shell command classification and gating, the network and \
+                      write gates, text redaction and prompt scans, and the Sensitive privacy \
+                      mode check are answered by the TinySecurity native module, loaded only \
+                      from a digest-pinned release. If the module is missing, untrusted, slow or \
+                      answers badly, the action is denied rather than falling back to a weaker \
+                      local check. Approval prompts, the approval store and the optional Jev \
                       auto-approve judge still run in the core during the migration.",
         how_to: "Always on in builds with the security-module feature; no setting to change.",
         status: CapabilityStatus::Beta,
