@@ -72,7 +72,7 @@ pub trait CommandGateway: std::fmt::Debug + Send + Sync {
         &self,
         policy: &SecurityPolicy,
         query: &CommandQuery<'_>,
-    ) -> Result<CommandVerdict, String>;
+    ) -> Result<CommandVerdict, Refusal>;
 }
 
 /// A shared gateway handle, as stored on the policy.
@@ -80,7 +80,7 @@ pub type SharedCommandGateway = Arc<dyn CommandGateway>;
 
 impl SecurityPolicy {
     /// Ask whether `query.command` may run, and whether a human must approve it.
-    pub async fn check_command(&self, query: CommandQuery<'_>) -> Result<CommandVerdict, String> {
+    pub async fn check_command(&self, query: CommandQuery<'_>) -> Result<CommandVerdict, Refusal> {
         match &self.command_gateway {
             Some(gateway) => gateway.decide(self, &query).await,
             None => self.native_command_verdict(&query).await,
@@ -89,7 +89,7 @@ impl SecurityPolicy {
 
     /// The tier's gate for an acting call of `class`: the module's answer to a
     /// command of that class. `Err` is a refusal.
-    pub async fn command_class_gate(&self, class: CommandClass) -> Result<GateDecision, String> {
+    pub async fn command_class_gate(&self, class: CommandClass) -> Result<GateDecision, Refusal> {
         match &self.command_gateway {
             Some(gateway) => gateway
                 .decide(self, &class_query(class))
@@ -102,7 +102,10 @@ impl SecurityPolicy {
     /// [`Self::command_class_gate`] for the synchronous tool traits
     /// (`FsGate`, `NetGate`) that cannot be `async`. Goes through the shared
     /// sync-to-async seam; any failure is a refusal.
-    pub fn command_class_gate_blocking(&self, class: CommandClass) -> Result<GateDecision, String> {
+    pub fn command_class_gate_blocking(
+        &self,
+        class: CommandClass,
+    ) -> Result<GateDecision, Refusal> {
         if let Some(gateway) = self.command_gateway.clone() {
             let policy = self.clone();
             return block_on_gateway(async move {
@@ -130,17 +133,17 @@ fn class_query(class: CommandClass) -> CommandQuery<'static> {
 /// Drive a gateway future from a synchronous caller without parking the
 /// caller's runtime: a dedicated thread with its own current-thread runtime.
 fn block_on_gateway<T: Send + 'static>(
-    future: impl std::future::Future<Output = Result<T, String>> + Send + 'static,
-) -> Result<T, String> {
+    future: impl std::future::Future<Output = Result<T, Refusal>> + Send + 'static,
+) -> Result<T, Refusal> {
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .map_err(|_| "command gateway runtime unavailable".to_owned())?
+            .map_err(|_| Refusal::Unavailable)?
             .block_on(future)
     })
     .join()
-    .map_err(|_| "command gateway panicked".to_owned())?
+    .map_err(|_| Refusal::Unavailable)?
 }
 
 /// The agent-facing message for a refused command.
@@ -177,9 +180,10 @@ pub(crate) fn refusal_message(denial: Refusal) -> String {
     }
 }
 
-/// Why the module refused, in the host's terms.
+/// Why a command was refused, in the host's terms. Its `Display` is the
+/// agent-facing message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Refusal {
+pub enum Refusal {
     Protected,
     ReadOnly,
     Hidden,
@@ -187,8 +191,17 @@ pub(crate) enum Refusal {
     HighRisk,
     RateLimit,
     Category,
+    /// The module could not answer: missing, untrusted, faulted or too slow.
     Unavailable,
 }
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&refusal_message(*self))
+    }
+}
+
+impl std::error::Error for Refusal {}
 
 impl SecurityPolicy {
     /// The settings the module enforces for this policy. Derived entirely from
@@ -198,7 +211,7 @@ impl SecurityPolicy {
         &self,
         flow: CommandFlow,
         stage: CommandStage,
-    ) -> Result<tinysecurity_bus::CommandPolicy, String> {
+    ) -> Result<tinysecurity_bus::CommandPolicy, Refusal> {
         use tinysecurity_bus::{CommandAutonomy, CommandExecutionMode, ShellDialect};
 
         let action_dir = absolute(&self.action_dir)?;
@@ -237,7 +250,7 @@ impl SecurityPolicy {
     async fn native_command_verdict(
         &self,
         query: &CommandQuery<'_>,
-    ) -> Result<CommandVerdict, String> {
+    ) -> Result<CommandVerdict, Refusal> {
         use crate::modules::security::command::{command_decision, CommandOp};
 
         let policy = self.native_command_policy(query.flow, query.stage)?;
@@ -254,7 +267,7 @@ impl SecurityPolicy {
 
     /// A class-only question needs neither an admission nor a budget.
     #[cfg(feature = "security-module")]
-    async fn native_class_gate(&self, class: CommandClass) -> Result<GateDecision, String> {
+    async fn native_class_gate(&self, class: CommandClass) -> Result<GateDecision, Refusal> {
         use crate::modules::security::command::{command_decision, CommandOp};
 
         let query = class_query(class);
@@ -271,7 +284,7 @@ impl SecurityPolicy {
     }
 
     #[cfg(feature = "security-module")]
-    fn native_class_gate_blocking(&self, class: CommandClass) -> Result<GateDecision, String> {
+    fn native_class_gate_blocking(&self, class: CommandClass) -> Result<GateDecision, Refusal> {
         use crate::modules::security::command::{command_decision_blocking, CommandOp};
 
         let query = class_query(class);
@@ -287,32 +300,32 @@ impl SecurityPolicy {
     }
 
     #[cfg(not(feature = "security-module"))]
-    async fn native_class_gate(&self, _class: CommandClass) -> Result<GateDecision, String> {
-        Err(refusal_message(Refusal::Unavailable))
+    async fn native_class_gate(&self, _class: CommandClass) -> Result<GateDecision, Refusal> {
+        Err(Refusal::Unavailable)
     }
 
     #[cfg(not(feature = "security-module"))]
     async fn native_command_verdict(
         &self,
         _query: &CommandQuery<'_>,
-    ) -> Result<CommandVerdict, String> {
-        Err(refusal_message(Refusal::Unavailable))
+    ) -> Result<CommandVerdict, Refusal> {
+        Err(Refusal::Unavailable)
     }
 
     #[cfg(not(feature = "security-module"))]
-    fn native_class_gate_blocking(&self, _class: CommandClass) -> Result<GateDecision, String> {
-        Err(refusal_message(Refusal::Unavailable))
+    fn native_class_gate_blocking(&self, _class: CommandClass) -> Result<GateDecision, Refusal> {
+        Err(Refusal::Unavailable)
     }
 }
 
 #[cfg(feature = "security-module")]
-fn absolute(path: &std::path::Path) -> Result<PathBuf, String> {
+fn absolute(path: &std::path::Path) -> Result<PathBuf, Refusal> {
     if path.is_absolute() {
         return Ok(path.to_path_buf());
     }
     std::env::current_dir()
         .map(|cwd| cwd.join(path))
-        .map_err(|_| refusal_message(Refusal::Unavailable))
+        .map_err(|_| Refusal::Unavailable)
 }
 
 #[cfg(feature = "security-module")]
@@ -348,14 +361,14 @@ pub(crate) fn project(
     query: &CommandQuery<'_>,
     class_only: bool,
     decision: Result<tinysecurity_bus::CommandDecision, String>,
-) -> Result<CommandVerdict, String> {
+) -> Result<CommandVerdict, Refusal> {
     use tinysecurity_bus::{CommandDenial, CommandGate};
 
     let decision = match decision {
         Ok(decision) => decision,
         Err(error) => {
             log::warn!("[security][command] module unavailable; command denied: {error}");
-            return Err(refusal_message(Refusal::Unavailable));
+            return Err(Refusal::Unavailable);
         }
     };
     if let Some(denial) = decision.denial {
@@ -373,7 +386,7 @@ pub(crate) fn project(
             CommandDenial::RateLimit => Refusal::RateLimit,
         };
         log::debug!("[security][command] refused flow={:?} reason={refusal:?}", query.flow);
-        return Err(refusal_message(refusal));
+        return Err(refusal);
     }
     let gate = match decision.gate {
         CommandGate::Allow => GateDecision::Allow,
@@ -381,7 +394,7 @@ pub(crate) fn project(
         // A class question reports a blocked tier as such; for a real command
         // a block always carries a denial, so one without is refused outright.
         CommandGate::Block if class_only => GateDecision::Block,
-        CommandGate::Block => return Err(refusal_message(Refusal::Category)),
+        CommandGate::Block => return Err(Refusal::Category),
     };
     Ok(CommandVerdict {
         class: from_bus_class(decision.class),
