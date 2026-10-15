@@ -21,6 +21,11 @@ async fn test_config(tmp: &TempDir) -> Config {
         config_path: tmp.path().join("config.toml"),
         ..Config::default()
     };
+    // Shell jobs run under the untrusted-spawn gate (the TinyBox jail). Unit
+    // tests load no native module, so they take the operator's explicit
+    // opt-out; the gate itself is pinned in `shell_job_jail_tests`.
+    let mut config = config;
+    config.sandbox.enabled = Some(false);
     tokio::fs::create_dir_all(&config.workspace_dir)
         .await
         .unwrap();
