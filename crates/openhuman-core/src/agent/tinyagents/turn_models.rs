@@ -10,6 +10,8 @@ use tinyagents_harness::host::{ModelResolveRequest, ModelResolver};
 use tinyinference_llm::model::{ErrorSlotModel, ProfileOverrideModel};
 use tinyinference_llm::model::{ResolvedModelRoute, RouteRecordingModel};
 
+use crate::agent::tinyagents::egress_model::EgressAssessedModel;
+
 /// The per-turn crate [`ChatModel`](tinyinference_llm::model::ChatModel) set,
 /// built once from an openhuman [`Provider`] by [`build_turn_models`] — the
 /// single place a turn's `native model adapters are constructed (issue #4249, Phase 5).
@@ -221,12 +223,18 @@ fn build_turn_models_crate(
                 factory::make_openhuman_backend_model_for_thread(
                     role, config, m, true, thread_id, &egress,
                 )?;
+            // The managed backend is always off-device.
             return Ok(Arc::new(RouteRecordingModel::new(
-                crate::agent::attachments::provider::wrap(
-                    backend,
-                    Arc::new(config.clone()),
-                    m,
+                EgressAssessedModel::for_route(
+                    crate::agent::attachments::provider::wrap(
+                        backend,
+                        Arc::new(config.clone()),
+                        m,
+                        "openhuman",
+                    ),
                     "openhuman",
+                    m,
+                    false,
                 ),
                 ResolvedModelRoute::new("openhuman", m, m),
             )));
@@ -251,11 +259,16 @@ fn build_turn_models_crate(
             ),
         }?;
         Ok(Arc::new(RouteRecordingModel::new(
-            crate::agent::attachments::provider::wrap(
-                model,
-                Arc::new(config.clone()),
-                &resolved_model,
+            EgressAssessedModel::for_route(
+                crate::agent::attachments::provider::wrap(
+                    model,
+                    Arc::new(config.clone()),
+                    &resolved_model,
+                    &provider,
+                ),
                 &provider,
+                &resolved_model,
+                is_local,
             ),
             ResolvedModelRoute::new(provider, resolved_model, m),
         )))
@@ -310,11 +323,22 @@ fn build_turn_models_crate(
                     Ok((route_model, provider, resolved_model)) => routes.push((
                         tier.to_string(),
                         Arc::new(RouteRecordingModel::new(
-                            crate::agent::attachments::provider::wrap(
-                                route_model,
-                                Arc::new(config.clone()),
-                                &resolved_model,
+                            EgressAssessedModel::for_route(
+                                crate::agent::attachments::provider::wrap(
+                                    route_model,
+                                    Arc::new(config.clone()),
+                                    &resolved_model,
+                                    &provider,
+                                ),
                                 &provider,
+                                &resolved_model,
+                                crate::agent::tinyagents::turn_policy::provider_is_self_hosted(
+                                    &provider,
+                                    crate::agent::tinyagents::turn_policy::local_openai_endpoint(
+                                        config,
+                                    )
+                                    .as_deref(),
+                                ),
                             ),
                             ResolvedModelRoute::new(provider, resolved_model, tier),
                         )),
@@ -559,10 +583,17 @@ impl TurnModelSource {
             let is_local =
                 crate::agent::tinyagents::turn_policy::provider_is_self_hosted(&provider_id, None);
             let context_window = context_window.or(profile.max_input_tokens);
-            let primary: TurnChatModel = Arc::new(
-                ProfileOverrideModel::new(direct.clone(), profile)
-                    .with_request_model(model)
-                    .with_request_temperature(temperature),
+            // An injected model is as external as its profile says; assess it
+            // unless it is self-hosted.
+            let primary: TurnChatModel = EgressAssessedModel::for_route(
+                Arc::new(
+                    ProfileOverrideModel::new(direct.clone(), profile)
+                        .with_request_model(model)
+                        .with_request_temperature(temperature),
+                ),
+                &provider_id,
+                model,
+                is_local,
             );
             let (primary, summarizer) = match &self.attachment_config {
                 Some(config) => (

@@ -56,14 +56,15 @@ impl EgressAssessedModel {
         }
     }
 
-    /// Wrap `inner` when `provider` is not a local one, otherwise hand it back
-    /// unchanged: a request that never leaves the device has nothing to assess.
+    /// `inner`, assessed before each call unless the route stays on the device
+    /// (`local`): a request that never leaves has nothing to assess.
     pub(crate) fn for_route(
         inner: Arc<dyn ChatModel<()>>,
         provider: &str,
         model: &str,
+        local: bool,
     ) -> Arc<dyn ChatModel<()>> {
-        if tinyinference_local::profile::is_local_provider_string(provider) {
+        if local {
             inner
         } else {
             Arc::new(Self::new(inner, provider, model))
