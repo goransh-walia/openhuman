@@ -317,8 +317,9 @@ decision. See [approval/README.md](approval/README.md).
     method, headers and body, spends the grant and hands the tool the approved
     socket addresses. The tool connects only to those (`resolve_to_addrs`, URL
     host kept for `Host`/SNI/certificate checks). A refused, missing, faulted or
-    slow module refuses the call; a build without `security-module` leaves the
-    tool's own DNS check in force.
+    slow module refuses the call. A build without `security-module` gets no
+    module-checked resolved-address floor: `module_destination` answers `None`
+    and the tool's own DNS check is the only one in force.
   - Browser navigation (`modules/browser.rs`) keeps the synchronous lexical
     pre-filter and then asks the module for a verdict on the `Browser`
     transport (`authorize_browser_navigation`): the address floor on every
@@ -340,7 +341,9 @@ decision. See [approval/README.md](approval/README.md).
     call's exact credentials, so a tenant's key is removed from that tenant's
     output without a process-wide reinitialization. The file only resolves the
     keys (host configuration), walks the outcome and writes answers back; a
-    result the module could not check is withheld.
+    result the module could not check is withheld. Without `security-module`
+    nothing can check a string that mentions a key, so every such string is
+    withheld (fail closed).
   - Chat inference (`agent/tinyagents/egress_model.rs`) assesses the outgoing
     messages on every route that leaves the device (the primary, workload-tier
     routes and fallbacks), not only the primary: a local primary does not exempt
