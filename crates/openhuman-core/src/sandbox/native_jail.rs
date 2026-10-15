@@ -165,7 +165,10 @@ async fn execute_owned(
         status.suitable_for_untrusted_code,
         untrusted,
     ) else {
-        anyhow::bail!("TinyBox native jail cannot meet the required isolation floor");
+        // Typed so callers can tell a deterministic policy refusal from a
+        // transient failure (`ops::IsolationFloor`).
+        return Err(anyhow::Error::new(super::ops::IsolationFloor)
+            .context("TinyBox native jail cannot meet the required isolation floor"));
     };
     if explicitly_requested && status.backend != "landlock" {
         anyhow::bail!("requested Landlock sandbox is unavailable");
