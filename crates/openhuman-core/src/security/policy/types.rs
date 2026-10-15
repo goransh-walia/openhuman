@@ -45,17 +45,9 @@ pub struct TrustedRoot {
     pub access: TrustedAccess,
 }
 
-/// Risk score for shell command execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandRiskLevel {
-    Low,
-    Medium,
-    High,
-}
-
 /// What the harness should do with an acting tool call of a given
 /// [`CommandClass`] under the session's [`AutonomyLevel`]. Computed by
-/// [`SecurityPolicy::gate_decision`]; the harness translates `Prompt` into an
+/// [`SecurityPolicy::gate_decision`] (and, for a command, the module's gate); the harness translates `Prompt` into an
 /// `ApprovalGate` round-trip *before* the tool's `execute()` runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GateDecision {
