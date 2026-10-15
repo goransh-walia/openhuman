@@ -361,10 +361,17 @@ impl BrowserClient {
         let host = url
             .host_str()
             .ok_or_else(|| BrowserCallError::Policy("URL has no host".into()))?;
+        // The shared lexical classifier (`tinytools_std::url_guard`) is the one
+        // host check; the browser's own copy was deleted. It is a pre-filter only:
+        // navigation is performed by the TinyComputer module, which the host
+        // cannot pin to approved sockets, so the TinySecurity module's
+        // `ScopedUrlGuard` (which refuses the `Browser` transport) does not apply
+        // here. Resolved-address enforcement for browser hops belongs to
+        // TinyComputer.
         let is_private = match url.host() {
-            Some(url::Host::Ipv4(ip)) => private_or_local(&ip.to_string()),
-            Some(url::Host::Ipv6(ip)) => private_or_local(&ip.to_string()),
-            _ => private_or_local(host),
+            Some(url::Host::Ipv4(ip)) => is_private_or_local_host(&ip.to_string()),
+            Some(url::Host::Ipv6(ip)) => is_private_or_local_host(&ip.to_string()),
+            _ => is_private_or_local_host(host),
         };
         if is_private {
             return Err(BrowserCallError::Policy(format!(
@@ -521,24 +528,6 @@ fn browser_allow_all() -> bool {
         std::env::var("OPENHUMAN_BROWSER_ALLOW_ALL").ok().as_deref(),
         Some("1" | "true" | "TRUE" | "yes" | "YES")
     )
-}
-
-fn private_or_local(host: &str) -> bool {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") {
-        return true;
-    }
-    // The network tools' full non-global list, so the browser blocks the same
-    // reserved, benchmarking and documentation ranges they do.
-    match host.parse::<std::net::IpAddr>() {
-        // `is_non_global_v4` already covers 0.0.0.0/8; the explicit octet check
-        // keeps that local-host range visibly blocked at this call site too.
-        Ok(std::net::IpAddr::V4(ip)) => {
-            tinytools_std::url_guard::is_non_global_v4(ip) || ip.octets()[0] == 0
-        }
-        Ok(std::net::IpAddr::V6(ip)) => tinytools_std::url_guard::is_non_global_v6(ip),
-        Err(_) => false,
-    }
 }
 
 #[cfg(test)]

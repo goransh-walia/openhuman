@@ -25,11 +25,11 @@ fn non_global_ip_literals_stay_blocked() {
         "[2001:db8::1]",
     ] {
         assert!(
-            private_or_local(host.trim_matches(['[', ']'])),
+            is_private_or_local_host(host.trim_matches(['[', ']'])),
             "{host} must be blocked"
         );
     }
-    assert!(!private_or_local("93.184.216.34"));
+    assert!(!is_private_or_local_host("93.184.216.34"));
 }
 
 #[test]
