@@ -42,12 +42,21 @@ pub async fn compute_approval_manifest(config: &Config, graph: &WorkflowGraph) -
     };
 
     let security = SecurityPolicy::from_full_config(config);
+    // The tier table is the module's; an unanswerable gate counts as blocked,
+    // as it does at run time.
     let gated = |class: CommandClass| {
-        Some(ManifestClass {
-            name: format!("{class:?}"),
-            blocked: security.gate_decision(class) == GateDecision::Block,
-            skip: false,
-        })
+        let security = &security;
+        async move {
+            let blocked = !matches!(
+                security.command_class_gate(class).await,
+                Ok(GateDecision::Allow | GateDecision::Prompt)
+            );
+            Some(ManifestClass {
+                name: format!("{class:?}"),
+                blocked,
+                skip: false,
+            })
+        }
     };
 
     // The graph walk and the wire entries are `tinyflows-catalog`'s; only the
@@ -56,8 +65,8 @@ pub async fn compute_approval_manifest(config: &Config, graph: &WorkflowGraph) -
     let mut classes: Vec<Option<ManifestClass>> = Vec::with_capacity(candidates.len());
     for candidate in &candidates {
         let class = match candidate {
-            ManifestCandidate::Http { .. } => gated(CommandClass::Network),
-            ManifestCandidate::Code { .. } => gated(CommandClass::Write),
+            ManifestCandidate::Http { .. } => gated(CommandClass::Network).await,
+            ManifestCandidate::Code { .. } => gated(CommandClass::Write).await,
             ManifestCandidate::NativeTool {
                 tool_name, args, ..
             } => {
@@ -66,7 +75,7 @@ pub async fn compute_approval_manifest(config: &Config, graph: &WorkflowGraph) -
                 // conservatively to Network: over-asking is safe.
                 let class = crate::tools::native_ops::classify_tool_call(config, tool_name, args)
                     .unwrap_or(CommandClass::Network);
-                gated(class)
+                gated(class).await
             }
             ManifestCandidate::ConnectorTool { slug, .. } => {
                 let class = classify_composio_action_for_tier(slug).await;
@@ -78,7 +87,7 @@ pub async fn compute_approval_manifest(config: &Config, graph: &WorkflowGraph) -
                         skip: true,
                     })
                 } else {
-                    gated(class)
+                    gated(class).await
                 }
             }
             ManifestCandidate::DynamicTool { .. } | ManifestCandidate::Agent { .. } => None,
