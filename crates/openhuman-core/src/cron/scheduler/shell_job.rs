@@ -2,7 +2,7 @@
 //! forbidden-path argument scan and a hard timeout.
 
 use crate::config::Config;
-use crate::security::policy::{CommandFlow, CommandQuery, CommandStage};
+use crate::security::policy::{CommandFlow, CommandQuery, CommandStage, Refusal};
 use crate::security::SecurityPolicy;
 use tinyflows_schedule::types::CronJob;
 use tokio::time::Duration;
@@ -45,16 +45,13 @@ async fn ask_module(
         })
         .await
         .map(|_| ())
-        .map_err(|reason| {
-            log::debug!("[cron][shell] command refused stage={stage:?}");
-            if reason.contains("protected path") {
-                "blocked by security policy: command rejected".to_owned()
-            } else if reason.contains("Rate limit") {
-                "blocked by security policy: rate limit exceeded".to_owned()
-            } else if reason.contains("unavailable") {
-                "Command analysis is unavailable.".to_owned()
-            } else {
-                "blocked by security policy: command not allowed".to_owned()
+        .map_err(|refusal| {
+            log::debug!("[cron][shell] command refused stage={stage:?} reason={refusal:?}");
+            match refusal {
+                Refusal::Protected => "blocked by security policy: command rejected".to_owned(),
+                Refusal::RateLimit => "blocked by security policy: rate limit exceeded".to_owned(),
+                Refusal::Unavailable => "Command analysis is unavailable.".to_owned(),
+                _ => "blocked by security policy: command not allowed".to_owned(),
             }
         })
 }

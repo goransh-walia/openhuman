@@ -311,7 +311,8 @@ impl OpenHumanSecurityGate {
                 flow: CommandFlow::Harness,
                 stage: CommandStage::Authorize,
             })
-            .await?;
+            .await
+            .map_err(|refusal| refusal.to_string())?;
         Ok(verdict.gate)
     }
 

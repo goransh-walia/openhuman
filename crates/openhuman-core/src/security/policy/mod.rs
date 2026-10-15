@@ -13,7 +13,7 @@ mod types;
 
 pub use enforcement::validate_path_within_root;
 pub use native_commands::{
-    CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, SharedCommandGateway,
+    CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, Refusal, SharedCommandGateway,
 };
 pub use enforcement::{ensure_openhuman_scratch_dir, openhuman_scratch_dir};
 #[cfg(feature = "modules")]

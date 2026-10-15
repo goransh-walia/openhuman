@@ -337,7 +337,7 @@ impl ShellTool {
             })
             .await
         {
-            return (false, ToolResult::error(reason));
+            return (false, ToolResult::error(reason.to_string()));
         }
 
         let _cwd = self.effective_action_dir_for_context(context);
