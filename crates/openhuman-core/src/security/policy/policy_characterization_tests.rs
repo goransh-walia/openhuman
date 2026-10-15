@@ -72,6 +72,29 @@ fn always_forbidden_floor_covers_credential_stores_and_system_roots() {
 }
 
 #[test]
+fn path_floor_holds_with_policy_disabled_and_through_trusted_roots() {
+    let off = SecurityPolicy {
+        enabled: false,
+        ..SecurityPolicy::default()
+    };
+    assert!(!off.is_resolved_path_allowed(Path::new("/home/u/.ssh/id_rsa")));
+    assert!(!off.is_resolved_path_allowed(Path::new("/etc/passwd")));
+    assert!(off.is_resolved_path_allowed(Path::new("/anywhere/else/file")));
+
+    let on = SecurityPolicy {
+        enabled: true,
+        trusted_roots: vec![TrustedRoot {
+            path: "/home/u".into(),
+            access: TrustedAccess::ReadWrite,
+        }],
+        ..SecurityPolicy::default()
+    };
+    assert!(on.is_within_trusted_root(Path::new("/home/u/project"), true));
+    assert!(!on.is_within_trusted_root(Path::new("/home/u/.ssh/id_rsa"), false));
+    assert!(!on.is_within_trusted_root(Path::new("/home/u/.aws/credentials"), true));
+}
+
+#[test]
 fn trusted_root_access_tiers_are_pinned() {
     let p = SecurityPolicy {
         enabled: true,

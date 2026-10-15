@@ -13,6 +13,7 @@
 //! [`CommandGateway`] on the policy (the trait is sealed to this crate);
 //! production always asks the module.
 
+#[cfg(feature = "security-module")]
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -20,7 +21,9 @@ use async_trait::async_trait;
 use tinybox_bus::CommandClass;
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
-use super::types::{AutonomyLevel, GateDecision, SecurityPolicy};
+#[cfg(feature = "security-module")]
+use super::types::AutonomyLevel;
+use super::types::{GateDecision, SecurityPolicy};
 
 /// Which host integration runs the command. The module applies a different
 /// admission rule to each, fixed by the trusted host and not by the request.
