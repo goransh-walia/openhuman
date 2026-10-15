@@ -271,6 +271,7 @@ impl SecurityPolicy {
             auto_approve_all: autonomy_config.auto_approve_all,
             tracker: ActionTracker::new(),
             canonical_workspace: Arc::new(OnceCell::new()),
+            command_gateway: None,
         }
     }
 
