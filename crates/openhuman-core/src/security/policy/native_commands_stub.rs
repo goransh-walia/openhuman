@@ -26,7 +26,8 @@ pub(crate) struct Asked {
     pub stage: CommandStage,
 }
 
-type Answer = Box<dyn Fn(&CommandQuery<'_>) -> Result<CommandVerdict, Refusal> + Send + Sync>;
+type Answer =
+    Box<dyn Fn(&SecurityPolicy, &CommandQuery<'_>) -> Result<CommandVerdict, Refusal> + Send + Sync>;
 
 pub(crate) struct StubGateway {
     answer: Answer,
@@ -41,7 +42,10 @@ impl std::fmt::Debug for StubGateway {
 
 impl StubGateway {
     pub(crate) fn answering(
-        answer: impl Fn(&CommandQuery<'_>) -> Result<CommandVerdict, Refusal> + Send + Sync + 'static,
+        answer: impl Fn(&SecurityPolicy, &CommandQuery<'_>) -> Result<CommandVerdict, Refusal>
+            + Send
+            + Sync
+            + 'static,
     ) -> Arc<Self> {
         Arc::new(Self {
             answer: Box::new(answer),
@@ -51,7 +55,7 @@ impl StubGateway {
 
     /// Always `gate` for a command of class `class`.
     pub(crate) fn gate(class: CommandClass, gate: GateDecision) -> Arc<Self> {
-        Self::answering(move |_| Ok(CommandVerdict { class, gate }))
+        Self::answering(move |_, _| Ok(CommandVerdict { class, gate }))
     }
 
     pub(crate) fn allow() -> Arc<Self> {
@@ -63,7 +67,26 @@ impl StubGateway {
     }
 
     pub(crate) fn refuse(reason: Refusal) -> Arc<Self> {
-        Self::answering(move |_| Err(reason))
+        Self::answering(move |_, _| Err(reason))
+    }
+
+    /// Answers a class-only question with the policy's own tier table
+    /// ([`SecurityPolicy::gate_decision`], which the flow nodes still use) and
+    /// allows every real command. For tests of what a tool does with each gate;
+    /// that the module's table is this table is pinned by the module-backed
+    /// `released_module_tier_gate_matches_the_host_gate_table`.
+    pub(crate) fn tiered() -> Arc<Self> {
+        Self::answering(|policy, query| {
+            let class = query.declared.unwrap_or(CommandClass::Read);
+            Ok(CommandVerdict {
+                class,
+                gate: if query.command.is_empty() {
+                    policy.gate_decision(class)
+                } else {
+                    GateDecision::Allow
+                },
+            })
+        })
     }
 
     pub(crate) fn asked(&self) -> Vec<Asked> {
@@ -75,7 +98,7 @@ impl StubGateway {
 impl CommandGateway for StubGateway {
     async fn decide(
         &self,
-        _policy: &SecurityPolicy,
+        policy: &SecurityPolicy,
         query: &CommandQuery<'_>,
     ) -> Result<CommandVerdict, Refusal> {
         self.asked.lock().unwrap().push(Asked {
@@ -84,7 +107,7 @@ impl CommandGateway for StubGateway {
             flow: query.flow,
             stage: query.stage,
         });
-        (self.answer)(query)
+        (self.answer)(policy, query)
     }
 }
 
