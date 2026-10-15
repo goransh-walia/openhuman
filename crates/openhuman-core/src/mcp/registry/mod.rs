@@ -483,36 +483,47 @@ pub(crate) async fn tools_safe_for_agent_scanned(
     tools: Vec<tinymcp_bus::McpTool>,
 ) -> Vec<tinymcp_bus::McpTool> {
     let tools = tools_safe_for_agent(server, tools);
-    #[cfg(feature = "security-module")]
-    return {
-        use crate::modules::security::text::{scan_tool_definition, ScanVerdict};
-        let Some(config) = crate::core::runtime::CoreContext::current_embedder_config() else {
-            return tools;
-        };
-        if !config.modules.enabled {
-            return tools;
-        }
-        let mut kept = Vec::with_capacity(tools.len());
-        for tool in tools {
-            let definition = serde_json::json!({
-                "description": tool.description,
-                "input_schema": tool.input_schema,
-            });
-            match scan_tool_definition(&config, &tool.name, &definition).await {
-                Ok(scan) if scan.verdict == ScanVerdict::Blocked => {
-                    tracing::warn!(
-                        server,
-                        tool = %tool.name,
-                        rules = %scan.rule_ids.join(","),
-                        "[mcp] dropped a remote tool blocked by the security module scan"
-                    );
-                }
-                _ => kept.push(tool),
-            }
-        }
-        kept
+    module_scan_tools(server, tools).await
+}
+
+#[cfg(all(feature = "mcp", feature = "security-module"))]
+async fn module_scan_tools(
+    server: &str,
+    tools: Vec<tinymcp_bus::McpTool>,
+) -> Vec<tinymcp_bus::McpTool> {
+    use crate::modules::security::text::{scan_tool_definition, ScanVerdict};
+    let Some(config) = crate::core::runtime::CoreContext::current_embedder_config() else {
+        return tools;
     };
-    #[cfg(not(feature = "security-module"))]
+    if !config.modules.enabled {
+        return tools;
+    }
+    let mut kept = Vec::with_capacity(tools.len());
+    for tool in tools {
+        let definition = serde_json::json!({
+            "description": tool.description,
+            "input_schema": tool.input_schema,
+        });
+        match scan_tool_definition(&config, &tool.name, &definition).await {
+            Ok(scan) if scan.verdict == ScanVerdict::Blocked => {
+                tracing::warn!(
+                    server,
+                    tool = %tool.name,
+                    rules = %scan.rule_ids.join(","),
+                    "[mcp] dropped a remote tool blocked by the security module scan"
+                );
+            }
+            _ => kept.push(tool),
+        }
+    }
+    kept
+}
+
+#[cfg(all(feature = "mcp", not(feature = "security-module")))]
+async fn module_scan_tools(
+    _server: &str,
+    tools: Vec<tinymcp_bus::McpTool>,
+) -> Vec<tinymcp_bus::McpTool> {
     tools
 }
 
