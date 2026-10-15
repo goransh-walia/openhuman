@@ -172,3 +172,23 @@ async fn moved_text_callers_redact_through_the_released_archive() {
     assert!(!line.contains("abcdefghijklmnopqrstuvwxyz"), "{line}");
     assert!(line.contains("request failed"), "{line}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "exploration"]
+async fn explore_arguments() {
+    let (_dir, config) = released_config();
+    arm(&config).await;
+    let cases = vec![
+        serde_json::json!({"action":"send","body":"hello world","to":"a@b.com","token":"abc","integration":"gmail"}),
+        serde_json::json!({"path":"/home/alice/x.txt","note":"c:\\Users\\bob\\y","list":[1,2,{"subject":"s"}],"n":5,"b":true,"nested":{"password":"hunter2","k":null}}),
+        serde_json::json!({"payload":"Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123","url":"https://u:p@h.com/a?k=v"}),
+        serde_json::json!({"attachments":[{"url":"https://s3/x"}],"user_id":"u-1","code":123456}),
+        serde_json::json!("plain string /Users/zed/x"),
+        serde_json::json!([1,2,3]),
+    ];
+    for c in cases {
+        println!("IN : {c}");
+        println!("OLD: {}", crate::security::approval::redact_args(&c));
+        println!("NEW: {}", arguments(&c));
+    }
+}
