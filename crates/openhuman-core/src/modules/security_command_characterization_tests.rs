@@ -400,10 +400,9 @@ async fn released_module_risk_levels_and_approval_requirements() {
     );
 
     let rm = with_allowlist(AutonomyLevel::Supervised, &["rm"]);
-    assert_eq!(m.validate(&rm, "rm -rf /tmp/test").await.0, true);
-    assert_eq!(
+    assert!(m.validate(&rm, "rm -rf /tmp/test").await.0);
+    assert!(
         m.validate(&default, "ls & python3 -c 'print(1)'").await.0,
-        true,
         "a background chain cannot smuggle a second command"
     );
 }
