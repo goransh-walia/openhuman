@@ -105,8 +105,8 @@ async fn shell_tool_gates_commands_on_the_released_module() {
     let (allowed, result) = read_only.run_with_security(&ctx, "touch refused", None).await;
     assert!(!allowed, "a write is refused in read-only mode");
     assert!(
-        result.content.contains(tinytools::status::POLICY_BLOCKED_MARKER),
-        "{}",
+        format!("{:?}", result.content).contains(tinytools::status::POLICY_BLOCKED_MARKER),
+        "{:?}",
         result.content
     );
     assert!(!released.action.join("refused").exists(), "nothing ran");
@@ -116,11 +116,11 @@ async fn shell_tool_gates_commands_on_the_released_module() {
         .run_with_security(&ctx, "echo $(whoami)", None)
         .await;
     assert!(!allowed, "hidden execution is refused");
-    assert!(!result.content.contains("whoami"), "{}", result.content);
+    assert!(!format!("{:?}", result.content).contains("whoami"));
 
     let limited = tool(AutonomyLevel::Supervised, 1);
     assert!(limited.run_with_security(&ctx, "ls", None).await.0);
     let (allowed, result) = limited.run_with_security(&ctx, "ls", None).await;
     assert!(!allowed, "the module's hourly budget is spent by the run");
-    assert!(result.content.contains("Rate limit exceeded"), "{}", result.content);
+    assert!(format!("{:?}", result.content).contains("Rate limit exceeded"));
 }
