@@ -63,11 +63,22 @@ pub struct CommandVerdict {
     pub gate: GateDecision,
 }
 
-/// Answers command questions for a policy. The default is the native module;
-/// a host that cannot load it (an embedder with its own admission service, a
-/// unit test) supplies another. An implementation must fail closed.
+mod sealed {
+    /// Only this crate can implement [`super::CommandGateway`].
+    pub trait Sealed {}
+}
+
+pub(crate) use sealed::Sealed;
+
+/// Answers command questions for a policy. The default is the native module.
+///
+/// The trait is sealed: the field that holds a gateway is public (struct-update
+/// construction needs it), but no code outside this crate can name an
+/// implementation, so a holder of a `SecurityPolicy` cannot swap in an
+/// allow-everything answer. The only implementation is the scripted test
+/// double. An implementation must fail closed.
 #[async_trait]
-pub trait CommandGateway: std::fmt::Debug + Send + Sync {
+pub trait CommandGateway: sealed::Sealed + std::fmt::Debug + Send + Sync {
     async fn decide(
         &self,
         policy: &SecurityPolicy,

@@ -112,6 +112,8 @@ impl StubGateway {
     }
 }
 
+impl super::native_commands::Sealed for StubGateway {}
+
 #[async_trait]
 impl CommandGateway for StubGateway {
     async fn decide(
