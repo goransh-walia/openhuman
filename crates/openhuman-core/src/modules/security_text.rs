@@ -266,9 +266,25 @@ fn bridge_scrub(text: &str) -> Option<String> {
 /// [`bridge_scrub`] for an explicit bridge (`None` when it was never armed).
 fn scrub_with_bridge(bridge: Option<&LogBridge>, text: &str) -> Option<String> {
     let bridge = bridge?;
-    // The module call may itself log; never recurse into the bridge.
+    match redact_through_bridge(bridge, RedactMode::Text, text) {
+        Ok(redacted) => Some(redacted),
+        Err(_) => {
+            log::debug!("[security][floor] module redact unavailable; floor result stands");
+            None
+        }
+    }
+}
+
+/// One bounded module redaction on behalf of a synchronous log caller. The
+/// module call may itself log, so a re-entrant call is refused (`Err`), never
+/// answered with the original text.
+fn redact_through_bridge(
+    bridge: &LogBridge,
+    mode: RedactMode,
+    text: &str,
+) -> Result<String, String> {
     if IN_BRIDGE.with(|flag| flag.replace(true)) {
-        return None;
+        return Err("TinySecurity log redaction re-entered".into());
     }
     struct Reset;
     impl Drop for Reset {
@@ -277,11 +293,30 @@ fn scrub_with_bridge(bridge: Option<&LogBridge>, text: &str) -> Option<String> {
         }
     }
     let _reset = Reset;
-    match redact_blocking(&bridge.config, RedactMode::Text, text, LOG_BRIDGE_TIMEOUT) {
-        Ok(redacted) => Some(redacted),
-        Err(_) => {
-            log::debug!("[security][floor] module redact unavailable; floor result stands");
-            None
+    redact_blocking(&bridge.config, mode, text, LOG_BRIDGE_TIMEOUT)
+}
+
+/// Redact `text` on `mode` for a log line or diagnostic written by a
+/// synchronous caller that holds no [`Config`] (endpoint and identifier
+/// formatting in `tracing` fields).
+///
+/// The module answers when it is armed ([`arm_log_scrubber`]); otherwise, and on
+/// every error, the result is [`SUPPRESSED`]. The original text is never
+/// returned.
+pub(crate) fn redact_for_log(mode: RedactMode, text: &str) -> String {
+    redact_for_log_with(LOG_BRIDGE.get(), mode, text)
+}
+
+fn redact_for_log_with(bridge: Option<&LogBridge>, mode: RedactMode, text: &str) -> String {
+    let Some(bridge) = bridge else {
+        log::debug!("[security][redact] log bridge not armed; suppressing");
+        return SUPPRESSED.to_string();
+    };
+    match redact_through_bridge(bridge, mode, text) {
+        Ok(redacted) => redacted,
+        Err(error) => {
+            log::debug!("[security][redact] module unavailable, suppressing: {error}");
+            SUPPRESSED.to_string()
         }
     }
 }
