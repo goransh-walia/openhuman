@@ -2,7 +2,7 @@ use super::*;
 
 /// A config whose module is the published archive, downloaded into a scratch
 /// install under `target/tmp` (a `TMPDIR` under `/tmp` breaks the policy tests).
-fn released_config() -> (tempfile::TempDir, crate::config::Config) {
+pub(super) fn released_config() -> (tempfile::TempDir, crate::config::Config) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();
     let dir = tempfile::tempdir_in(&root).unwrap();
@@ -17,7 +17,7 @@ fn released_config() -> (tempfile::TempDir, crate::config::Config) {
 }
 
 /// Load the module and arm the log bridge through an ordinary async call.
-async fn arm(config: &crate::config::Config) {
+pub(super) async fn arm(config: &crate::config::Config) {
     crate::modules::security::text::redact(
         config,
         crate::modules::security::text::RedactMode::Text,
@@ -173,22 +173,41 @@ async fn moved_text_callers_redact_through_the_released_archive() {
     assert!(line.contains("request failed"), "{line}");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "exploration"]
-async fn explore_arguments() {
-    let (_dir, config) = released_config();
-    arm(&config).await;
-    let cases = vec![
-        serde_json::json!({"action":"send","body":"hello world","to":"a@b.com","token":"abc","integration":"gmail"}),
-        serde_json::json!({"path":"/home/alice/x.txt","note":"c:\\Users\\bob\\y","list":[1,2,{"subject":"s"}],"n":5,"b":true,"nested":{"password":"hunter2","k":null}}),
-        serde_json::json!({"payload":"Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123","url":"https://u:p@h.com/a?k=v"}),
-        serde_json::json!({"attachments":[{"url":"https://s3/x"}],"user_id":"u-1","code":123456}),
-        serde_json::json!("plain string /Users/zed/x"),
-        serde_json::json!([1,2,3]),
-    ];
-    for c in cases {
-        println!("IN : {c}");
-        println!("OLD: {}", crate::security::approval::redact_args(&c));
-        println!("NEW: {}", arguments(&c));
-    }
+#[test]
+fn arguments_withheld_when_the_module_cannot_answer_carry_only_the_shape() {
+    let args = serde_json::json!({"body": "dear alice, the password is hunter2", "to": "a@b.c"});
+    let out = arguments_from(None, &args);
+    let rendered = out.to_string();
+    assert!(!rendered.contains("hunter2") && !rendered.contains("alice"), "{rendered}");
+    assert_eq!(out, serde_json::json!("<redacted: object (2 keys); arguments unavailable>"));
+    assert_eq!(
+        arguments_from(None, &serde_json::json!(["a", "b"])),
+        serde_json::json!("<redacted: array (2 items); arguments unavailable>")
+    );
+    assert_eq!(arguments_from(None, &serde_json::Value::Null), serde_json::Value::Null);
+}
+
+#[test]
+fn arguments_answer_that_is_not_json_is_withheld() {
+    let args = serde_json::json!({"k": "v"});
+    let out = arguments_from(Some("not json {".to_string()), &args);
+    assert_eq!(out, serde_json::json!("<redacted: object (1 keys); arguments unavailable>"));
+}
+
+#[test]
+fn arguments_use_the_module_answer_when_it_is_json() {
+    let args = serde_json::json!({"k": "v"});
+    assert_eq!(
+        arguments_from(Some("{\"k\":\"<redacted: string (1 chars)>\"}".to_string()), &args),
+        serde_json::json!({"k": "<redacted: string (1 chars)>"})
+    );
+}
+
+#[test]
+fn arguments_without_an_armed_module_never_return_the_original() {
+    // The process bridge may or may not be armed by an ignored test that ran
+    // earlier in this process; either way the secret must not survive.
+    let args = serde_json::json!({"body": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123"});
+    let out = arguments(&args).to_string();
+    assert!(!out.contains("abcdefghijklmnopqrstuvwxyz"), "{out}");
 }

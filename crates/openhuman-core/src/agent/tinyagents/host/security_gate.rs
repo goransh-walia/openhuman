@@ -13,7 +13,7 @@
 //!   [`SecurityPolicy::check_command`] (the module's shell verdict) and
 //!   [`AutonomyLevel`].
 //! - [`crate::approval`] — the process-global [`ApprovalGate`],
-//!   [`GateOutcome`], and the `summarize_action` / `redact_args` pair that keep
+//!   [`GateOutcome`], and the `summarize_action` / `security::redact::arguments` pair that keep
 //!   raw arguments out of the approval card.
 //! - [`crate::agent_tool_policy`] — a pre-built [`ToolPolicySession`]
 //!   (channel permission boundary).

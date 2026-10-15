@@ -142,3 +142,7 @@ fn redact(_kind: Kind, _input: &str) -> String {
 #[cfg(test)]
 #[path = "redact_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "redact_arguments_tests.rs"]
+mod arguments_tests;
