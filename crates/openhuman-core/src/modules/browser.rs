@@ -227,6 +227,7 @@ impl BrowserClient {
     /// Open a session bound to the host tree of an explicit destination.
     pub async fn open_session_for_url(&self, url: &str) -> Result<SessionInfo, BrowserCallError> {
         let origin = self.explicit_origin(url)?;
+        self.authorize_navigation(url).await?;
         self.open_session_with_origin(SessionOptions::default(), origin)
             .await
     }
@@ -258,6 +259,7 @@ impl BrowserClient {
         request: NavigateRequest,
     ) -> Result<PageState, BrowserCallError> {
         self.check_url(&request.url)?;
+        self.authorize_navigation(&request.url).await?;
         let page: PageState = self
             .call(
                 names::methods::NAVIGATE,
@@ -340,6 +342,33 @@ impl BrowserClient {
         Ok(())
     }
 
+    /// The module's verdict on a navigation, then the egress disclosure.
+    ///
+    /// The browser module opens the connection itself, so the host cannot pin
+    /// its sockets: the security module's answer (the address floor on every
+    /// resolved address, the privacy mode, the open-public policy) is a
+    /// preflight verdict for the `Browser` transport, not a grant. A module that
+    /// is missing, untrusted, faulted or slow refuses the navigation.
+    async fn authorize_navigation(&self, raw: &str) -> Result<(), BrowserCallError> {
+        #[cfg(feature = "security-module")]
+        crate::modules::security::egress::authorize_browser_navigation(
+            &self.config.workspace_dir,
+            raw,
+        )
+        .await
+        .map_err(BrowserCallError::Policy)?;
+        if let Some(host) = parsed_browser_url(raw)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_owned))
+        {
+            crate::security::egress::emit_external_transfer(
+                None,
+                crate::security::egress::EgressDescriptor::network_fetch(&host),
+            );
+        }
+        Ok(())
+    }
+
     pub(crate) fn check_url(&self, raw: &str) -> Result<(), BrowserCallError> {
         self.check_url_for_mode(raw, browser_allow_all())
     }
@@ -363,12 +392,12 @@ impl BrowserClient {
             .host_str()
             .ok_or_else(|| BrowserCallError::Policy("URL has no host".into()))?;
         // The shared lexical classifier (`tinytools_std::url_guard`) is the one
-        // host check; the browser's own copy was deleted. It is a pre-filter only:
-        // navigation is performed by the TinyComputer module, which the host
-        // cannot pin to approved sockets, so the TinySecurity module's
-        // `ScopedUrlGuard` (which refuses the `Browser` transport) does not apply
-        // here. Resolved-address enforcement for browser hops belongs to
-        // TinyComputer.
+        // synchronous host check; the browser's own copy was deleted. It is a
+        // pre-filter: `authorize_navigation` adds the TinySecurity module's
+        // verdict (resolved-address floor, privacy mode) before a navigation.
+        // The browser module performs the connection and the host cannot pin its
+        // sockets, so a redirect or subresource the page causes later is the
+        // browser module's to enforce.
         let is_private = match url.host() {
             Some(url::Host::Ipv4(ip)) => is_private_or_local_host(&ip.to_string()),
             Some(url::Host::Ipv6(ip)) => is_private_or_local_host(&ip.to_string()),
