@@ -136,10 +136,17 @@ async fn shared_corpus_text_cases_are_redacted_by_the_module() {
 
 #[test]
 fn bridge_without_a_ready_module_leaves_the_floor_result() {
-    // Never armed in this process: the sync bridge answers None, so
-    // `scrub_secrets` returns the floor output and not the original text.
-    assert!(bridge_scrub("Bearer abcdefghijklmnop").is_none());
-    let out = crate::core::log_redaction::scrub_secrets("Bearer abcdefghijklmnop");
+    // The process-global bridge may or may not be armed by whichever tests ran
+    // first, so the two ways a bridge cannot answer are built explicitly: one
+    // that was never armed, and one armed with a configuration whose module is
+    // disabled. Neither may return the original text; the caller keeps the floor
+    // result.
+    let secret = "Bearer abcdefghijklmnop";
+    assert!(scrub_with_bridge(None, secret).is_none());
+    let mut config = Config::default();
+    config.modules.enabled = false;
+    assert!(scrub_with_bridge(Some(&LogBridge { config }), secret).is_none());
+    let out = crate::core::log_redaction::scrub_secrets(secret);
     assert!(!out.contains("abcdefghijklmnop"), "{out}");
 }
 

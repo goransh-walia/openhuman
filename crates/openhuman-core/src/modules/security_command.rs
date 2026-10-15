@@ -147,7 +147,6 @@ pub(crate) fn command_decision_blocking(
     // The module bus's own runtime serves the seam: it lives for the process,
     // so it cannot be a caller runtime that has since shut down. Until the bus
     // has started there is nothing to ask, and the call below is refused.
-    eprintln!("TMPDBG-BLOCKING {:?}", std::thread::current().name());
     super::sync_seam::arm_module_runtime();
     let scope = crate::core::runtime::DispatchCtx::ambient().core().cloned();
     let workspace_dir = workspace_dir.to_path_buf();

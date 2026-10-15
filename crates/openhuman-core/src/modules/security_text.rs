@@ -244,7 +244,6 @@ pub(crate) fn redact_blocking(
 /// (Sentry `before_send`, error logs). Called once the module answered; a no-op
 /// outside a tokio runtime or when already armed.
 pub(crate) fn arm_log_scrubber(config: &Config) {
-    eprintln!("TMPDBG-ARM {:?}", std::thread::current().name());
     if !super::sync_seam::arm_current() {
         return;
     }
@@ -261,7 +260,12 @@ pub(crate) fn arm_log_scrubber(config: &Config) {
 /// Cache first, then at most [`LOG_BRIDGE_TIMEOUT`] on the module. `None` leaves
 /// the caller with the floor result.
 fn bridge_scrub(text: &str) -> Option<String> {
-    let bridge = LOG_BRIDGE.get()?;
+    scrub_with_bridge(LOG_BRIDGE.get(), text)
+}
+
+/// [`bridge_scrub`] for an explicit bridge (`None` when it was never armed).
+fn scrub_with_bridge(bridge: Option<&LogBridge>, text: &str) -> Option<String> {
+    let bridge = bridge?;
     // The module call may itself log; never recurse into the bridge.
     if IN_BRIDGE.with(|flag| flag.replace(true)) {
         return None;
