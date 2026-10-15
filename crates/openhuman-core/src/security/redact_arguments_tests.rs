@@ -337,9 +337,10 @@ fn non_string_sensitive_values_redact_to_kind_markers_and_nested_values_recurse(
 
 /// Every ported case through the released module, from a runtime worker.
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn approval_argument_contract_holds_on_the_released_archive() {
+fn approval_argument_contract_holds_on_the_released_archive() {
+    super::tests::shared_runtime().block_on(async {
     let (_dir, config) = super::tests::released_config();
     super::tests::arm(&config).await;
     sensitive_string_field_is_replaced_with_marker();
@@ -361,4 +362,5 @@ async fn approval_argument_contract_holds_on_the_released_archive() {
     file_handoff_links_are_redacted();
     redact_preserves_toolkit_slug_for_connect_card();
     non_string_sensitive_values_redact_to_kind_markers_and_nested_values_recurse();
+    });
 }

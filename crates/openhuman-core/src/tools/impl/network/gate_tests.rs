@@ -367,9 +367,10 @@ fn other_modes_never_assess_the_arguments() {
 /// The released module decides a real network call: a plain GET is permitted
 /// under Sensitive, one whose headers carry a credential is refused.
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn sensitive_network_gate_on_the_released_archive() {
+fn sensitive_network_gate_on_the_released_archive() {
+    crate::security::redact::tests::shared_runtime().block_on(async {
     use crate::config::PrivacyMode;
     use crate::security::live_policy::test_privacy_scope;
     let (_dir, config) = crate::security::redact::tests::released_config();
@@ -391,6 +392,7 @@ async fn sensitive_network_gate_on_the_released_archive() {
         &json!({"url": "https://example.com/", "headers": {"Authorization": secret}}),
     );
     assert!(leaking.local_only_block("example.com").is_some());
+    });
 }
 
 fn destination_of<'a>(url: &'a str) -> Destination<'a> {

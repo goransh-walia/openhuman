@@ -71,9 +71,10 @@ fn rank_puts_an_unassessed_part_above_every_assessed_one() {
 /// permitted, a credential-bearing one is High and refused, and an unarmed
 /// bridge elsewhere stays Unknown (covered above).
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn sensitive_assessment_on_the_released_archive() {
+fn sensitive_assessment_on_the_released_archive() {
+    crate::security::redact::tests::shared_runtime().block_on(async {
     let (_dir, config) = crate::security::redact::tests::released_config();
     crate::security::redact::tests::arm(&config).await;
 
@@ -93,4 +94,5 @@ async fn sensitive_assessment_on_the_released_archive() {
     let batch =
         EgressDescriptor::embedding("cloud", "m").assessed_parts(["fine text", secret.as_str()]);
     assert_eq!(batch.risk_level, IdentificationRisk::High);
+    });
 }

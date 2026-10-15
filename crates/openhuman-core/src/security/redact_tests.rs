@@ -27,7 +27,22 @@ pub(crate) fn released_config() -> ((), crate::config::Config) {
     ((), config.clone())
 }
 
+/// The runtime every module-backed test runs on. The module connection and the
+/// sync seam belong to the runtime that first started them, and a per-test
+/// runtime is dropped when its test ends, which would pull them out from under
+/// every later test in the process.
 #[cfg(feature = "security-module")]
+pub(crate) fn shared_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("shared module test runtime")
+    })
+}
+
 /// Load the module and arm the log bridge through an ordinary async call.
 ///
 /// The first call downloads and starts the archive, which can outlast the
@@ -65,9 +80,10 @@ fn corpus(name: &str) -> serde_json::Value {
 /// path, query and fragment are gone from the origin and host forms, and the
 /// forms are the ones the removed host helpers produced.
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
+fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
+    shared_runtime().block_on(async {
     let (_dir, config) = released_config();
     arm(&config).await;
     for name in [
@@ -101,14 +117,16 @@ async fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
         endpoint_origin("http://example.com:8080/path?token=secret"),
         "http://example.com:8080"
     );
+    });
 }
 
 /// The sync text pass removes every secret shape of the shared text corpora and
 /// keeps ordinary text, from a plain thread and from a runtime worker.
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
+fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
+    shared_runtime().block_on(async {
     let (_dir, config) = released_config();
     arm(&config).await;
     for name in [
@@ -136,19 +154,22 @@ async fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
             assert_eq!(inside, out, "case {} differs by thread", case["case"]);
         }
     }
+    });
 }
 
 /// A timestamp and a bare digit run survive (corroborated card policy), and a
 /// card with an issuer prefix does not.
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
+fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
+    shared_runtime().block_on(async {
     let (_dir, config) = released_config();
     arm(&config).await;
     assert_eq!(text("at 1700000000000 ms"), "at 1700000000000 ms");
     let card = text("card 4111 1111 1111 1111 on file");
     assert!(!card.contains("4111 1111 1111 1111"), "{card}");
+    });
 }
 
 #[test]
@@ -176,9 +197,10 @@ fn text_prefers_the_module_answer() {
 /// reports a secret-bearing body as rewritten without the secret, leaves a clean
 /// body unchanged, and the halt-summary error line loses the secret.
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn moved_text_callers_redact_through_the_released_archive() {
+fn moved_text_callers_redact_through_the_released_archive() {
+    shared_runtime().block_on(async {
     use tinyagents_harness::artifacts::ArtifactRedactor;
 
     let (_dir, config) = released_config();
@@ -202,6 +224,7 @@ async fn moved_text_callers_redact_through_the_released_archive() {
     let line = crate::agent::session_host::stop_summary::short_error_line(&failure);
     assert!(!line.contains("abcdefghijklmnopqrstuvwxyz"), "{line}");
     assert!(line.contains("request failed"), "{line}");
+    });
 }
 
 #[test]
@@ -263,9 +286,10 @@ fn arguments_without_an_armed_module_never_return_the_original() {
 /// misses a scheme-less `user:pass@host` DSN; the module pass is what removes it,
 /// so this is pinned on the released archive rather than assumed.
 #[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {
+fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {
+    shared_runtime().block_on(async {
     let (_dir, config) = released_config();
     arm(&config).await;
     let secret = "hunter2pw";
@@ -283,6 +307,7 @@ async fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {
     // An ordinary URL keeps its host and path.
     let plain = crate::core::log_redaction::scrub_secrets("https://example.com/docs/page");
     assert!(plain.contains("example.com"), "{plain}");
+    });
 }
 
 /// A result larger than the module's request bound is answered in line-aligned
