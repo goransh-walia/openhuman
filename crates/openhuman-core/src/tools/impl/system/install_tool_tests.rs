@@ -98,3 +98,11 @@ fn package_name_validation() {
     assert!(!is_valid_package_name("a b"));
     assert!(!is_valid_package_name(""));
 }
+
+#[test]
+fn saas_refuses_installs_and_single_user_hosts_do_not() {
+    let refusal = refuse_under_saas(true).expect("SaaS must refuse");
+    assert!(refusal.is_error);
+    assert!(refusal.output().contains("SaaS"), "{}", refusal.output());
+    assert!(refuse_under_saas(false).is_none());
+}
