@@ -11,9 +11,7 @@ use tinyagents_harness::middleware::{ApprovalResolution, ApprovalResolver};
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::ToolResult as TaToolResult;
 
-use crate::security::approval::{
-    summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome,
-};
+use crate::security::approval::{summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome};
 use tinytools::Tool;
 
 /// `wrap_tool`: route OpenHuman's human-in-the-loop **approval gate** through a

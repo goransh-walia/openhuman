@@ -83,9 +83,7 @@ use tinyagents_harness::error::Result as TaResult;
 use tinyagents_harness::host::security_gate::{GateDecision, ToolCallRequest};
 
 use crate::agent::tinyagents::policy_denial::PolicyDenial;
-use crate::security::approval::{
-    summarize_action, ApprovalGate, ApprovalTurnContext, GateOutcome,
-};
+use crate::security::approval::{summarize_action, ApprovalGate, ApprovalTurnContext, GateOutcome};
 use crate::security::policy::{
     CommandFlow, CommandQuery, CommandStage, GateDecision as PolicyGateDecision, SecurityPolicy,
 };

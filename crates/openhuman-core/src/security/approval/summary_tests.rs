@@ -43,4 +43,3 @@ fn summarize_action_skill_install_without_entry_id_falls_back() {
     assert!(summary.contains("skill_registry_install"));
     assert!(summary.contains("bytes"));
 }
-

@@ -100,9 +100,13 @@ impl<T: Tool> Tool for PerCallTool<T> {
         context: Option<&dyn ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
         let approval = approval_for_tool(context);
-        (self.build)(approval.chat.as_ref(), &dispatch_ctx_for_tool(context), &args)
-            .execute_with_context(args, options, context)
-            .await
+        (self.build)(
+            approval.chat.as_ref(),
+            &dispatch_ctx_for_tool(context),
+            &args,
+        )
+        .execute_with_context(args, options, context)
+        .await
     }
 
     fn policy(&self) -> ToolPolicy {

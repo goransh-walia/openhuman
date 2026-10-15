@@ -188,27 +188,42 @@ fn arguments_withheld_when_the_module_cannot_answer_carry_only_the_shape() {
     let args = serde_json::json!({"body": "dear alice, the password is hunter2", "to": "a@b.c"});
     let out = arguments_from(None, &args);
     let rendered = out.to_string();
-    assert!(!rendered.contains("hunter2") && !rendered.contains("alice"), "{rendered}");
-    assert_eq!(out, serde_json::json!("<redacted: object (2 keys); arguments unavailable>"));
+    assert!(
+        !rendered.contains("hunter2") && !rendered.contains("alice"),
+        "{rendered}"
+    );
+    assert_eq!(
+        out,
+        serde_json::json!("<redacted: object (2 keys); arguments unavailable>")
+    );
     assert_eq!(
         arguments_from(None, &serde_json::json!(["a", "b"])),
         serde_json::json!("<redacted: array (2 items); arguments unavailable>")
     );
-    assert_eq!(arguments_from(None, &serde_json::Value::Null), serde_json::Value::Null);
+    assert_eq!(
+        arguments_from(None, &serde_json::Value::Null),
+        serde_json::Value::Null
+    );
 }
 
 #[test]
 fn arguments_answer_that_is_not_json_is_withheld() {
     let args = serde_json::json!({"k": "v"});
     let out = arguments_from(Some("not json {".to_string()), &args);
-    assert_eq!(out, serde_json::json!("<redacted: object (1 keys); arguments unavailable>"));
+    assert_eq!(
+        out,
+        serde_json::json!("<redacted: object (1 keys); arguments unavailable>")
+    );
 }
 
 #[test]
 fn arguments_use_the_module_answer_when_it_is_json() {
     let args = serde_json::json!({"k": "v"});
     assert_eq!(
-        arguments_from(Some("{\"k\":\"<redacted: string (1 chars)>\"}".to_string()), &args),
+        arguments_from(
+            Some("{\"k\":\"<redacted: string (1 chars)>\"}".to_string()),
+            &args
+        ),
         serde_json::json!({"k": "<redacted: string (1 chars)>"})
     );
 }
@@ -221,7 +236,6 @@ fn arguments_without_an_armed_module_never_return_the_original() {
     let out = arguments(&args).to_string();
     assert!(!out.contains("abcdefghijklmnopqrstuvwxyz"), "{out}");
 }
-
 
 /// Whole-URL log fields (storage and backend URLs, the config snapshot) go
 /// through `scrub_secrets`: the boot floor, then the module. The floor alone

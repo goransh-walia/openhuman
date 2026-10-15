@@ -46,9 +46,7 @@ use crate::flows::{
 };
 use crate::memory::types::{FetchParams, RecallParams};
 use crate::memory::MemoryError;
-use crate::security::approval::{
-    summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome,
-};
+use crate::security::approval::{summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome};
 use crate::security::SecurityPolicy;
 use tinybox_bus::CommandClass;
 use tinymemory_api::wrap_untrusted_for_agent;
