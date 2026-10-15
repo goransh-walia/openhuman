@@ -58,6 +58,9 @@ pub(crate) async fn command_decision(
     let mut state = state().lock().await;
     let result = async {
         let proxy = super::proxy(&config, &mut state).await?;
+        // A synchronous tool trait may ask next; it reaches this runtime
+        // through the shared seam.
+        super::sync_seam::arm_current();
         command_on(&mut state, &proxy, policy, command, declared_class, op).await
     }
     .await;
