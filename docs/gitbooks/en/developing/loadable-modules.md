@@ -64,12 +64,15 @@ the host library chain. Asynchronous filesystem checks use immutable scopes
 containing host-authorized roots and internal-state reservations. The client
 requires artifact attestation and fails closed if loading or validation fails.
 
-The production registry pins TinySecurity v0.2.2 and its 11 supported host
+The production registry pins TinySecurity v0.7.0 and its 11 supported host
 archives using digests copied from the published checksum manifest. Native CI
 loads these released archives through digest admission. Explicit local fixtures
 remain available for module development and never replace production pins.
-Shell policy, approvals, redaction, and crypto still run through their existing
-host implementations.
+Today the module owns asynchronous filesystem authorization and password crypt
+(`modules/security_crypto.rs`). Shell and network policy, the approval engine,
+the Jev judge, sandbox planning, redaction and the keyring and pairing crypto
+paths still run through their existing host implementations. Tracker issue
+#7328 lists the remaining phases; this page describes only what has landed.
 
 ## Resolution order
 

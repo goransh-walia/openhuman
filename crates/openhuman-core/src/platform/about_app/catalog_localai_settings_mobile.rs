@@ -380,6 +380,20 @@ Capability {
         privacy: None,
     },
 Capability {
+        id: "security.native_policy_module",
+        name: "Fail-Closed Security Module",
+        domain: "security",
+        category: CapabilityCategory::Settings,
+        description: "File access for agent tools is authorized by the TinySecurity native \
+                      module, loaded only from a digest-pinned release. If the module is missing, \
+                      untrusted, slow or answers badly, access is denied rather than falling back \
+                      to a weaker local check. Shell policy, approvals and the optional Jev \
+                      auto-approve judge still run in the core during the migration.",
+        how_to: "Always on in builds with the security-module feature; no setting to change.",
+        status: CapabilityStatus::Beta,
+        privacy: None,
+    },
+Capability {
         id: "security.sandbox_backends",
         name: "Sandbox Execution Backends",
         domain: "security",
