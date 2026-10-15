@@ -90,3 +90,11 @@ fn an_installed_selection_builds_the_hook_process() {
     assert_eq!(process.as_std().get_program(), "/bin/bash");
     *slot().write().unwrap() = None;
 }
+
+#[test]
+fn saas_never_starts_a_hook_command_even_with_a_resolved_selection() {
+    let process = build(Some(posix()), true, "echo hi");
+    assert_eq!(process.as_std().get_program(), UNAVAILABLE);
+    let single_user = build(Some(posix()), false, "echo hi");
+    assert_eq!(single_user.as_std().get_program(), "/bin/bash");
+}

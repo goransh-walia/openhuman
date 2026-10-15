@@ -76,12 +76,31 @@ fn embeds_placeholder_once(selection: &ShellInvocation) -> bool {
 }
 
 /// Build the process for one hook `command` from the remembered selection.
+///
+/// Hook commands are text from `hooks.json` layers (system, user and the
+/// project's own file), run with this process's privileges: the engine spawns
+/// them itself through a synchronous factory, so they cannot yet be placed in
+/// the TinyBox jail (that needs an async spawner seam in
+/// `tinyagents_runtime::command_hooks`; see `scripts/ci/spawner-inventory.json`).
+/// Under SaaS that is not acceptable, so there a hook command never starts.
 pub(super) fn command(command: &str) -> tokio::process::Command {
     let selection = slot()
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone();
+    build(selection, crate::core::runtime::is_saas(), command)
+}
+
+fn build(
+    selection: Option<ShellInvocation>,
+    saas: bool,
+    command: &str,
+) -> tokio::process::Command {
     let process = match selection {
+        _ if saas => {
+            log::warn!("[hooks] command hooks are refused under SaaS: no unjailed spawn");
+            std::process::Command::new(UNAVAILABLE)
+        }
         Some(selection) => from_selection(&selection, command),
         None => {
             log::warn!("[hooks] no TinyBox shell selection; the hook command will not start");
