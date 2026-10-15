@@ -5448,7 +5448,6 @@ dependencies = [
  "tinyagents-session",
  "tinyagents-tasks",
  "tinybox-bus",
- "tinybox-core",
  "tinybus",
  "tinybus-module",
  "tinychannels",
