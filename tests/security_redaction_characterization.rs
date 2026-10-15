@@ -5,9 +5,9 @@
 //! credential-scrub middleware, and the four URL helpers in `config`, `inference`
 //! and `web3`) and `security-redaction-extended-corpus.json`, which adds more
 //! secret and PII shapes. Redactors covered here:
-//! `approval/redact.rs`, `tinymemory_api::safety` (pii), `core/log_redaction.rs`
+//! `tinymemory_api::safety` (pii), `core/log_redaction.rs`
 //! (the floor every URL log field now uses) and `tools/registry/denials.rs`. The
-//! prefix, identity-hash, `security/scrub.rs` and URL helpers were deleted in
+//! prefix, identity-hash, approval-argument, `security/scrub.rs` and URL helpers were deleted in
 //! favour of the module's `security::redact`, which `modules::security` tests
 //! pin against the released archive. Each case pins which redactors remove its needle *today*
 //! (`removed_by`). A secret that a sink still leaks is NOT blessed: the leak is
@@ -26,8 +26,6 @@ fn outputs(input: &str) -> Vec<(&'static str, String)> {
     // The denial log is process-global and read back as "the latest entry".
     static DENIAL_LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _serial = DENIAL_LOG.lock().unwrap_or_else(|e| e.into_inner());
-    let approval =
-        openhuman_core::security::approval::redact::redact_args(&json!({"payload": input}));
     tinytools::registry::denials::record("characterization", "test", "blocked", input);
     let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
     vec![
@@ -35,10 +33,6 @@ fn outputs(input: &str) -> Vec<(&'static str, String)> {
         (
             "log",
             openhuman_core::core::log_redaction::scrub_secrets(input),
-        ),
-        (
-            "approval",
-            approval["payload"].as_str().unwrap().to_string(),
         ),
         ("pii", tinymemory_api::safety::redact_identifiers(input)),
     ]
@@ -103,7 +97,7 @@ fn extended_url_corpus_is_cleaned_by_the_log_floor() {
 /// Sinks that must scrub each kind of text (the desired contract the module owns).
 fn required_sinks(kind: &str) -> &'static [&'static str] {
     match kind {
-        "secret" => &["log", "denials", "approval"],
+        "secret" => &["log", "denials"],
         "pii" => &["pii"],
         _ => &[],
     }

@@ -1,31 +1,11 @@
 [
  [
-  "anthropic_key",
-  "approval"
- ],
- [
-  "aws_access_key_id",
-  "approval"
- ],
- [
   "aws_access_key_id",
   "denials"
  ],
  [
   "aws_access_key_id",
   "log"
- ],
- [
-  "bearer_header",
-  "approval"
- ],
- [
-  "github_pat",
-  "approval"
- ],
- [
-  "jwt",
-  "approval"
  ],
  [
   "jwt",
@@ -37,23 +17,11 @@
  ],
  [
   "password_in_connection_string",
-  "approval"
- ],
- [
-  "password_in_connection_string",
   "denials"
  ],
  [
   "private_key_block",
-  "approval"
- ],
- [
-  "private_key_block",
   "log"
- ],
- [
-  "slack_bot_token",
-  "approval"
  ],
  [
   "slack_bot_token",

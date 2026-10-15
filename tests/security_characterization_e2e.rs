@@ -304,10 +304,6 @@ fn shared_redaction_corpus_records_existing_catches_and_gaps() {
     for case in corpus["text"].as_array().unwrap() {
         let input = case["input"].as_str().unwrap();
         let needle = case["needle"].as_str().unwrap();
-        // Unknown-key approval args exercise text/path scrubbing rather than
-        // the separate sensitive-field blanket replacement.
-        let approval =
-            openhuman_core::security::approval::redact::redact_args(&json!({"payload":input}));
         tinytools::registry::denials::record("characterization", "test", "blocked", input);
         let denial = tinytools::registry::denials::list(1).pop().unwrap().reason;
         let outputs = [
@@ -315,10 +311,6 @@ fn shared_redaction_corpus_records_existing_catches_and_gaps() {
             (
                 "log",
                 openhuman_core::core::log_redaction::scrub_secrets(input),
-            ),
-            (
-                "approval",
-                approval["payload"].as_str().unwrap().to_string(),
             ),
             ("pii", tinymemory_api::safety::redact_identifiers(input)),
         ];

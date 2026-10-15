@@ -25,8 +25,7 @@
       "input": "/home/alice/report.txt",
       "needle": "alice",
       "removed_by": [
-        "log",
-        "approval"
+        "log"
       ],
       "composio_secret": "unrelated-configured-key"
     },
@@ -35,8 +34,7 @@
       "input": "/Users/alice/report.txt",
       "needle": "alice",
       "removed_by": [
-        "log",
-        "approval"
+        "log"
       ],
       "composio_secret": "unrelated-configured-key"
     },
@@ -45,8 +43,7 @@
       "input": "C:\\Users\\alice\\report.txt",
       "needle": "alice",
       "removed_by": [
-        "log",
-        "approval"
+        "log"
       ],
       "composio_secret": "unrelated-configured-key"
     },
