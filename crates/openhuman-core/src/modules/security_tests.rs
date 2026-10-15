@@ -16,6 +16,8 @@ fn initialization_does_not_treat_bootstrap_policy_as_an_agents_enabled_policy() 
     // some other test has started the shared runtime; the policy is the claim.
     let actual = ModuleConfig {
         trusted_host: None,
+        // The production password-only crypto surface is asserted separately.
+        crypto: None,
         ..module_config(&config)
     };
     assert_eq!(actual, ModuleConfig::default());
