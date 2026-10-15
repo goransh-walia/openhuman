@@ -131,8 +131,11 @@ pub async fn apply_decision(run: TriageRun, envelope: &TriggerEnvelope) -> anyho
                     "prompt_chars": prompt.chars().count(),
                 });
                 let tool_key = format!("triage.{}", run.decision.action.as_str());
-                let (outcome, request_id) =
-                    gate.intercept_audited(&tool_key, &summary, redacted).await;
+                // A triage escalation is not a chat turn: nothing to route an
+                // approval reply to.
+                let (outcome, request_id) = gate
+                    .intercept_audited(&Default::default(), &tool_key, &summary, redacted)
+                    .await;
                 match outcome {
                     crate::security::approval::GateOutcome::Allow => {
                         approval_request_id = request_id;

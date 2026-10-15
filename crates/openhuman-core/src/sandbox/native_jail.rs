@@ -52,6 +52,7 @@ pub(crate) async fn execute(
     extra_env: &HashMap<OsString, OsString>,
     timeout: Duration,
     explicitly_requested: bool,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
     #[cfg(feature = "modules")]
     {
@@ -70,6 +71,7 @@ pub(crate) async fn execute(
                 &extra_env,
                 timeout,
                 explicitly_requested,
+                meter,
             )
             .await
         })
@@ -86,6 +88,7 @@ pub(crate) async fn execute(
             extra_env,
             timeout,
             explicitly_requested,
+            meter,
         );
         anyhow::bail!("TinyBox module support is disabled; native jail execution is unavailable")
     }
@@ -100,6 +103,7 @@ async fn execute_owned(
     extra_env: &HashMap<OsString, OsString>,
     timeout: Duration,
     explicitly_requested: bool,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
     let status = tinybox::jail_status(config)
         .await
@@ -115,6 +119,7 @@ async fn execute_owned(
     run.workspace = policy.workspace_root.clone();
     run.env = approved_environment(extra_env)?;
     run.isolate_network = true;
+    run.meter = meter;
     // TinyBox adds its own per-call scratch directory to the writable grants and
     // points TMPDIR, TMP and TEMP at it unless the caller overrides them.
     run.jail = Some(jail_request(policy)?);

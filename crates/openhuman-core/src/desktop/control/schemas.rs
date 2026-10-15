@@ -1,5 +1,6 @@
 //! RPC controllers for the local desktop connection.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -75,9 +76,10 @@ fn schema(function: &'static str) -> ControllerSchema {
     }
 }
 
-fn status(_: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async {
-        let config = crate::config::rpc::load_config_with_timeout()
+fn status(ctx: DispatchCtx, _: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
         crate::core::runtime::components::require_config(&config, "computer")?;
@@ -85,13 +87,14 @@ fn status(_: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn set_enabled(params: Map<String, Value>) -> ControllerFuture {
+fn set_enabled(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let value = params
             .get("enabled")
             .and_then(Value::as_bool)
             .ok_or_else(|| "enabled must be a boolean".to_owned())?;
-        let config = crate::config::rpc::load_config_with_timeout()
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
         crate::core::runtime::components::require_config(&config, "computer")?;
@@ -100,9 +103,10 @@ fn set_enabled(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn probe(_: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async {
-        let config = crate::config::rpc::load_config_with_timeout()
+fn probe(ctx: DispatchCtx, _: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
         crate::core::runtime::components::require_config(&config, "computer")?;
@@ -110,9 +114,10 @@ fn probe(_: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn pending(_: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async {
-        let config = crate::config::rpc::load_config_with_timeout()
+fn pending(ctx: DispatchCtx, _: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
         crate::core::runtime::components::require_config(&config, "computer")?;
@@ -120,7 +125,7 @@ fn pending(_: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn confirm(params: Map<String, Value>) -> ControllerFuture {
+fn confirm(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let id = params
             .get("confirmation_id")
@@ -131,7 +136,8 @@ fn confirm(params: Map<String, Value>) -> ControllerFuture {
             .get("approve")
             .and_then(Value::as_bool)
             .ok_or_else(|| "approve must be a boolean".to_owned())?;
-        let config = crate::config::rpc::load_config_with_timeout()
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("config unavailable: {error}"))?;
         crate::core::runtime::components::require_config(&config, "computer")?;

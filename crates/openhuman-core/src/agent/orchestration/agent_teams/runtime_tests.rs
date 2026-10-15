@@ -1,7 +1,7 @@
 //! Live-runtime unit tests (#3374 PR4).
 //!
 //! The worker-driving core ([`super::drive_member`]) is exercised directly with
-//! a mock `ChatModel` installed via [`with_parent_context`] (mirroring
+//! a mock `ChatModel` passed as the explicit parent (mirroring
 //! `workflow_runs::engine_tests`), so a teammate runs deterministically without
 //! touching the network. [`super::start_member_run`]'s pre-spawn outcome routing
 //! (blocked / already-claimed / no-claimable / unknown) is tested through the
@@ -14,7 +14,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::*;
-use crate::agent::harness::fork_context::{with_parent_context, ParentExecutionContext};
+use crate::agent::harness::fork_context::ParentExecutionContext;
 use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::config::{AgentConfig, Config};
 use tinyagents_orchestration::teams::{SessionTeamLedger, TeamService};
@@ -200,18 +200,16 @@ async fn drive_member_completes_task_with_worker_output_as_evidence() {
         output: "did the thing".into(),
         fail: false,
     });
-    with_parent_context(mock_parent(provider), async {
-        drive_member(
-            &config,
-            "team-1",
-            "m1",
-            "task_manager_agent",
-            &task,
-            "teamrun-x",
-            Some("test-model".into()),
-        )
-        .await
-    })
+    drive_member(
+        &config,
+        "team-1",
+        "m1",
+        "task_manager_agent",
+        &task,
+        "teamrun-x",
+        Some("test-model".into()),
+        mock_parent(provider),
+    )
     .await
     .expect("drive_member ok");
 
@@ -231,12 +229,12 @@ async fn drive_member_completes_task_with_worker_output_as_evidence() {
 }
 
 /// Covers `run_member_loop` — the `with_root_parent` wrapper around
-/// `drive_member`. With a mock parent already installed, `with_root_parent`
-/// reuses it (rather than building a real root), so the member drives to
+/// `drive_member`. With a mock parent passed explicitly, `with_root_parent`
+/// uses it (rather than building a real root), so the member drives to
 /// completion under the canned provider. Same setup as the `drive_member`
 /// happy-path test, but through the wrapper the live runtime spawns.
 #[tokio::test]
-async fn run_member_loop_drives_member_under_ambient_parent() {
+async fn run_member_loop_drives_member_under_an_explicit_parent() {
     AgentDefinitionRegistry::init_global_builtins().unwrap();
     let (_dir, config) = test_config();
     seed_team(&config, "team-1");
@@ -268,18 +266,16 @@ async fn run_member_loop_drives_member_under_ambient_parent() {
         output: "did the thing".into(),
         fail: false,
     });
-    with_parent_context(mock_parent(provider), async {
-        run_member_loop(
-            &config,
-            "team-1",
-            "m1",
-            "task_manager_agent",
-            task,
-            "teamrun-y",
-            Some("test-model".into()),
-        )
-        .await
-    })
+    run_member_loop(
+        &config,
+        "team-1",
+        "m1",
+        "task_manager_agent",
+        task,
+        "teamrun-y",
+        Some("test-model".into()),
+        Some(mock_parent(provider)),
+    )
     .await;
 
     let done = run_ledger::get_agent_team_task(&config.workspace_dir, "task-a")
@@ -325,18 +321,16 @@ async fn drive_member_releases_task_when_worker_fails() {
         output: String::new(),
         fail: true,
     });
-    with_parent_context(mock_parent(provider), async {
-        drive_member(
-            &config,
-            "team-1",
-            "m1",
-            "task_manager_agent",
-            &task,
-            "teamrun-x",
-            Some("test-model".into()),
-        )
-        .await
-    })
+    drive_member(
+        &config,
+        "team-1",
+        "m1",
+        "task_manager_agent",
+        &task,
+        "teamrun-x",
+        Some("test-model".into()),
+        mock_parent(provider),
+    )
     .await
     .expect("drive_member handles worker failure without erroring");
 

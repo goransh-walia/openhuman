@@ -1,5 +1,4 @@
 use super::*;
-use crate::agent::harness::fork_context::with_parent_context;
 use crate::agent::harness::ParentExecutionContext;
 use crate::threads::store::CreateConversationThread;
 use std::path::PathBuf;
@@ -120,21 +119,27 @@ async fn rejects_agent_outside_parent_allowlist() {
     let temp = TempDir::new().unwrap();
     let parent = test_parent_ctx(temp.path().to_path_buf());
 
-    with_parent_context(parent, async {
-        let tool = SpawnWorkerThreadTool::new();
-        let result = tool
-            .execute(json!({
+    let live = crate::agent::orchestration::tools::live_parent_run_context(
+        "worker-allowlist-test",
+        parent,
+    );
+    let tool = SpawnWorkerThreadTool::new();
+    let result = tool
+        .execute_with_live_parent_context(
+            json!({
                 "agent_id": "task_manager_agent",
                 "prompt": "do it",
                 "task_title": "Task"
-            }))
-            .await
-            .unwrap();
+            }),
+            None,
+            live.data.child(),
+            Some(&live),
+        )
+        .await
+        .unwrap();
 
-        assert!(result.is_error);
-        assert!(result.output().contains(
-            "spawn_worker_thread: agent 'task_manager_agent' is not in parent agent 'orchestrator' subagents.allowlist"
-        ));
-    })
-    .await;
+    assert!(result.is_error);
+    assert!(result.output().contains(
+        "spawn_worker_thread: agent 'task_manager_agent' is not in parent agent 'orchestrator' subagents.allowlist"
+    ));
 }

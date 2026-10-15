@@ -15,6 +15,7 @@ impl ApprovalGate {
     #[inline(never)]
     fn intercept_audited_inner<'a>(
         &'a self,
+        turn: &'a ApprovalTurnContext,
         tool_name: &'a str,
         action_summary: &'a str,
         args_redacted: serde_json::Value,
@@ -24,6 +25,7 @@ impl ApprovalGate {
         forced: bool,
     ) -> futures::future::BoxFuture<'a, (GateOutcome, Option<String>)> {
         Box::pin(self.intercept_audited_inner_body(
+            turn,
             tool_name,
             action_summary,
             args_redacted,
@@ -37,6 +39,7 @@ impl ApprovalGate {
     #[allow(clippy::too_many_arguments)]
     async fn intercept_audited_inner_body(
         &self,
+        turn: &ApprovalTurnContext,
         tool_name: &str,
         action_summary: &str,
         args_redacted: serde_json::Value,
@@ -108,7 +111,7 @@ impl ApprovalGate {
                     ..
                 }
             ),
-            chat_context = APPROVAL_CHAT_CONTEXT.try_with(|c| c.clone()).is_ok(),
+            chat_context = turn.chat.is_some(),
             "[approval::gate] evaluating approval request"
         );
 
@@ -254,28 +257,26 @@ impl ApprovalGate {
             return (GateOutcome::Allow, None);
         }
 
-        // Chat context (thread/client id) for routing the yes/no reply — set by
-        // the web channel around the agent run; absent for non-chat callers.
+        // Chat context (thread/client id) for routing the yes/no reply — handed
+        // to the turn by the web channel; absent for non-chat callers.
         //
-        // Fallback (#5499): when the task-local is absent but the turn is
+        // Fallback (#5499): when the turn has no chat context but is
         // `WebChat`, route via the thread/client the origin itself carries. The
-        // web channel scopes `APPROVAL_CHAT_CONTEXT` and builds the `WebChat`
+        // web channel builds the chat context and the `WebChat`
         // origin from the *same* thread_id/client_id (`web_chat::start_chat`),
         // so the two are identical whenever both are present. They diverge only
-        // when a turn is carried across a `tokio::spawn` boundary that
-        // propagates the origin but not the approval context — most importantly
+        // when a turn is detached from the chat turn that started it and keeps
+        // the origin but not the approval context — most importantly
         // an async-delegated sub-agent (`spawn_async_subagent`, reached when the
         // orchestrator routes "remind me…" to `scheduler_agent`): the origin
-        // travels but this task-local does not. Without the fallback the gate
+        // travels but the chat context does not (`detached_child`). Without the fallback the gate
         // parks with `thread_id: None`, the web-channel surface drops the
         // `ApprovalRequested` event ("thread/client absent — NOT surfacing"),
         // and the park silently TTL-denies — so a `cron_add` scheduled from a
         // chat turn never completes.
         // Forced approvals route from the validated WebChat origin itself. A
-        // stray task-local must not redirect the decision to another thread.
-        let chat_ctx = (!forced)
-            .then(|| APPROVAL_CHAT_CONTEXT.try_with(|c| c.clone()).ok())
-            .flatten();
+        // stray chat context must not redirect the decision to another thread.
+        let chat_ctx = (!forced).then(|| turn.chat.clone()).flatten();
         let origin_chat_route = match &origin {
             AgentTurnOrigin::WebChat {
                 thread_id,
@@ -298,7 +299,7 @@ impl ApprovalGate {
         if detached {
             tracing::debug!(
                 tool = tool_name,
-                "[approval::gate] APPROVAL_CHAT_CONTEXT absent on a WebChat turn — routing the \
+                "[approval::gate] no chat context on a WebChat turn — routing the \
                  approval via the origin's thread/client (async-delegated sub-agent path, #5499); \
                  marking the card detached so it survives the parent turn's end"
             );
@@ -318,10 +319,10 @@ impl ApprovalGate {
             .map(|c| c.client_id.clone())
             .or_else(|| origin_chat_route.as_ref().map(|(_, c)| c.clone()));
 
-        // Copilot-streaming context — set by `flows::ops::flows_build` around
-        // the streaming `run_single` call. Presence alone clamps the park
-        // window to `COPILOT_APPROVAL_TTL`; see that task-local's doc.
-        let copilot_stream = !forced && APPROVAL_COPILOT_STREAM_CONTEXT.try_with(|_| ()).is_ok();
+        // Copilot-streaming flag — set by `flows::ops::flows_build` on the
+        // streaming turn. It clamps the park window to `COPILOT_APPROVAL_TTL`;
+        // see `ApprovalTurnContext::copilot_stream`.
+        let copilot_stream = !forced && turn.copilot_stream;
 
         // Branch by origin. Web chat parks for an in-app approval; external
         // channel persists an audit row and TTL-denies (no routable approval
@@ -475,24 +476,25 @@ impl ApprovalGate {
 
         // Correlation context (flow-approval-surface, PR2): a Workflow-origin
         // park carries the flow id on the origin itself, but not the run id —
-        // that comes from the `APPROVAL_FLOW_RUN_CONTEXT` task-local
-        // `flows::ops::flows_run`/`flows_resume` scope alongside `with_origin`.
-        // `try_with` returns `Err` for every non-flow caller (chat, cron,
+        // that comes from the turn's `flow_run`, which
+        // `flows::ops::flows_run`/`flows_resume` set alongside the origin.
+        // It is `None` for every non-flow caller (chat, cron,
         // background jobs, CLI, and even a Workflow origin reached without the
-        // flows module's scope, which "should never happen" but must not
+        // flows module's context, which "should never happen" but must not
         // panic), so `source_context` stays `None` there — unchanged chat
         // behavior.
         let source_context = match &origin {
             AgentTurnOrigin::TrustedAutomation {
                 source: TrustedAutomationSource::Workflow { .. },
                 job_id: flow_id,
-            } => APPROVAL_FLOW_RUN_CONTEXT
-                .try_with(|ctx| ApprovalSourceContext::Flow {
+            } => turn
+                .flow_run
+                .as_ref()
+                .map(|ctx| ApprovalSourceContext::Flow {
                     flow_id: flow_id.clone(),
                     run_id: ctx.run_id.clone(),
                     node_id: None,
-                })
-                .ok(),
+                }),
             _ => None,
         };
 

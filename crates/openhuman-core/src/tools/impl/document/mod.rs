@@ -194,6 +194,28 @@ impl Tool for DocumentTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
+        self.run(args, None).await
+    }
+
+    async fn execute_with_context(
+        &self,
+        args: Value,
+        _options: tinytools::ToolCallOptions,
+        context: Option<&dyn tinytools::ToolRunContext>,
+    ) -> anyhow::Result<ToolResult> {
+        let approval = crate::agent::tinyagents::host::run_context::approval_for_tool(context);
+        self.run(args, approval.chat.as_ref()).await
+    }
+}
+
+impl DocumentTool {
+    /// Produces the artifact for a turn whose chat routing is `chat` (`None`
+    /// outside a chat turn).
+    pub(crate) async fn run(
+        &self,
+        args: Value,
+        chat: Option<&crate::security::approval::ApprovalChatContext>,
+    ) -> anyhow::Result<ToolResult> {
         let input: GenerateDocumentInput = match serde_json::from_value(args.clone()) {
             Ok(v) => v,
             Err(err) => {
@@ -222,6 +244,7 @@ impl Tool for DocumentTool {
             ArtifactKind::Document,
             &input.title,
             "docx",
+            chat,
         )
         .await
         .map_err(anyhow::Error::msg)?;
@@ -250,6 +273,7 @@ impl Tool for DocumentTool {
                     &self.files_dir,
                     &meta.id,
                     &err.to_string(),
+                    chat,
                 )
                 .await;
                 tracing::warn!(
@@ -267,7 +291,7 @@ impl Tool for DocumentTool {
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
             let reason = format!("failed to write generated document ({filename}): {err}");
-            let _ = fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &reason).await;
+            let _ = fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &reason, chat).await;
             tracing::warn!(
                 target: "document",
                 err = %err,
@@ -279,7 +303,7 @@ impl Tool for DocumentTool {
         }
 
         let size_bytes = bytes.len() as u64;
-        let updated = match finalize_artifact(&self.workspace_dir, &meta.id, size_bytes).await {
+        let updated = match finalize_artifact(&self.workspace_dir, &meta.id, size_bytes, chat).await {
             Ok(updated) => updated,
             Err(err) => {
                 let reason = format!("failed to finalize artifact: {err}");
@@ -289,7 +313,7 @@ impl Tool for DocumentTool {
                 // swallowed — they can only recur if the same ledger backend
                 // is unavailable.
                 let _ =
-                    fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &reason).await;
+                    fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &reason, chat).await;
                 tracing::warn!(
                     target: "document",
                     err = %err,

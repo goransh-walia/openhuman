@@ -13,6 +13,8 @@
 
 #[path = "support/env_guard.rs"]
 mod env_guard;
+#[path = "support/linked_modules.rs"]
+mod linked_modules;
 #[path = "support/scripted_stack.rs"]
 mod scripted_stack;
 use env_guard::EnvVarGuard;
@@ -3105,9 +3107,11 @@ async fn model_call_ceiling_bounds_a_wedged_call_below_the_turn_deadline_inner()
     // `Timeout` onto the same generic `turn_timeout` copy — so an inherited
     // value below the 8s bound asserted here would fire first, produce an
     // identical terminal, and let the whole test pass with the per-call ceiling
-    // unwired. Cleared, not set, so it falls back to its 900s default and can
-    // play no part in the outcome.
+    // unwired. Cleared, not set, so it falls back to its 3600s default and can
+    // play no part in the outcome. The web idle guard reads its own variable;
+    // it is cleared for the same reason.
     let _web_backstop = EnvVarGuard::unset("OPENHUMAN_WEB_TURN_TIMEOUT_SECS");
+    let _web_idle = EnvVarGuard::unset("OPENHUMAN_WEB_TURN_IDLE_SECS");
 
     // Every upstream reply is held for 25s — comfortably past the 2s per-call
     // ceiling and comfortably short of the 600s turn deadline. Armed globally
@@ -5216,4 +5220,247 @@ async fn a_wrong_tool_guess_is_retried_not_treated_as_an_auth_blocker_inner() {
     );
 
     stack.shutdown();
+}
+
+// ─── Web-turn idle guard ─────────────────────────────────────────────────────
+//
+// Both tests shrink the idle window (`OPENHUMAN_WEB_TURN_IDLE_SECS`) to 30s so
+// the guard's logic runs in seconds instead of the 900s default. Not smaller:
+// checking out a cold session on this stack emits no progress and takes
+// 6-15 seconds here, which a smaller window rightly counts as a stall.
+//
+// Local only: the shell steps need TinyBox built in, so the section is
+// compiled only with `--features linked-modules` (which CI never enables).
+// Run with `OPENHUMAN_MODULE_SOURCE=linked RUST_MIN_STACK=67108864 cargo test
+// -p openhuman-cli --features linked-modules --test agent_harness_e2e --
+// long_shell_call_outlives stalled_turn_is_stopped --test-threads=1`.
+//
+// Shell runs without the native jail (`OPENHUMAN_SANDBOX=off`), which reports
+// itself unsuitable on a macOS test host; the unjailed path uses the same
+// TinyBox output loop and keeps TinyBox's command analysis.
+#[cfg(feature = "linked-modules")]
+mod idle_guard_local {
+    use super::*;
+
+    /// Wait for `event_name` for this request, failing fast if the turn ends
+    /// first: the idle guard must not have stopped it.
+    async fn wait_for_event_before_terminal(
+        rx: &mut tokio::sync::mpsc::UnboundedReceiver<Value>,
+        event_name: &str,
+        request_id: &str,
+        timeout: Duration,
+    ) -> Value {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            let event = match tokio::time::timeout(remaining, rx.recv()).await {
+                Ok(Some(event)) => event,
+                Ok(None) => panic!("SSE channel closed waiting for {event_name}"),
+                Err(_) => panic!("timed out waiting for {event_name}"),
+            };
+            if event.get("request_id").and_then(Value::as_str) != Some(request_id) {
+                continue;
+            }
+            match event.get("event").and_then(Value::as_str) {
+                Some(name) if name == event_name => return event,
+                Some("chat_done") | Some("chat_error") => {
+                    panic!("turn ended before {event_name}: {event}")
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// A shell call that runs well past the idle window keeps the turn alive: an
+    /// open tool call is never idle, and the call reports progress while it runs.
+    /// Killing its process from outside the stack ends the call with a failed
+    /// result, and the turn carries on to the model's next reply. One killed
+    /// command does not wedge the turn, so the idle guard never fires.
+    #[test]
+    fn long_shell_call_outlives_the_idle_window_and_survives_an_external_kill() {
+        run_on_agent_stack(
+            "long_shell_call_outlives_the_idle_window_and_survives_an_external_kill",
+            long_shell_call_outlives_the_idle_window_and_survives_an_external_kill_inner,
+        );
+    }
+
+    async fn long_shell_call_outlives_the_idle_window_and_survives_an_external_kill_inner() {
+        let _lock = env_lock();
+        super::linked_modules::install_if_requested();
+        let _idle = EnvVarGuard::set("OPENHUMAN_WEB_TURN_IDLE_SECS", "30");
+        let _unjailed = EnvVarGuard::set("OPENHUMAN_SANDBOX", "off");
+        // A sleep length no other process uses, so the kill below hits only this
+        // command.
+        let command = format!("sleep {}.{}", 7_000 + std::process::id() % 1_000, 37);
+        reset_script(vec![
+            tool_call_completion("shell", json!({ "command": command })),
+            text_completion("The long command was stopped. KILLED_SHELL_CANARY"),
+        ]);
+        let stack = boot_stack().await;
+        let mut events = spawn_sse_collector(format!(
+            "{}/events?client_id=harness-idle-shell",
+            stack.rpc_base
+        ))
+        .await;
+        let request_id = send_web_chat(
+            &stack.rpc_base,
+            610,
+            "harness-idle-shell",
+            "thread-idle-shell",
+            "run the long command",
+        )
+        .await;
+
+        let call = wait_for_event_before_terminal(
+            &mut events,
+            "tool_call",
+            &request_id,
+            Duration::from_secs(60),
+        )
+        .await;
+        assert_eq!(call.get("tool_name").and_then(Value::as_str), Some("shell"));
+
+        // Inside the 30s idle window the call reports progress (every 15s); it
+        // stays open past the window below, which the guard counts as active.
+        let progress = wait_for_event_before_terminal(
+            &mut events,
+            "tool_progress",
+            &request_id,
+            Duration::from_secs(30),
+        )
+        .await;
+        let message = progress
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(
+            message.starts_with("running "),
+            "progress message: {progress}"
+        );
+        assert_eq!(
+            progress.get("tool_call_id"),
+            call.get("tool_call_id"),
+            "progress belongs to the running call"
+        );
+
+        // Kill the command from outside the stack.
+        let killed = std::process::Command::new("pkill")
+            .args(["-f", &command])
+            .status()
+            .expect("run pkill");
+        assert!(killed.success(), "pkill found no `{command}` process");
+
+        let result = wait_for_event_before_terminal(
+            &mut events,
+            "tool_result",
+            &request_id,
+            Duration::from_secs(30),
+        )
+        .await;
+        assert_eq!(
+            result.get("success"),
+            Some(&json!(false)),
+            "a killed command is a failed call: {result}"
+        );
+        let done =
+            wait_for_terminal_request(&mut events, Duration::from_secs(60), Some(&request_id))
+                .await;
+        assert_eq!(
+            done.get("event").and_then(Value::as_str),
+            Some("chat_done"),
+            "{done}"
+        );
+        let reply = done
+            .get("full_response")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(reply.contains("KILLED_SHELL_CANARY"), "{reply}");
+
+        stack.shutdown();
+    }
+
+    /// Clears the park-after-run test hook even when an assertion unwinds.
+    struct ParkAfterRunGuard;
+
+    impl Drop for ParkAfterRunGuard {
+        fn drop(&mut self) {
+            openhuman_core::web_chat::set_test_park_after_run(false);
+        }
+    }
+
+    /// A turn that goes quiet with nothing in flight is stopped by the idle guard
+    /// and closed with a reply saying what it did and where it got stuck. The turn
+    /// runs a real shell step and finishes its run, then is parked before its
+    /// reply is saved (`set_test_park_after_run`), like a stuck save. The closing
+    /// reply comes from one more model call, which sees the stop reason, the stuck
+    /// point and the shell step.
+    #[test]
+    fn stalled_turn_is_stopped_by_the_idle_guard_and_closed_with_a_summary() {
+        run_on_agent_stack(
+            "stalled_turn_is_stopped_by_the_idle_guard_and_closed_with_a_summary",
+            stalled_turn_is_stopped_by_the_idle_guard_and_closed_with_a_summary_inner,
+        );
+    }
+
+    async fn stalled_turn_is_stopped_by_the_idle_guard_and_closed_with_a_summary_inner() {
+        let _lock = env_lock();
+        super::linked_modules::install_if_requested();
+        let _idle = EnvVarGuard::set("OPENHUMAN_WEB_TURN_IDLE_SECS", "30");
+        let _unjailed = EnvVarGuard::set("OPENHUMAN_SANDBOX", "off");
+        openhuman_core::web_chat::set_test_park_after_run(true);
+        let _park = ParkAfterRunGuard;
+        reset_script(vec![
+            // request[0]: the turn runs one shell step.
+            tool_call_completion("shell", json!({ "command": "echo STEP_ONE_CANARY" })),
+            // request[1]: its final answer, which is never saved (the turn parks).
+            text_completion("All done. UNSAVED_REPLY_CANARY"),
+            // request[2]: the idle guard's closing call.
+            text_completion("I ran one command, then the turn stalled while saving. CLOSE_CANARY"),
+        ]);
+        let stack = boot_stack().await;
+        let mut events = spawn_sse_collector(format!(
+            "{}/events?client_id=harness-idle-stall",
+            stack.rpc_base
+        ))
+        .await;
+        let request_id = send_web_chat(
+            &stack.rpc_base,
+            611,
+            "harness-idle-stall",
+            "thread-idle-stall",
+            "run one step",
+        )
+        .await;
+
+        let done =
+            wait_for_terminal_request(&mut events, Duration::from_secs(60), Some(&request_id))
+                .await;
+        assert_eq!(
+            done.get("event").and_then(Value::as_str),
+            Some("chat_done"),
+            "a stopped turn is closed with a reply, not an error: {done}"
+        );
+        let reply = done
+            .get("full_response")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(reply.contains("CLOSE_CANARY"), "{reply}");
+        assert!(!reply.contains("UNSAVED_REPLY_CANARY"), "{reply}");
+
+        let captured = with_captured(|c| c.clone());
+        assert_eq!(captured.len(), 3, "turn calls plus one closing call");
+        let close_prompt = captured[2].to_string();
+        for expected in [
+            "nothing happened for 30 seconds",
+            "after the agent finished, while its reply was being saved",
+            "done: Shell (echo STEP_ONE_CANARY)",
+        ] {
+            assert!(
+                close_prompt.contains(expected),
+                "closing call missing {expected:?}: {close_prompt}"
+            );
+        }
+
+        stack.shutdown();
+    }
 }

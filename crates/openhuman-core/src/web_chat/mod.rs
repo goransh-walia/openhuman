@@ -5,7 +5,7 @@
 //! durably-persisted reply: `start_chat` (`ops/start_chat.rs`) validates and
 //! preprocesses the message, applies the queue mode against the thread's
 //! in-flight state, and spawns `run_task::run_chat_task` under the cancel
-//! token / wall-clock backstop / `APPROVAL_CHAT_CONTEXT` scope
+//! token / idle guard / wall-clock backstop / approval-context hand-off
 //! (`run_turn_under_cancel_and_deadline`, `ops/turn_guards.rs`). `run_chat_task`
 //! resolves or builds the cached session `Agent` (`session.rs`), spawns
 //! `spawn_progress_bridge` alongside the run, and returns the result; the
@@ -19,7 +19,8 @@
 //!
 //! Submodules: `ops*.rs` (request surface, session/in-flight state),
 //! `run_task.rs` (turn execution), `session.rs` (agent build/fingerprint),
-//! `progress_bridge.rs` (progress → socket event bridge), `presentation.rs`
+//! `progress_bridge.rs` (progress → socket event bridge), `turn_activity.rs`
+//! (per-turn inactivity record behind the idle guard), `presentation.rs`
 //! (reply delivery), `reply_persistence.rs` (durable reply write),
 //! `event_bus.rs` (broadcast + `DomainEvent` surface subscribers),
 //! `web_errors*.rs` (provider error classification), `schemas.rs` (RPC
@@ -40,6 +41,8 @@ mod run_task;
 mod schemas;
 mod session;
 mod suggestions;
+mod turn_activity;
+mod turn_close;
 mod turn_timing;
 mod types;
 
@@ -134,7 +137,7 @@ pub use ops::set_test_forced_run_chat_task_error;
 #[cfg(any(test, debug_assertions))]
 pub use ops::RUN_CHAT_TASK_TEST_LOCK;
 #[cfg(any(test, debug_assertions))]
-pub use ops::{set_test_run_chat_task_block, TestRunChatTaskBlock};
+pub use ops::{set_test_park_after_run, set_test_run_chat_task_block, TestRunChatTaskBlock};
 
 #[cfg(any(test, debug_assertions))]
 #[path = "mod_test_support_tests.rs"]

@@ -108,7 +108,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
             .transcript_snapshot
             .get_or_insert_with(|| {
                 Arc::new(std::sync::Mutex::new(
-                    crate::agent::tinyagents::TranscriptSnapshot {
+                    crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot {
                         request_base_len: request.history.len(),
                         ..Default::default()
                     },
@@ -589,7 +589,7 @@ fn ensure_snapshot_tools_are_executable(
 
 fn driver_error_with_snapshot(
     error: anyhow::Error,
-    snapshot: &crate::agent::tinyagents::TranscriptSnapshotSink,
+    snapshot: &crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshotSink,
     sidecar: &std::sync::Arc<
         std::sync::Mutex<crate::agent::tinyagents::host::run_context::SessionTurnSidecar>,
     >,
@@ -622,8 +622,9 @@ fn driver_error_with_snapshot(
     }
     let accepted_end = guard.accepted_end();
     let history = guard.messages[..accepted_end].to_vec();
-    let unanswered =
-        crate::agent::tinyagents::render_unanswered_steps(&guard.messages[accepted_end..]);
+    let unanswered = crate::agent::tinyagents::middleware::turn_context::render_unanswered_steps(
+        &guard.messages[accepted_end..],
+    );
     let display = if stalled {
         // The model's streamed narration was stopped before it could repeat
         // indefinitely. Preserve the completed tools as a useful, bounded
@@ -663,7 +664,7 @@ fn driver_error_with_snapshot(
 /// runtime's single atomic append carries the same usage/failure truth as a
 /// successful turn. The partial history itself remains accepted-only.
 fn record_snapshot_usage(
-    guard: &crate::agent::tinyagents::TranscriptSnapshot,
+    guard: &crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot,
     sidecar: &std::sync::Arc<
         std::sync::Mutex<crate::agent::tinyagents::host::run_context::SessionTurnSidecar>,
     >,
@@ -691,7 +692,7 @@ fn record_snapshot_usage(
 /// just the request before the first model call. No display partial: the
 /// turn_state mirror already records the streamed text.
 fn driver_cancelled_with_snapshot(
-    snapshot: &crate::agent::tinyagents::TranscriptSnapshotSink,
+    snapshot: &crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshotSink,
     sidecar: &std::sync::Arc<
         std::sync::Mutex<crate::agent::tinyagents::host::run_context::SessionTurnSidecar>,
     >,

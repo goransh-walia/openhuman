@@ -1,8 +1,9 @@
 use crate::agent::tinyagents::middleware::tool_output::ToolOutputMiddleware;
 // Imported here rather than in the middleware module since #6014: the
-// production install site moved to `assemble_turn_harness` (which names it
+// production install site moved to `install_turn_middleware` (which names it
 // fully-qualified), so the module itself no longer references the type.
 use super::*;
+use crate::agent::tinyagents::middleware::turn_context::TurnContextMiddleware;
 use tinyagents_harness::middleware::MicrocompactMiddleware;
 use tinytools::{ToolRuntime, ToolTimeout};
 

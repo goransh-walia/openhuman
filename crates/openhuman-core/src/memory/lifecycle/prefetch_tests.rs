@@ -340,7 +340,7 @@ async fn slow_engine_results_survive_the_manual_pre_turn_cutoff() {
 }
 
 #[tokio::test]
-async fn queued_work_keeps_the_callers_core_and_memory_identity() {
+async fn queued_work_keeps_the_callers_core_context() {
     let _guard = TEST_LOCK.lock().await;
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
@@ -348,32 +348,25 @@ async fn queued_work_keeps_the_callers_core_and_memory_identity() {
         crate::core::runtime::DomainSet::full(),
         Some(config.workspace_dir.clone()),
     );
-    crate::core::runtime::CoreContext::scope(
-        ctx.clone(),
-        crate::memory::scope::within(MemoryIdentity::agent("scoped-agent"), async {
-            let identity = MemoryIdentity::agent("scoped-agent").resolve(&config);
-            let key = Key::new(&config, &identity, "t", false);
-            let cache = cache();
-            let expected = ctx.clone();
-            enqueue(
-                cache.clone(),
-                key.clone(),
-                Box::pin(crate::core::runtime::spawn::scoped(async move {
-                    assert!(Arc::ptr_eq(
-                        &crate::core::runtime::CoreContext::scoped().unwrap(),
-                        &expected
-                    ));
-                    assert_eq!(
-                        crate::memory::scope::current().unwrap().agent_id.as_deref(),
-                        Some("scoped-agent")
-                    );
-                    Some(pack("scoped"))
-                })),
-            );
-            drain(&cache, &key).await;
-            assert_eq!(completed(&cache, &key).unwrap().markdown, "scoped");
-        }),
-    )
+    crate::core::runtime::CoreContext::scope(ctx.clone(), async {
+        let identity = MemoryIdentity::agent("scoped-agent").resolve(&config);
+        let key = Key::new(&config, &identity, "t", false);
+        let cache = cache();
+        let expected = ctx.clone();
+        enqueue(
+            cache.clone(),
+            key.clone(),
+            Box::pin(crate::core::runtime::spawn::scoped(async move {
+                assert!(Arc::ptr_eq(
+                    &crate::core::runtime::CoreContext::scoped().unwrap(),
+                    &expected
+                ));
+                Some(pack("scoped"))
+            })),
+        );
+        drain(&cache, &key).await;
+        assert_eq!(completed(&cache, &key).unwrap().markdown, "scoped");
+    })
     .await;
 }
 

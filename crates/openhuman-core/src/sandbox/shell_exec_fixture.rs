@@ -61,12 +61,20 @@ pub(crate) async fn run(run: NativeShellRun) -> anyhow::Result<SandboxExecResult
         .kill_on_drop(true);
     tinytools_std::timeout::own_process_group(command.as_std_mut());
     match tinytools_std::timeout::output_or_kill(&mut command, run.timeout).await {
-        Ok(Ok(output)) => Ok(SandboxExecResult {
-            exit_code: output.status.code().unwrap_or(-1),
-            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-            timed_out: false,
-        }),
+        Ok(Ok(output)) => {
+            // The module streams output into the caller's meter as it reads it;
+            // the fixture folds the finished output in the same way.
+            if let Some(meter) = &run.meter {
+                meter.record(&output.stdout);
+                meter.record(&output.stderr);
+            }
+            Ok(SandboxExecResult {
+                exit_code: output.status.code().unwrap_or(-1),
+                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                timed_out: false,
+            })
+        }
         Ok(Err(error)) => anyhow::bail!("Failed to execute command: {error}"),
         Err(_) => Ok(SandboxExecResult {
             exit_code: -1,

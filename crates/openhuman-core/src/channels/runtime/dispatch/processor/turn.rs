@@ -414,6 +414,24 @@ pub(crate) async fn process_channel_runtime_message(
         history_key: Some(history_key.clone()),
     };
 
+    // Sub-issue 2 of #3098: give the agent turn an `ApprovalTurnContext` for
+    // every channel with the `chat_approvals` capability (served by
+    // `ChannelApprovalSurfaceSubscriber`). Without a chat context the gate's
+    // "no chat context -> allow straight through" branch silently bypasses
+    // every `Prompt`-class tool call, voiding the `supervised` autonomy tier
+    // on the channel.
+    let approval = if channel_has_approval_surface(&msg.channel) {
+        crate::security::approval::ApprovalTurnContext::chat(
+            crate::security::approval::ApprovalChatContext {
+                thread_id: history_key.clone(),
+                client_id: msg.channel.clone(),
+                request_id: Some(msg.id.clone()),
+            },
+        )
+    } else {
+        crate::security::approval::ApprovalTurnContext::default()
+    };
+
     // A channel bound to a host agent (`agent.channel_agents`) runs as that
     // agent; every other channel goes over the bus to the orchestrator.
     let agent_call: std::pin::Pin<
@@ -429,6 +447,7 @@ pub(crate) async fn process_channel_runtime_message(
                 message: enriched_message.clone(),
                 origin: turn_origin,
                 progress: progress_tx,
+                approval,
             },
         )),
         None => Box::pin(dispatch_bus_turn(
@@ -439,28 +458,11 @@ pub(crate) async fn process_channel_runtime_message(
             active_turn_model_source,
             progress_tx,
             turn_origin,
+            approval,
         )),
     };
-    // Sub-issue 2 of #3098: scope the agent turn in an `ApprovalChatContext`
-    // for every channel with the `chat_approvals` capability (served by
-    // `ChannelApprovalSurfaceSubscriber`). Without this scope the gate's
-    // "no chat context → allow straight through" branch
-    // (`approval/gate.rs:219-231`) silently bypasses every `Prompt`-class
-    // tool call, voiding the `supervised` autonomy tier on the channel.
-    let llm_result = tokio::time::timeout(Duration::from_secs(ctx.message_timeout_secs), async {
-        if channel_has_approval_surface(&msg.channel) {
-            let approval_ctx = crate::security::approval::ApprovalChatContext {
-                thread_id: history_key.clone(),
-                client_id: msg.channel.clone(),
-                request_id: Some(msg.id.clone()),
-            };
-            crate::security::approval::APPROVAL_CHAT_CONTEXT
-                .scope(approval_ctx, agent_call)
-                .await
-        } else {
-            agent_call.await
-        }
-    })
+    let llm_result =
+        tokio::time::timeout(Duration::from_secs(ctx.message_timeout_secs), agent_call)
     .await;
 
     // Wait for draft updater to finish

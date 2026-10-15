@@ -31,6 +31,19 @@ impl OpenHumanSessionHost {
         message: &str,
         origin: Option<crate::agent::turn_origin::AgentTurnOrigin>,
     ) -> Result<String> {
+        self.run_single_with_approval(message, origin, Default::default())
+            .await
+    }
+
+    /// [`Self::run_single_with_origin`] for a turn that also owns an approval
+    /// context (chat surface, copilot flag, flow run). The context is handed to
+    /// this turn alone.
+    pub async fn run_single_with_approval(
+        &mut self,
+        message: &str,
+        origin: Option<crate::agent::turn_origin::AgentTurnOrigin>,
+        approval: crate::security::approval::ApprovalTurnContext,
+    ) -> Result<String> {
         let origin = origin.or_else(crate::core::runtime::CoreContext::current_turn_origin);
         let guard = enforce_prompt_input(
             message,
@@ -97,7 +110,10 @@ impl OpenHumanSessionHost {
             channel: self.event_channel().to_string(),
         });
 
-        match self.turn_with_origin(message, origin.as_ref()).await {
+        match self
+            .turn_with_approval(message, origin.as_ref(), approval)
+            .await
+        {
             Ok(response) => {
                 let history = self.history();
                 let new_entries = Self::new_entries_for_turn(&history_snapshot, &history);

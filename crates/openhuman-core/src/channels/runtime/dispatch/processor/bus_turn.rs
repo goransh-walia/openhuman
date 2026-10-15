@@ -22,6 +22,7 @@ pub(super) async fn dispatch_bus_turn(
     active_turn_model_source: Option<crate::agent::tinyagents::TurnModelSource>,
     progress_tx: Option<tokio::sync::mpsc::Sender<AgentProgress>>,
     turn_origin: AgentTurnOrigin,
+    approval: crate::security::approval::ApprovalTurnContext,
 ) -> anyhow::Result<AgentTurnResponse> {
     // Dispatch the agentic turn through the native event bus instead of
     // calling `run_tool_call_loop` directly. The agent domain registers
@@ -95,6 +96,7 @@ pub(super) async fn dispatch_bus_turn(
         extra_tools: scoping.extra_tools,
         on_progress: progress_tx,
         origin: turn_origin,
+        approval,
     };
     tracing::debug!(
         channel = %msg.channel,

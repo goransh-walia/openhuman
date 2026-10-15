@@ -1,3 +1,4 @@
+use openhuman_embed::__host::core::runtime::DispatchCtx;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -87,14 +88,14 @@ pub fn referral_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_referral_get_stats(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_referral_get_stats(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         to_json(crate::hosted::referral::get_stats(&config).await?)
     })
 }
 
-fn handle_referral_claim(params: Map<String, Value>) -> ControllerFuture {
+fn handle_referral_claim(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<ReferralClaimParams>(params)?;

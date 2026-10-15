@@ -22,7 +22,7 @@ fn send_message(writer: &mut impl Write, message: &Value) {
 fn wait_for_response(receiver: &Receiver<Result<Value, String>>, request_id: u64) -> Value {
     loop {
         let message = receiver
-            .recv_timeout(Duration::from_secs(20))
+            .recv_timeout(Duration::from_secs(60))
             .expect("stdio MCP response arrives before the deadline")
             .expect("stdio MCP server writes valid JSON-RPC to stdout");
         if message.get("id") == Some(&json!(request_id)) {

@@ -141,28 +141,33 @@ impl Docs {
         let id = name.to_string();
         let doc = json!({ "value": value });
         log::debug!("[composio:store] document import id={id}");
-        self.0.run(|docs| async move {
-            let wrote = match docs.put(STATE, &id, doc, Precondition::Absent).await {
-                Ok(_) => true,
-                Err(error) if error.kind() == ErrorKind::Conflict => false,
-                Err(error) => return Err(error),
-            };
-            match docs
-                .put(
-                    IMPORTED,
-                    &id,
-                    json!({ "imported": true }),
-                    Precondition::Absent,
-                )
-                .await
-            {
-                Ok(_) => {}
-                // Another core finished first.
-                Err(error) if error.kind() == ErrorKind::Conflict => {}
-                Err(error) => return Err(error),
-            }
-            Ok(wrote)
-        })
+        let claimed =
+            crate::storage::import_claim::with_claim(&self.0, IMPORTED, &id.clone(), || {
+                let (id, doc) = (id.clone(), doc.clone());
+                self.0.run(|docs| async move {
+                    let wrote = match docs.put(STATE, &id, doc, Precondition::Absent).await {
+                        Ok(_) => true,
+                        Err(error) if error.kind() == ErrorKind::Conflict => false,
+                        Err(error) => return Err(error),
+                    };
+                    match docs
+                        .put(
+                            IMPORTED,
+                            &id,
+                            json!({ "imported": true }),
+                            Precondition::Absent,
+                        )
+                        .await
+                    {
+                        Ok(_) => {}
+                        // Another core finished first.
+                        Err(error) if error.kind() == ErrorKind::Conflict => {}
+                        Err(error) => return Err(error),
+                    }
+                    Ok(wrote)
+                })
+            })?;
+        Ok(claimed.unwrap_or(false))
     }
 
     #[cfg(test)]

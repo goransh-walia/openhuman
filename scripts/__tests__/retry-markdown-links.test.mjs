@@ -7,6 +7,8 @@ import {
 
 const unavailable =
   "* [503] <https://example.test/docs#anchor> | Service Unavailable\n";
+const internalError =
+  "* [500] <https://example.test/docs#anchor> | Internal Server Error\n";
 const missing = "* [404] <https://example.test/missing> | Not Found\n";
 
 function checker(results) {
@@ -45,6 +47,25 @@ test("transient 503 recovers after more than one retry and preserves fragments",
   assert.ok(logs.some((line) => /attempt=1 status=2/.test(line)));
   assert.ok(logs.some((line) => /attempt=2 status=0/.test(line)));
   assert.ok(logs.some((line) => /reason=recovered/.test(line)));
+});
+
+test("transient GitHub 500 responses are retried too", async () => {
+  const { calls, check } = checker([
+    { status: 2, report: internalError },
+    { status: 0, report: "" },
+  ]);
+  assert.equal(
+    await retryServiceUnavailable({
+      initialReport: internalError,
+      check,
+      wait: async () => {},
+    }),
+    0,
+  );
+  assert.deepEqual(calls, [
+    ["https://example.test/docs#anchor"],
+    ["https://example.test/docs#anchor"],
+  ]);
 });
 
 test("persistent 503 remains a failure after bounded retries", async () => {

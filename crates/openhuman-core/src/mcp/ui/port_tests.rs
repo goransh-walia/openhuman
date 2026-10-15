@@ -232,4 +232,16 @@ mod module_backed {
             Some(json!({"ui": {"resourceUri": "ui://card"}}))
         );
     }
+
+    #[tokio::test]
+    async fn a_tool_the_server_does_not_list_has_no_descriptor() {
+        let fake = Arc::new(ModulePort {
+            installed: vec!["srv-1"],
+            ..ModulePort::default()
+        });
+        assert!(port_over(&fake)
+            .tool_descriptor("srv-1", "missing")
+            .await
+            .is_none());
+    }
 }

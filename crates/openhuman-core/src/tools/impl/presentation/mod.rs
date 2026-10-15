@@ -289,6 +289,28 @@ impl Tool for PresentationTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
+        self.run(args, None).await
+    }
+
+    async fn execute_with_context(
+        &self,
+        args: Value,
+        _options: tinytools::ToolCallOptions,
+        context: Option<&dyn tinytools::ToolRunContext>,
+    ) -> anyhow::Result<ToolResult> {
+        let approval = crate::agent::tinyagents::host::run_context::approval_for_tool(context);
+        self.run(args, approval.chat.as_ref()).await
+    }
+}
+
+impl PresentationTool {
+    /// Produces the deck for a turn whose chat routing is `chat` (`None`
+    /// outside a chat turn).
+    pub(crate) async fn run(
+        &self,
+        args: Value,
+        chat: Option<&crate::security::approval::ApprovalChatContext>,
+    ) -> anyhow::Result<ToolResult> {
         let input: GeneratePresentationInput = match serde_json::from_value(args.clone()) {
             Ok(v) => v,
             Err(err) => {
@@ -331,6 +353,7 @@ impl Tool for PresentationTool {
             "pptx",
             None,
             self.regenerate_target.as_deref(),
+            chat,
         )
         .await
         .map_err(anyhow::Error::msg)?;
@@ -366,6 +389,7 @@ impl Tool for PresentationTool {
                     &self.files_dir,
                     &meta.id,
                     &err.to_string(),
+                    chat,
                 )
                 .await;
                 tracing::warn!(
@@ -383,7 +407,8 @@ impl Tool for PresentationTool {
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
             let reason = format!("failed to write generated deck ({filename}): {err}");
-            let _ = fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &reason).await;
+            let _ =
+                fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &reason, chat).await;
             tracing::warn!(
                 target: "presentation",
                 err = %err,
@@ -395,7 +420,7 @@ impl Tool for PresentationTool {
         }
 
         let size_bytes = bytes.len() as u64;
-        let updated = match finalize_artifact(&self.workspace_dir, &meta.id, size_bytes).await {
+        let updated = match finalize_artifact(&self.workspace_dir, &meta.id, size_bytes, chat).await {
             Ok(updated) => updated,
             Err(err) => {
                 let reason = format!("failed to finalize artifact: {err}");
@@ -405,8 +430,14 @@ impl Tool for PresentationTool {
                 // errors are swallowed — they can only happen if the same
                 // ledger backend is unavailable, in which case nothing we
                 // do here will help.
-                let _ =
-                    fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &reason).await;
+                let _ = fail_artifact(
+                    &self.workspace_dir,
+                    &self.files_dir,
+                    &meta.id,
+                    &reason,
+                    chat,
+                )
+                .await;
                 tracing::warn!(
                     target: "presentation",
                     err = %err,

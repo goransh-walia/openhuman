@@ -25,7 +25,7 @@ use openhuman_core::agent::turn_origin::{self, AgentTurnOrigin};
 use openhuman_core::config::Config;
 use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
 use openhuman_core::security::approval::gate::{
-    ApprovalChatContext, ApprovalGate, APPROVAL_CHAT_CONTEXT,
+    ApprovalChatContext, ApprovalGate, ApprovalTurnContext,
 };
 use openhuman_core::security::approval::types::{ExecutionOutcome, GateOutcome};
 use openhuman_core::security::credentials::{
@@ -609,24 +609,23 @@ async fn approval_gate_rpc_decision_resumes_parked_tool_and_records_execution() 
                 client_id: "worker-b-client".to_string(),
                 request_id: None,
             },
-            APPROVAL_CHAT_CONTEXT.scope(
-                ApprovalChatContext {
+            async move {
+                let turn = ApprovalTurnContext::chat(ApprovalChatContext {
                     thread_id: "worker-b-thread".to_string(),
                     client_id: "worker-b-client".to_string(),
                     // No turn in scope in this fixture; the field is documented as
                     // carried only when the caller has one (`gate.rs:91-95`).
                     request_id: None,
-                },
-                async move {
-                    gate_for_task
-                        .intercept_audited(
-                            "tools.web_search",
-                            "search the web for coverage",
-                            json!({ "query": "<redacted>", "max_results": 3 }),
-                        )
-                        .await
-                },
-            ),
+                });
+                gate_for_task
+                    .intercept_audited(
+                        &turn,
+                        "tools.web_search",
+                        "search the web for coverage",
+                        json!({ "query": "<redacted>", "max_results": 3 }),
+                    )
+                    .await
+            },
         )
         .await
     });

@@ -20,7 +20,7 @@ use crate::agent::tinyagents::live_harness::{assemble_live_tool_harness, LIVE_MA
 use crate::agent::turn_origin::{with_origin, AgentTurnOrigin};
 use crate::config::schema::voice_live::is_live_provider;
 use crate::config::Config;
-use crate::security::approval::{ApprovalChatContext, APPROVAL_CHAT_CONTEXT};
+use crate::security::approval::{ApprovalChatContext, ApprovalTurnContext};
 use crate::threads::store::{ConversationMessage, CreateConversationThread};
 
 /// The agent a live session borrows its tools from.
@@ -176,14 +176,6 @@ pub(crate) async fn start(
         message_id: format!("voice-live-{session_id}"),
         history_key: None,
     };
-    let mut context = OpenHumanRunContext::new();
-    context.origin = Some(origin.clone());
-    context.thread_id = Some(thread_id.clone());
-    context.workspace = host.live_workspace_descriptor();
-    let run_config =
-        RunConfig::new(format!("voice-live-{session_id}")).with_max_tool_calls(LIVE_MAX_TOOL_CALLS);
-    let ctx = context.into_tinyagents(run_config);
-
     let approval = ApprovalChatContext {
         thread_id: thread_id.clone(),
         client_id: request
@@ -191,18 +183,25 @@ pub(crate) async fn start(
             .unwrap_or_else(|| format!("voice-live-{session_id}")),
         request_id: None,
     };
-    // The approval gate still reads the turn origin and chat context from
-    // task-locals (an unlabelled call is treated as `Unknown` and denied), so
-    // the tool worker — a spawned task — must be scoped explicitly. Baselined
-    // in `agent-runtime-boundary-baseline.json` with the other entry points
-    // until the gate reads the origin from the run context.
+    let mut context = OpenHumanRunContext::new();
+    context.origin = Some(origin.clone());
+    // The chat the session's approvals surface in rides the run context, which
+    // reaches the gate and every tool the live agent runs.
+    context.approval = ApprovalTurnContext::chat(approval);
+    context.thread_id = Some(thread_id.clone());
+    context.workspace = host.live_workspace_descriptor();
+    let run_config =
+        RunConfig::new(format!("voice-live-{session_id}")).with_max_tool_calls(LIVE_MAX_TOOL_CALLS);
+    let ctx = context.into_tinyagents(run_config);
+
+    // The approval gate still reads the turn origin from a task-local (an
+    // unlabelled call is treated as `Unknown` and denied), so the tool worker
+    // -- a spawned task -- must be scoped explicitly. Baselined in
+    // `agent-runtime-boundary-baseline.json` with the other entry points until
+    // the gate reads the origin from the run context.
     let scope: TaskScope = Arc::new(move |task| {
         let origin = origin.clone();
-        let approval = approval.clone();
-        Box::pin(with_origin(
-            origin,
-            APPROVAL_CHAT_CONTEXT.scope(approval, task),
-        ))
+        Box::pin(with_origin(origin, task))
     });
     let agent = LiveAgent::new(Arc::new(harness), Arc::new(())).with_task_scope(scope);
     let session = agent

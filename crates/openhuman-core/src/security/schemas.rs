@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -39,7 +40,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_policy_info(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_policy_info(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async {
         log::debug!("[security][rpc] policy_info enter");
         match crate::security::rpc::load_and_get_security_policy_info().await {

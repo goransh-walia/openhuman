@@ -174,6 +174,7 @@ pub(super) async fn run_job_command_with_timeout(
         std::collections::BTreeMap::new(),
         timeout,
         true,
+        None,
     )
     .await
     {

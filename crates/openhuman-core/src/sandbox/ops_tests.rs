@@ -125,6 +125,7 @@ async fn run_unsandboxed(
         workspace,
         env,
         timeout,
+        None,
     )
     .await
 }

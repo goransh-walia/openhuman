@@ -61,7 +61,15 @@ function makeTree() {
 
   // The mock backend "starts" and exits at once, so the health probe waits for
   // the stub to record the launch rather than racing the child process.
-  writeExecutable(path.join(bin, "node"), `#!/usr/bin/env bash\n${record("node")}\n`);
+  writeExecutable(
+    path.join(bin, "node"),
+    `#!/usr/bin/env bash
+${record("node")}
+if [[ "$*" == *"randomBytes"* ]]; then
+  printf '%064d' 0
+fi
+`,
+  );
   writeExecutable(
     path.join(bin, "curl"),
     `#!/usr/bin/env bash
@@ -166,6 +174,7 @@ function run(tree, script, env = {}) {
         CARGO_BIN: path.join(tree.bin, "cargo"),
         RUST_HOST_TRIPLE: "test-triple",
         OPENHUMAN_WORKSPACE: path.join(tree.root, "workspace"),
+        OPENHUMAN_KEYRING_MASTER_KEY: "11".repeat(32),
         E2E_WEB_CORE_TARGET_DIR: path.join(tree.root, "target"),
         // Deliberately unset so each test states the ports it is exercising;
         // a developer's shell must not choose them.

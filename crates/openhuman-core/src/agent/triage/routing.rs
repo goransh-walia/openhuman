@@ -27,7 +27,7 @@ pub struct ResolvedProvider {
     /// Kept for telemetry / observability compat with the previous two-path design.
     pub provider_name: String,
     /// Model identifier — the concrete string the turn
-    /// (`run_turn_via_tinyagents_shared`) will hand to the provider.
+    /// (`TurnSpec::run`) will hand to the provider.
     pub model: String,
     /// Always `false` — local AI is never used for triage.
     /// Preserved so existing telemetry subscribers that read this field do not

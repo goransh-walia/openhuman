@@ -36,6 +36,7 @@
 
 use openhuman_core::config::Config;
 use openhuman_core::memory::engine::{self, Binding};
+use openhuman_core::memory::scope::MemoryIdentity;
 use openhuman_core::memory::{brain, explore, lifecycle, ops, types};
 use tinymemory_api::{
     ItemKind, MemoryMeta, MetaFilter, Namespace, Reach, StoreItem, StoreReceipt, WriteOptions,
@@ -140,8 +141,9 @@ impl Memory {
             ));
         }
         let layout = MemoryLayout::new(namespace)?;
-        // The host binding outranks any identity in scope, so a call made from
-        // inside an agent's turn still lands on this root.
+        // The host binding outranks every identity, and the facade acts as the
+        // root one, so a call made from inside an agent's turn still lands on
+        // this root.
         base.memory.root = Some(root.to_string());
         base.memory.agent_id = None;
         log::debug!("[embed][memory] bound root={root}");
@@ -192,7 +194,7 @@ impl Memory {
 
     /// The agents with logged turns under the root, most first.
     pub async fn agents(&self) -> MemoryResult<AgentsView> {
-        lifecycle::views::agents_list(&self.config).await
+        lifecycle::views::agents_list(&self.config, &MemoryIdentity::root()).await
     }
 
     /// A page of items, newest first.
@@ -376,7 +378,7 @@ impl Memory {
 
     /// The brain's sources under the root and their sizes.
     pub async fn brain_sources(&self) -> MemoryResult<BrainSourcesView> {
-        brain::sources(&self.config).await
+        brain::sources(&self.config, &MemoryIdentity::root()).await
     }
 
     /// Brain documents matching `query`, optionally of one source.
@@ -388,6 +390,7 @@ impl Memory {
     ) -> MemoryResult<BrainSearchView> {
         brain::search(
             &self.config,
+            &MemoryIdentity::root(),
             brain::BrainSearchParams {
                 query: query.into(),
                 source,
@@ -399,13 +402,14 @@ impl Memory {
 
     /// Files a document (a file on disk, or text) in the root's brain.
     pub async fn brain_ingest(&self, params: BrainIngestParams) -> MemoryResult<BrainIngestView> {
-        brain::ingest(&self.config, params).await
+        brain::ingest(&self.config, &MemoryIdentity::root(), params).await
     }
 
     /// Forgets every brain document of one source under the root.
     pub async fn brain_forget(&self, source: impl Into<String>) -> MemoryResult<BrainForgetView> {
         brain::forget(
             &self.config,
+            &MemoryIdentity::root(),
             brain::BrainForgetParams {
                 source: source.into(),
             },

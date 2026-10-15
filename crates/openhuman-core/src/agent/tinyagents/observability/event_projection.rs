@@ -636,6 +636,9 @@ impl EventListener for OpenhumanEventBridge {
             // without invoking the provider (deterministic internal runs only —
             // interactive chat never attaches a cache). Counters are additive; the
             // cost-footer DTO wiring is a follow-up (workstream 06).
+            AgentEvent::ToolProgressDetail {
+                call_id, message, ..
+            } => self.forward_tool_progress(call_id.as_str(), message),
             AgentEvent::CacheHit { call_id, key } => {
                 {
                     let mut s = self.state.lock().unwrap();

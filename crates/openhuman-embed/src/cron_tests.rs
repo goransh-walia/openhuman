@@ -4,6 +4,8 @@ use std::time::{Duration, SystemTime};
 fn core_job(job_type: JobType, command: &str) -> CronJob {
     let now = chrono::Utc::now();
     CronJob {
+        claim_generation: 0,
+        policy: Default::default(),
         id: "job-1".into(),
         expression: String::new(),
         schedule: Schedule::Every { every_ms: 60_000 },
@@ -23,8 +25,6 @@ fn core_job(job_type: JobType, command: &str) -> CronJob {
         last_status: Some("ok".into()),
         last_output: None,
         origin: None,
-        claim_generation: 0,
-        policy: Default::default(),
     }
 }
 

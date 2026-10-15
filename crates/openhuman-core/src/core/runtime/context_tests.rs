@@ -18,6 +18,7 @@ fn ctx(dir: &str) -> Arc<CoreContext> {
         session_agent: None,
         profile: None,
         agent: Default::default(),
+        bare: false,
     })
 }
 
@@ -53,6 +54,7 @@ fn ctx_with_config(config: crate::config::Config) -> Arc<CoreContext> {
         session_agent: None,
         profile: None,
         agent: Default::default(),
+        bare: false,
     })
 }
 
@@ -393,6 +395,7 @@ fn degraded_context_rejects_workspace_bound_stores() {
         session_agent: None,
         profile: None,
         agent: Default::default(),
+        bare: false,
     };
 
     // `workspace_dir()` is the gate every workspace-bound store goes

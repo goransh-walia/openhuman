@@ -10,6 +10,7 @@
 use super::super::failure_policy::recovery_policy_with_effect;
 use super::super::repeated_failure::{failure_scope, recovery_policy};
 use super::*;
+use crate::agent::tinyagents::middleware::repeated_failure::RepeatedToolFailureMiddleware;
 use tinyagents_harness::middleware::{
     call_effect, dispatch_target, CallEffect, ToolEffectFacts, ToolFactsLookup,
 };

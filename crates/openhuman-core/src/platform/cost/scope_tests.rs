@@ -54,7 +54,6 @@ fn each_origin_maps_to_its_thread_and_label() {
 
 #[tokio::test]
 async fn ambient_scope_reads_the_turn_and_prefers_the_subagent() {
-    use crate::memory::scope::{within, MemoryIdentity};
     let origin = AgentTurnOrigin::WebChat {
         thread_id: "thread-9".into(),
         client_id: "c".into(),
@@ -67,12 +66,14 @@ async fn ambient_scope_reads_the_turn_and_prefers_the_subagent() {
     let (parent, child) = crate::core::runtime::CoreContext::scope(
         ctx,
         crate::agent::turn_origin::with_origin(origin, async {
-            within(MemoryIdentity::agent("orchestrator"), async {
+            async {
                 (
-                    UsageScope::ambient(Some("openhuman"), None),
-                    UsageScope::ambient(Some("openhuman"), Some(("researcher", "task-1"))),
+                    UsageScope::ambient(Some("openhuman"), None)
+                        .with_definition(Some("orchestrator")),
+                    UsageScope::ambient(Some("openhuman"), Some(("researcher", "task-1")))
+                        .with_definition(Some("orchestrator")),
                 )
-            })
+            }
             .await
         }),
     )

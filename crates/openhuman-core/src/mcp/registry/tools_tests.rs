@@ -250,6 +250,7 @@ struct ToolCallPort {
     arguments: SharedArc<Mutex<Vec<Value>>>,
     normalized_arguments: SharedArc<Mutex<Vec<Option<Value>>>>,
     connected: bool,
+    tool_meta: Option<Value>,
 }
 
 #[async_trait]
@@ -302,7 +303,9 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
             }
             tinymcp_bus::names::methods::LIST_TOOLS => {
                 if self.connected {
-                    serde_json::to_value(vec![tinymcp_bus::McpTool::new("forecast")])
+                    let mut forecast = tinymcp_bus::McpTool::new("forecast");
+                    forecast.meta = self.tool_meta.clone();
+                    serde_json::to_value(vec![forecast])
                         .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)
                 } else {
                     Err(tinybus::module::ModuleCallError::ModuleFault)
@@ -435,4 +438,49 @@ async fn tool_call_preserves_missing_arguments_as_distinct_from_json_null() {
         arguments.lock().unwrap().as_slice(),
         &[json!({}), json!({})]
     );
+}
+
+#[tokio::test]
+async fn registry_tool_call_attaches_the_descriptor_widget() {
+    let dir = tempfile::tempdir().expect("temp workspace");
+    let config = workspace_config(dir.path());
+    let port = ToolCallPort {
+        connected: true,
+        tool_meta: Some(json!({"ui":{"resourceUri":"ui://widget/forecast.html"}})),
+        ..ToolCallPort::default()
+    };
+    crate::mcp::module_client::McpConfiguredClient::install_test_port(&config, Box::new(port))
+        .expect("test module port");
+
+    let result = McpRegistryToolCallTool::new(Arc::clone(&config))
+        .execute(json!({"server_id":"srv-1", "tool_name":"forecast", "arguments":{}}))
+        .await
+        .expect("call");
+
+    assert!(!result.is_error, "{}", result.text());
+    let metadata = result.metadata.expect("widget presentation");
+    assert_eq!(metadata["kind"], "mcp_ui");
+    assert_eq!(metadata["resource_uri"], "ui://widget/forecast.html");
+    assert_eq!(metadata["server_id"], "srv-1");
+    assert_eq!(metadata["tool"], "forecast");
+}
+
+#[tokio::test]
+async fn registry_tool_call_without_a_descriptor_widget_has_no_presentation() {
+    let dir = tempfile::tempdir().expect("temp workspace");
+    let config = workspace_config(dir.path());
+    let port = ToolCallPort {
+        connected: true,
+        ..ToolCallPort::default()
+    };
+    crate::mcp::module_client::McpConfiguredClient::install_test_port(&config, Box::new(port))
+        .expect("test module port");
+
+    let result = McpRegistryToolCallTool::new(Arc::clone(&config))
+        .execute(json!({"server_id":"srv-1", "tool_name":"forecast", "arguments":{}}))
+        .await
+        .expect("call");
+
+    assert!(!result.is_error, "{}", result.text());
+    assert!(result.metadata.is_none());
 }

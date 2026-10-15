@@ -1,3 +1,4 @@
+use openhuman_embed::__host::core::runtime::DispatchCtx;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -100,7 +101,10 @@ pub fn channel_link_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_auth_create_channel_link_token(params: Map<String, Value>) -> ControllerFuture {
+fn handle_auth_create_channel_link_token(
+    _ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<AuthCreateChannelLinkTokenParams>(params)?;
@@ -114,14 +118,14 @@ fn handle_auth_create_channel_link_token(params: Map<String, Value>) -> Controll
     })
 }
 
-fn handle_telegram_login_start(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_telegram_login_start(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         to_json(crate::hosted::channel_link::telegram_login_start(&config).await?)
     })
 }
 
-fn handle_telegram_login_check(params: Map<String, Value>) -> ControllerFuture {
+fn handle_telegram_login_check(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let p = deserialize_params::<LinkCheckParams>(params)?;
@@ -131,14 +135,14 @@ fn handle_telegram_login_check(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_discord_link_start(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_discord_link_start(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         to_json(crate::hosted::channel_link::discord_link_start(&config).await?)
     })
 }
 
-fn handle_discord_link_check(params: Map<String, Value>) -> ControllerFuture {
+fn handle_discord_link_check(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let p = deserialize_params::<LinkCheckParams>(params)?;

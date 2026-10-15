@@ -746,3 +746,5 @@ async fn hold_text_stream_suppresses_text_delta_but_keeps_interim() {
         Some("Let me check the release notes for you first.")
     );
 }
+#[path = "progress_bridge_tool_progress_tests.rs"]
+mod tool_progress_tests;

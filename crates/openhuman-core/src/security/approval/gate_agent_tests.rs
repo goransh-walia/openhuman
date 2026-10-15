@@ -30,14 +30,12 @@ async fn gated_call(
         ctx,
         turn_origin::with_origin(
             origin,
-            APPROVAL_CHAT_CONTEXT.scope(
-                chat_ctx(),
-                gate.intercept_audited_bounded(
-                    tool,
-                    "run it",
-                    serde_json::json!({}),
-                    Some(Duration::from_millis(100)),
-                ),
+            gate.intercept_audited_bounded(
+                &ApprovalTurnContext::chat(chat_ctx()),
+                tool,
+                "run it",
+                serde_json::json!({}),
+                Some(Duration::from_millis(100)),
             ),
         ),
     )
@@ -168,13 +166,11 @@ fn park(
     let ctx = agent_ctx(agent, None, false);
     tokio::spawn(CoreContext::scope(
         ctx,
-        turn_origin::with_origin(
-            web_origin(),
-            APPROVAL_CHAT_CONTEXT.scope(chat_ctx(), async move {
-                gate.intercept_audited("shell", "run it", serde_json::json!({}))
-                    .await
-            }),
-        ),
+        turn_origin::with_origin(web_origin(), async move {
+            let turn = ApprovalTurnContext::chat(chat_ctx());
+            gate.intercept_audited(&turn, "shell", "run it", serde_json::json!({}))
+                .await
+        }),
     ))
 }
 
@@ -309,13 +305,11 @@ async fn an_agent_cannot_decide_a_request_the_process_parked() {
     let (gate, _dir) = test_gate();
     let gate = Arc::new(gate);
     let g = Arc::clone(&gate);
-    let process = tokio::spawn(turn_origin::with_origin(
-        web_origin(),
-        APPROVAL_CHAT_CONTEXT.scope(chat_ctx(), async move {
-            g.intercept_audited("shell", "run it", serde_json::json!({}))
-                .await
-        }),
-    ));
+    let process = tokio::spawn(turn_origin::with_origin(web_origin(), async move {
+        let turn = ApprovalTurnContext::chat(chat_ctx());
+        g.intercept_audited(&turn, "shell", "run it", serde_json::json!({}))
+            .await
+    }));
     let request_id = loop {
         if let Some(request_id) = gate.pending_for_agent_thread(None, "t-test") {
             break request_id;

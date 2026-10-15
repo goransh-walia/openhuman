@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 #[test]
 fn registered_controllers_match_schemas() {
@@ -30,7 +31,9 @@ async fn cancel_unknown_task_is_a_noop_false() {
     let _lock = crate::config::TEST_ENV_LOCK.lock().await;
     let mut params = Map::new();
     params.insert("taskId".into(), json!("sub-does-not-exist"));
-    let out = handle_subagent_cancel(params).await.expect("handler ok");
+    let out = handle_subagent_cancel(DispatchCtx::process_default(), params)
+        .await
+        .expect("handler ok");
     // Outcome wraps the payload under `data`.
     let cancelled = out
         .get("data")
@@ -125,7 +128,9 @@ async fn cancel_of_a_finished_run_reports_its_outcome_and_rewrites_nothing() {
 
         let mut params = Map::new();
         params.insert("taskId".into(), json!(task_id));
-        let out = handle_subagent_cancel(params).await.expect("handler ok");
+        let out = handle_subagent_cancel(DispatchCtx::process_default(), params)
+            .await
+            .expect("handler ok");
         assert_eq!(field(&out, "cancelled"), Some(json!(false)), "{task_id}");
         assert_eq!(field(&out, "outcome"), Some(json!(outcome)), "{task_id}");
     }
@@ -142,7 +147,9 @@ async fn steer_unknown_task_is_a_noop_false() {
     let mut params = Map::new();
     params.insert("taskId".into(), json!("sub-does-not-exist"));
     params.insert("message".into(), json!("redirect"));
-    let out = handle_subagent_steer(params).await.expect("handler ok");
+    let out = handle_subagent_steer(DispatchCtx::process_default(), params)
+        .await
+        .expect("handler ok");
     let data = out.get("data").unwrap_or(&out);
     assert_eq!(data.get("steered").and_then(Value::as_bool), Some(false));
     assert_eq!(data.get("reason").and_then(Value::as_str), Some("unknown"));

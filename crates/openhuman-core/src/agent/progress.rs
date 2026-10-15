@@ -91,6 +91,18 @@ pub enum AgentProgress {
         structured: Option<serde_json::Value>,
     },
 
+    /// A running tool reported progress through
+    /// `ToolRunContext::report_progress` (a shell call's elapsed time and
+    /// output, a media job's state). Falls between the call's
+    /// [`Self::ToolCallStarted`] and [`Self::ToolCallCompleted`]. Parent-scope
+    /// calls only.
+    ToolCallProgress {
+        /// Correlation id of the running call.
+        call_id: String,
+        /// Human-readable status line.
+        message: String,
+    },
+
     /// A sub-agent was spawned during tool execution.
     SubagentSpawned {
         agent_id: String,

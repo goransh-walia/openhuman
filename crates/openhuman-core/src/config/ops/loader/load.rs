@@ -5,6 +5,10 @@ use std::path::Path;
 
 use crate::config::Config;
 
+/// What a SaaS call that carries no context is told, instead of the operator's config.
+const NO_SAAS_CONFIG_SCOPE: &str =
+    "[saas] no config in scope: SaaS work must run under a user agent's or the operator's context";
+
 const CONFIG_LOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Loads persisted config with a 30s timeout.
@@ -28,14 +32,34 @@ const CONFIG_LOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 /// resolution found. Normalization still runs, because that is a shaping step
 /// handlers depend on, not a re-read.
 pub async fn load_config_with_timeout() -> Result<Config, String> {
-    // SaaS reads only the task's own scope, as `Config::load_or_init` does, so
-    // a task that lost its user scope fails rather than getting the operator's.
-    let scoped = if crate::core::runtime::is_saas() {
-        crate::core::runtime::CoreContext::scoped().and_then(|ctx| ctx.embedder_config().cloned())
+    // Transitional (#7801): callers that have no `DispatchCtx` of their own yet
+    // read the task's ambient context. SaaS reads only the task's own scope, as
+    // `Config::load_or_init` does, so a task that lost its user scope fails
+    // rather than getting the operator's.
+    let ambient = if crate::core::runtime::is_saas() {
+        crate::core::runtime::CoreContext::scoped()
     } else {
-        crate::core::runtime::context::CoreContext::current_embedder_config()
+        crate::core::runtime::CoreContext::current()
     };
-    if let Some(mut config) = scoped {
+    let ctx = ambient.map_or_else(
+        crate::core::runtime::DispatchCtx::unbound,
+        crate::core::runtime::DispatchCtx::new,
+    );
+    load_config_in(&ctx).await
+}
+
+/// [`load_config_with_timeout`] for the context the caller was handed.
+///
+/// The context's embedder config, when it has one, short-circuits the disk
+/// read (see [`CoreContext::embedder_config`](crate::core::runtime::context::CoreContext::embedder_config)).
+/// In SaaS a call with no bound context fails instead of falling back to the
+/// operator's config; outside SaaS an unbound context reads the process
+/// default's, as an unscoped task always did.
+pub async fn load_config_in(ctx: &crate::core::runtime::DispatchCtx) -> Result<Config, String> {
+    if crate::core::runtime::is_saas() && ctx.core().is_none() {
+        return Err(NO_SAAS_CONFIG_SCOPE.to_owned());
+    }
+    if let Some(mut config) = ctx.embedder_config() {
         normalize_loaded_config(&mut config).await;
         return Ok(config);
     }

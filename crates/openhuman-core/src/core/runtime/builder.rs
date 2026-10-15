@@ -439,8 +439,9 @@ impl CoreRuntime {
     ) -> Result<serde_json::Value, String> {
         log::trace!("[core-runtime] invoke_in method={method}");
         CoreContext::scope(
-            ctx,
+            Arc::clone(&ctx),
             crate::core::invoke::invoke_method(
+                crate::core::runtime::DispatchCtx::new(ctx),
                 crate::core::invoke::default_state(),
                 method,
                 params,

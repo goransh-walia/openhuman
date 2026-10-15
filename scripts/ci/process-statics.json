@@ -26,8 +26,8 @@
     "type": "LazyLock<Mutex<HashMap<String,Entry>>>",
     "count": 1,
     "category": "B",
-    "reason": "Keyed by a random per-remix correlation id; each entry holds the registering caller's config, CoreContext and memory identity, which every callback re-enters. Callbacks are accepted only from the module peer (bus name owner) for a live id, and the entry is retired by End, a failed call, or an age sweep.",
-    "verification": "tinymemes/service_tests.rs: only_the_module_may_call_back_and_only_for_a_live_remix; tinymemes/callbacks_tests.rs: callbacks_run_as_the_identity_that_registered_the_remix"
+    "reason": "Keyed by a random per-remix correlation id; each entry holds the registering caller's config and CoreContext, which every callback re-enters. Callbacks are accepted only from the module peer (bus name owner) for a live id, and the entry is retired by End, a failed call, or an age sweep.",
+    "verification": "tinymemes/service_tests.rs: only_the_module_may_call_back_and_only_for_a_live_remix"
   },
   {
     "file": "crates/openhuman-core/src/tinymemes/service.rs",
@@ -36,7 +36,7 @@
     "type": "std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String,std::sync::Arc<tokio::sync::Mutex<()>>>>, >",
     "count": 1,
     "category": "B",
-    "reason": "Holds only unit mutexes. The key is the workspace directory plus the acting memory identity, so different scopes never share or wait on a lock and no tenant data is stored.",
+    "reason": "Holds only unit mutexes. The key is the workspace directory, so different workspaces never share or wait on a lock and no tenant data is stored.",
     "verification": "tinymemes/service_tests.rs: foreground_remixes_share_a_lock_per_workspace_and_never_across_workspaces"
   },
   {
@@ -88,5 +88,25 @@
     "category": "A",
     "reason": "Registry ids whose serving source was already logged, so each is logged once; holds static ids only.",
     "verification": "modules/ops_tests.rs: status_reports_the_source_that_serves_a_module"
+  },
+  {
+    "file": "crates/openhuman-core/src/web_chat/ops/test_hooks.rs",
+    "scope": "",
+    "name": "TEST_PARK_AFTER_RUN",
+    "type": "std::sync::atomic::AtomicBool",
+    "count": 1,
+    "category": "A",
+    "reason": "A debug/test-only hook flag (`cfg(any(test, debug_assertions))`) that parks `run_chat_task` after its run so the idle guard can be exercised end to end; it holds no tenant data and is off unless a test sets it.",
+    "verification": "tests/agent_harness_e2e.rs: idle_guard_local::stalled_turn_is_stopped_by_the_idle_guard_and_closed_with_a_summary"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/connectors.rs",
+    "scope": "",
+    "name": "ROUTE_TURN",
+    "type": "tokio::sync::Mutex<()>",
+    "count": 1,
+    "category": "A",
+    "reason": "Test-only (cfg(test)): serializes each TinyConnectors call with the route it sets, because libtest runs a crate's tests in one process and the module's route is process-global; it guards no data and carries no tenant state.",
+    "verification": "flows/tinyflows/caps/tools/composio_tests.rs: backend_dispatch_forwards_the_workflow_connection_id"
   }
 ]

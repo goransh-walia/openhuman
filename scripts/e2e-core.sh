@@ -9,8 +9,11 @@
 #   scripts/e2e-core.sh sqlite     # sqlite:<scratch dir>
 #   scripts/e2e-core.sh mongodb    # needs TSD_MONGO_URL (a local replica set)
 #
-# MongoDB: start one with
-#   vendor/tinyagents/vendor/tinystoragedrivers/.github/scripts/start-mongo-replset.sh 27017
+# MongoDB: start one with tinystoragedrivers' .github/scripts/start-mongo-replset.sh
+# (https://github.com/tinyhumansai/tinystoragedrivers, tag v0.11.0) as
+#   curl -fsSL -o start-mongo-replset.sh \
+#     https://raw.githubusercontent.com/tinyhumansai/tinystoragedrivers/9eeef54aea403ac07461a612189bdf4982782823/.github/scripts/start-mongo-replset.sh
+#   bash start-mongo-replset.sh 27017
 # and export TSD_MONGO_URL=mongodb://127.0.0.1:27017/tsd_test?directConnection=true
 # (the storage-mongodb workflow does exactly this). The URL must be loopback:
 # the run creates a database of its own and writes to it.
@@ -102,5 +105,5 @@ export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 cd "$REPO_ROOT"
 features="$(bash "$SCRIPT_DIR/ci/product-features.sh")$extra_features"
 bash "$SCRIPT_DIR/ci-cancel-aware.sh" cargo test -p openhuman-cli \
-  --features "$features" --test tinymcp_storage_smoke_e2e -- \
-  --ignored --test-threads=1 "$@"
+  --features "$features,e2e-test-support" --test tinymcp_storage_smoke_e2e -- \
+  --test-threads=1 "$@"

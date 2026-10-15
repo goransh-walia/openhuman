@@ -1,6 +1,7 @@
 //! Controller schema + handler for `openhuman.session_import_run`: a manual
 //! retry of the boot-time import of legacy session files into the backend.
 
+use crate::core::runtime::DispatchCtx;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
@@ -70,7 +71,7 @@ pub fn session_import_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_session_import_run(params: Map<String, Value>) -> ControllerFuture {
+fn handle_session_import_run(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload: SessionImportRunParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;

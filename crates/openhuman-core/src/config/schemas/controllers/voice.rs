@@ -1,5 +1,6 @@
 //! Handlers for voice dictation and voice-server settings.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::config::rpc as config_rpc;
@@ -9,11 +10,17 @@ use super::super::helpers::{
     deserialize_params, to_json, DictationSettingsUpdate, VoiceServerSettingsUpdate,
 };
 
-pub(super) fn handle_get_dictation_settings(_params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_get_dictation_settings(
+    _ctx: DispatchCtx,
+    _params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async { to_json(config_rpc::get_dictation_settings().await?) })
 }
 
-pub(super) fn handle_update_dictation_settings(params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_update_dictation_settings(
+    _ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let update = deserialize_params::<DictationSettingsUpdate>(params)?;
         let patch = config_rpc::DictationSettingsPatch {
@@ -28,11 +35,17 @@ pub(super) fn handle_update_dictation_settings(params: Map<String, Value>) -> Co
     })
 }
 
-pub(super) fn handle_get_voice_server_settings(_params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_get_voice_server_settings(
+    _ctx: DispatchCtx,
+    _params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async { to_json(config_rpc::get_voice_server_settings().await?) })
 }
 
-pub(super) fn handle_update_voice_server_settings(params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_update_voice_server_settings(
+    ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let update = deserialize_params::<VoiceServerSettingsUpdate>(params)?;
         let patch = config_rpc::VoiceServerSettingsPatch {
@@ -52,7 +65,7 @@ pub(super) fn handle_update_voice_server_settings(params: Map<String, Value>) ->
         // Settings switch takes effect without a restart. Don't fail the RPC if
         // the reload hiccups, but DO surface it — otherwise the saved setting
         // silently wouldn't apply until the next launch.
-        match config_rpc::load_config_with_timeout().await {
+        match ctx.load_config().await {
             Ok(config) => {
                 log::info!("[config][rpc] voice settings saved; applying live always-on state");
                 crate::voice::always_on::start_if_enabled(&config).await;

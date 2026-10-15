@@ -82,7 +82,9 @@ use tinyagents_harness::error::Result as TaResult;
 use tinyagents_harness::host::security_gate::{GateDecision, ToolCallRequest};
 
 use crate::agent::tinyagents::policy_denial::PolicyDenial;
-use crate::security::approval::{redact_args, summarize_action, ApprovalGate, GateOutcome};
+use crate::security::approval::{
+    redact_args, summarize_action, ApprovalGate, ApprovalTurnContext, GateOutcome,
+};
 use crate::security::policy::{GateDecision as PolicyGateDecision, SecurityPolicy};
 use tinybox_bus::CommandClass;
 use tinytools::{PermissionLevel, Tool};
@@ -146,6 +148,9 @@ pub struct OpenHumanSecurityGate {
     /// `false` for a host-only turn reading untrusted data
     /// ([`Self::with_input_screening`]): its input is data, not instructions.
     screens_input: bool,
+    /// The owning turn's approval context (chat routing, copilot flag, flow
+    /// run), read from the turn's explicit run context when the gate is built.
+    approval: ApprovalTurnContext,
 }
 
 impl OpenHumanSecurityGate {
@@ -163,7 +168,15 @@ impl OpenHumanSecurityGate {
             tool_sets,
             pending_audit: Mutex::new(HashMap::new()),
             screens_input: true,
+            approval: ApprovalTurnContext::default(),
         }
+    }
+
+    /// Binds the owning turn's approval context, so a parked approval is routed
+    /// to the turn's chat surface and stamped with its flow run.
+    pub fn with_approval(mut self, approval: ApprovalTurnContext) -> Self {
+        self.approval = approval;
+        self
     }
 
     /// Whether this gate screens the turn's input. A host-only turn reading
@@ -332,7 +345,16 @@ impl OpenHumanSecurityGate {
             );
             return GateDecision::Allow;
         };
+        self.park_for_approval_on(&gate, call).await
+    }
 
+    /// [`Self::park_for_approval`] against an explicit gate, with this turn's
+    /// approval context.
+    pub(crate) async fn park_for_approval_on(
+        &self,
+        gate: &ApprovalGate,
+        call: &ToolCallRequest,
+    ) -> GateDecision {
         let summary = summarize_action(&call.tool_name, &call.arguments);
         let redacted = redact_args(&call.arguments);
         tracing::debug!(
@@ -346,7 +368,7 @@ impl OpenHumanSecurityGate {
         // executor close the audit row later *without* raising a second
         // approval card. See mismatch (2).
         let (outcome, request_id) = gate
-            .intercept_audited(&call.tool_name, &summary, redacted)
+            .intercept_audited(&self.approval, &call.tool_name, &summary, redacted)
             .await;
         if matches!(outcome, GateOutcome::Allow) {
             // Only an approval that persisted a row yields an id; the

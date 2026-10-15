@@ -1,6 +1,16 @@
 use super::*;
 use crate::agent::turn_origin::with_origin;
-use crate::security::approval::{ApprovalChatContext, APPROVAL_CHAT_CONTEXT};
+use crate::security::approval::ApprovalChatContext;
+
+/// The execution context the harness hands a tool dispatched inside a turn
+/// whose chat is `chat`.
+fn chat_tool_context(
+    chat: crate::security::approval::ApprovalChatContext,
+) -> tinyagents_harness::tool::ToolExecutionContext {
+    crate::agent::tinyagents::host::run_context::tool_context_with_approval(
+        crate::security::approval::ApprovalTurnContext::chat(chat),
+    )
+}
 
 #[tokio::test]
 async fn non_interactive_origin_auto_approves() {
@@ -25,22 +35,24 @@ async fn interactive_turn_parks_until_resolved() {
         tinyagents_harness::middleware::RunMode::Plan,
     );
     let tool = RequestPlanReviewTool::new();
+    let context = chat_tool_context(ApprovalChatContext {
+        thread_id: "t-int".into(),
+        client_id: "c-int".into(),
+        request_id: Some("req-int".into()),
+    });
     let fut = with_origin(
         AgentTurnOrigin::WebChat {
             thread_id: "t-int".into(),
             client_id: "c-int".into(),
             request_id: Some("req-int".into()),
         },
-        APPROVAL_CHAT_CONTEXT.scope(
-            ApprovalChatContext {
-                thread_id: "t-int".into(),
-                client_id: "c-int".into(),
-                request_id: Some("req-int".into()),
-            },
-            tool.execute(json!({ "summary": "plan", "steps": ["one"] })),
+        tool.execute_with_context(
+            json!({ "summary": "plan", "steps": ["one"] }),
+            tinytools::ToolCallOptions::default(),
+            Some(&context),
         ),
     );
-    // The web channel supplies both task locals. One poll reaches the gate
+    // The web channel supplies the origin and the chat context. One poll reaches the gate
     // and must remain pending; no wall-clock timeout is needed to prove park.
     tokio::pin!(fut);
     assert!(

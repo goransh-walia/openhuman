@@ -1,5 +1,6 @@
 //! Controller schemas and JSON-RPC dispatchers for the cost dashboard.
 
+use crate::core::runtime::DispatchCtx;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -223,11 +224,11 @@ fn new_correlation_id() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..8].to_string()
 }
 
-fn handle_cost_get_dashboard(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_cost_get_dashboard(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_dashboard.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_dashboard.config_load_failed err={err}");
         })?;
         let outcome = cost_rpc::dashboard(&config).map_err(|e| {
@@ -241,11 +242,11 @@ fn handle_cost_get_dashboard(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_cost_get_daily_history(params: Map<String, Value>) -> ControllerFuture {
+fn handle_cost_get_daily_history(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_daily_history.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_daily_history.config_load_failed err={err}");
         })?;
         let payload = if params.is_empty() {
@@ -273,11 +274,11 @@ fn handle_cost_get_daily_history(params: Map<String, Value>) -> ControllerFuture
     })
 }
 
-fn handle_cost_get_summary(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_cost_get_summary(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_summary.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_summary.config_load_failed err={err}");
         })?;
         let outcome = cost_rpc::summary(&config).map_err(|e| {
@@ -291,11 +292,11 @@ fn handle_cost_get_summary(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_cost_get_usage_log(params: Map<String, Value>) -> ControllerFuture {
+fn handle_cost_get_usage_log(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_usage_log.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "cost_rpc", "[cost_rpc][{cid}] cost_get_usage_log.config_load_failed err={err}");
         })?;
         let payload = if params.is_empty() {
@@ -336,11 +337,11 @@ fn parse_report_params<T: serde::de::DeserializeOwned + Default>(
     serde_json::from_value(Value::Object(params)).map_err(|e| format!("invalid params: {e}"))
 }
 
-fn handle_cost_report(params: Map<String, Value>) -> ControllerFuture {
+fn handle_cost_report(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "cost_rpc", "[cost_rpc][{cid}] cost_report.entry");
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let p: ReportParams = parse_report_params(params)?;
         let days = p.days.unwrap_or_else(default_usage_days);
         let outcome = cost_rpc::usage_report(&config, days, &p.group_by, &p.filter)
@@ -349,11 +350,11 @@ fn handle_cost_report(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_cost_cache_report(params: Map<String, Value>) -> ControllerFuture {
+fn handle_cost_cache_report(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "cost_rpc", "[cost_rpc][{cid}] cost_cache_report.entry");
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let p: CacheReportParams = parse_report_params(params)?;
         let days = p.days.unwrap_or_else(default_usage_days);
         let limit = p.limit.unwrap_or(200);

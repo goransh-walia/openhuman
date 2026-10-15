@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -86,7 +87,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_list(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         log::debug!(
             "[tool_registry] rpc list requested param_count={}",
@@ -96,7 +97,7 @@ fn handle_list(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_get(params: Map<String, Value>) -> ControllerFuture {
+fn handle_get(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let tool_id = required_tool_id(&params)?;
         log::debug!("[tool_registry] rpc get requested tool_id={tool_id}");
@@ -104,7 +105,7 @@ fn handle_get(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_diagnostics(params: Map<String, Value>) -> ControllerFuture {
+fn handle_diagnostics(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         log::debug!(
             "[tool_registry] rpc diagnostics requested param_count={}",

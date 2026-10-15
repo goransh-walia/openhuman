@@ -15,6 +15,7 @@
 //!
 //! [`Config`]: crate::config::schema::types::Config
 
+use crate::core::runtime::DispatchCtx;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Map, Value};
@@ -144,7 +145,7 @@ fn require_managed_worktree_path(params: &Map<String, Value>) -> Result<PathBuf,
     Ok(path)
 }
 
-fn handle_list(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_list(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "worktree_rpc", "[worktree_rpc][{cid}] list.entry");
@@ -153,7 +154,7 @@ fn handle_list(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_status(params: Map<String, Value>) -> ControllerFuture {
+fn handle_status(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "worktree_rpc", "[worktree_rpc][{cid}] status.entry");
@@ -163,7 +164,7 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_diff(params: Map<String, Value>) -> ControllerFuture {
+fn handle_diff(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "worktree_rpc", "[worktree_rpc][{cid}] diff.entry");
@@ -173,7 +174,7 @@ fn handle_diff(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_remove(params: Map<String, Value>) -> ControllerFuture {
+fn handle_remove(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "worktree_rpc", "[worktree_rpc][{cid}] remove.entry");

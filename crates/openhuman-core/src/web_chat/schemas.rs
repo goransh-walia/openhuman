@@ -2,6 +2,7 @@
 //! RPC namespace: `web_chat`, `web_cancel`, `web_queue_status`,
 //! `web_queue_clear`.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -154,7 +155,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_chat(params: Map<String, Value>) -> ControllerFuture {
+fn handle_chat(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebChatParams>(params)?;
         // Recorded before the turn starts so it reads the new choice.
@@ -189,28 +190,28 @@ fn handle_chat(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_queue_status(params: Map<String, Value>) -> ControllerFuture {
+fn handle_queue_status(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebQueueParams>(params)?;
         to_json(channel_web_queue_status(&p.thread_id).await?)
     })
 }
 
-fn handle_queue_clear(params: Map<String, Value>) -> ControllerFuture {
+fn handle_queue_clear(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebQueueParams>(params)?;
         to_json(channel_web_queue_clear(&p.thread_id).await?)
     })
 }
 
-fn handle_queue_remove(params: Map<String, Value>) -> ControllerFuture {
+fn handle_queue_remove(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebQueueRemoveParams>(params)?;
         to_json(channel_web_queue_remove(&p.client_id, &p.thread_id, &p.item_id).await?)
     })
 }
 
-fn handle_cancel(params: Map<String, Value>) -> ControllerFuture {
+fn handle_cancel(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebCancelParams>(params)?;
         to_json(channel_web_cancel(&p.client_id, &p.thread_id, p.request_id.as_deref()).await?)

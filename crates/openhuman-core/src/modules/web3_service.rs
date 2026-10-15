@@ -95,13 +95,16 @@ async fn ensure_service(
     Ok(())
 }
 
-fn owner() -> Option<QuoteOwner> {
-    crate::security::approval::APPROVAL_CHAT_CONTEXT
-        .try_with(|context| QuoteOwner {
-            thread_id: context.thread_id.clone(),
-            client_id: context.client_id.clone(),
-        })
-        .ok()
+/// The quote owner of a turn whose chat routing is `chat`: quotes are bound to
+/// the thread and client that prepared them, so another chat cannot execute
+/// them. `None` outside a chat turn.
+pub(crate) fn owner_of(
+    chat: Option<&crate::security::approval::ApprovalChatContext>,
+) -> Option<QuoteOwner> {
+    chat.map(|context| QuoteOwner {
+        thread_id: context.thread_id.clone(),
+        client_id: context.client_id.clone(),
+    })
 }
 
 /// Close the active module service on sign-out. The mutex joins any in-flight
@@ -172,6 +175,7 @@ pub(crate) struct ExecuteParams {
 /// Prepare one implementation-owned Web3 quote.
 pub(crate) async fn quote(
     config: &Config,
+    owner: Option<QuoteOwner>,
     member: &'static str,
     params: serde_json::Value,
 ) -> Result<Web3QuoteResponse, wallet::WalletCallError> {
@@ -188,7 +192,7 @@ pub(crate) async fn quote(
         member,
         Web3QuoteRequest {
             service: service_handle,
-            owner: owner(),
+            owner,
             params,
         },
     )
@@ -211,6 +215,7 @@ pub(crate) async fn routes(config: &Config) -> Result<serde_json::Value, wallet:
 /// Execute one explicitly confirmed quote using its module-declared signer chain.
 pub(crate) async fn execute(
     config: &Config,
+    owner: Option<QuoteOwner>,
     quote_id: String,
     confirmed: bool,
 ) -> Result<serde_json::Value, wallet::WalletCallError> {
@@ -250,7 +255,7 @@ pub(crate) async fn execute(
             .value;
     let mut request = Web3ExecuteRequest {
         service: service_handle,
-        owner: owner(),
+        owner,
         quote_id: quote_id.clone(),
         confirmed,
         secret: tinywallet_bus::wire::SecretMaterial {

@@ -3,6 +3,7 @@
 //! It shares the `channel` namespace with `channel.web_chat`: both start a
 //! turn on one of the caller's conversation threads.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use super::ops::channel_relay_inbound;
@@ -91,7 +92,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_relay_inbound(params: Map<String, Value>) -> ControllerFuture {
+fn handle_relay_inbound(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let params: RelayInboundParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;

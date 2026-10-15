@@ -111,23 +111,39 @@ impl Docs {
         source: &std::path::Path,
         sessions: &[DurableSubagentSession],
     ) -> Result<()> {
-        self.save(sessions)?;
         let id = marker_id(source);
-        self.0.run(|docs| async move {
-            match docs
-                .put(
-                    IMPORTED,
-                    &id,
-                    serde_json::json!({ "imported": true }),
-                    Precondition::Absent,
-                )
-                .await
-            {
-                Ok(_) => Ok(()),
-                Err(error) if error.kind() == tinystoragedrivers::ErrorKind::Conflict => Ok(()),
-                Err(error) => Err(error),
-            }
-        })
+        let claimed =
+            crate::storage::import_claim::with_claim(&self.0, IMPORTED, &id.clone(), || {
+                // The process that held the claim before us may have finished.
+                if self.legacy_imported(source)? {
+                    return Ok(());
+                }
+                self.save(sessions)?;
+                let id = id.clone();
+                self.0.run(|docs| async move {
+                    match docs
+                        .put(
+                            IMPORTED,
+                            &id,
+                            serde_json::json!({ "imported": true }),
+                            Precondition::Absent,
+                        )
+                        .await
+                    {
+                        Ok(_) => Ok(()),
+                        Err(error) if error.kind() == tinystoragedrivers::ErrorKind::Conflict => {
+                            Ok(())
+                        }
+                        Err(error) => Err(error),
+                    }
+                })
+            })?;
+        if claimed.is_none() {
+            log::debug!(
+                "[subagent_sessions] another process is importing the legacy file; skipped"
+            );
+        }
+        Ok(())
     }
 
     pub(super) fn save(&self, sessions: &[DurableSubagentSession]) -> Result<()> {

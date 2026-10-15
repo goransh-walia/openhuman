@@ -138,7 +138,14 @@ fn capabilities_are_answered_for_an_object_the_grant_does_not_hold() {
         writable: true,
         ..StorageGrant::default()
     };
-    assert!(authorize(&documents_only, Object::Blobs, "Capabilities", &json!(null)).is_ok());
+    assert_eq!(
+        authorize(&documents_only, Object::Blobs, "Capabilities", &json!({})),
+        Ok(Plan::Answer(json!({
+            "presigned_urls": false,
+            "ttl": false,
+            "max_key_len": 0,
+        })))
+    );
     // Anything else on that object is still refused.
     assert_eq!(
         authorize(

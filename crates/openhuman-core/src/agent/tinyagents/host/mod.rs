@@ -34,6 +34,7 @@ pub mod definition_registry;
 pub mod delegation;
 pub mod learning_sink;
 pub mod model_resolver;
+mod operation_context;
 pub mod progress_sink;
 pub mod run_context;
 pub mod security_gate;

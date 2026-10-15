@@ -303,11 +303,12 @@ async fn cancel_chat_cooperatively_stops_in_flight_turn() {
 /// Issue #4746: a turn that never produces a terminal event on its own — a
 /// wedged main agent stuck mid tool-call, or a delegated sub-agent that never
 /// returns (modeled here by the parked test block) — must still end in a
-/// terminal `chat_error`, never an empty reply / an endless `inference_heartbeat`
+/// terminal event, never an empty reply / an endless `inference_heartbeat`
 /// stream until the socket dies. The web turn driver's wall-clock backstop fires
-/// and emits a graceful, retryable `turn_timeout` chat_error, and tears the
-/// wedged future down cooperatively (its `Drop` guard flips well before the 30s
-/// test sleep would elapse).
+/// and tears the wedged future down cooperatively (its `Drop` guard flips well
+/// before the 30s test sleep would elapse). The block parks before the turn
+/// resolves its config, so there is no workspace to write a closing reply to:
+/// the turn ends in the graceful, retryable `turn_timeout` chat_error.
 #[tokio::test]
 async fn wedged_turn_hits_wall_clock_backstop_and_emits_turn_timeout_chat_error() {
     let _serial = FORCED_ERROR_TEST_LOCK.lock().await;
@@ -336,32 +337,13 @@ async fn wedged_turn_hits_wall_clock_backstop_and_emits_turn_timeout_chat_error(
     .await
     .expect("turn should start");
 
-    let recv = timeout(Duration::from_secs(20), async move {
-        loop {
-            let event = rx.recv().await.expect("event stream should stay open");
-            if event.event == "chat_error" && event.request_id == request_id {
-                return event;
-            }
-        }
-    })
+    let recv = timeout(
+        Duration::from_secs(20),
+        terminal_event(&mut rx, &request_id),
+    )
     .await
-    .expect("a wedged turn must still emit a terminal chat_error (issue #4746)");
-
-    assert_eq!(
-        recv.error_type.as_deref(),
-        Some("turn_timeout"),
-        "the backstop must surface a graceful turn_timeout, not a generic error"
-    );
-    assert_eq!(
-        recv.error_retryable,
-        Some(true),
-        "a turn_timeout is safe to retry in the same thread"
-    );
-    let message = recv.message.unwrap_or_default();
-    assert!(
-        !message.contains("openhuman_turn_wall_clock_timeout"),
-        "internal marker must not leak into user copy: {message}"
-    );
+    .expect("a wedged turn must still emit a terminal event (issue #4746)");
+    assert_turn_timeout(&recv);
 
     // The wedged future is torn down cooperatively when the backstop drops it
     // (the Drop guard flips), not left sleeping to its 30s test wall.
@@ -369,6 +351,45 @@ async fn wedged_turn_hits_wall_clock_backstop_and_emits_turn_timeout_chat_error(
 
     set_test_run_chat_task_block(None).await;
     // `OPENHUMAN_WEB_TURN_TIMEOUT_SECS` is cleared by `_env_guard`'s Drop.
+}
+
+/// The idle guard ends a turn that emits no progress with nothing in flight,
+/// well inside the wall-clock ceiling. The parked test block emits nothing and
+/// parks before the turn resolves its config, like a turn wedged in session
+/// checkout, so the turn ends in the graceful `turn_timeout` chat_error.
+#[tokio::test]
+async fn silent_turn_hits_idle_guard_and_emits_turn_timeout_chat_error() {
+    let _serial = FORCED_ERROR_TEST_LOCK.lock().await;
+    let _env_guard =
+        crate::config::test_env::EnvVarGuard::locked_set_async("OPENHUMAN_WEB_TURN_IDLE_SECS", "1")
+            .await;
+    let block = make_block();
+    set_test_run_chat_task_block(Some(block.clone())).await;
+
+    let mut rx = subscribe_web_channel_events();
+    let request_id = start_chat(
+        "idle-client",
+        "idle-thread",
+        "park me until the idle guard fires",
+        None,
+        None,
+        None,
+        None,
+        ChatRequestMetadata::default(),
+    )
+    .await
+    .expect("turn should start");
+
+    let recv = timeout(
+        Duration::from_secs(20),
+        terminal_event(&mut rx, &request_id),
+    )
+    .await
+    .expect("a silent turn must end in a terminal event");
+    assert_turn_timeout(&recv);
+    wait_for_flag(&block.dropped, "silent turn future dropped by idle guard").await;
+
+    set_test_run_chat_task_block(None).await;
 }
 
 /// A `parallel`-mode turn runs CONCURRENTLY with the primary turn on the SAME
@@ -605,4 +626,31 @@ async fn unscoped_cancel_stops_the_threads_detached_subagents() {
         .await
         .expect("aborted child finishes promptly");
     assert!(joined.expect_err("child aborted").is_cancelled());
+}
+
+/// The terminal event (`chat_done` or `chat_error`) for `request_id`.
+async fn terminal_event(
+    rx: &mut tokio::sync::broadcast::Receiver<crate::web_chat::WebChannelEvent>,
+    request_id: &str,
+) -> crate::web_chat::WebChannelEvent {
+    loop {
+        let event = rx.recv().await.expect("event stream should stay open");
+        if event.request_id == request_id
+            && matches!(event.event.as_str(), "chat_done" | "chat_error")
+        {
+            return event;
+        }
+    }
+}
+
+/// A graceful, retryable `turn_timeout` whose user copy hides the marker.
+fn assert_turn_timeout(event: &crate::web_chat::WebChannelEvent) {
+    assert_eq!(event.event, "chat_error", "{event:?}");
+    assert_eq!(event.error_type.as_deref(), Some("turn_timeout"));
+    assert_eq!(event.error_retryable, Some(true));
+    let message = event.message.clone().unwrap_or_default();
+    assert!(
+        !message.contains("openhuman_turn_wall_clock_timeout"),
+        "internal marker must not leak into user copy: {message}"
+    );
 }

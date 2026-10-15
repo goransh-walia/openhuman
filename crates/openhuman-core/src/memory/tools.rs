@@ -129,6 +129,9 @@ pub struct CallFacts {
     pub agent_id: Option<String>,
     /// The provider-assigned tool-call id.
     pub tool_call_id: Option<String>,
+    /// The chat the call's turn is surfaced in, so the memory activity it
+    /// raises reaches that chat. `None` outside a chat turn.
+    pub chat: Option<crate::security::approval::ApprovalChatContext>,
     /// Where the agent's learnings go: its layout's learnings node.
     pub namespace: Namespace,
     /// What the agent may read and forget: its whole layout.
@@ -136,7 +139,7 @@ pub struct CallFacts {
 }
 
 impl CallFacts {
-    /// Gathers the facts from the run context and the turn's task-locals,
+    /// Gathers the facts from the run context,
     /// falling back to `config.action_dir` for the workspace.
     #[must_use]
     pub fn gather(config: &Config, context: Option<&dyn ToolRunContext>) -> Self {
@@ -144,20 +147,23 @@ impl CallFacts {
             .and_then(ToolRunContext::workspace_root)
             .map(std::path::Path::to_path_buf)
             .unwrap_or_else(|| config.action_dir.clone());
-        let identity = super::scope::current().unwrap_or_else(|| {
-            // Outside a scoped turn (a legacy driver), fall back to the
-            // parent context's agent, else the root.
-            crate::agent::harness::fork_context::current_parent()
-                .map_or_else(super::scope::MemoryIdentity::root, |parent| {
-                    super::scope::MemoryIdentity::agent(&parent.agent_definition_id)
-                })
-        });
+        // The acting identity is the run's own; direct dispatch (CLI, tests)
+        // has no run, and falls back to the spawning agent, else the root.
+        let identity =
+            crate::agent::tinyagents::host::run_context::memory_identity_for_tool(context)
+                .unwrap_or_else(|| {
+                    crate::agent::tinyagents::host::run_context::parent_agent_id_for_tool(context)
+                        .map_or_else(super::scope::MemoryIdentity::root, |parent_agent_id| {
+                            super::scope::MemoryIdentity::agent(&parent_agent_id)
+                        })
+                });
         Self {
             workspace: Some(workspace.display().to_string()),
             thread_id: context
                 .and_then(ToolRunContext::thread_id)
                 .map(str::to_string),
             tool_call_id: crate::tools::host_extensions::tool_call_id(context),
+            chat: crate::agent::tinyagents::host::run_context::approval_for_tool(context).chat,
             ..Self::of(config, &identity)
         }
     }
@@ -231,6 +237,8 @@ pub async fn run_action(config: &Config, args: &Value, facts: &CallFacts) -> Too
                         BUS.publish(DomainEvent::MemoryRecalled {
                             query: question,
                             hit_count: view.citations.len(),
+                            thread_id: facts.chat.as_ref().map(|chat| chat.thread_id.clone()),
+                            client_id: facts.chat.as_ref().map(|chat| chat.client_id.clone()),
                         });
                         json!(view)
                     })
@@ -266,6 +274,8 @@ pub async fn run_action(config: &Config, args: &Value, facts: &CallFacts) -> Too
                         key: view.id.clone(),
                         category: kind.as_str().to_string(),
                         namespace: "learnings".to_string(),
+                        thread_id: facts.chat.as_ref().map(|chat| chat.thread_id.clone()),
+                        client_id: facts.chat.as_ref().map(|chat| chat.client_id.clone()),
                     });
                     json!({"id": view.id, "status": LEARN_STATUS})
                 })
@@ -369,6 +379,7 @@ impl Tool for MemoryTool {
         ) {
             let config = self.config.clone();
             let write_args = args.clone();
+            let queued_root = facts.reach.at.clone();
             let queued = crate::core::runtime::spawn_blocking_scoped(move || {
                 super::tool_writes::enqueue(&config, &write_args, &facts)
             })
@@ -380,7 +391,7 @@ impl Tool for MemoryTool {
                     ))
                 }) {
                     Ok(value) => {
-                        super::tool_writes::schedule(self.config.clone());
+                        super::tool_writes::schedule(self.config.clone(), &queued_root);
                         ToolResult::success(value.to_string())
                     }
                     Err(error) => ToolResult::error(render_error(error)),

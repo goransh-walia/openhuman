@@ -121,28 +121,29 @@ async fn scoped_tool_limit_is_honored_by_the_hosted_runner_inner() {
     // The host's explicit cap rides the run context: no tool may run.
     limited_context.tool_call_limit = Some(0);
     let _ = async {
-        run_root_turn_via_hosted_agent(
-            limited_context,
-            hosted_base(),
-            "main".to_string(),
-            models,
-            "test".to_string(),
-            "root-test-model",
-            root_messages("limited-runner"),
-            vec![Arc::new(vec![
+        TurnSpec {
+            run_context: limited_context,
+            turn_models: models,
+            provider_id: "test".to_string(),
+            model: "root-test-model",
+            history: root_messages("limited-runner"),
+            tool_sets: vec![Arc::new(vec![
                 Box::new(LimitedTool(tool_calls.clone())) as Box<dyn Tool>
             ])],
-            None,
-            2,
-            None,
-            None,
-            &[],
-            false,
-            None,
-            TurnContextMiddleware::default(),
-            None,
-            true,
-        )
+            allowed: None,
+            max_iterations: 2,
+            context_window: None,
+            run_queue: None,
+            early_exit_tools: &[],
+            pause_at_cap: false,
+            max_output_tokens: None,
+            context_mw: TurnContextMiddleware::default(),
+            tool_policy: None,
+            defer_turn_completed_to_caller: true,
+            subagent_scope: None,
+            deterministic_cacheable: false,
+        }
+        .run_hosted(hosted_base(), "main".to_string())
         .await
     }
     .await;
@@ -183,28 +184,29 @@ async fn positive_scoped_tool_limit_caps_hosted_runner_inner() {
     );
     limited_context.tool_call_limit = Some(1);
     let outcome = async {
-        run_root_turn_via_hosted_agent(
-            limited_context,
-            hosted_base(),
-            "main".to_string(),
-            models,
-            "test".to_string(),
-            "root-test-model",
-            root_messages("limited-runner-positive"),
-            vec![Arc::new(vec![
+        TurnSpec {
+            run_context: limited_context,
+            turn_models: models,
+            provider_id: "test".to_string(),
+            model: "root-test-model",
+            history: root_messages("limited-runner-positive"),
+            tool_sets: vec![Arc::new(vec![
                 Box::new(LimitedTool(tool_calls.clone())) as Box<dyn Tool>
             ])],
-            None,
-            3,
-            None,
-            None,
-            &[],
-            false,
-            None,
-            TurnContextMiddleware::default(),
-            None,
-            true,
-        )
+            allowed: None,
+            max_iterations: 3,
+            context_window: None,
+            run_queue: None,
+            early_exit_tools: &[],
+            pause_at_cap: false,
+            max_output_tokens: None,
+            context_mw: TurnContextMiddleware::default(),
+            tool_policy: None,
+            defer_turn_completed_to_caller: true,
+            subagent_scope: None,
+            deterministic_cacheable: false,
+        }
+        .run_hosted(hosted_base(), "main".to_string())
         .await
     }
     .await;
@@ -249,26 +251,27 @@ async fn run_root_with(
     reply: &str,
     messages: Vec<TranscriptMessage>,
 ) -> anyhow::Result<TinyagentsTurnOutcome> {
-    run_root_turn_via_hosted_agent(
-        context,
-        base,
-        "main".to_string(),
-        root_models(reply),
-        "test".to_string(),
-        "root-test-model",
-        messages,
-        vec![Arc::new(Vec::new())],
-        Some(Default::default()),
-        2,
-        None,
-        None,
-        &[],
-        false,
-        None,
-        TurnContextMiddleware::default(),
-        None,
-        true,
-    )
+    TurnSpec {
+        run_context: context,
+        turn_models: root_models(reply),
+        provider_id: "test".to_string(),
+        model: "root-test-model",
+        history: messages,
+        tool_sets: vec![Arc::new(Vec::new())],
+        allowed: Some(Default::default()),
+        max_iterations: 2,
+        context_window: None,
+        run_queue: None,
+        early_exit_tools: &[],
+        pause_at_cap: false,
+        max_output_tokens: None,
+        context_mw: TurnContextMiddleware::default(),
+        tool_policy: None,
+        defer_turn_completed_to_caller: true,
+        subagent_scope: None,
+        deterministic_cacheable: false,
+    }
+    .run_hosted(base, "main".to_string())
     .await
 }
 
@@ -506,26 +509,27 @@ async fn an_in_stream_provider_failure_is_re_surfaced_past_the_hosted_sanitizer(
         .build("root-test-model", 0.0, None, None)
         .expect("turn models build");
     let (tx, _rx) = tokio::sync::mpsc::channel(8);
-    let error = run_root_turn_via_hosted_agent(
-        root_context("in-stream", "/tmp/in-stream", tx),
-        hosted_base(),
-        "main".to_string(),
-        models,
-        "test".to_string(),
-        "root-test-model",
-        root_messages("in-stream"),
-        vec![Arc::new(Vec::new())],
-        Some(Default::default()),
-        2,
-        None,
-        None,
-        &[],
-        false,
-        None,
-        TurnContextMiddleware::default(),
-        None,
-        true,
-    )
+    let error = TurnSpec {
+        run_context: root_context("in-stream", "/tmp/in-stream", tx),
+        turn_models: models,
+        provider_id: "test".to_string(),
+        model: "root-test-model",
+        history: root_messages("in-stream"),
+        tool_sets: vec![Arc::new(Vec::new())],
+        allowed: Some(Default::default()),
+        max_iterations: 2,
+        context_window: None,
+        run_queue: None,
+        early_exit_tools: &[],
+        pause_at_cap: false,
+        max_output_tokens: None,
+        context_mw: TurnContextMiddleware::default(),
+        tool_policy: None,
+        defer_turn_completed_to_caller: true,
+        subagent_scope: None,
+        deterministic_cacheable: false,
+    }
+    .run_hosted(hosted_base(), "main".to_string())
     .await
     .expect_err("the provider rejected the request");
     let text = error.to_string();

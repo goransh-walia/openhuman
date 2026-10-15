@@ -208,8 +208,14 @@ pub async fn flows_resume(
     }
     let compiled = tinyflows::compiler::compile(&flow.graph).map_err(|e| e.to_string())?;
     let config_arc = Arc::new(config.clone());
-    let caps =
-        crate::flows::tinyflows::build_capabilities(config_arc.clone(), format!("flow:{flow_id}"));
+    let caps = crate::flows::tinyflows::build_capabilities(
+        config_arc.clone(),
+        format!("flow:{flow_id}"),
+        Some(FlowRunContext {
+            flow_id: flow_id.to_string(),
+            run_id: thread_id.to_string(),
+        }),
+    );
     let checkpointer =
         crate::flows::tinyflows::open_flow_checkpointer(config).map_err(|e| e.to_string())?;
 
@@ -291,26 +297,20 @@ pub async fn flows_resume(
     // `error` port (recovery branch) or, if it has none, fails the run. The
     // empty-rejections case is byte-for-byte the prior approve-only resume.
     //
-    // Same flow/run correlation scope as `flows_run` (see its comment) — a
-    // resumed run can dispatch further tool calls that park, and those parks
-    // need `source_context` too.
-    let run = APPROVAL_FLOW_RUN_CONTEXT.scope(
-        FlowRunContext {
-            flow_id: flow_id.to_string(),
-            run_id: thread_id.to_string(),
-        },
-        with_origin(
-            origin,
-            tinyflows::engine::resume_with_checkpointer_journaled_observed(
-                &compiled,
-                &caps,
-                checkpointer,
-                thread_id,
-                approvals,
-                rejections,
-                journal.clone(),
-                &observer,
-            ),
+    // Same flow/run correlation as `flows_run` (see its comment), carried by the
+    // capabilities above -- a resumed run can dispatch further tool calls that
+    // park, and those parks need `source_context` too.
+    let run = with_origin(
+        origin,
+        tinyflows::engine::resume_with_checkpointer_journaled_observed(
+            &compiled,
+            &caps,
+            checkpointer,
+            thread_id,
+            approvals,
+            rejections,
+            journal.clone(),
+            &observer,
         ),
     );
 

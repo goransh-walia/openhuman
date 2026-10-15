@@ -53,8 +53,8 @@ and trim string params.
 | `ai.regenerate` | `artifact_id`, `thread_id`, `client_id` (all required) | `{ artifact_id, regenerated: true, is_error }` |
 
 `ai.regenerate` only accepts `kind == presentation`, reloads `args.json`,
-and re-runs `PresentationTool::with_regenerate_target(id)` inside
-`APPROVAL_CHAT_CONTEXT.scope({thread_id, client_id}, ..)` so the same id
+and re-runs `PresentationTool::with_regenerate_target(id)` with the
+`{thread_id, client_id}` chat context passed to the tool, so the same id
 is reused and the Pending/Ready/Failed events route back to the originating
 chat. The RPC result is an ack; the card state comes from the socket events.
 When `thread_id` is given to `list_artifacts`, legacy records with no
@@ -82,8 +82,8 @@ subscribes to nothing):
 - `DomainEvent::ArtifactReady`: from `finalize_artifact` on a real transition.
 - `DomainEvent::ArtifactFailed`: from `fail_artifact`.
 
-All three carry `thread_id` / `client_id` read from the
-`security::approval::APPROVAL_CHAT_CONTEXT` task-local; outside a chat turn
+All three carry `thread_id` / `client_id` taken from the
+`ApprovalChatContext` the producing tool receives with its run context; outside a chat turn
 (CLI, cron, sub-agents) both are `None` and the
 `web_chat::artifact_surface` subscriber ([`web_chat/event_bus.rs`](../../web_chat/event_bus.rs)) drops the
 event.

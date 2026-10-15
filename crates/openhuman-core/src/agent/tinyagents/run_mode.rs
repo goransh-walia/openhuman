@@ -4,17 +4,18 @@
 //! (vendor tinyagents#211) gate side-effecting tools per-run via a live
 //! [`RunModeHandle`] the host can flip without restarting the run. OpenHuman's
 //! unit of "a run" for this purpose is a chat *thread*: the same thread is
-//! driven through many independent turns (one `assemble_turn_harness` call
+//! driven through many independent turns (one `install_turn_middleware` call
 //! each), so the mode has to live somewhere that outlives any one turn's
 //! [`crate::agent::tinyagents::host::OpenHumanRunContext`] — this process-wide,
 //! thread_id-keyed registry is that home.
 //!
 //! `plan_exit` (the tool) and the `agent.set_run_mode` / `agent.get_run_mode`
-//! RPCs both read/write through here; `turn_runner` looks the handle up by
+//! RPCs both read/write through here; `turn_exec` looks the handle up by
 //! `OpenHumanRunContext::thread_id` right before assembling each turn's
 //! harness and pushes `plan_mode_middleware(handle, ..)` when a handle exists
 //! for the thread.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -195,7 +196,7 @@ struct ThreadIdParams {
     thread_id: String,
 }
 
-fn handle_set_run_mode(params: Map<String, Value>) -> ControllerFuture {
+fn handle_set_run_mode(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ThreadModeParams>(params)?;
         let Some(mode) = parse_mode_label(&p.mode) else {
@@ -211,7 +212,7 @@ fn handle_set_run_mode(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_get_run_mode(params: Map<String, Value>) -> ControllerFuture {
+fn handle_get_run_mode(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ThreadIdParams>(params)?;
         let mode = get_mode(&p.thread_id);

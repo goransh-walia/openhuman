@@ -3,6 +3,7 @@
 //! MCP clients use. All of them call the TinySearch module's role tools, so an
 //! RPC caller gets the same provider choice and fallback as the agent.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{json, Map, Value};
 
 use crate::config::rpc as config_rpc;
@@ -150,14 +151,17 @@ fn search_arguments(params: &Map<String, Value>, provider: Option<&str>) -> Resu
     Ok(arguments)
 }
 
-pub(super) fn handle_web_search(params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_web_search(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let arguments = search_arguments(&params, None)?;
         run_role_tool(tinysearch_bus::tools::WEB_SEARCH, arguments, "web_search").await
     })
 }
 
-pub(super) fn handle_searxng_search(params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_searxng_search(
+    _ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let arguments = search_arguments(&params, Some("searxng"))?;
         run_role_tool(
@@ -169,7 +173,7 @@ pub(super) fn handle_searxng_search(params: Map<String, Value>) -> ControllerFut
     })
 }
 
-pub(super) fn handle_web_answer(params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_web_answer(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let query = required_text(&params, "query")?;
         let mut arguments = json!({ "query": query });
@@ -190,7 +194,10 @@ pub(super) fn handle_web_answer(params: Map<String, Value>) -> ControllerFuture 
     })
 }
 
-pub(super) fn handle_web_contents(params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_web_contents(
+    _ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let urls = optional_string_array(&params, "urls")?;
         if urls.is_empty() {

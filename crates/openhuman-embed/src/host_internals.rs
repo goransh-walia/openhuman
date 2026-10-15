@@ -80,7 +80,7 @@ pub mod core {
     }
     pub mod runtime {
         pub use openhuman_core::core::runtime::{
-            current_tenant, is_saas, CoreContext, CoreRuntime, Mode, SaasConfig,
+            current_tenant, is_saas, CoreContext, CoreRuntime, DispatchCtx, Mode, SaasConfig,
         };
         pub mod saas {
             pub use openhuman_core::core::runtime::saas::build;
@@ -184,7 +184,10 @@ pub mod channels {
 /// OpenAI-compatible HTTP router.
 pub mod inference {
     pub mod embedding_host {
-        pub use openhuman_core::inference::embedding_host::default_embedding_provider_with_config;
+        pub use openhuman_core::inference::embedding_host::{
+            default_embedding_provider_for_chat, default_embedding_provider_with_config,
+            SharedEmbeddingModel,
+        };
     }
     pub mod provider {
         pub mod factory {
@@ -235,7 +238,7 @@ pub mod security {
         }
     }
     pub mod approval {
-        pub use openhuman_core::security::approval::ApprovalGate;
+        pub use openhuman_core::security::approval::{ApprovalChatContext, ApprovalGate};
     }
     pub mod pairing {
         pub use openhuman_core::security::pairing::is_public_bind;

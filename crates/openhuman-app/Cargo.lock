@@ -3835,7 +3835,6 @@ dependencies = [
  "rand 0.10.2",
  "regex",
  "reqwest 0.12.28",
- "reqwest 0.13.5",
  "rustls",
  "schemars 1.2.2",
  "sentry",
@@ -3888,7 +3887,6 @@ dependencies = [
  "tinymemory-tools",
  "tinyredact",
  "tinysearch-bus",
- "tinysecurity-bus",
  "tinyskills",
  "tinyskills-drivers",
  "tinystoragedrivers",
@@ -3912,7 +3910,6 @@ dependencies = [
  "urlencoding",
  "uuid",
  "walkdir",
- "webpki-roots 1.0.9",
  "windows-sys 0.61.2",
  "x25519-dalek",
  "zeroize",
@@ -4890,17 +4887,14 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
- "h2",
  "http",
  "http-body",
  "http-body-util",
  "hyper",
  "hyper-rustls",
- "hyper-tls",
  "hyper-util",
  "js-sys",
  "log",
- "native-tls",
  "percent-encoding",
  "pin-project-lite",
  "rustls",
@@ -4910,7 +4904,6 @@ dependencies = [
  "serde_json",
  "sync_wrapper",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls",
  "tokio-util",
  "tower",
@@ -6755,14 +6748,14 @@ dependencies = [
 
 [[package]]
 name = "tinybox-bus"
-version = "0.1.34"
+version = "0.1.33"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "tinybus"
-version = "0.1.6"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "flate2",
@@ -6783,7 +6776,7 @@ dependencies = [
 
 [[package]]
 name = "tinybus-macros"
-version = "0.1.6"
+version = "0.1.5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6792,7 +6785,7 @@ dependencies = [
 
 [[package]]
 name = "tinybus-module"
-version = "0.1.6"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "serde",
@@ -6804,7 +6797,7 @@ dependencies = [
 
 [[package]]
 name = "tinychannels-bus"
-version = "0.1.33"
+version = "0.1.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6818,7 +6811,7 @@ dependencies = [
 
 [[package]]
 name = "tinycomputer-bus"
-version = "0.14.0"
+version = "0.13.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6827,7 +6820,7 @@ dependencies = [
 
 [[package]]
 name = "tinyconnectors-bus"
-version = "0.19.2"
+version = "0.19.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -7130,7 +7123,7 @@ dependencies = [
 
 [[package]]
 name = "tinyjuice-bus"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -7157,7 +7150,7 @@ dependencies = [
 
 [[package]]
 name = "tinymcp"
-version = "0.18.5"
+version = "0.18.4"
 dependencies = [
  "base64 0.23.1",
  "dirs 7.0.0",
@@ -7183,7 +7176,7 @@ dependencies = [
 
 [[package]]
 name = "tinymcp-bus"
-version = "0.18.5"
+version = "0.18.4"
 dependencies = [
  "schemars 1.2.2",
  "serde",
@@ -7270,16 +7263,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinysecurity-bus"
-version = "0.7.0"
-dependencies = [
- "serde",
- "thiserror 2.0.20",
-]
-
-[[package]]
 name = "tinyskills"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
@@ -7296,7 +7281,7 @@ dependencies = [
 
 [[package]]
 name = "tinyskills-drivers"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cap-std",
  "serde_json",
@@ -7309,6 +7294,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "tinystoragedrivers-core",
  "tinystoragedrivers-file",
@@ -7319,6 +7305,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers-bus"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "serde",
  "serde_json",
@@ -7328,6 +7315,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers-busproxy"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "async-trait",
  "serde",
@@ -7342,6 +7330,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers-client"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "async-trait",
  "serde",
@@ -7355,6 +7344,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers-core"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "async-trait",
  "serde",
@@ -7366,6 +7356,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers-file"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "async-trait",
  "libc",
@@ -7378,6 +7369,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers-secrets"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "async-trait",
  "atomicwrites",
@@ -7401,6 +7393,7 @@ dependencies = [
 [[package]]
 name = "tinystoragedrivers-sqlite"
 version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
 dependencies = [
  "rusqlite",
  "serde_json",
@@ -7487,7 +7480,7 @@ dependencies = [
 
 [[package]]
 name = "tinywallet-bus"
-version = "0.23.2"
+version = "0.23.3"
 dependencies = [
  "serde",
  "serde_json",

@@ -108,19 +108,17 @@ jobs:
       - name: Check out submodules
         run: bash scripts/ci/checkout-submodules.sh
 
-      - name: Verify the replica-set script was checked out
-        run: |
-          script=vendor/tinyagents/vendor/tinystoragedrivers/.github/scripts/start-mongo-replset.sh
-          if [ ! -f "$script" ]; then
-            echo "::error::$script is missing: scripts/ci/checkout-submodules.sh did not populate vendor/tinyagents/vendor/tinystoragedrivers"
-            exit 1
-          fi
-
       - name: Start a MongoDB replica set
-        # tinystoragedrivers' own script: GitHub service containers cannot pass
-        # `--replSet` to mongod, and a replica set is what lets the driver
-        # report and exercise transactions.
-        run: bash vendor/tinyagents/vendor/tinystoragedrivers/.github/scripts/start-mongo-replset.sh 27017
+        # tinystoragedrivers' own script, fetched at the commit the v0.11.0 tag
+        # points to (the same tag every Cargo manifest names): GitHub service
+        # containers cannot pass `--replSet` to mongod, and a replica set is
+        # what lets the driver report and exercise transactions.
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o start-mongo-replset.sh \
+            https://raw.githubusercontent.com/tinyhumansai/tinystoragedrivers/9eeef54aea403ac07461a612189bdf4982782823/.github/scripts/start-mongo-replset.sh
+          bash start-mongo-replset.sh 27017
+          rm -f start-mongo-replset.sh
 
       - name: Restore Rust build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6

@@ -21,6 +21,26 @@ fn offline_config() -> Config {
 /// later caller holds.
 #[tokio::test]
 async fn a_faulted_module_is_not_retried_in_process() {
+    const ISOLATED: &str = "OPENHUMAN_TEST_ISOLATED_FAULTED_MODULE_RESOLVER";
+    if std::env::var_os(ISOLATED).is_none() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "modules::ops::resolver_tests::a_faulted_module_is_not_retried_in_process",
+                "--test-threads=1",
+            ])
+            .env(ISOLATED, "1")
+            .output()
+            .expect("run the resolver test in a fresh process");
+        assert!(
+            output.status.success(),
+            "isolated resolver test failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+
     use crate::config::schema::ModuleOverride;
     const MODULE: &str = "tinysearch";
     let table = tinybus::module::resolution::global();

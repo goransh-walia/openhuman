@@ -13,10 +13,10 @@ use crate::media::generation::MediaGenerators;
 
 fn tools(action_dir: &Path) -> Vec<Box<dyn Tool>> {
     media_tools_from(
-        MediaGenerators {
-            image: Arc::new(MockImageGenerator::new()),
-            video: Arc::new(MockVideoGenerator::new(MockVideoScript::delivers())),
-        },
+        MediaGenerators::new(
+            Arc::new(MockImageGenerator::new()),
+            Arc::new(MockVideoGenerator::new(MockVideoScript::delivers())),
+        ),
         action_dir,
         &action_dir.join("workspace"),
         action_dir.join("Files"),

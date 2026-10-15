@@ -186,6 +186,7 @@ pub fn format_event(ev: &AgentProgress) -> Option<String> {
         AgentProgress::TextDelta { .. }
         | AgentProgress::ThinkingDelta { .. }
         | AgentProgress::ToolCallArgsDelta { .. }
+        | AgentProgress::ToolCallProgress { .. }
         | AgentProgress::TurnCostUpdated { .. }
         | AgentProgress::ModelCallCompleted { .. }
         | AgentProgress::SubagentTextDelta { .. }

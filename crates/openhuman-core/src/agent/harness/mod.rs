@@ -15,7 +15,7 @@
 //!
 //! ## Key Sub-modules
 //! - **[`host_definition`]**: OpenHuman's extension slot and registry over `tinyagents-definition`.
-//! - **[`fork_context`]**: Task-local storage for parent context sharing.
+//! - **[`fork_context`]**: The parent execution snapshot handed to sub-agents.
 //!
 //! Cancellation is handled by the tinyagents steering channel (see
 //! `crate::agent::tinyagents`); there is no in-house interrupt fence.
@@ -30,8 +30,6 @@ pub(crate) mod tool_result_artifacts;
 // NOTE: deliberately no flat re-export here. `artifact_offload::ArtifactKind`
 // would shadow the unrelated `openhuman::agent::artifacts::ArtifactKind` for anyone
 // glob-importing this module; callers import the owning library directly.
-pub use fork_context::{
-    current_parent, with_parent_context, AgentContextPreparedSource, ParentExecutionContext,
-};
+pub use fork_context::{AgentContextPreparedSource, ParentExecutionContext};
 
 pub(crate) use graph::run_channel_turn_via_graph;

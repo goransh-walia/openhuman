@@ -72,7 +72,6 @@ fn stub(name: &'static str) -> Box<dyn Tool> {
 
 // ── End-to-end runner tests with mock provider ────────────────────────
 
-use crate::agent::harness::fork_context::with_parent_context;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tinyagents_harness::run_queue::{QueueLane, RunQueue};
@@ -248,6 +247,16 @@ fn tool_response(name: &str, args: &str) -> ModelResponse {
 
 /// Build a minimal `ParentExecutionContext` suitable for runner tests.
 /// Uses a no-op memory backend so we don't have to spin up a real one.
+/// `options` with `parent` bound as the run's explicit parent execution
+/// context, the way a spawning tool or orchestration surface supplies it.
+fn with_parent(
+    parent: ParentExecutionContext,
+    mut options: SubagentRunOptions,
+) -> SubagentRunOptions {
+    options.run_context.parent = Some(parent);
+    options
+}
+
 fn make_parent(
     provider: Arc<dyn ChatModel<()>>,
     tools: Vec<Box<dyn Tool>>,

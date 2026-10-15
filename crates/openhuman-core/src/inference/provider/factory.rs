@@ -125,6 +125,7 @@ use crate::inference::provider::openai_codex::resolve_openai_codex_routing;
 use crate::inference::provider::openhuman_backend_model::OpenHumanBackendModel;
 use crate::inference::provider::ProviderRuntimeOptions;
 use crate::security::credentials::AuthService;
+use crate::security::egress::EgressLedger;
 use std::sync::Arc;
 use tinyagents_harness::providers::claude_agent_sdk::ClaudeAgentSdkProvider;
 use tinyinference_llm::model::{ChatModel, ModelRequest, ModelResponse, ModelStream};

@@ -613,10 +613,12 @@ fn status_reports_the_source_that_serves_a_module() {
 }
 
 #[tokio::test]
+#[cfg(feature = "e2e-test-support")]
 async fn a_registered_linked_factory_serves_the_module_and_status_says_so() {
     use crate::config::schema::ModuleSourceMode;
     use crate::modules::types::ModuleSource;
 
+    let _storage = crate::channels::module_fixture::install_memory_storage();
     crate::modules::linked::register_linked("tinychannels", tinychannels_module::linked_module);
     let mut config = Config::default();
     config.modules.source = ModuleSourceMode::Linked;

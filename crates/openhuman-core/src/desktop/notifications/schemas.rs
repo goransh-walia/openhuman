@@ -3,13 +3,14 @@
 //!
 //! Follows the exact pattern from `crates/openhuman-core/src/cron/schemas.rs`.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
 use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
 
 type SchemaBuilder = fn() -> ControllerSchema;
-type ControllerHandler = fn(Map<String, Value>) -> ControllerFuture;
+type ControllerHandler = fn(DispatchCtx, Map<String, Value>) -> ControllerFuture;
 
 struct NotificationControllerDef {
     function: &'static str,
@@ -463,43 +464,43 @@ fn schema_unknown() -> ControllerSchema {
 // Handler wrappers (delegate to rpc.rs)
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn handle_ingest_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_ingest_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_ingest(params).await })
 }
 
-fn handle_list_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_list(params).await })
 }
 
-fn handle_mark_read_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_mark_read_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_mark_read(params).await })
 }
 
-fn handle_settings_get_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_settings_get_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_settings_get(params).await })
 }
 
-fn handle_settings_set_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_settings_set_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_settings_set(params).await })
 }
 
-fn handle_dismiss_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_dismiss_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_dismiss(params).await })
 }
 
-fn handle_mark_acted_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_mark_acted_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_mark_acted(params).await })
 }
 
-fn handle_stats_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_stats_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_stats(params).await })
 }
 
-fn handle_core_list_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_core_list_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_core_list(params).await })
 }
 
-fn handle_core_mark_read_wrap(params: Map<String, Value>) -> ControllerFuture {
+fn handle_core_mark_read_wrap(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { super::rpc::handle_core_mark_read(params).await })
 }
 

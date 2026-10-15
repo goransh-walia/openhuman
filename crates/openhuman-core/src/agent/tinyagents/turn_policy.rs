@@ -16,12 +16,16 @@ use crate::agent::tinyagents::budget::MAX_SPAWN_DEPTH;
 
 /// The builder-configured [`ToolCallPolicy`](tinyagents_harness::middleware::ToolCallPolicy)
 /// plus the session context a policy check needs, handed to the shared turn seam
-/// so it can install the [`ToolPolicyMiddleware`](super::middleware::ToolPolicyMiddleware).
+/// so it can install the [`ToolPolicyMiddleware`](super::middleware::tool_policy::ToolPolicyMiddleware).
 /// `None` means "no policy enforcement on this turn" (the channel/CLI + sub-agent
 /// paths, which carry their own gating).
 #[derive(Clone)]
 pub(crate) struct ToolPolicyEnforcement {
-    pub policy: std::sync::Arc<dyn tinyagents_harness::middleware::ToolCallPolicy<crate::agent::tinyagents::host::OpenHumanRunContext>>,
+    pub policy: std::sync::Arc<
+        dyn tinyagents_harness::middleware::ToolCallPolicy<
+            crate::agent::tinyagents::host::OpenHumanRunContext,
+        >,
+    >,
     /// The session's channel-permission snapshot — enforces the per-channel
     /// permission ceiling (deny + per-call permission-level gate) the in-house
     /// engine ran in `agent_tool_exec`.
@@ -124,7 +128,7 @@ pub(crate) fn run_policy_for(max_iterations: usize, response_cache_enabled: bool
 /// providers keep the tight defaults so a wedged call is still caught fast.
 ///
 /// Cross-route fallback (`RunPolicy.fallback`) is orthogonal and populated
-/// per-turn by [`assemble_turn_harness`](super::harness_assembly::assemble_turn_harness).
+/// per-turn by [`turn_run_policy`](super::turn_plan::turn_run_policy).
 pub(crate) fn run_policy_for_provider(
     max_iterations: usize,
     response_cache_enabled: bool,

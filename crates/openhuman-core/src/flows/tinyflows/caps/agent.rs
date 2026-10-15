@@ -68,6 +68,9 @@ use crate::inference::provider::{is_raw_passthrough_model, role_for_model_tier};
 /// caller's task), so HITL gating still applies to every fanned-out turn.
 pub struct OpenHumanAgentRunner {
     pub config: Arc<Config>,
+    /// The run's approval context (flow run correlation), handed to the gate
+    /// with every acting dispatch.
+    pub approval: crate::security::approval::ApprovalTurnContext,
 }
 
 /// Process-wide ceiling on **simultaneous harness agent turns started by flow
@@ -449,10 +452,10 @@ impl OpenHumanAgentRunner {
         > = if let Some(escalated) = escalated_origin {
             Box::pin(turn_origin::with_origin(
                 escalated,
-                agent.run_single(&prompt),
+                agent.run_single_with_approval(&prompt, None, self.approval.clone()),
             ))
         } else {
-            Box::pin(agent.run_single(&prompt))
+            Box::pin(agent.run_single_with_approval(&prompt, None, self.approval.clone()))
         };
         // A host agent's turn reads its own context (config, domains, tool
         // groups, session store); the origin task-local is untouched.

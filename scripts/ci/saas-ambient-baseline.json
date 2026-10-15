@@ -155,20 +155,6 @@
   },
   {
     "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/channels/runtime/dispatch/helpers.rs",
-    "line": 27,
-    "text": "tokio::spawn(async move {",
-    "occurrence": 1
-  },
-  {
-    "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/channels/runtime/dispatch/helpers.rs",
-    "line": 46,
-    "text": "tokio::spawn(async move {",
-    "occurrence": 2
-  },
-  {
-    "rule": "bare-spawn",
     "path": "crates/openhuman-core/src/channels/runtime/dispatch/processor/turn.rs",
     "line": 196,
     "text": "_acknowledgment_task = Some(AbortOnDropHandle::new(tokio::spawn(async move {",
@@ -186,13 +172,6 @@
     "path": "crates/openhuman-core/src/channels/runtime/dispatch/routing.rs",
     "line": 62,
     "text": "let config = match Config::load_or_init().await {",
-    "occurrence": 1
-  },
-  {
-    "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/channels/runtime/session.rs",
-    "line": 112,
-    "text": "tokio::spawn(async move {",
     "occurrence": 1
   },
   {
@@ -686,34 +665,6 @@
     "occurrence": 1
   },
   {
-    "rule": "ambient-config",
-    "path": "crates/openhuman-core/src/inference/tokenjuice/schemas.rs",
-    "line": 374,
-    "text": "let config = crate::config::Config::load_or_init()",
-    "occurrence": 1
-  },
-  {
-    "rule": "ambient-config",
-    "path": "crates/openhuman-core/src/inference/tokenjuice/schemas.rs",
-    "line": 394,
-    "text": "let mut config = crate::config::Config::load_or_init()",
-    "occurrence": 1
-  },
-  {
-    "rule": "ambient-config",
-    "path": "crates/openhuman-core/src/inference/tokenjuice/schemas.rs",
-    "line": 416,
-    "text": "let config = crate::config::Config::load_or_init()",
-    "occurrence": 2
-  },
-  {
-    "rule": "ambient-config",
-    "path": "crates/openhuman-core/src/inference/tokenjuice/schemas.rs",
-    "line": 434,
-    "text": "let config = crate::config::Config::load_or_init()",
-    "occurrence": 3
-  },
-  {
     "rule": "bare-spawn",
     "path": "crates/openhuman-core/src/integrations/composio/bus/config_changed_subscriber.rs",
     "line": 64,
@@ -814,7 +765,7 @@
   {
     "rule": "env-mutation",
     "path": "crates/openhuman-core/src/mcp/server/stdio.rs",
-    "line": 163,
+    "line": 165,
     "text": "std::env::set_var(\"RUST_LOG\", level);",
     "occurrence": 1
   },
@@ -1103,13 +1054,6 @@
     "path": "crates/openhuman-core/src/skills/webhooks/router.rs",
     "line": 554,
     "text": "tokio::task::spawn_blocking(do_write);",
-    "occurrence": 1
-  },
-  {
-    "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/storage/import/mod.rs",
-    "line": 190,
-    "text": "let joined = tokio::task::spawn_blocking(move || run_all(&backend, &config)).await;",
     "occurrence": 1
   },
   {

@@ -294,9 +294,12 @@ impl ShellTool {
         let requested_timeout = args.get("timeout_secs").and_then(|v| v.as_u64());
 
         let start = Instant::now();
-        let (allowed, result) = self
-            .run_with_security_in_context(command, requested_timeout, context)
-            .await;
+        let (allowed, result) = crate::sandbox::shell_progress::with_shell_progress(
+            context,
+            crate::sandbox::shell_progress::HEARTBEAT_INTERVAL,
+            |meter| self.run_with_security_in_context(command, requested_timeout, context, meter),
+        )
+        .await;
         let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
         // `allowed` = passed the in-tool security checks. `approved` = the command
         // is Prompt-class (required human approval) and thus went through the
@@ -326,7 +329,7 @@ impl ShellTool {
         command: &str,
         requested_timeout: Option<u64>,
     ) -> (bool, ToolResult) {
-        self.run_with_security_in_context(command, requested_timeout, None)
+        self.run_with_security_in_context(command, requested_timeout, None, None)
             .await
     }
 
@@ -335,6 +338,7 @@ impl ShellTool {
         command: &str,
         requested_timeout: Option<u64>,
         context: Option<&dyn ToolRunContext>,
+        meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
         // Revalidate facts immediately before execution. The authorization
         // hook supplies the same module-owned parser to the harness gate; this
@@ -405,7 +409,7 @@ impl ShellTool {
             let action_dir = saas_action_dir;
             return match resolved {
                 Ok(policy) => {
-                    self.run_in_policy(policy, command, requested_timeout, &action_dir)
+                    self.run_in_policy(policy, command, requested_timeout, &action_dir, meter)
                         .await
                 }
                 Err(why) => {
@@ -434,7 +438,7 @@ impl ShellTool {
         if sandbox_required {
             let action_dir = self.effective_action_dir_for_context(context);
             return self
-                .run_sandboxed(command, requested_timeout, &action_dir)
+                .run_sandboxed(command, requested_timeout, &action_dir, meter)
                 .await;
         }
 
@@ -611,6 +615,7 @@ impl ShellTool {
         run.env = env;
         run.python_utf8 = true;
         run.hide_window = self.runtime.hide_window();
+        run.meter = meter;
         let result = crate::sandbox::shell_exec::run(&config, run).await;
         (true, exec_result(result, effective))
     }
@@ -622,6 +627,7 @@ impl ShellTool {
         command: &str,
         requested_timeout: Option<u64>,
         action_dir: &Path,
+        meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
         let config = crate::config::RuntimeConfig::default();
         let policy = crate::sandbox::resolve_sandbox_policy(
@@ -631,7 +637,7 @@ impl ShellTool {
             &config,
             false,
         );
-        self.run_in_policy(policy, command, requested_timeout, action_dir)
+        self.run_in_policy(policy, command, requested_timeout, action_dir, meter)
             .await
     }
 
@@ -642,6 +648,7 @@ impl ShellTool {
         command: &str,
         requested_timeout: Option<u64>,
         action_dir: &Path,
+        meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
         use crate::sandbox;
 
@@ -673,8 +680,10 @@ impl ShellTool {
             "[shell] starting sandboxed command"
         );
 
-        let result =
-            sandbox::execute_in_sandbox(&policy, command, action_dir, extra_env, effective).await;
+        let result = sandbox::ops::execute_in_sandbox_metered(
+            &policy, command, action_dir, extra_env, effective, meter,
+        )
+        .await;
         (true, exec_result(result, effective))
     }
 }

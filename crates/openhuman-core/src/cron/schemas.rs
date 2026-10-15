@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
@@ -281,9 +282,9 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_add(params: Map<String, Value>) -> ControllerFuture {
+fn handle_add(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
 
         let schedule: tinyflows_schedule::types::Schedule = read_required(&params, "schedule")?;
         let name = params
@@ -398,41 +399,41 @@ fn handle_add(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_list(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async {
-        let config = config_rpc::load_config_with_timeout().await?;
+fn handle_list(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = ctx.load_config().await?;
         to_json(crate::cron::rpc::cron_list(&config).await?)
     })
 }
 
-fn handle_update(params: Map<String, Value>) -> ControllerFuture {
+fn handle_update(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let job_id = read_required::<String>(&params, "job_id")?;
         let patch = read_required::<CronJobPatch>(&params, "patch")?;
         to_json(crate::cron::rpc::cron_update(&config, job_id.trim(), patch).await?)
     })
 }
 
-fn handle_remove(params: Map<String, Value>) -> ControllerFuture {
+fn handle_remove(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let job_id = read_required::<String>(&params, "job_id")?;
         to_json(crate::cron::rpc::cron_remove(&config, job_id.trim()).await?)
     })
 }
 
-fn handle_run(params: Map<String, Value>) -> ControllerFuture {
+fn handle_run(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let job_id = read_required::<String>(&params, "job_id")?;
         to_json(crate::cron::rpc::cron_run(&config, job_id.trim()).await?)
     })
 }
 
-fn handle_runs(params: Map<String, Value>) -> ControllerFuture {
+fn handle_runs(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let job_id = read_required::<String>(&params, "job_id")?;
         let limit = read_optional_u64(&params, "limit")?
             .map(|raw| usize::try_from(raw).map_err(|_| "limit is too large for usize".to_string()))

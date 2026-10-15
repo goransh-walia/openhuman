@@ -111,21 +111,13 @@ const MEMORY_ACTIVITY_QUERY_PREVIEW_CHARS: usize = 40;
 /// event so the chat surface can show a brief "remembered"/"recalled N"
 /// indicator.
 ///
-/// Routing: these domain events carry no `thread_id`/`client_id` of their
-/// own (unlike the artifact events), so this subscriber reads the current
-/// turn's chat context off the same
-/// [`crate::security::approval::APPROVAL_CHAT_CONTEXT`] task-local the
-/// artifact producers use, and drops the event when it is absent (CLI /
-/// cron / sub-agent paths — no client to fan out to). Only ever carries
+/// Routing: the events carry the `thread_id`/`client_id` of the turn whose tool
+/// call raised them (taken from that turn's explicit approval context), and the
+/// subscriber drops an event that has none (CLI / cron / sub-agent paths — no
+/// client to fan out to). Only ever carries
 /// `key`/`category`/`namespace` (never stored content) and a short, clipped
 /// preview of the recall query (never the full query text).
 struct MemoryActivitySurfaceSubscriber;
-
-fn current_chat_context() -> Option<(String, String)> {
-    crate::security::approval::APPROVAL_CHAT_CONTEXT
-        .try_with(|ctx| (ctx.thread_id.clone(), ctx.client_id.clone()))
-        .ok()
-}
 
 #[async_trait]
 impl EventHandler<DomainEvent> for MemoryActivitySurfaceSubscriber {
@@ -138,13 +130,17 @@ impl EventHandler<DomainEvent> for MemoryActivitySurfaceSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) {
-        let (event_name, args) = match event {
+        let (event_name, thread_id, client_id, args) = match event {
             DomainEvent::MemoryStored {
                 key,
                 category,
                 namespace,
+                thread_id,
+                client_id,
             } => (
                 "stored",
+                thread_id,
+                client_id,
                 serde_json::json!({
                     "kind": "stored",
                     "key": key,
@@ -152,7 +148,12 @@ impl EventHandler<DomainEvent> for MemoryActivitySurfaceSubscriber {
                     "namespace": namespace,
                 }),
             ),
-            DomainEvent::MemoryRecalled { query, hit_count } => {
+            DomainEvent::MemoryRecalled {
+                query,
+                hit_count,
+                thread_id,
+                client_id,
+            } => {
                 let preview: String = query
                     .chars()
                     .take(MEMORY_ACTIVITY_QUERY_PREVIEW_CHARS)
@@ -160,6 +161,8 @@ impl EventHandler<DomainEvent> for MemoryActivitySurfaceSubscriber {
                 let truncated = query.chars().count() > MEMORY_ACTIVITY_QUERY_PREVIEW_CHARS;
                 (
                     "recalled",
+                    thread_id,
+                    client_id,
                     serde_json::json!({
                         "kind": "recalled",
                         "query_preview": if truncated { format!("{preview}…") } else { preview },
@@ -169,7 +172,7 @@ impl EventHandler<DomainEvent> for MemoryActivitySurfaceSubscriber {
             }
             _ => return,
         };
-        let Some((thread_id, client_id)) = current_chat_context() else {
+        let (Some(thread_id), Some(client_id)) = (thread_id.clone(), client_id.clone()) else {
             log::debug!("[web-channel] memory-activity-surface skip {event_name}: no chat context");
             return;
         };

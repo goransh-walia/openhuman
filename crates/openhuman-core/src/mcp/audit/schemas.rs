@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::config::rpc as config_rpc;
@@ -80,11 +81,11 @@ fn schema() -> ControllerSchema {
     }
 }
 
-fn handle_list(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         log::debug!("[mcp_audit] handle_list enter params={params:?}");
         log::trace!("[mcp_audit] handle_list loading config");
-        let config = match config_rpc::load_config_with_timeout().await {
+        let config = match ctx.load_config().await {
             Ok(config) => {
                 log::trace!(
                     "[mcp_audit] handle_list config loaded workspace={}",

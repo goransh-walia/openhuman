@@ -22,7 +22,7 @@ use crate::config::Config;
 use super::engine;
 use super::error::{MemoryError, MemoryResult};
 use super::lifecycle::jobs;
-use super::scope;
+use super::scope::MemoryIdentity;
 
 /// Largest file `memory_brain_ingest` reads, in bytes.
 pub const MAX_INGEST_BYTES: u64 = 25 * 1024 * 1024;
@@ -56,14 +56,14 @@ pub fn brain_node(
     )?)
 }
 
-/// The layout the brain RPCs act on: the in-scope identity's.
-fn layout(config: &Config) -> MemoryLayout {
-    scope::resolve_current(config).layout
+/// The layout the brain RPCs act on: `identity`'s.
+fn layout(config: &Config, identity: &MemoryIdentity) -> MemoryLayout {
+    identity.resolve(config).layout
 }
 
-fn brain(config: &Config) -> MemoryResult<Brain> {
+fn brain(config: &Config, identity: &MemoryIdentity) -> MemoryResult<Brain> {
     let bound = engine::resolve(config).engine()?;
-    Ok(Brain::new(bound.engine, layout(config)))
+    Ok(Brain::new(bound.engine, layout(config, identity)))
 }
 
 fn parse_source(raw: &str) -> MemoryResult<BrainSource> {
@@ -92,9 +92,9 @@ pub struct BrainSourcesView {
 }
 
 /// `memory_brain_sources`: the brain's sources and their sizes.
-pub async fn sources(config: &Config) -> MemoryResult<BrainSourcesView> {
+pub async fn sources(config: &Config, identity: &MemoryIdentity) -> MemoryResult<BrainSourcesView> {
     let bound = engine::resolve(config).engine()?;
-    let layout = layout(config);
+    let layout = layout(config, identity);
     let page = bound
         .engine
         .explore(ExploreRequest {
@@ -152,14 +152,20 @@ pub struct BrainSearchView {
 }
 
 /// `memory_brain_search`.
-pub async fn search(config: &Config, params: BrainSearchParams) -> MemoryResult<BrainSearchView> {
+pub async fn search(
+    config: &Config,
+    identity: &MemoryIdentity,
+    params: BrainSearchParams,
+) -> MemoryResult<BrainSearchView> {
     let query = params.query.trim();
     if query.is_empty() {
         return Err(MemoryError::invalid("the query is blank"));
     }
     let source = params.source.as_deref().map(parse_source).transpose()?;
     let limit = super::types::clamp_limit(params.limit);
-    let hits = brain(config)?.search(query, source.as_ref(), limit).await?;
+    let hits = brain(config, identity)?
+        .search(query, source.as_ref(), limit)
+        .await?;
     tracing::debug!(hits = hits.len(), "[memory:brain] search");
     Ok(BrainSearchView { hits })
 }
@@ -211,7 +217,11 @@ async fn ingest_path(config: &Config, path: &str) -> MemoryResult<std::path::Pat
 
 /// `memory_brain_ingest`: files a document in the brain and queues its
 /// source's belief build. The write waits only for the engine to accept it.
-pub async fn ingest(config: &Config, params: BrainIngestParams) -> MemoryResult<BrainIngestView> {
+pub async fn ingest(
+    config: &Config,
+    identity: &MemoryIdentity,
+    params: BrainIngestParams,
+) -> MemoryResult<BrainIngestView> {
     let source = params.source.as_deref().map(parse_source).transpose()?;
     let mut document = match (params.path.as_deref(), params.text.as_deref()) {
         (Some(path), None) => {
@@ -252,12 +262,12 @@ pub async fn ingest(config: &Config, params: BrainIngestParams) -> MemoryResult<
         document = document.titled(title);
     }
     let filed = document.source.to_string();
-    let ingested = brain(config)?
+    let ingested = brain(config, identity)?
         .ingest_with(document, WriteOptions::accepted())
         .await?;
     jobs::enqueue(
         config,
-        layout(config).root(),
+        layout(config, identity).root(),
         ingested.job.into_iter().collect(),
     )
     .await;
@@ -284,9 +294,13 @@ pub struct BrainForgetView {
 }
 
 /// `memory_brain_forget`: forgets every document of one source.
-pub async fn forget(config: &Config, params: BrainForgetParams) -> MemoryResult<BrainForgetView> {
+pub async fn forget(
+    config: &Config,
+    identity: &MemoryIdentity,
+    params: BrainForgetParams,
+) -> MemoryResult<BrainForgetView> {
     let source = parse_source(&params.source)?;
-    let report = brain(config)?.forget(&source).await?;
+    let report = brain(config, identity)?.forget(&source).await?;
     tracing::info!(source = %source, forgotten = report.forgotten, "[memory:brain] source forgotten");
     Ok(BrainForgetView {
         forgotten: report.forgotten,

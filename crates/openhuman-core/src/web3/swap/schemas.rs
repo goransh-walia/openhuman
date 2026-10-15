@@ -2,6 +2,7 @@
 //! prepared quote, and list supported routes. Cross-chain swaps are rejected
 //! at the ops layer with a pointer to `web3_bridge`.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -102,22 +103,27 @@ fn unknown_schema() -> ControllerSchema {
     }
 }
 
-fn handle_quote(params: Map<String, Value>) -> ControllerFuture {
+fn handle_quote(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
-        let quote = web3_service::quote(&config, methods::WEB3_SWAP_QUOTE, Value::Object(params))
-            .await
-            .map_err(|error| error.to_string())?;
+        let config = ctx.load_config().await?;
+        let quote = web3_service::quote(
+            &config,
+            None,
+            methods::WEB3_SWAP_QUOTE,
+            Value::Object(params),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         Outcome::new(quote, vec!["web3 swap prepared".to_string()]).into_cli_compatible_json()
     })
 }
 
-fn handle_execute(params: Map<String, Value>) -> ControllerFuture {
+fn handle_execute(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: web3_service::ExecuteParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        let config = config_rpc::load_config_with_timeout().await?;
-        let result = web3_service::execute(&config, parsed.quote_id, parsed.confirmed)
+        let config = ctx.load_config().await?;
+        let result = web3_service::execute(&config, None, parsed.quote_id, parsed.confirmed)
             .await
             .map_err(|error| error.to_string())?;
         Outcome::new(result, vec!["web3 transaction broadcast".to_string()])
@@ -125,9 +131,9 @@ fn handle_execute(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_routes(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_routes(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let routes = web3_service::routes(&config)
             .await
             .map_err(|error| error.to_string())?;

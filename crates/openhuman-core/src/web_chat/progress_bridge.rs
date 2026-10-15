@@ -16,6 +16,10 @@ use super::types::ChatRequestMetadata;
 mod subagent_events;
 #[path = "progress_bridge_text_events.rs"]
 mod text_events;
+#[path = "progress_bridge_tool_progress.rs"]
+mod tool_progress;
+#[path = "progress_bridge_trace.rs"]
+mod trace;
 use subagent_events::BridgeCtx;
 
 /// Cadence of the `inference_heartbeat` liveness beat the bridge emits while a
@@ -325,69 +329,9 @@ pub(crate) fn spawn_progress_bridge(
         let mut turn_state =
             TurnStateMirror::new(turn_state_store, thread_id.clone(), request_id.clone());
 
-        // #3886: structured tracing export. When enabled, fold the same
-        // progress stream into OTel/Langfuse-style spans correlated by session
-        // id (falling back to the thread id for headless/autonomous runs).
-        // `None` (both remote and local exporters disabled) is zero-cost.
-        let mut journal_trace_ctx = None;
-        let mut span_collector = if config.observability.share_usage_data
-            || config.observability.agent_tracing.enabled
-        {
-            use crate::agent::progress_tracing::SpanCollector;
-            use tinyagents_harness::observability::trace_export as te;
-            // One trace per turn: the trace id is unique per request, while the
-            // thread id rides along as the Langfuse `sessionId` so a
-            // conversation's per-turn traces still group under one session.
-            let base = te::trace_session_id(metadata.session_id, &thread_id);
-            let trace_id = format!("{base}:{request_id}");
-            // Attribute the trace to the *real* authenticated user (cached
-            // stored credential identity: id, else email) — the transport client
-            // id (socket client / "system") is NOT a user; it rides along as
-            // the separate `client.id` metadata attribute. The backend stamps
-            // the authenticated JWT user on every accepted trace.
-            let identity = crate::security::credentials::identity::peek_credential_user_identity();
-            let user_id = identity
-                .and_then(|i| i.id.or(i.email))
-                .or_else(|| session_profile_user_attribution(&config));
-            let user_attributed = user_id.is_some();
-            // Run origin for trace metadata: the request's source tag
-            // ("ptt"/"dictation"/"type"/"autonomous"/…), else a
-            // plain interactive chat turn.
-            let run_type = te::RunType::from_source(metadata.source.as_deref());
-            let channel_source = metadata
-                .source
-                .clone()
-                .unwrap_or_else(|| "chat".to_string());
-            // Storage-level privacy gate (#4454): capture_content (off by
-            // default) rides on the TraceContext so the collector only attaches
-            // prompt/reply content to spans when the operator opted in — no
-            // exporter can serialize prompt/reply text otherwise.
-            let capture_content = config.observability.agent_tracing.capture_content;
-            log::debug!(
-                "[web_channel][bridge] trace context trace_id={} user_attributed={} \
-                 agent_id={:?} channel_source={} run_type={} capture_content={} request_id={}",
-                trace_id,
-                user_attributed,
-                metadata.agent_id,
-                channel_source,
-                run_type.as_str(),
-                capture_content,
-                request_id,
-            );
-            let mut trace_ctx = te::TraceContext::new(trace_id, user_id)
-                .with_session_group(thread_id.clone())
-                .with_client_id(client_id.clone())
-                .with_channel_source(channel_source)
-                .with_run_type(run_type)
-                .with_capture_content(capture_content);
-            if let Some(agent_id) = metadata.agent_id.clone() {
-                trace_ctx = trace_ctx.with_agent_id(agent_id);
-            }
-            journal_trace_ctx = Some(trace_ctx.clone());
-            Some(SpanCollector::new(trace_ctx))
-        } else {
-            None
-        };
+        // #3886: structured tracing export (`progress_bridge_trace.rs`).
+        let (mut span_collector, mut journal_trace_ctx) =
+            trace::span_collector(&config, &metadata, &client_id, &thread_id, &request_id).unzip();
 
         // #4270: emit a periodic liveness beat for the whole in-flight turn so
         // the frontend silence timer never false-fires during a long prefill or
@@ -1150,6 +1094,10 @@ pub(crate) fn spawn_progress_bridge(
                             },
                         );
                     }
+                }
+                AgentProgress::ToolCallProgress { call_id, message } => {
+                    let ids = (client_id.as_str(), thread_id.as_str(), request_id.as_str());
+                    tool_progress::publish(&mut emit_seq, ids, call_id, message);
                 }
                 AgentProgress::TurnContent { .. } => {
                     // Prompt/reply content is attached to the trace span by the

@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use std::str::FromStr;
 
 use serde::de::DeserializeOwned;
@@ -103,7 +104,7 @@ pub fn about_app_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_about_app_list(params: Map<String, Value>) -> ControllerFuture {
+fn handle_about_app_list(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload = deserialize_params::<AboutAppListParams>(params)?;
         let category = payload
@@ -117,7 +118,7 @@ fn handle_about_app_list(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_about_app_lookup(params: Map<String, Value>) -> ControllerFuture {
+fn handle_about_app_lookup(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload = deserialize_params::<AboutAppLookupParams>(params)?;
         tracing::debug!(id = %payload.id, "[about_app] lookup capability");
@@ -125,7 +126,7 @@ fn handle_about_app_lookup(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_about_app_search(params: Map<String, Value>) -> ControllerFuture {
+fn handle_about_app_search(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload = deserialize_params::<AboutAppSearchParams>(params)?;
         tracing::debug!(query = %payload.query, "[about_app] search capabilities");

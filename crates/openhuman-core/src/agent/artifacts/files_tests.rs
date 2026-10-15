@@ -15,11 +15,11 @@ async fn create_ready(
     title: &str,
     bytes: &[u8],
 ) -> ArtifactMeta {
-    let (meta, path) = create_artifact(workspace, files_dir, ArtifactKind::Document, title, "txt")
+    let (meta, path) = create_artifact(workspace, files_dir, ArtifactKind::Document, title, "txt", None)
         .await
         .expect("create_artifact");
     tokio::fs::write(&path, bytes).await.unwrap();
-    finalize_artifact(workspace, &meta.id, bytes.len() as u64)
+    finalize_artifact(workspace, &meta.id, bytes.len() as u64, None)
         .await
         .expect("finalize_artifact")
 }
@@ -62,6 +62,7 @@ async fn new_artifact_is_written_to_the_files_folder_not_the_workspace() {
         ArtifactKind::Presentation,
         "Q3 Deck",
         "pptx",
+        None,
     )
     .await
     .unwrap();
@@ -88,6 +89,7 @@ async fn files_folder_is_created_on_first_use() {
         ArtifactKind::Document,
         "Notes",
         "docx",
+        None,
     )
     .await
     .unwrap();
@@ -163,6 +165,7 @@ async fn regenerate_overwrites_the_file_it_owns() {
         "txt",
         None,
         Some(original.id.as_str()),
+        None,
     )
     .await
     .unwrap();
@@ -183,12 +186,13 @@ async fn a_failed_generation_leaves_no_empty_file_behind() {
         ArtifactKind::Document,
         "Doomed",
         "docx",
+        None,
     )
     .await
     .unwrap();
     assert!(path.is_file());
 
-    fail_artifact(tmp.path(), &files_dir, &meta.id, "engine exploded")
+    fail_artifact(tmp.path(), &files_dir, &meta.id, "engine exploded", None)
         .await
         .unwrap();
 

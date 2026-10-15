@@ -538,6 +538,7 @@ pub async fn agent_chat_reply_for(
     }
     // The host environment of this turn (budget, cancellation, deadline, hooks,
     // tool-belt authority) rides the session explicitly.
+    let approval = env.host.approval.clone();
     agent.set_host_env(env.host);
     // Live progress for in-process embedders. `OpenHumanSessionHost::from_config` never
     // attaches a sink itself, so there is nothing to clobber here; callers that
@@ -568,7 +569,7 @@ pub async fn agent_chat_reply_for(
     // instead of the narrower one it asked for.
     let run = crate::agent::turn_origin::with_origin(
         effective_agent_chat_origin(),
-        agent.run_single(message),
+        agent.run_single_with_approval(message, None, approval),
     );
     // `untrusted_input` was set on the session above; the turn's run context
     // carries it to the security gate, so no extra scope is needed here.
@@ -639,6 +640,7 @@ pub async fn agent_chat_simple(
                 &default_model,
                 true,
                 thread_id.as_deref(),
+                &crate::security::egress::EgressLedger::none(),
             )
             .map_err(|e| e.to_string())?;
         (backend, resolved_model)

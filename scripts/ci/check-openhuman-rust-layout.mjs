@@ -28,25 +28,23 @@ const LEGACY_LIMIT_ENTRIES = [
   // The session-todo integration added transcript metadata construction to
   // this already-exempt composition seam. Keep its allowance exact.
   ["crates/openhuman-core/src/agent/session_host/runtime_session.rs", 1080],
-  // `[components] juice` test constructor (tokenjuice gate tests).
-  ["crates/openhuman-core/src/core/runtime/context.rs", 753],
   // Session-host factory still assembles the product's deliberately coupled
   // provider, security, memory, tool and prompt policy.  Generic session
   // state moved to tinyagents-runtime; this remaining composition is split in
   // a follow-up without reintroducing an old harness/session exception.
-  ["crates/openhuman-core/src/agent/session_host/builder/factory.rs", 970],
-  ["crates/openhuman-core/src/agent/subagent_host/lifecycle.rs", 1247],
+  ["crates/openhuman-core/src/agent/session_host/builder/factory.rs", 974],
+  ["crates/openhuman-core/src/agent/subagent_host/lifecycle.rs", 1241],
   ["crates/openhuman-core/src/agent/subagent_host/ops/runner.rs", 1045],
-  ["crates/openhuman-core/src/web_chat/progress_bridge.rs", 1261],
+  ["crates/openhuman-core/src/web_chat/progress_bridge.rs", 1209],
   // These established external test modules grew with upstream coverage. Pin
   // their current sizes while follow-up work separates their test concerns.
   // `core/` was pruned from the line limit by name until these pins; its
   // oversized files are pinned at the size they had when enforcement began.
-  ["crates/openhuman-core/src/core/all.rs", 1276],
-  ["crates/openhuman-core/src/core/all_tests.rs", 1475],
-  ["crates/openhuman-core/src/core/events.rs", 1776],
-  ["crates/openhuman-core/src/core/events_tests.rs", 991],
-  ["crates/openhuman-core/src/core/observability.rs", 3477],
+  ["crates/openhuman-core/src/core/all.rs", 1230],
+  ["crates/openhuman-core/src/core/all_tests.rs", 1465],
+  ["crates/openhuman-core/src/core/events.rs", 1789],
+  ["crates/openhuman-core/src/core/events_tests.rs", 995],
+  ["crates/openhuman-core/src/core/observability.rs", 3466],
 ];
 const LEGACY_LIMITS = new Map(LEGACY_LIMIT_ENTRIES);
 

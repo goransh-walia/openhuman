@@ -63,29 +63,6 @@ tinybus = { path = "vendor/tinybus/crates/tinybus" }
 tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
 tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }
 
-[patch."https://github.com/tinyhumansai/tinystoragedrivers"]
-# tinyflows (tinyflows-drivers, tinyflows-import) names the storage crates by
-# git tag (v0.7.0, the version tinyagents vendors) so it can build on its own,
-# and its published `tinyflows` crate cannot carry a path or crates.io
-# dependency on them (tinystoragedrivers is not on crates.io). A git source and a
-# path source are different packages to cargo even at the same commit, so
-# without this redirect to the copy tinyagents vendors — the one the session
-# store and the core `storage` domain link — the graph would hold two
-# `DocumentStore` traits and two `libsqlite3-sys` (`links = "sqlite3"`). The pins
-# now agree on v0.7.0, but the sources still differ, so the patch stays until
-# tinyflows takes the storage crates from the same source as tinyagents.
-tinystoragedrivers-core = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
-tinystoragedrivers-sqlite = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
-# tinyinference-providers (the OAuth pending session) names the secrets port by
-# git tag too, and the host hands it a `DocumentSecrets` from the vendored copy.
-tinystoragedrivers-secrets = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
-# The loadable modules name the bus, client and busproxy crates by git tag too
-# (v0.8.0, the version tinyagents vendors). Without these redirects every linked
-# module would carry a second copy of the wire types the host serves.
-tinystoragedrivers-bus = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-bus" }
-tinystoragedrivers-client = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-client" }
-tinystoragedrivers-busproxy = { path = "vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-busproxy" }
-
 [patch."https://github.com/tinyhumansai/tinyinference"]
 # tinymemes depends on the Jev client by git; resolve it to the vendored copy.
 tinyinference-decisions = { path = "vendor/tinyagents/vendor/tinyinference/crates/tinyinference-decisions" }

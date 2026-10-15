@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
@@ -252,9 +253,9 @@ fn artifact_id_input(comment: &'static str) -> FieldSchema {
     }
 }
 
-fn handle_list_artifacts(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list_artifacts(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let offset = read_optional_u64(&params, "offset")?
             .map(|raw| {
                 usize::try_from(raw).map_err(|_| "offset is too large for usize".to_string())
@@ -276,17 +277,17 @@ fn handle_list_artifacts(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_get_artifact(params: Map<String, Value>) -> ControllerFuture {
+fn handle_get_artifact(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let artifact_id = read_required::<String>(&params, "artifact_id")?;
         to_json(crate::agent::artifacts::ops::ai_get_artifact(&config, artifact_id.trim()).await?)
     })
 }
 
-fn handle_delete_artifact(params: Map<String, Value>) -> ControllerFuture {
+fn handle_delete_artifact(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let artifact_id = read_required::<String>(&params, "artifact_id")?;
         to_json(
             crate::agent::artifacts::ops::ai_delete_artifact(&config, artifact_id.trim()).await?,
@@ -294,9 +295,9 @@ fn handle_delete_artifact(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_regenerate(params: Map<String, Value>) -> ControllerFuture {
+fn handle_regenerate(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let artifact_id = read_required::<String>(&params, "artifact_id")?;
         let thread_id = read_required::<String>(&params, "thread_id")?;
         let client_id = read_required::<String>(&params, "client_id")?;

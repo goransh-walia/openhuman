@@ -85,7 +85,7 @@ pub mod turn_env;
 /// entry point that invokes the agent (web chat, channel runtime, cron,
 /// background jobs, CLI). Read by the approval gate to make
 /// origin-aware decisions rather than inferring trust from the absence of
-/// `APPROVAL_CHAT_CONTEXT`.
+/// a chat approval context.
 pub mod turn_origin;
 /// How a turn that reached the completion path was stopped early (breaker,
 /// deadline wind-down, iteration cap), carried to traces and parent tools.

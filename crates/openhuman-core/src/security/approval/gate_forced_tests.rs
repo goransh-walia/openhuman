@@ -9,13 +9,10 @@ async fn forced_approval_parks_with_autonomy_disabled_and_releases_exact_request
     let handle = tokio::spawn(async move {
         turn_origin::with_origin(
             web_origin(),
-            APPROVAL_CHAT_CONTEXT.scope(
-                chat_ctx(),
-                worker.intercept_forced(
-                    "browser",
-                    "Click Submit on checkout",
-                    serde_json::json!({"action": "click", "target": "Submit"}),
-                ),
+            worker.intercept_forced(
+                "browser",
+                "Click Submit on checkout",
+                serde_json::json!({"action": "click", "target": "Submit"}),
             ),
         )
         .await
@@ -43,11 +40,8 @@ async fn forced_approval_parks_with_autonomy_disabled_and_releases_exact_request
 #[tokio::test]
 async fn forced_approval_denies_without_routable_web_chat_origin() {
     let (gate, _dir) = test_gate();
-    let outcome = APPROVAL_CHAT_CONTEXT
-        .scope(
-            chat_ctx(),
-            gate.intercept_forced("browser", "click", serde_json::json!({})),
-        )
+    let outcome = gate
+        .intercept_forced("browser", "click", serde_json::json!({}))
         .await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }));
     assert!(gate.list_pending().unwrap().is_empty());
@@ -74,10 +68,7 @@ async fn forced_approval_ignores_auto_approval_and_rejects_persistent_grants() {
     let handle = tokio::spawn(async move {
         turn_origin::with_origin(
             web_origin(),
-            APPROVAL_CHAT_CONTEXT.scope(
-                chat_ctx(),
-                worker.intercept_forced("browser_forced_test", "click", serde_json::json!({})),
-            ),
+            worker.intercept_forced("browser_forced_test", "click", serde_json::json!({})),
         )
         .await
     });

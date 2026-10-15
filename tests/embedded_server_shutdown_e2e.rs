@@ -83,8 +83,25 @@ async fn shutdown_token_stops_listener() {
         rpc_token: None,
     };
     let builder = desktop_builder(&options);
-    let (ready_tx, _ready_rx) = tokio::sync::oneshot::channel();
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(serve_desktop(builder, server_token, ready_tx));
+
+    let ready = match tokio::time::timeout(Duration::from_secs(30), ready_rx).await {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(_)) => {
+            let result = server.await.expect("embedded server task should not panic");
+            panic!("embedded server ended before signaling readiness: {result:?}");
+        }
+        Err(_) => {
+            server.abort();
+            let _ = server.await;
+            panic!("embedded server did not signal readiness within timeout");
+        }
+    };
+    assert_eq!(
+        ready.port, port,
+        "embedded server selected an unexpected port"
+    );
 
     wait_until_port(port, true).await;
     shutdown_token.cancel();

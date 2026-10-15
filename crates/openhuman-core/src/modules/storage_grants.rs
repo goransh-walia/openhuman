@@ -254,7 +254,18 @@ pub(crate) fn authorize(
     // bind when one is refused, so a grant without (say) blobs would leave the
     // whole module without storage. It reveals nothing of the data and every
     // other call on an ungranted object is still refused.
-    if !grant.has_object(object) && selector != "Capabilities" {
+    if selector == "Capabilities" && !grant.has_object(object) {
+        return match object {
+            Object::Documents => Ok(Plan::Answer(serde_json::json!({ "capabilities": [] }))),
+            Object::Blobs => Ok(Plan::Answer(serde_json::json!({
+                "presigned_urls": false,
+                "ttl": false,
+                "max_key_len": 0,
+            }))),
+            Object::Streams | Object::Secrets => Err(Denied::Object),
+        };
+    }
+    if !grant.has_object(object) {
         return Err(Denied::Object);
     }
     let write = is_write(object, selector);

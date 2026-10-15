@@ -7,7 +7,7 @@ icon: database
 
 # Storage
 
-OpenHuman keeps durable state on the ports of [`tinystoragedrivers`](https://github.com/tinyhumansai/tinystoragedrivers), vendored through `vendor/tinyagents/vendor/tinystoragedrivers`. One URL picks the backend for the whole process. The host adapter is `crates/openhuman-core/src/storage/`. It resolves the URL, opens the backend, holds it in a process slot and decides which scope a call runs in. The ports, the drivers and their conformance suites belong to `tinystoragedrivers`, and the typed records stay with the domain that owns them.
+OpenHuman keeps durable state on the ports of [`tinystoragedrivers`](https://github.com/tinyhumansai/tinystoragedrivers), taken by git tag (`v0.11.0`) by the host and by every module, so the build holds one copy. One URL picks the backend for the whole process. The host adapter is `crates/openhuman-core/src/storage/`. It resolves the URL, opens the backend, holds it in a process slot and decides which scope a call runs in. The ports, the drivers and their conformance suites belong to `tinystoragedrivers`, and the typed records stay with the domain that owns them.
 
 With no URL configured, which is the desktop default, the host opens `sqlite:<workspace>/storage` and installs it. The URL decides where the whole process keeps its state, and there is no second layout: older installs' per-domain databases, transcripts and turn-state files are imported once, read-only, when the backend is installed. The files that remain outside the ports are listed under "What is not on the ports yet" below.
 
@@ -148,7 +148,10 @@ cargo test -p openhuman-cli --features storage-sqlite,storage-file --test storag
 For MongoDB, start a single-node replica set and set the URL (a replica set is what lets the driver report and exercise transactions):
 
 ```bash
-bash vendor/tinyagents/vendor/tinystoragedrivers/.github/scripts/start-mongo-replset.sh 27017
+# the script lives in the tinystoragedrivers repo (tag v0.11.0); fetch the pinned copy first
+curl -fsSL -o start-mongo-replset.sh \
+  https://raw.githubusercontent.com/tinyhumansai/tinystoragedrivers/9eeef54aea403ac07461a612189bdf4982782823/.github/scripts/start-mongo-replset.sh
+bash start-mongo-replset.sh 27017
 export TSD_MONGO_URL='mongodb://127.0.0.1:27017/tsd_test?directConnection=true'
 cargo test -p openhuman-cli --features storage-mongodb --test storage_approvals_e2e
 ```
@@ -161,5 +164,5 @@ CI has two lanes for this:
 ## Where to read next
 
 - `crates/openhuman-core/src/storage/README.md` for the entry points and the consumers.
-- The `tinystoragedrivers` specs: `docs/specs/storage-ports.md` and `docs/plans/storage-rollout.md` in `vendor/tinyagents/vendor/tinystoragedrivers`.
+- The `tinystoragedrivers` specs: `docs/specs/storage-ports.md` and `docs/plans/storage-rollout.md` in the tinystoragedrivers repository (tag `v0.11.0`).
 - [Security](security.md) for the keyring and credential stores.

@@ -100,6 +100,8 @@ fn all_variants_have_correct_domain() {
                 key: "k".into(),
                 category: "c".into(),
                 namespace: "n".into(),
+                thread_id: None,
+                client_id: None,
             },
             "memory",
         ),
@@ -107,6 +109,8 @@ fn all_variants_have_correct_domain() {
             DomainEvent::MemoryRecalled {
                 query: "q".into(),
                 hit_count: 0,
+                thread_id: None,
+                client_id: None,
             },
             "memory",
         ),

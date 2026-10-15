@@ -12,7 +12,6 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use crate::agent::turn_origin::{self, AgentTurnOrigin};
-use crate::security::approval::APPROVAL_CHAT_CONTEXT;
 use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolResult, ToolRunContext, ToolTimeout};
 
 use super::gate;
@@ -133,8 +132,8 @@ impl RequestPlanReviewTool {
         }
 
         // Route the surface back to the originating chat thread/client (set by
-        // the web channel around the turn, same task-local the ApprovalGate uses).
-        let chat_ctx = APPROVAL_CHAT_CONTEXT.try_with(|c| c.clone()).ok();
+        // the web channel for the turn, the same context the ApprovalGate uses).
+        let chat_ctx = crate::agent::tinyagents::host::run_context::approval_for_tool(context).chat;
         let thread_id = chat_ctx.as_ref().map(|c| c.thread_id.clone());
         let client_id = chat_ctx.as_ref().map(|c| c.client_id.clone());
 

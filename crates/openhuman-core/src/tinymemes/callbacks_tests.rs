@@ -158,39 +158,3 @@ fn the_correlation_id_is_read_from_the_first_argument_only() {
         assert_eq!(correlation_of(&bad), None, "{bad}");
     }
 }
-
-#[tokio::test]
-async fn callbacks_run_as_the_identity_that_registered_the_remix() {
-    let dir = tempfile::tempdir().unwrap();
-    let config = config_in(dir.path());
-    let identity = MemoryIdentity {
-        agent_id: Some("tenant-agent".into()),
-        team: Some("team-a".into()),
-    };
-    // Registered inside the caller's task...
-    let session =
-        crate::memory::scope::within(identity.clone(), async { Session::new(&config) }).await;
-    // ...and answered later, on a task that has no scope of its own.
-    assert_eq!(crate::memory::scope::current(), None);
-    let seen = session
-        .enter(async { crate::memory::scope::current() })
-        .await;
-    assert_eq!(seen, Some(identity));
-    assert_eq!(
-        crate::memory::scope::current(),
-        None,
-        "the scope does not leak out"
-    );
-}
-
-#[tokio::test]
-async fn a_session_registered_without_a_scope_adds_none() {
-    let dir = tempfile::tempdir().unwrap();
-    let session = Session::new(&config_in(dir.path()));
-    assert_eq!(
-        session
-            .enter(async { crate::memory::scope::current() })
-            .await,
-        None
-    );
-}

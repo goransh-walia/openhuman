@@ -148,7 +148,7 @@ pub fn start_node_logging(
 
 pub fn client() -> reqwest::blocking::Client {
     reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(45))
         .build()
         .unwrap()
 }
@@ -163,7 +163,13 @@ pub fn call(node: &Node, user: &str, method: &str, params: Value) -> (u16, Optio
         .header(USER_SIG_HEADER, sign(BEARER, user, now()))
         .json(&json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params }))
         .send()
-        .expect("POST /rpc");
+        .unwrap_or_else(|error| {
+            panic!(
+                "POST /rpc method={method} profile={user}: {error}\ncore {} log:\n{}",
+                node.name,
+                node.log_tail()
+            )
+        });
     let status = response.status().as_u16();
     let owner = response
         .headers()

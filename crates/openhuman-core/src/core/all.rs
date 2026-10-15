@@ -12,6 +12,7 @@ use std::{
 
 use serde_json::{Map, Value};
 
+use crate::core::runtime::DispatchCtx;
 use crate::core::ControllerSchema;
 
 /// A pinned, boxed future returned by a controller handler.
@@ -19,8 +20,10 @@ pub type ControllerFuture = Pin<Box<dyn Future<Output = Result<Value, String>> +
 
 /// A function pointer type for controller handlers.
 ///
-/// Handlers take a map of parameters and return a [`ControllerFuture`].
-pub type ControllerHandler = fn(Map<String, Value>) -> ControllerFuture;
+/// Handlers take the call's explicit [`DispatchCtx`] and a map of parameters,
+/// and return a [`ControllerFuture`]. The transport that accepted the call
+/// builds the context; the registry passes it through untouched.
+pub type ControllerHandler = fn(DispatchCtx, Map<String, Value>) -> ControllerFuture;
 
 /// A function pointer type for domain-specific CLI handlers.
 pub type CliHandler = fn(&[String]) -> anyhow::Result<()>;
@@ -1141,59 +1144,6 @@ fn kind(matches: bool, expected: &'static str) -> Result<(), TypeMismatch> {
     matches.then_some(()).ok_or(TypeMismatch::Kind(expected))
 }
 
-/// Attempts to invoke a registered RPC method by name.
-///
-/// Checks both the agent-facing controller registry and the internal-only registry,
-/// so internal-only write paths (e.g. the MCP write-audit list) are routable
-/// even though they are not included in agent tool listings.
-///
-/// Returns `None` if the method is not found in either registry.
-pub async fn try_invoke_registered_rpc(
-    method: &str,
-    params: Map<String, Value>,
-) -> Option<Result<Value, String>> {
-    let view = registry_view();
-    let grouped = view
-        .iter()
-        .chain(internal_registry().iter())
-        .find(|g| g.controller.rpc_method_name() == method)?;
-
-    // DomainSet gate (#4796): a method whose group is disabled under the ambient
-    // context reports as an unknown method (`None`) — the same result a caller
-    // gets for a genuinely-unregistered method, so a gated domain's controllers
-    // are indistinguishable from absent. Enforced HERE (dispatch), not in
-    // schema/validation lookups, to avoid a validate/dispatch split.
-    if !visible(grouped) {
-        log::debug!(
-            "[rpc][domain-gate] method '{method}' suppressed — group {:?} disabled or method \
-             outside the user surface in the active scope",
-            grouped.group
-        );
-        return None;
-    }
-
-    let handler = grouped.controller.handler;
-
-    // Establish the ambient CoreContext for the duration of the handler so
-    // `CoreContext::current()` resolves inside handler bodies (Phase 2).
-    // `current()` inherits an already-active scope (so a handler that dispatches
-    // a nested RPC stays in the same tenant context) and otherwise resolves to
-    // the process default. Before any context is built (some unit tests) it is
-    // `None` and the handler runs unscoped.
-    //
-    // The scoped future is re-boxed back into a `ControllerFuture` so the
-    // concrete `TaskLocalFuture` type does not escape into this fn's future —
-    // without the type erasure the `Send` auto-trait solver overflows on the
-    // largest handler futures (E0275).
-    use crate::core::runtime::context::CoreContext;
-    let fut = handler(params);
-    let scoped: ControllerFuture = match CoreContext::current() {
-        Some(ctx) => Box::pin(CoreContext::scope(ctx, fut)),
-        None => fut,
-    };
-    Some(scoped.await)
-}
-
 #[derive(Debug, Clone)]
 pub struct HttpMethodSchemaDefinition {
     pub method: String,
@@ -1270,6 +1220,10 @@ pub(crate) fn assert_schema_controller_parity(
         "expected a `{known_function}` controller schema to be registered",
     );
 }
+
+#[path = "all_invoke.rs"]
+mod invoke_registered;
+pub use invoke_registered::try_invoke_registered_rpc;
 
 #[cfg(test)]
 #[path = "all_tests.rs"]

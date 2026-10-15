@@ -259,11 +259,11 @@ required-features = ["storage-sqlite", "modules"]
 
 [[test]]
 # The released TinyMCP cdylib under the real host: add a server, restart the
-# core, list it (#7737). Ignored without a staged module; the Rust e2e runner
-# stages the registry-pinned release and runs it.
+# core, list it (#7737). Its opt-in `e2e-test-support` feature is set by the
+# Rust e2e runners after they stage the registry-pinned TinyMCP release.
 name = "tinymcp_storage_smoke_e2e"
 path = "../../tests/tinymcp_storage_smoke_e2e.rs"
-required-features = ["storage-sqlite", "modules", "mcp"]
+required-features = ["storage-sqlite", "modules", "mcp", "e2e-test-support"]
 
 [[test]]
 name = "saas_mode_e2e"
@@ -378,7 +378,7 @@ tinyinference-llm = { path = "../../vendor/tinyagents/vendor/tinyinference/crate
 # The owning PII safety contract, for the shared security redaction corpus.
 tinymemory-api = { path = "../../vendor/tinymemory/crates/tinymemory-api", features = ["local-safety"] }
 # The document-port contract for failure injection in cron storage regressions.
-tinystoragedrivers-core = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v0.11.0" }
 # The shell command-class vocabulary, for the security policy characterization.
 tinybox-bus = { path = "../../vendor/tinybox/crates/tinybox-bus" }
 tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools" }

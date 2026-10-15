@@ -87,6 +87,7 @@ fn http_adapter(allowed_domains: Vec<String>) -> OpenHumanHttp {
         http_creds: Arc::new(
             crate::security::credentials::HttpCredentialsStore::from_config(&config),
         ),
+        approval: Default::default(),
     }
 }
 
@@ -104,7 +105,11 @@ fn tools_adapter(config: Arc<Config>) -> OpenHumanTools {
         &config.workspace_dir,
         &config.action_dir,
     ));
-    OpenHumanTools { config, security }
+    OpenHumanTools {
+        config,
+        security,
+        approval: Default::default(),
+    }
 }
 
 /// Minimal seeded [`ToolContract`](super::caps::ToolContract) for the tests

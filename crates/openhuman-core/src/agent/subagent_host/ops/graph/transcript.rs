@@ -18,7 +18,7 @@ use super::worker_mirror::mirror_worker_thread_from_history;
 /// before.
 pub(super) fn failed_run_history(
     original: &[TranscriptMessage],
-    snapshot: &crate::agent::tinyagents::TranscriptSnapshot,
+    snapshot: &crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot,
 ) -> (Vec<TranscriptMessage>, Option<String>) {
     if snapshot.messages.is_empty() {
         return (Vec::new(), None);
@@ -33,7 +33,9 @@ pub(super) fn failed_run_history(
     );
     (
         recovered,
-        crate::agent::tinyagents::render_unanswered_steps(&snapshot.messages[end..]),
+        crate::agent::tinyagents::middleware::turn_context::render_unanswered_steps(
+            &snapshot.messages[end..],
+        ),
     )
 }
 

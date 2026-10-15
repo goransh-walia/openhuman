@@ -43,7 +43,7 @@ fn guarded_turn_env_shares_its_cancellation_with_the_stop_handle() {
 /// error, which is classified to user-facing copy, not silence.
 #[tokio::test(start_paused = true)]
 async fn backstop_firing_yields_a_classified_turn_timeout_error() {
-    let err = drive_turn_with_deadline(Some(Duration::from_secs(900)), async {
+    let err = drive_turn_with_deadline(Some(Duration::from_secs(900)), None, None, |_| async {
         std::future::pending::<()>().await;
         Ok(result("never"))
     })
@@ -55,6 +55,68 @@ async fn backstop_firing_yields_a_classified_turn_timeout_error() {
     let classified = super::super::super::web_errors::classify_inference_error(&err);
     assert_eq!(classified.error_type, "turn_timeout");
     assert!(!classified.message.trim().is_empty());
+}
+
+fn text_delta() -> crate::agent::progress::AgentProgress {
+    crate::agent::progress::AgentProgress::TextDelta {
+        delta: "x".into(),
+        iteration: 1,
+    }
+}
+
+const IDLE: Option<Duration> = Some(Duration::from_secs(900));
+const CEILING: Option<Duration> = Some(Duration::from_secs(3_600));
+
+/// A turn that keeps emitting progress runs past the old 900s backstop: the
+/// idle guard restarts on every event and the backstop is now the 3600s
+/// ceiling.
+#[tokio::test(start_paused = true)]
+async fn a_turn_that_keeps_progressing_outlives_the_idle_window() {
+    let res = drive_turn_with_deadline(CEILING, IDLE, None, |activity| async move {
+        for _ in 0..90 {
+            tokio::time::sleep(Duration::from_secs(17)).await;
+            activity.observe(&text_delta());
+        }
+        Ok(result("done after 25 minutes"))
+    })
+    .await
+    .expect("idle guard must not fire on a progressing turn");
+    assert_eq!(res.full_response, "done after 25 minutes");
+}
+
+/// A turn that goes silent with nothing in flight ends after the idle window,
+/// long before the ceiling, with the classified `turn_timeout` error.
+#[tokio::test(start_paused = true)]
+async fn a_silent_turn_ends_after_the_idle_window() {
+    let started = tokio::time::Instant::now();
+    let err = drive_turn_with_deadline(CEILING, IDLE, None, |_| async {
+        std::future::pending::<()>().await;
+        Ok(result("never"))
+    })
+    .await
+    .expect_err("idle guard fires");
+    let waited = started.elapsed();
+    assert!(waited >= Duration::from_secs(900) && waited < Duration::from_secs(3_600));
+    assert!(err.contains("no progress for"), "{err}");
+    assert!(super::super::super::web_errors::is_outer_backstop_timeout(
+        &err
+    ));
+    let classified = super::super::super::web_errors::classify_inference_error(&err);
+    assert_eq!(classified.error_type, "turn_timeout");
+}
+
+/// A turn that stays busy forever is still bounded by the fixed ceiling.
+#[tokio::test(start_paused = true)]
+async fn a_turn_busy_past_the_ceiling_hits_the_backstop() {
+    let err = drive_turn_with_deadline(CEILING, IDLE, None, |activity| async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            activity.observe(&text_delta());
+        }
+    })
+    .await
+    .expect_err("backstop fires");
+    assert!(err.contains("3600s wall-clock budget"), "{err}");
 }
 
 /// A Stop fires the turn's own session cancellation and lets the turn finish,

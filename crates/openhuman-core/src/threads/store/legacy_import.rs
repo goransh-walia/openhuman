@@ -166,32 +166,47 @@ pub(super) fn import_once(
             log::debug!("{LOG_PREFIX} already imported");
             return Ok(());
         }
-        let threads = fold_threads(&root)?;
-        let mut messages = Vec::with_capacity(threads.len());
-        for thread in &threads {
-            messages.push(read_jsonl::<ThreadMessage>(&messages_path(
-                &root, &thread.id,
-            ))?);
+        let claimed =
+            crate::storage::import_claim::with_claim(repo, MARKERS, &marker_id.clone(), || {
+                let marked = repo.run(|docs| {
+                    let marker_id = marker_id.clone();
+                    async move { docs.get(MARKERS, &marker_id).await }
+                })?;
+                if marked.is_some() {
+                    return Ok(());
+                }
+                let threads = fold_threads(&root)?;
+                let mut messages = Vec::with_capacity(threads.len());
+                for thread in &threads {
+                    messages.push(read_jsonl::<ThreadMessage>(&messages_path(
+                        &root, &thread.id,
+                    ))?);
+                }
+                let store = store.clone();
+                let (threads_n, messages_n) = crate::storage::block_on_anyhow(async move {
+                    copy(&store, threads, messages).await
+                })?;
+                repo.run(|docs| async move {
+                    match docs
+                        .put(
+                            MARKERS,
+                            &marker_id,
+                            serde_json::json!({ "threads": threads_n, "messages": messages_n }),
+                            Precondition::Absent,
+                        )
+                        .await
+                    {
+                        Ok(_) => Ok(()),
+                        Err(error) if error.kind() == ErrorKind::Conflict => Ok(()),
+                        Err(error) => Err(error),
+                    }
+                })?;
+                log::info!("{LOG_PREFIX} imported threads={threads_n} messages={messages_n}");
+                Ok(())
+            })?;
+        if claimed.is_none() {
+            log::debug!("{LOG_PREFIX} another process is importing; skipped");
         }
-        let store = store.clone();
-        let (threads_n, messages_n) =
-            crate::storage::block_on_anyhow(async move { copy(&store, threads, messages).await })?;
-        repo.run(|docs| async move {
-            match docs
-                .put(
-                    MARKERS,
-                    &marker_id,
-                    serde_json::json!({ "threads": threads_n, "messages": messages_n }),
-                    Precondition::Absent,
-                )
-                .await
-            {
-                Ok(_) => Ok(()),
-                Err(error) if error.kind() == ErrorKind::Conflict => Ok(()),
-                Err(error) => Err(error),
-            }
-        })?;
-        log::info!("{LOG_PREFIX} imported threads={threads_n} messages={messages_n}");
         Ok(())
     })
 }

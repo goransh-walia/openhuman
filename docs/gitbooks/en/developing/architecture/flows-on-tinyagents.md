@@ -174,7 +174,7 @@ A flow `agent` node names a registered agent kind through a trusted
 - A harness `AgentDefinition` exists: build a full harness `Agent`
   (`Agent::from_config_for_agent`) and run the node's request through
   `run_single`. That is the same entry the builder, scout and cron
-  jobs use, and internally it drives `run_turn_via_tinyagents_shared`
+  jobs use, and internally it drives `TurnSpec::run`
   ([`crates/openhuman-core/src/agent/tinyagents/mod.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/tinyagents/mod.rs)) -
   the tinyagents `AgentHarness` tool-call loop. The definition's ToolScope,
   `sandbox_mode`, and `max_iterations` govern the inner turn.

@@ -2,7 +2,7 @@
 //!
 //! `skills_run` runs the orchestrator (and any sub-agents it spawns) as an
 //! unattended background tree: it isn't approval-gated (background turns carry
-//! no `APPROVAL_CHAT_CONTEXT`), and the per-agent iteration cap is lifted so the
+//! no chat approval context), and the per-agent iteration cap is lifted so the
 //! run continues until it's done or the repeated-failure circuit breaker trips.
 //!
 //! The lifted cap rides `OpenHumanRunContext::autonomous_iter_cap`, set by

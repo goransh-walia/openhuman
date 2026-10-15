@@ -73,13 +73,28 @@ fn endpoint_references() -> &'static Mutex<HashMap<String, EndpointReference>> {
     ENDPOINT_REFERENCES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Whether the payment was quoted for the chat the acting turn is in.
+///
+/// An x402 payment is approved with a forced approval, which only a `WebChat`
+/// turn can raise, and that origin carries the same thread and client the turn's
+/// chat context does. The origin is therefore the chat to compare against; the
+/// callback arrives over the bus with no run context of its own.
 fn x402_request_owner_matches(
     request: &AuthorizeX402PaymentRequest,
-    context: &crate::security::approval::ApprovalChatContext,
+    origin: Option<&crate::agent::turn_origin::AgentTurnOrigin>,
 ) -> bool {
-    request.owner.as_ref().is_some_and(|owner| {
-        owner.thread_id == context.thread_id && owner.client_id == context.client_id
-    })
+    let Some(crate::agent::turn_origin::AgentTurnOrigin::WebChat {
+        thread_id,
+        client_id,
+        ..
+    }) = origin
+    else {
+        return false;
+    };
+    request
+        .owner
+        .as_ref()
+        .is_some_and(|owner| &owner.thread_id == thread_id && &owner.client_id == client_id)
 }
 
 fn x402_approval_facts(request: &AuthorizeX402PaymentRequest) -> serde_json::Value {
@@ -677,9 +692,10 @@ impl WalletHost {
         &self,
         request: AuthorizeX402PaymentRequest,
     ) -> tinybus::Result<HostResponse> {
-        let owner_matches = crate::security::approval::APPROVAL_CHAT_CONTEXT
-            .try_with(|context| x402_request_owner_matches(&request, context))
-            .unwrap_or(false);
+        let owner_matches = x402_request_owner_matches(
+            &request,
+            crate::agent::turn_origin::current().as_ref(),
+        );
         let approved = if owner_matches {
             if let Some(gate) = crate::security::approval::ApprovalGate::try_global() {
                 matches!(

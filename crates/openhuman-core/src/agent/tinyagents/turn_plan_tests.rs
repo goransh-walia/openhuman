@@ -1,12 +1,15 @@
-//! Tool-inventory coverage for [`assemble_turn_harness`]: which of the turn's
-//! shared tools end up registered on the assembled harness.
+//! Planner coverage: which of the turn's shared tools the driver registers, the
+//! run policy a turn gets, and the model-call ceilings.
 
 use super::*;
+use crate::agent::tinyagents::turn_models::TurnModels;
 use crate::agent::tinyagents::TurnModelSource;
 use async_trait::async_trait;
 use tinyagents_harness::turn_policy::{
     DEFAULT_MODEL_CALL_TIMEOUT_SECS, LOCAL_MODEL_CALL_TIMEOUT_SECS,
 };
+use tinyagents_runtime::turn_driver::{SharedToolSet, TurnControls, TurnDriver};
+use tinyagents_runtime::{DriverRequest, ToolSnapshot};
 use tinyinference_llm::model::{ChatModel, ModelProfile, ModelRequest, ModelResponse};
 use tinytools::{Tool, ToolResult};
 
@@ -55,72 +58,102 @@ impl ChatModel<()> for IdleModel {
     }
 }
 
-/// Assemble a harness over the real goal tools plus one ordinary tool and
-/// return the names it registered.
-fn registered_tool_names(has_thread: bool) -> Vec<String> {
-    assembled_with(has_thread, None).harness.tools().names()
-}
-
-/// Assemble the same harness, optionally carrying turn tool rules.
-fn assembled_with(
+/// Plan and prepare a turn over `tool_sets` through the real driver.
+async fn prepare_with(
+    model: Arc<dyn ChatModel<()>>,
+    tool_sets: Vec<SharedToolSet>,
     has_thread: bool,
     tool_rules: Option<Arc<tinyagents_harness::tool::ToolRulePolicy>>,
-) -> AssembledTurnHarness {
-    let workspace = tempfile::TempDir::new().expect("workspace");
-    let model: Arc<dyn ChatModel<()>> = Arc::new(IdleModel);
+) -> tinyagents_runtime::turn_driver::PreparedTurn<(), OpenHumanRunContext> {
     let models = TurnModelSource::from_model(model)
         .build("assembly-test-model", 0.0, None, None)
         .expect("scripted turn models build");
-    let mut tools = crate::agent::goals::goal_tools(workspace.path());
-    tools.push(Box::new(PlainTool));
-
-    assemble_turn_harness(
-        models,
+    let (policy, _) = turn_run_policy(
         "assembly-test-model",
-        vec![Arc::new(tools)],
-        None,
         3,
-        None,
-        None,
-        None,
-        &[],
-        TurnContextMiddleware::default(),
-        Default::default(),
-        None,
-        None,
         false,
-        false,
-        false,
+        models.is_local(),
         tinyagents_harness::config::ToolDispatcher::default(),
-        Arc::new(HashSet::new()),
-        None,
-        None,
-        has_thread,
         None,
         tool_rules,
-    )
+        None,
+    );
+    let TurnModels {
+        primary,
+        routes,
+        error_slot,
+        ..
+    } = models;
+    let planner = OpenHumanTurnPlanner {
+        models: turn_models_for_plan("assembly-test-model", primary, routes, &error_slot, false),
+        policy,
+        tool_sets,
+        allowed: None,
+        has_thread,
+        session_deferred: Arc::new(HashSet::new()),
+    };
+    let request = DriverRequest {
+        history: vec![tinyinference_llm::message::Message::user("hi")],
+        tools: ToolSnapshot::new(Vec::new()).expect("empty snapshot"),
+        run_context: tinyagents_harness::context::RunContext::new(
+            tinyagents_harness::context::RunConfig::new("plan-test"),
+            OpenHumanRunContext::new(),
+        ),
+        stream: false,
+        controls: TurnControls::default(),
+    };
+    TurnDriver::new(Arc::new(planner), Arc::new(()))
+        .prepare(request)
+        .await
+        .map_err(|failure| failure.error)
+        .expect("turn prepares")
 }
 
-#[test]
-fn turn_tool_rules_reach_the_harness_policy() {
+/// Prepare a turn over the real goal tools plus one ordinary tool.
+async fn prepared_with(
+    has_thread: bool,
+    tool_rules: Option<Arc<tinyagents_harness::tool::ToolRulePolicy>>,
+) -> tinyagents_runtime::turn_driver::PreparedTurn<(), OpenHumanRunContext> {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let mut tools = crate::agent::goals::goal_tools(workspace.path());
+    tools.push(Box::new(PlainTool));
+    prepare_with(
+        Arc::new(IdleModel),
+        vec![Arc::new(tools)],
+        has_thread,
+        tool_rules,
+    )
+    .await
+}
+
+async fn registered_tool_names(has_thread: bool) -> Vec<String> {
+    prepared_with(has_thread, None)
+        .await
+        .harness
+        .tools()
+        .names()
+}
+
+#[tokio::test]
+async fn turn_tool_rules_reach_the_harness_policy() {
     let rules = tinytools::ToolRules::from_allow_deny(Vec::<String>::new(), ["plain_*"]);
     let policy = crate::tools::rules::turn_rule_policy(
         Arc::new(tinytools::ToolRuleSet::single(rules)),
         crate::tools::rules::rule_context(Some("web"), Some("orchestrator"), None),
     );
-    let assembled = assembled_with(true, Some(Arc::new(policy.clone())));
-    assert_eq!(assembled.harness.policy().tool_rules, policy);
+    let prepared = prepared_with(true, Some(Arc::new(policy.clone()))).await;
+    assert_eq!(prepared.harness.policy().tool_rules, policy);
 }
 
-#[test]
-fn a_turn_without_rules_leaves_the_harness_policy_permissive() {
-    let assembled = assembled_with(true, None);
-    assert!(assembled.harness.policy().tool_rules.is_permissive());
+#[tokio::test]
+async fn a_turn_without_rules_leaves_the_harness_policy_permissive() {
+    let prepared = prepared_with(true, None).await;
+    assert!(prepared.harness.policy().tool_rules.is_permissive());
 }
 
-#[test]
-fn goal_tools_are_not_registered_on_a_turn_without_a_thread() {
-    let names = registered_tool_names(false);
+#[tokio::test]
+async fn goal_tools_are_not_registered_on_a_turn_without_a_thread() {
+    let names = registered_tool_names(false).await;
 
     for goal_tool in GOAL_TOOLS {
         assert!(
@@ -134,9 +167,9 @@ fn goal_tools_are_not_registered_on_a_turn_without_a_thread() {
     );
 }
 
-#[test]
-fn goal_tools_are_registered_on_a_threaded_turn() {
-    let names = registered_tool_names(true);
+#[tokio::test]
+async fn goal_tools_are_registered_on_a_threaded_turn() {
+    let names = registered_tool_names(true).await;
 
     for goal_tool in GOAL_TOOLS.iter().chain(["plain_tool"].iter()) {
         assert!(
@@ -180,7 +213,7 @@ impl ChatModel<()> for SlowFirstByteModel {
     }
 }
 
-/// Assemble over a [`SlowFirstByteModel`] and run one turn on the virtual clock.
+/// Prepare over a [`SlowFirstByteModel`] and run one turn on the virtual clock.
 async fn run_slow_first_byte_turn(
     provider: &'static str,
     delay_secs: u64,
@@ -189,40 +222,14 @@ async fn run_slow_first_byte_turn(
         delay: std::time::Duration::from_secs(delay_secs),
         provider,
     });
-    let models = TurnModelSource::from_model(model)
-        .build("slow-model", 0.0, None, None)
-        .expect("turn models build");
-    let assembled = assemble_turn_harness(
-        models,
-        "slow-model",
-        Vec::new(),
-        None,
-        3,
-        None,
-        None,
-        None,
-        &[],
-        TurnContextMiddleware::default(),
-        Default::default(),
-        None,
-        None,
-        false,
-        false,
-        false,
-        tinyagents_harness::config::ToolDispatcher::default(),
-        Arc::new(HashSet::new()),
-        None,
-        None,
-        false,
-        None,
-        None,
-    );
-    assembled
-        .harness
-        .invoke_default(&(), vec![tinyinference_llm::message::Message::user("hi")])
+    let run = prepare_with(model, Vec::new(), false, None)
         .await
-        .map(|run| run.text().unwrap_or_default())
-        .map_err(|err| err.to_string())
+        .run()
+        .await;
+    match run.partial.error {
+        Some(error) => Err(error.to_string()),
+        None => Ok(run.partial.run.text().unwrap_or_default()),
+    }
 }
 
 /// #6042: a ~57K-token prefill on a local model can take longer than the hosted

@@ -14,7 +14,7 @@ use tinytools_std::filesystem::{
     ApplyPatchTool, CsvExportTool, EditFileTool, FileReadTool, FileWriteTool, GitOperationsTool,
     GlobTool, GrepTool, ImageInfoTool, ListFilesTool, ReadDiffTool, RunLinterTool, RunTestsTool,
 };
-use tinytools_std::network::{CurlTool, PushoverTool};
+use tinytools_std::network::PushoverTool;
 
 /// Create the default tool registry
 pub fn default_tools(security: Arc<SecurityPolicy>) -> Vec<Box<dyn Tool>> {
@@ -304,7 +304,7 @@ pub fn all_tools_with_runtime(
     // + `security` still gate which hosts are reachable; there is no
     // enable flag because every session needs basic HTTP as a baseline
     // capability.
-    tools.push(Box::new(http_request_tool(
+    tools.push(Box::new(routed_http_request_tool(
         security.clone(),
         http_config.allowed_domains.clone(),
         http_config.max_response_size,
@@ -327,7 +327,7 @@ pub fn all_tools_with_runtime(
     // GET-and-read primitive that reuses the same allowed-domains gate
     // as `http_request`. Use this for docs/READMEs; reach for
     // `http_request` only when you need richer HTTP semantics.
-    tools.push(Box::new(web_fetch_tool(
+    tools.push(Box::new(routed_web_fetch_tool(
         security.clone(),
         http_config.allowed_domains.clone(),
         Some(http_config.max_response_size),
@@ -337,7 +337,7 @@ pub fn all_tools_with_runtime(
     // curl — always registered. Shares `http_request.allowed_domains`,
     // adds streaming-to-disk with a hard byte ceiling. Writes land
     // under `<workspace>/<curl.dest_subdir>`.
-    tools.push(Box::new(CurlTool::new(
+    tools.push(Box::new(routed_curl_tool(
         security.clone(),
         http_config.allowed_domains.clone(),
         action_dir.to_path_buf(),

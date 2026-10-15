@@ -238,7 +238,7 @@ async fn resumed_juice_snapshot_does_not_add_live_repl_declarations() {
 /// tool result enters the transcript uncompressed.
 #[tokio::test]
 async fn juice_off_turn_loads_no_module_and_passes_tool_output_through() {
-    use crate::agent::tinyagents::middleware::ToolOutputMiddleware;
+    use crate::agent::tinyagents::middleware::tool_output::ToolOutputMiddleware;
     use tinyagents_harness::context::{RunConfig, RunContext};
     use tinyagents_harness::middleware::{Middleware, ToolInvocationIdentity};
 

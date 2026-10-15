@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 use serde_json::json;
 
 #[test]
@@ -47,7 +48,9 @@ async fn handle_list_returns_persisted_audit_records() {
     .await
     .expect("record write");
 
-    let value = handle_list(Map::new()).await.expect("handle list");
+    let value = handle_list(DispatchCtx::process_default(), Map::new())
+        .await
+        .expect("handle list");
     let records = value["records"].as_array().expect("records array");
     assert_eq!(records.len(), 1);
     assert_eq!(records[0]["tool_name"], "memory.store");

@@ -269,6 +269,7 @@ async fn create_artifact_publishes_artifact_pending_event() {
         ArtifactKind::Presentation,
         "Q3 Deck",
         "pptx",
+        None,
     )
     .await
     .expect("create_artifact succeeds");
@@ -345,7 +346,7 @@ async fn create_artifact_publishes_artifact_pending_event() {
 /// C5; this is the follow-up wiring.
 #[tokio::test]
 async fn artifact_events_fill_request_id_from_chat_context() {
-    use crate::security::approval::{ApprovalChatContext, APPROVAL_CHAT_CONTEXT};
+    use crate::security::approval::ApprovalChatContext;
 
     crate::core::bus::init().await.expect("bus init");
     let collector = PendingCollector::new();
@@ -358,23 +359,19 @@ async fn artifact_events_fill_request_id_from_chat_context() {
         request_id: Some("request-artifact-request-id".to_string()),
     };
 
-    let (meta, _path) = APPROVAL_CHAT_CONTEXT
-        .scope(ctx, async {
-            let (meta, _path) = create_artifact(
-                tmp.path(),
-                &tmp.path().join("Files"),
-                ArtifactKind::Document,
-                "Report",
-                "pdf",
-            )
-            .await
-            .expect("create_artifact succeeds");
-            finalize_artifact(tmp.path(), &meta.id, 42)
-                .await
-                .expect("finalize_artifact succeeds");
-            (meta, ())
-        })
-        .await;
+    let (meta, _path) = create_artifact(
+        tmp.path(),
+        &tmp.path().join("Files"),
+        ArtifactKind::Document,
+        "Report",
+        "pdf",
+        Some(&ctx),
+    )
+    .await
+    .expect("create_artifact succeeds");
+    finalize_artifact(tmp.path(), &meta.id, 42, Some(&ctx))
+        .await
+        .expect("finalize_artifact succeeds");
 
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let (mut saw_pending, mut saw_ready) = (false, false);
@@ -425,7 +422,7 @@ async fn artifact_events_fill_request_id_from_chat_context() {
 /// `ArtifactFailed.request_id` from the bound chat context.
 #[tokio::test]
 async fn fail_artifact_fills_request_id_from_chat_context() {
-    use crate::security::approval::{ApprovalChatContext, APPROVAL_CHAT_CONTEXT};
+    use crate::security::approval::ApprovalChatContext;
 
     crate::core::bus::init().await.expect("bus init");
     let collector = PendingCollector::new();
@@ -438,23 +435,19 @@ async fn fail_artifact_fills_request_id_from_chat_context() {
         request_id: Some("request-artifact-fail-request-id".to_string()),
     };
 
-    let meta = APPROVAL_CHAT_CONTEXT
-        .scope(ctx, async {
-            let (meta, _path) = create_artifact(
-                tmp.path(),
-                &tmp.path().join("Files"),
-                ArtifactKind::Document,
-                "Report",
-                "pdf",
-            )
-            .await
-            .expect("create_artifact succeeds");
-            fail_artifact(tmp.path(), tmp.path(), &meta.id, "boom")
-                .await
-                .expect("fail_artifact succeeds");
-            meta
-        })
-        .await;
+    let (meta, _path) = create_artifact(
+        tmp.path(),
+        &tmp.path().join("Files"),
+        ArtifactKind::Document,
+        "Report",
+        "pdf",
+        Some(&ctx),
+    )
+    .await
+    .expect("create_artifact succeeds");
+    fail_artifact(tmp.path(), tmp.path(), &meta.id, "boom", Some(&ctx))
+        .await
+        .expect("fail_artifact succeeds");
 
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     loop {
@@ -521,6 +514,7 @@ async fn create_artifact_mints_fresh_id_without_scope() {
         ArtifactKind::Presentation,
         "Q3 Deck",
         "pptx",
+        None,
     )
     .await
     .unwrap();
@@ -541,6 +535,7 @@ async fn create_artifact_reuses_id_for_an_explicit_regenerate_target() {
         "pptx",
         None,
         Some("reused-id"),
+        None,
     )
     .await
     .unwrap();
@@ -563,6 +558,7 @@ async fn regenerate_preserves_original_created_at() {
         ArtifactKind::Presentation,
         "Deck",
         "pptx",
+        None,
     )
     .await
     .unwrap();
@@ -580,6 +576,7 @@ async fn regenerate_preserves_original_created_at() {
         "pptx",
         None,
         Some(id.as_str()),
+        None,
     )
     .await
     .unwrap();

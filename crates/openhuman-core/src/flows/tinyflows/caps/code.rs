@@ -45,6 +45,9 @@ use tinybox_bus::CommandClass;
 pub struct OpenHumanCode {
     pub config: Arc<Config>,
     pub security: Arc<SecurityPolicy>,
+    /// The run's approval context (flow run correlation), handed to the gate
+    /// with every acting dispatch.
+    pub approval: crate::security::approval::ApprovalTurnContext,
 }
 
 pub(crate) const CODE_RUN_TIMEOUT_SECS: u64 = 60;
@@ -68,7 +71,8 @@ impl CodeRunner for OpenHumanCode {
         let summary = crate::security::approval::summarize_action("flows_code", &action);
         let redacted = crate::security::approval::redact_args(&action);
         let (gate_outcome, audit_id) =
-            gate_call_for_tier(tier_decision, "flows_code", &summary, redacted).await;
+            gate_call_for_tier(&self.approval, tier_decision, "flows_code", &summary, redacted)
+                .await;
         if let crate::security::approval::GateOutcome::Deny { reason } = gate_outcome {
             return Err(EngineError::Capability(reason));
         }

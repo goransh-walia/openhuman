@@ -614,14 +614,13 @@ async fn production_turn_path_wires_an_artifact_store_outside_the_project() {
         "the production turn path must wire an artifact store, or oversized \
          tool results are truncated with their tail discarded (#6408)",
     );
-    assert!(store.is_detached(), "the pointer must be absolute");
     assert_eq!(
-        store.root(),
+        store.materialize_root(),
         crate::security::policy::tool_result_artifacts_dir(workspace.path()),
         "the store must live under the workspace, not in the project the agent edits"
     );
-    assert!(!store.root().starts_with(action_dir.path()));
-    assert!(!store.root().starts_with(turn_root.path()));
+    assert!(!store.materialize_root().starts_with(action_dir.path()));
+    assert!(!store.materialize_root().starts_with(turn_root.path()));
 }
 
 /// Without a descriptor the answer is the same: the workspace, not
@@ -657,7 +656,7 @@ async fn artifact_store_stays_in_the_workspace_without_a_descriptor() {
         .as_ref()
         .expect("artifact store");
     assert_eq!(
-        store.root(),
+        store.materialize_root(),
         crate::security::policy::tool_result_artifacts_dir(workspace.path())
     );
 }

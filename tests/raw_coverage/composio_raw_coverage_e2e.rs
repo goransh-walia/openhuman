@@ -3,6 +3,7 @@
 //! These tests avoid live Composio/backend calls and exercise public helper
 //! surfaces that feed the JSON-RPC and agent-tool paths.
 
+use openhuman_core::core::runtime::DispatchCtx;
 use std::sync::{Arc, OnceLock};
 
 use serde_json::{json, Value};
@@ -469,5 +470,5 @@ fn composio_controller<'a>(
 
 async fn composio_call(controller: &RegisteredController, params: Value) -> Result<Value, String> {
     let params = params.as_object().cloned().unwrap_or_default();
-    (controller.handler)(params).await
+    (controller.handler)(DispatchCtx::process_default(), params).await
 }

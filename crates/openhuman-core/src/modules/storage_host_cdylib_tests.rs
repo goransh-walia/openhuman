@@ -213,7 +213,10 @@ async fn rig_with_peers(module_id: &'static str, others: &[&'static str]) -> Rig
         trail.clone(),
     ));
     attach(&modules, &host_connection, host).await.unwrap();
-    let staged = tempfile::tempdir().unwrap();
+    let temp_root = std::env::temp_dir()
+        .canonicalize()
+        .expect("canonical temporary directory");
+    let staged = tempfile::tempdir_in(temp_root).unwrap();
     let artifact = stage(staged.path());
     modules.load_file(&artifact).expect("load the probe cdylib");
     // `load_file` can return before the module's setup claims its name.

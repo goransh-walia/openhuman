@@ -13,7 +13,7 @@ fn record(turn: &mut tinyagents_harness::cost::TurnCost, model: &str, usage: &Bi
     let response = crate::agent::tinyagents::model::native_model_response_for_request(
         &crate::inference::provider::ChatResponse {
             text: Some("ok".into()),
-            usage: Some(usage.clone()),
+            usage: Some(*usage),
             ..Default::default()
         },
         &tinyinference_llm::model::ModelRequest::default(),

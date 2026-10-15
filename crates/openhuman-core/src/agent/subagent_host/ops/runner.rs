@@ -121,7 +121,7 @@ pub(crate) async fn run_subagent_direct(
     // every caller doesn't have to carry this future's state inline.
     // Tools that delegate run inside the parent agent's already-deep
     // turn poll (the boxed tinyagents harness drive future in
-    // `run_turn_via_tinyagents_shared`), so the parent's stack would
+    // `TurnSpec::run`), so the parent's stack would
     // otherwise pile (parent turn state + dispatch_subagent state +
     // run_subagent's wrapper state + run_typed_mode state + child turn
     // state) onto tokio's 2 MiB worker stack and abort with "thread
@@ -234,6 +234,9 @@ pub(crate) async fn run_subagent_direct(
                 max_depth,
             })?;
         options.run_context.spawn_depth = attempted_depth;
+        // Acts on memory as a child of its parent: same team, own definition.
+        let acting = options.run_context.memory_identity.take().unwrap_or_default();
+        options.run_context.memory_identity = Some(acting.child(&definition.id));
 
         // Runtime spawn-hierarchy (tier) gate — defense-in-depth alongside the
         // depth gate above. The loader validates *declared* `subagents` pairs
@@ -299,7 +302,7 @@ pub(crate) async fn run_subagent_direct(
         // When the worker opted into git-worktree isolation, its isolated
         // checkout is carried on the `WorkspaceDescriptor` prepared below and
         // threaded onto the run's tinyagents `RunContext`
-        // (`run_turn_via_tinyagents_shared` → `RunContext::with_workspace`).
+        // (`TurnSpec::run` → `RunContext::with_workspace`).
         // Every tool call then receives it via
         // `ToolExecutionContext::from_run_context`, so acting tools (shell, git)
         // resolve their CWD to that worktree (`effective_action_dir_for_context`)
@@ -320,20 +323,17 @@ pub(crate) async fn run_subagent_direct(
             );
         }
         let run_result = Box::pin(with_run_depth(RunDepth { depth: attempted_depth, max_depth }, async {
-            crate::memory::scope::within_agent(&definition.id, with_file_state_agent_id(task_id.clone(), async {
-                async {
-                    Box::pin(run_typed_mode(
-                        definition,
-                        task_prompt,
-                        &options,
-                        &parent_for_subagent,
-                        &task_id,
-                        &loaded_config,
-                    ))
-                    .await
-                }
+            with_file_state_agent_id(task_id.clone(), async {
+                Box::pin(run_typed_mode(
+                    definition,
+                    task_prompt,
+                    &options,
+                    &parent_for_subagent,
+                    &task_id,
+                    &loaded_config,
+                ))
                 .await
-            }))
+            })
             .await
         }))
         .await;

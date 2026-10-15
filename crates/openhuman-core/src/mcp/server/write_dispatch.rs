@@ -4,6 +4,7 @@
 //! module. The public surface is consumed only by `tools::call_tool` and
 //! the protocol layer.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{json, Map, Value};
 
 use crate::config::rpc as config_rpc;
@@ -70,7 +71,7 @@ pub(super) async fn dispatch_write_tool(
         "[mcp_server] write dispatch invoking rpc"
     );
 
-    match all::try_invoke_registered_rpc(rpc_method, params.clone()).await {
+    match all::try_invoke_registered_rpc(DispatchCtx::ambient(), rpc_method, params.clone()).await {
         Some(Ok(value)) => {
             let item_id = extract_item_id(&value);
             audit_write(

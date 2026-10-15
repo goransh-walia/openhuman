@@ -2,7 +2,7 @@
 
 The process's storage backend on the
 [tinystoragedrivers](https://github.com/tinyhumansai/tinystoragedrivers)
-ports, vendored through `vendor/tinyagents/vendor/tinystoragedrivers`.
+ports, taken by git tag (`v0.11.0`) by the host and by every module, so the build holds one copy.
 
 One URL picks it: `OPENHUMAN_STORAGE_URL`, else `[storage] url` in
 `config.toml` (`config::StorageConfig`), else the default,

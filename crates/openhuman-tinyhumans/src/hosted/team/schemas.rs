@@ -1,3 +1,4 @@
+use openhuman_embed::__host::core::runtime::DispatchCtx;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -340,14 +341,14 @@ pub fn team_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_team_get_usage(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_get_usage(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         to_json(crate::hosted::team::get_usage(&config).await?)
     })
 }
 
-fn handle_team_list_members(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_list_members(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<TeamIdParams>(params)?;
@@ -355,14 +356,14 @@ fn handle_team_list_members(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_list_teams(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_list_teams(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         to_json(crate::hosted::team::list_teams(&config).await?)
     })
 }
 
-fn handle_team_get_team(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_get_team(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<TeamIdParams>(params)?;
@@ -370,7 +371,7 @@ fn handle_team_get_team(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_create_team(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_create_team(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<CreateTeamParams>(params)?;
@@ -378,7 +379,7 @@ fn handle_team_create_team(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_update_team(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_update_team(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<UpdateTeamParams>(params)?;
@@ -389,7 +390,7 @@ fn handle_team_update_team(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_delete_team(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_delete_team(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<TeamIdParams>(params)?;
@@ -397,7 +398,7 @@ fn handle_team_delete_team(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_switch_team(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_switch_team(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<TeamIdParams>(params)?;
@@ -405,7 +406,7 @@ fn handle_team_switch_team(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_leave_team(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_leave_team(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<TeamIdParams>(params)?;
@@ -413,7 +414,7 @@ fn handle_team_leave_team(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_join_team(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_join_team(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<JoinTeamParams>(params)?;
@@ -421,7 +422,7 @@ fn handle_team_join_team(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_create_invite(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_create_invite(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<InviteParams>(params)?;
@@ -437,7 +438,7 @@ fn handle_team_create_invite(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_remove_member(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_remove_member(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<RemoveMemberParams>(params)?;
@@ -447,7 +448,10 @@ fn handle_team_remove_member(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_change_member_role(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_change_member_role(
+    _ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<ChangeRoleParams>(params)?;
@@ -463,7 +467,7 @@ fn handle_team_change_member_role(params: Map<String, Value>) -> ControllerFutur
     })
 }
 
-fn handle_team_list_invites(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_list_invites(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<TeamIdParams>(params)?;
@@ -471,7 +475,7 @@ fn handle_team_list_invites(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_team_revoke_invite(params: Map<String, Value>) -> ControllerFuture {
+fn handle_team_revoke_invite(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let payload = deserialize_params::<RevokeInviteParams>(params)?;

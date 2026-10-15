@@ -1,4 +1,5 @@
 use super::*;
+use crate::security::egress::EgressLedger;
 
 use crate::inference::provider::factory::cloud_slug::try_create_cloud_slug_chat_model_from_string_with_native_tools;
 
@@ -16,6 +17,7 @@ fn custom_ca_bundle_builds_a_provider_scoped_chat_client() {
         "team:private-model",
         &config,
         true,
+        &EgressLedger::none(),
     )
     .expect("configured provider")
     .expect("custom CA client should build");
@@ -94,6 +96,7 @@ fn enforce_local_only_inference_errors_on_external_when_local_only() {
                 route,
                 true,
                 Some("privacy-test-thread"),
+                &EgressLedger::none(),
             )
             .map(|(model, _)| model)
         };
@@ -288,13 +291,16 @@ fn explicit_local_provider_string_routes_to_crate_native_model() {
 fn try_create_local_runtime_returns_none_for_managed_and_cloud() {
     let _guard = crate::inference::inference_test_guard();
     // Default config resolves to the managed backend, not a local runtime.
-    assert!(try_create_local_runtime_chat_model("chat", &Config::default()).is_none());
+    assert!(
+        try_create_local_runtime_chat_model("chat", &Config::default(), &EgressLedger::none())
+            .is_none()
+    );
     // A BYOK cloud slug is not a local runtime either — it falls through to the
     // `Provider` path.
     let mut cloud = Config::default();
     cloud.cloud_providers.push(openai_entry("p_oai", "openai"));
     cloud.chat_provider = Some("openai:gpt-4o-mini".to_string());
-    assert!(try_create_local_runtime_chat_model("chat", &cloud).is_none());
+    assert!(try_create_local_runtime_chat_model("chat", &cloud, &EgressLedger::none()).is_none());
 }
 
 #[test]
@@ -325,9 +331,15 @@ fn turn_model_route_metadata_uses_post_remap_cloud_model() {
     config.cloud_providers.push(deepseek_entry("p_ds"));
     config.chat_provider = Some("deepseek:hint:chat".to_string());
 
-    let (_model, provider, resolved_model) =
-        create_turn_chat_model_with_native_tools_and_route("chat", &config, "hint:chat", 0.7, true)
-            .expect("abstract BYOK tier must build");
+    let (_model, provider, resolved_model) = create_turn_chat_model_with_native_tools_and_route(
+        "chat",
+        &config,
+        "hint:chat",
+        0.7,
+        true,
+        &EgressLedger::none(),
+    )
+    .expect("abstract BYOK tier must build");
 
     assert_eq!(provider, "deepseek");
     assert_eq!(resolved_model, "deepseek-chat");
@@ -401,6 +413,7 @@ fn anthropic_auth_cloud_slug_in_text_mode_keeps_the_compat_client() {
         "anthropic:claude-sonnet-4-6",
         &config,
         false,
+        &EgressLedger::none(),
     )
     .expect("anthropic slug resolves")
     .expect("build");
@@ -422,15 +435,16 @@ fn configured_openhuman_jwt_slug_routes_to_managed_chat_model() {
     // the managed default, never reaches the backend verbatim.
     config.chat_provider = Some("openhuman:reasoning-v1".to_string());
 
-    let (model, model_id) = try_create_cloud_slug_chat_model("chat", &config)
-        .expect("configured OpenhumanJwt slug should be recognized")
-        .expect("managed model should build");
+    let (model, model_id) =
+        try_create_cloud_slug_chat_model("chat", &config, &EgressLedger::none())
+            .expect("configured OpenhumanJwt slug should be recognized")
+            .expect("managed model should build");
 
     assert_eq!(model_id, crate::config::MODEL_MANAGED_DEFAULT);
 
     // A concrete catalog id is forwarded verbatim.
     config.chat_provider = Some("openhuman:openrouter/deepseek/deepseek-v4-pro".to_string());
-    let (_, pinned_id) = try_create_cloud_slug_chat_model("chat", &config)
+    let (_, pinned_id) = try_create_cloud_slug_chat_model("chat", &config, &EgressLedger::none())
         .expect("configured OpenhumanJwt slug should be recognized")
         .expect("managed model should build");
     assert_eq!(pinned_id, "openrouter/deepseek/deepseek-v4-pro");
@@ -457,9 +471,14 @@ async fn openhuman_jwt_slug_discloses_pinned_model() {
     let mut config = Config::default();
     config.cloud_providers.push(oh_entry("p_oh"));
     let provider = format!("openhuman:{marker}");
-    let _ = try_create_cloud_slug_chat_model_from_string("chat", &provider, &config)
-        .expect("configured OpenhumanJwt slug should be recognized")
-        .expect("managed model should build");
+    let _ = try_create_cloud_slug_chat_model_from_string(
+        "chat",
+        &provider,
+        &config,
+        &EgressLedger::none(),
+    )
+    .expect("configured OpenhumanJwt slug should be recognized")
+    .expect("managed model should build");
 
     let sentinel = "egress-jwt-pinned-sentinel-end";
     crate::core::bus::BUS.publish(DomainEvent::ExternalTransferPending {
@@ -580,6 +599,7 @@ fn openhuman_jwt_slug_preserves_forced_text_mode() {
         "openhuman:reasoning-v1",
         &config,
         false,
+        &EgressLedger::none(),
     )
     .expect("configured OpenhumanJwt slug should be recognized")
     .expect("managed model should build");
@@ -598,10 +618,14 @@ fn openhuman_jwt_slug_without_model_preserves_managed_role_tier() {
     let mut config = Config::default();
     config.cloud_providers.push(oh_entry("p_oh"));
 
-    let (_model, model_id) =
-        try_create_cloud_slug_chat_model_from_string("summarization", "openhuman:", &config)
-            .expect("configured OpenhumanJwt slug should be recognized")
-            .expect("managed model should build");
+    let (_model, model_id) = try_create_cloud_slug_chat_model_from_string(
+        "summarization",
+        "openhuman:",
+        &config,
+        &EgressLedger::none(),
+    )
+    .expect("configured OpenhumanJwt slug should be recognized")
+    .expect("managed model should build");
 
     assert_eq!(model_id, crate::config::MODEL_MANAGED_DEFAULT);
 }
@@ -614,9 +638,10 @@ fn try_create_cloud_slug_flips_openai_but_declines_non_cloud() {
     let mut openai = Config::default();
     openai.cloud_providers.push(openai_entry("p_oai", "openai"));
     openai.chat_provider = Some("openai:gpt-4o-mini".to_string());
-    let (model, model_id) = try_create_cloud_slug_chat_model("chat", &openai)
-        .expect("openai should flip crate-native")
-        .expect("build");
+    let (model, model_id) =
+        try_create_cloud_slug_chat_model("chat", &openai, &EgressLedger::none())
+            .expect("openai should flip crate-native")
+            .expect("build");
     assert_eq!(model_id, "gpt-4o-mini");
     assert_eq!(
         model.profile().and_then(|p| p.provider.as_deref()),
@@ -625,11 +650,71 @@ fn try_create_cloud_slug_flips_openai_but_declines_non_cloud() {
 
     // Managed (default), local runtimes, and unconfigured slugs are not cloud
     // slugs — they decline and fall through to their own paths.
-    assert!(try_create_cloud_slug_chat_model("chat", &Config::default()).is_none());
+    assert!(
+        try_create_cloud_slug_chat_model("chat", &Config::default(), &EgressLedger::none())
+            .is_none()
+    );
     let mut local = Config::default();
     local.chat_provider = Some("ollama:qwen2.5".to_string());
-    assert!(try_create_cloud_slug_chat_model("chat", &local).is_none());
+    assert!(try_create_cloud_slug_chat_model("chat", &local, &EgressLedger::none()).is_none());
     let mut unconfigured = Config::default();
     unconfigured.chat_provider = Some("deepseek:deepseek-chat".to_string());
-    assert!(try_create_cloud_slug_chat_model("chat", &unconfigured).is_none());
+    assert!(
+        try_create_cloud_slug_chat_model("chat", &unconfigured, &EgressLedger::none()).is_none()
+    );
+}
+
+/// The per-turn egress ledger rides the factory chain as an explicit argument:
+/// two managed constructions through one `EgressLedger::per_turn()` disclose the
+/// destination once, while constructions with no ledger disclose each time.
+#[tokio::test]
+async fn managed_construction_ledger_collapses_repeat_disclosures() {
+    use crate::core::events::DomainEvent;
+
+    let _guard = crate::inference::inference_test_guard_async().await;
+    crate::core::bus::init().await.expect("bus init");
+    let mut rx = crate::core::bus::BUS.get().unwrap().receiver();
+
+    let config = Config {
+        default_model: Some("egress-ledger-factory-test-model".to_string()),
+        ..Config::default()
+    };
+    let build = |ledger: &EgressLedger| {
+        managed_backend::make_openhuman_backend_model_for_thread(
+            "chat",
+            &config,
+            "egress-ledger-factory-test-model",
+            true,
+            Some("ledger-test-thread"),
+            ledger,
+        )
+        .expect("managed construction")
+    };
+
+    let ledger = EgressLedger::per_turn();
+    build(&ledger);
+    build(&ledger);
+    build(&EgressLedger::none());
+
+    let sentinel = "egress-ledger-factory-sentinel";
+    crate::security::egress::emit_external_transfer(None, crate::security::egress::EgressDescriptor::network_fetch(sentinel));
+    let mut disclosures = 0;
+    loop {
+        match rx.recv().await {
+            Some(DomainEvent::ExternalTransferPending { descriptor, .. }) => {
+                if descriptor.service == "egress-ledger-factory-test-model" {
+                    disclosures += 1;
+                }
+                if descriptor.service == sentinel {
+                    break;
+                }
+            }
+            Some(_) => continue,
+            None => panic!("the bus closed before the sentinel arrived"),
+        }
+    }
+    assert_eq!(
+        disclosures, 2,
+        "two ledgered constructions disclose once; the ledger-less one discloses again"
+    );
 }

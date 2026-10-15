@@ -181,7 +181,15 @@ impl InstalledServerTool {
             )
             .to_metadata(),
         );
-        crate::mcp::ui::decorate_result(None, &tool_input, &mut result);
+        let tool_meta = crate::mcp::ui::decorate::installed_tool(
+            &client,
+            &client_config,
+            &self.presentation.server_id,
+            &self.presentation.remote_name,
+        )
+        .await
+        .and_then(|listed| listed.meta);
+        crate::mcp::ui::decorate_result(tool_meta.as_ref(), &tool_input, &mut result);
         Ok(result)
     }
 }

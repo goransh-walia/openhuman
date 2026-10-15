@@ -6,13 +6,11 @@ use crate::core::Outcome;
 // Imports used only by the `documents`-gated presentation regeneration helper
 // below; when the feature is off the PresentationTool is compiled out.
 #[cfg(feature = "documents")]
-use crate::security::approval::{ApprovalChatContext, APPROVAL_CHAT_CONTEXT};
+use crate::security::approval::ApprovalChatContext;
 #[cfg(feature = "documents")]
 use crate::security::SecurityPolicy;
 #[cfg(feature = "documents")]
 use crate::tools::PresentationTool;
-#[cfg(feature = "documents")]
-use tinytools::Tool;
 
 use super::store;
 use super::types::ArtifactKind;
@@ -153,7 +151,7 @@ pub async fn ai_delete_artifact(
 ///    live config and run it inside both:
 ///    - `PresentationTool::with_regenerate_target(artifact_id)` so `create_artifact`
 ///      reuses the id + directory instead of minting a new one, and
-///    - `APPROVAL_CHAT_CONTEXT.scope({thread_id, client_id}, …)` so the
+///    - the chat context `{thread_id, client_id}` handed to the tool so the
 ///      Pending/Ready/Failed events route back to the originating chat
 ///      surface (the RPC carries no ambient chat context of its own).
 ///
@@ -225,9 +223,7 @@ async fn regenerate_presentation(
         request_id: None,
     };
 
-    let result = APPROVAL_CHAT_CONTEXT
-        .scope(chat_ctx, async move { tool.execute(args).await })
-        .await;
+    let result = tool.run(args, Some(&chat_ctx)).await;
 
     match result {
         Ok(tool_result) => {

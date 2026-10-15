@@ -46,6 +46,7 @@ pub(crate) fn create_turn_chat_model_with_native_tools(
         model,
         temperature,
         native_tool_calling,
+        &EgressLedger::none(),
     )
     .map(|(chat, _, _)| chat)
 }
@@ -61,12 +62,14 @@ pub(crate) fn create_turn_chat_model_with_native_tools_and_route(
     model: &str,
     temperature: f64,
     native_tool_calling: bool,
+    egress: &EgressLedger,
 ) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String, String)> {
     create_turn_chat_model_with_native_tools_and_route_inner(
         role,
         config,
         model,
         native_tool_calling,
+        egress,
     )
     .map(|(chat, provider, model)| (with_default_temperature(chat, temperature), provider, model))
 }
@@ -76,6 +79,7 @@ pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
     config: &Config,
     model: &str,
     native_tool_calling: bool,
+    egress: &EgressLedger,
 ) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String, String)> {
     if let Some(chat) = crate::core::runtime::CoreContext::current_host_overrides()
         .and_then(|local| local.model_for(role))
@@ -102,7 +106,7 @@ pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
     };
     if !test_override_active {
         if resolves_to_managed_backend(role, config) {
-            let (backend, _resolved_model) = resolve_managed_backend(role, config)?;
+            let (backend, _resolved_model) = resolve_managed_backend(role, config, egress)?;
             return Ok((
                 Arc::new(
                     backend
@@ -123,7 +127,7 @@ pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
         if let Some(result) = prepare_claude_agent_sdk_chat_model(role, &resolved_provider, config)
         {
             let _resolved_model = result?;
-            emit_inference_egress(role, &format!("{CLAUDE_AGENT_SDK_PREFIX}{model}"));
+            emit_inference_egress(role, &format!("{CLAUDE_AGENT_SDK_PREFIX}{model}"), egress);
             return Ok((
                 Arc::new(ClaudeAgentSdkProvider::for_model(
                     (&config.claude_agent_sdk).into(),
@@ -138,16 +142,22 @@ pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
             &resolved_provider,
             config,
             Some(model),
+            egress,
         ) {
             return result
                 .map(|(chat, _configured_model)| (chat, provider_name.clone(), model.to_string()));
         }
-        if let Some(result) = try_create_local_runtime_chat_model(role, config) {
+        if let Some(result) = try_create_local_runtime_chat_model(role, config, egress) {
             return result
                 .map(|(chat, resolved_model)| (chat, provider_name.clone(), resolved_model));
         }
         if let Some(result) =
-            try_create_cloud_slug_chat_model_with_native_tools(role, config, native_tool_calling)
+            try_create_cloud_slug_chat_model_with_native_tools(
+                role,
+                config,
+                native_tool_calling,
+                egress,
+            )
         {
             return result
                 .map(|(chat, resolved_model)| (chat, provider_name.clone(), resolved_model));
@@ -157,6 +167,7 @@ pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
         role,
         &provider_for_role(role, config),
         config,
+        egress,
     ))
 }
 
@@ -208,6 +219,7 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools(
         model,
         temperature,
         native_tool_calling,
+        &EgressLedger::none(),
     )
     .map(|(chat, _, _)| chat)
 }
@@ -219,6 +231,7 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools_and_route(
     model: &str,
     temperature: f64,
     native_tool_calling: bool,
+    egress: &EgressLedger,
 ) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String, String)> {
     if let Some(chat) = crate::core::runtime::CoreContext::current_host_overrides()
         .and_then(|local| local.model_for(role))
@@ -250,7 +263,7 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools_and_route(
     let p = provider_string.trim();
     let is_managed = p.is_empty() || p == "cloud" || p == PROVIDER_OPENHUMAN;
     if is_managed && !test_override_active {
-        let (backend, _resolved_model) = resolve_managed_backend(role, config)?;
+        let (backend, _resolved_model) = resolve_managed_backend(role, config, egress)?;
         return Ok((
             with_default_temperature(
                 Arc::new(
@@ -272,5 +285,6 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools_and_route(
         model,
         temperature,
         native_tool_calling,
+        egress,
     )
 }

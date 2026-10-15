@@ -57,10 +57,7 @@ use crate::core::Outcome;
 use crate::flows::bus;
 use crate::flows::draft_store;
 use crate::flows::store;
-use crate::security::approval::{
-    ApprovalChatContext, FlowRunContext, APPROVAL_CHAT_CONTEXT, APPROVAL_COPILOT_STREAM_CONTEXT,
-    APPROVAL_FLOW_RUN_CONTEXT,
-};
+use crate::security::approval::{ApprovalChatContext, ApprovalTurnContext, FlowRunContext};
 use tinyflows_catalog::build_registry;
 use tinyflows_catalog::run_registry;
 use tinyflows_catalog::types::{

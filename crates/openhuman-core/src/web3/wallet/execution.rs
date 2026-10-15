@@ -97,14 +97,9 @@ pub async fn balances() -> Result<Outcome<Vec<BalanceInfo>>, String> {
 /// Validate a transfer and store a quote for it.
 pub async fn prepare_transfer(
     params: PrepareTransferParams,
+    owner: Option<tinywallet_bus::wire::QuoteOwner>,
 ) -> Result<Outcome<PreparedTransaction>, String> {
     let config = config_rpc::load_config_with_timeout().await?;
-    let owner = crate::security::approval::APPROVAL_CHAT_CONTEXT
-        .try_with(|context| tinywallet_bus::wire::QuoteOwner {
-            thread_id: context.thread_id.clone(),
-            client_id: context.client_id.clone(),
-        })
-        .ok();
     let quote = wallet_service::prepare_native_transfer(&config, owner, params)
         .await
         .map_err(|error| error.to_string())?;
@@ -117,14 +112,9 @@ pub async fn prepare_transfer(
 /// Confirm and execute a prepared transfer.
 pub async fn execute_prepared(
     params: ExecutePreparedParams,
+    owner: Option<tinywallet_bus::wire::QuoteOwner>,
 ) -> Result<Outcome<ExecutionResult>, String> {
     let config = config_rpc::load_config_with_timeout().await?;
-    let owner = crate::security::approval::APPROVAL_CHAT_CONTEXT
-        .try_with(|context| tinywallet_bus::wire::QuoteOwner {
-            thread_id: context.thread_id.clone(),
-            client_id: context.client_id.clone(),
-        })
-        .ok();
     let result = wallet_service::execute_native_transfer(&config, owner, params)
         .await
         .map_err(|error| error.to_string())?;

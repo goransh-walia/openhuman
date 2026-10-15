@@ -16,6 +16,12 @@
 
 use std::fmt::Display;
 
+#[cfg(feature = "crash-reporting")]
+#[path = "observability_release_tag.rs"]
+mod release_tag;
+#[cfg(feature = "crash-reporting")]
+use release_tag::{parse_release_tag, parse_version};
+
 #[path = "observability_availability.rs"]
 mod availability;
 use availability::log_module_unavailable;
@@ -3093,7 +3099,10 @@ pub fn is_insufficient_credits_event(event: &sentry::protocol::Event<'_>) -> boo
 /// [`tinyinference_llm::failure::body_indicates_quota_exhausted`], so
 /// the emit-site guard and this `before_send` net can't drift. Shared with the
 /// event-level filter [`is_quota_exhausted_event`].
-pub use tinyinference_llm::failure::body_indicates_quota_exhausted as is_quota_exhausted_message;
+#[cfg(any(feature = "crash-reporting", test))]
+fn is_quota_exhausted_message(body: &str) -> bool {
+    tinyinference_llm::failure::body_indicates_quota_exhausted(body)
+}
 
 /// Defense-in-depth `before_send` filter for provider **monthly-quota
 /// exhausted** events (TAURI-RUST-C9A): the user's third-party plan has spent
@@ -3450,26 +3459,6 @@ pub fn is_stale_release_event(event: &sentry::protocol::Event<'_>) -> bool {
             current_minor.saturating_sub(event_minor) > MAX_AGE_MINOR_VERSIONS
         })
     })
-}
-
-/// Parse a Sentry release tag like `"openhuman@0.58.0"` or
-/// `"openhuman@0.58.0+abc123def456"` into `(major, minor)`.
-#[cfg(feature = "crash-reporting")]
-fn parse_release_tag(tag: &str) -> Option<(u32, u32)> {
-    // Strip the `openhuman@` prefix
-    let after_at = tag.split('@').nth(1)?;
-    // Get the version part before any `+` suffix
-    let version = after_at.split('+').next()?;
-    parse_version(version)
-}
-
-/// Parse a `"MAJOR.MINOR.PATCH"` version string into `(major, minor)`.
-#[cfg(feature = "crash-reporting")]
-fn parse_version(version: &str) -> Option<(u32, u32)> {
-    let mut parts = version.splitn(3, '.');
-    let major = parts.next()?.parse::<u32>().ok()?;
-    let minor = parts.next()?.parse::<u32>().ok()?;
-    Some((major, minor))
 }
 
 #[cfg(test)]

@@ -187,3 +187,21 @@ fn workspaces_sharing_a_backend_each_import_their_own_legacy_file() {
     docs.import_legacy(two, &[session("from-two")]).unwrap();
     assert_eq!(docs.load().unwrap().len(), 2);
 }
+
+#[test]
+fn a_late_importer_rechecks_the_marker_under_the_claim() {
+    let docs = docs_in(&MemoryStorage::new(), "local");
+    let source = std::path::Path::new("/legacy/subagent_sessions.json");
+    docs.import_legacy(source, &[session("first")]).unwrap();
+    assert!(docs.legacy_imported(source).unwrap());
+    // A process that passed the marker check before the first finished
+    // reaches the claim afterwards: it must not copy its list again.
+    docs.import_legacy(source, &[session("second")]).unwrap();
+    let ids: Vec<_> = docs
+        .load()
+        .unwrap()
+        .into_iter()
+        .map(|s| s.subagent_session_id)
+        .collect();
+    assert_eq!(ids, ["first"]);
+}

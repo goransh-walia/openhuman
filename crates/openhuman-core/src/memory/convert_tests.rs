@@ -300,6 +300,7 @@ async fn brain_ingest_files_a_pdf_by_path() {
 
     let view = ingest(
         &config,
+        &crate::memory::scope::MemoryIdentity::root(),
         BrainIngestParams {
             path: Some(path.display().to_string()),
             text: None,

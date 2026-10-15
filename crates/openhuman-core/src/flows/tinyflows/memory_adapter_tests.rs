@@ -31,6 +31,7 @@ fn adapter(autonomy: AutonomyLevel) -> (TempDir, OpenHumanMemory) {
         OpenHumanMemory {
             config,
             security: security(autonomy),
+            approval: Default::default(),
         },
     )
 }

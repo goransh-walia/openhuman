@@ -146,6 +146,8 @@ pub(super) async fn try_arm(
             message_id: envelope.external_id.clone(),
             history_key: None,
         },
+        // Triage is not an interactive chat turn: no approval surface.
+        approval: Default::default(),
     };
 
     let response = match BUS

@@ -8,7 +8,7 @@
 //! **adapter seam**: it bridges openhuman's `Provider`, `Tool`, and `TranscriptMessage`
 //! types onto the crate's `ChatModel`, `Tool`, and `Message` traits, then drives
 //! a turn through [`AgentHarness::invoke`]. The chat / channel / sub-agent
-//! routes call [`run_turn_via_tinyagents_shared`] (default ON in production).
+//! routes drive a turn through [`TurnSpec`].
 //!
 //! The chat route is at functional parity with the legacy `run_turn_engine`:
 //! the [`OpenhumanEventBridge`] mirrors the harness event stream onto
@@ -24,8 +24,6 @@ mod context_wiring;
 mod deadline_wind_down;
 pub mod discovery;
 mod embeddings;
-mod harness_assembly;
-pub(crate) mod harness_tool_registration;
 pub mod host;
 pub(crate) mod hosted_error;
 pub(crate) mod journal;
@@ -58,14 +56,15 @@ mod routes;
 mod steering_forwarder;
 pub(crate) mod stop_hooks;
 pub mod todos;
-pub(crate) mod tools;
+pub(crate) mod tool_registration;
 mod turn_models;
 mod turn_outcome;
 mod turn_policy;
 mod turn_run_error;
 mod turn_run_finalize;
-mod turn_runner;
-mod turn_runner_boxed;
+mod turn_exec;
+mod turn_middleware;
+mod turn_plan;
 mod use_skill_dispatch;
 mod verify_before_finish;
 
@@ -75,9 +74,6 @@ pub(crate) use crate::agent::message_convert::ta_call_to_oh_call;
 
 #[allow(unused_imports)] // Wired into the recall/retrieval facade in workstream 09.2.
 pub(crate) use embeddings::ProviderEmbeddingModel;
-pub(crate) use middleware::{
-    render_unanswered_steps, TranscriptSnapshot, TranscriptSnapshotSink, TurnContextMiddleware,
-};
 pub(crate) use observability::SubagentScope;
 pub(crate) use reasoning::{apply_requested_effort, parse_reasoning_effort};
 pub use turn_models::TurnModelSource;
@@ -89,7 +85,7 @@ pub(crate) use turn_policy::{
     agent_turn_wall_clock_ms_for, chat_provider_is_local, local_web_turn_backstop_secs,
     ToolPolicyEnforcement,
 };
-pub(crate) use turn_runner::{run_root_turn_via_hosted_agent, run_turn_via_tinyagents_shared};
+pub(crate) use turn_exec::TurnSpec;
 
 // Test-only glue so `tinyagents_tests.rs`'s `use super::*;` sees the
 // lower-level policy helpers it exercises directly (they otherwise stay

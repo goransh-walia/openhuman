@@ -240,6 +240,17 @@ fn fingerprint(route: &serde_json::Value) -> u64 {
     hasher.finish()
 }
 
+/// Under test, one route-dependent call at a time.
+///
+/// The module's route is process-global, and every call first sets it from its
+/// own caller's config (`ensure_routed`). libtest runs a crate's tests in one
+/// process, so a test with no session could switch the route to `none` between
+/// another test's CONFIGURE and its call. Holding this across both makes each
+/// call atomic with its route. ponytail: test-only; production callers with
+/// different routes can still interleave the same way, which this does not fix.
+#[cfg(test)]
+static ROUTE_TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Tell the module which route to use, if that answer has changed.
 ///
 /// The module is registered `Lazy`, so it is commonly loaded the first time
@@ -351,6 +362,8 @@ pub async fn reconcile_route_if_loaded(config: &Config) -> Result<(), String> {
     if ops::state_of(MODULE_ID) != ModuleState::Ready {
         return Ok(());
     }
+    #[cfg(test)]
+    let _turn = ROUTE_TURN.lock().await;
     let proxy = proxy_to_serving().await?;
     ensure_routed(config, &proxy).await
 }
@@ -410,6 +423,8 @@ where
     Request: Serialize + Send,
     Reply: DeserializeOwned,
 {
+    #[cfg(test)]
+    let _turn = ROUTE_TURN.lock().await;
     let proxy = proxy(config).await?;
     proxy
         .call::<Reply>(member, (request,))
@@ -460,6 +475,8 @@ pub async fn call_bare<Reply: DeserializeOwned>(
     config: &Config,
     member: &str,
 ) -> Result<Reply, String> {
+    #[cfg(test)]
+    let _turn = ROUTE_TURN.lock().await;
     let proxy = proxy(config).await?;
     proxy
         .call::<Reply>(member, ())

@@ -1,5 +1,5 @@
 //! Turn a completed `tinyagents` harness run into a
-//! [`TinyagentsTurnOutcome`], for [`run_turn_via_tinyagents_shared`](super::run_turn_via_tinyagents_shared).
+//! [`TinyagentsTurnOutcome`], for [`TurnSpec::run`](super::TurnSpec::run).
 //!
 //! Split out of the runner: everything here executes only on the success path
 //! (after the drive future returns `Ok`), covering journal completion,
@@ -15,7 +15,6 @@ use tokio::sync::mpsc::Sender;
 use crate::agent::progress::AgentProgress;
 use crate::agent::tinyagents::journal::TurnJournal;
 use crate::agent::tinyagents::observability::{self, OpenhumanEventBridge, SubagentScope};
-use crate::agent::tinyagents::tools::EarlyExitHook;
 use crate::agent::tinyagents::turn_outcome::TinyagentsTurnOutcome;
 use tinyagents_harness::turn_outcome::{HaltSummarySlot, ToolOutcomeSink};
 use tinyagents_harness::turn_run_finalize::{
@@ -40,7 +39,7 @@ pub(super) async fn finalize_turn_outcome(
     prompt_cache_guard: &PromptCacheGuardMiddleware,
     turn_completed_sink: Option<Sender<AgentProgress>>,
     bridge: Option<Arc<OpenhumanEventBridge>>,
-    early_exit_hook: Option<EarlyExitHook>,
+    early_exit: Option<tinyagents_harness::tool::EarlyExit>,
     halt_summary: &HaltSummarySlot,
     wrap_up_fired: &Option<Arc<tinyagents_harness::middleware::FinalCallWrapUpMiddleware>>,
     run_instance_id: u64,
@@ -132,7 +131,6 @@ pub(super) async fn finalize_turn_outcome(
     // name and use its captured question as the turn text (the paused assistant
     // turn carries the tool call, not a final answer) so the caller can
     // checkpoint and prompt the user — matching the legacy `early_exit_tool`.
-    let early_exit = early_exit_hook.and_then(|hook| hook.take());
 
     // The repeated-failure breaker halts the run with a root-cause summary
     // instead of a final model turn; surface it as the turn's text so the

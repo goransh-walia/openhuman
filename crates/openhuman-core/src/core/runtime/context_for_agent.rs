@@ -39,6 +39,7 @@ impl CoreContext {
             session_agent: Some(agent.to_string()),
             profile: self.profile.clone(),
             agent: parts,
+            bare: self.bare,
         })
     }
 }

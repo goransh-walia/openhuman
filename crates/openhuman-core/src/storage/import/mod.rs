@@ -141,6 +141,9 @@ pub enum Outcome {
     NoSource,
     /// A marker says the import already finished.
     AlreadyDone,
+    /// Another process holds the import claim and is importing this domain;
+    /// this process skips it (the other writes the marker).
+    InProgress,
     /// The import ran.
     Imported {
         /// Records found in the legacy file (both shapes).
@@ -187,7 +190,8 @@ pub async fn run(config: &Config) -> Vec<Report> {
         return Vec::new();
     }
     let config = config.clone();
-    let joined = tokio::task::spawn_blocking(move || run_all(&backend, &config)).await;
+    let joined =
+        crate::core::runtime::spawn_blocking_scoped(move || run_all(&backend, &config)).await;
     match joined {
         Ok(reports) => reports,
         Err(error) => {
@@ -232,6 +236,11 @@ pub fn run_with(
                     target: "openhuman::storage_import",
                     domain = source.domain,
                     "[storage::import] already imported"
+                ),
+                Ok(Outcome::InProgress) => tracing::debug!(
+                    target: "openhuman::storage_import",
+                    domain = source.domain,
+                    "[storage::import] another process is importing; skipped"
                 ),
                 Ok(Outcome::NoSource) => tracing::debug!(
                     target: "openhuman::storage_import",
@@ -287,71 +296,83 @@ fn import_one(
         return Ok(Outcome::NoSource);
     }
 
-    let snapshot = Snapshot::of(&legacy, source.db)
-        .with_context(|| format!("[{domain}] copy the legacy file for reading"))?;
-    let scratch = Config {
-        workspace_dir: snapshot.workspace().to_path_buf(),
-        ..config.clone()
-    };
-
-    // Driver document records first: they are the newer copy of a row whose
-    // legacy table was retired, so they win an id clash.
-    let mut found: Vec<Record> = snapshot
-        .driver_docs(source.collections)
-        .with_context(|| format!("[{domain}] read the document tables"))?
-        .into_iter()
-        .map(|doc| (source.rekey)(doc, config))
-        .collect();
-    found.extend(
-        (source.read_legacy)(&scratch, config)
-            .with_context(|| format!("[{domain}] read the legacy tables"))?
-            .into_iter()
-            .map(Record::from),
-    );
-
-    let total = found.len();
-    let written = repo.run(move |docs| async move {
-        let mut written = 0usize;
-        for record in found {
-            match docs
-                .put(
-                    &record.collection,
-                    &record.id,
-                    record.doc,
-                    Precondition::Absent,
-                )
-                .await
-            {
-                Ok(_) => written += 1,
-                Err(error) if error.kind() == ErrorKind::Conflict => {}
-                Err(error) => return Err(error),
+    let claimed =
+        super::import_claim::with_claim(&markers, MARKER_COLLECTION, &marker.clone(), || {
+            // Another process may have finished between our check and the claim.
+            let again = marker.clone();
+            let done = markers
+                .run(move |docs| async move { docs.get(MARKER_COLLECTION, &again).await })?
+                .is_some();
+            if done {
+                return Ok(Outcome::AlreadyDone);
             }
-        }
-        Ok(written)
-    })?;
+            let snapshot = Snapshot::of(&legacy, source.db)
+                .with_context(|| format!("[{domain}] copy the legacy file for reading"))?;
+            let scratch = Config {
+                workspace_dir: snapshot.workspace().to_path_buf(),
+                ..config.clone()
+            };
 
-    let body = json!({
-        "version": MARKER_VERSION,
-        "domain": domain,
-        "found": total,
-        "written": written,
-        "at": chrono::Utc::now().to_rfc3339(),
-    });
-    markers.run(move |docs| async move {
-        match docs
-            .put(MARKER_COLLECTION, &marker, body, Precondition::Absent)
-            .await
-        {
-            Ok(_) => Ok(()),
-            // Another process finished first.
-            Err(error) if error.kind() == ErrorKind::Conflict => Ok(()),
-            Err(error) => Err(error),
-        }
-    })?;
-    Ok(Outcome::Imported {
-        found: total,
-        written,
-    })
+            // Driver document records first: they are the newer copy of a row whose
+            // legacy table was retired, so they win an id clash.
+            let mut found: Vec<Record> = snapshot
+                .driver_docs(source.collections)
+                .with_context(|| format!("[{domain}] read the document tables"))?
+                .into_iter()
+                .map(|doc| (source.rekey)(doc, config))
+                .collect();
+            found.extend(
+                (source.read_legacy)(&scratch, config)
+                    .with_context(|| format!("[{domain}] read the legacy tables"))?
+                    .into_iter()
+                    .map(Record::from),
+            );
+
+            let total = found.len();
+            let written = repo.run(move |docs| async move {
+                let mut written = 0usize;
+                for record in found {
+                    match docs
+                        .put(
+                            &record.collection,
+                            &record.id,
+                            record.doc,
+                            Precondition::Absent,
+                        )
+                        .await
+                    {
+                        Ok(_) => written += 1,
+                        Err(error) if error.kind() == ErrorKind::Conflict => {}
+                        Err(error) => return Err(error),
+                    }
+                }
+                Ok(written)
+            })?;
+
+            let body = json!({
+                "version": MARKER_VERSION,
+                "domain": domain,
+                "found": total,
+                "written": written,
+                "at": chrono::Utc::now().to_rfc3339(),
+            });
+            markers.run(move |docs| async move {
+                match docs
+                    .put(MARKER_COLLECTION, &marker, body, Precondition::Absent)
+                    .await
+                {
+                    Ok(_) => Ok(()),
+                    // Another process finished first.
+                    Err(error) if error.kind() == ErrorKind::Conflict => Ok(()),
+                    Err(error) => Err(error),
+                }
+            })?;
+            Ok(Outcome::Imported {
+                found: total,
+                written,
+            })
+        })?;
+    Ok(claimed.unwrap_or(Outcome::InProgress))
 }
 
 /// Whether the marker for `source` exists (test and diagnostics helper).

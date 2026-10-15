@@ -451,3 +451,51 @@ async fn default_provider_with_config_authenticates_with_config_scoped_token() {
         "the memory client's default embedder must authenticate with the config-scoped token"
     );
 }
+
+/// The factory path a chat turn takes: the managed model it builds for a chat
+/// discloses its cloud egress to that chat, and the same factory without a chat
+/// discloses unrouted.
+#[tokio::test]
+async fn a_managed_provider_built_for_a_chat_turn_discloses_to_that_chat() {
+    crate::core::bus::init().await.expect("bus init");
+    let mut rx = crate::core::bus::BUS.get().unwrap().receiver();
+    let tmp = TempDir::new().unwrap();
+    let mut config = test_config(&tmp);
+    config.api_url = Some("http://127.0.0.1:0".into());
+    let marker = "factory-embed-for-a-chat";
+    let chat = crate::security::approval::ApprovalChatContext {
+        thread_id: "thread-factory".into(),
+        client_id: "client-factory".into(),
+        request_id: Some("req-factory".into()),
+    };
+
+    let routed = create_embedding_provider_for_chat(
+        &config,
+        "managed",
+        marker,
+        DEFAULT_CLOUD_EMBEDDING_DIMENSIONS,
+        "",
+        None,
+        Some(chat),
+    )
+    .unwrap();
+    let _ = routed.embed(&["hello".to_string()]).await;
+
+    loop {
+        match rx.recv().await {
+            Some(crate::core::events::DomainEvent::ExternalTransferPending {
+                descriptor,
+                thread_id,
+                client_id,
+                request_id,
+            }) if descriptor.service == marker => {
+                assert_eq!(thread_id.as_deref(), Some("thread-factory"));
+                assert_eq!(client_id.as_deref(), Some("client-factory"));
+                assert_eq!(request_id.as_deref(), Some("req-factory"));
+                break;
+            }
+            Some(_) => continue,
+            None => panic!("the bus closed before the disclosure arrived"),
+        }
+    }
+}

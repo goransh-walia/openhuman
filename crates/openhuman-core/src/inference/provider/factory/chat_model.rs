@@ -72,24 +72,24 @@ pub(super) fn create_chat_model_with_model_id_inner(
         if resolves_to_managed_backend(role, config) {
             return make_openhuman_backend_model(role, config);
         }
-        if let Some(result) = try_create_claude_agent_sdk_chat_model(role, config) {
+        if let Some(result) = try_create_claude_agent_sdk_chat_model(role, config, &EgressLedger::none()) {
             return result;
         }
-        if let Some(result) = try_create_claude_code_chat_model(role, config, None) {
+        if let Some(result) = try_create_claude_code_chat_model(role, config, None, &EgressLedger::none()) {
             return result;
         }
         // Local OpenAI-compatible runtimes (Ollama / LM Studio / MLX / OMLX /
         // local-openai) → crate-native `ChatModel` (issue #4727 Motion B) instead
         // of a crate-adapted host provider. Cloud/BYOK/bespoke providers
         // return `None` here and fall through to the `Provider` path below.
-        if let Some(result) = try_create_local_runtime_chat_model(role, config) {
+        if let Some(result) = try_create_local_runtime_chat_model(role, config, &EgressLedger::none()) {
             return result;
         }
         // Wire-equivalent BYOK cloud slugs (Anthropic / None / plain-Bearer, no
         // codex-oauth or `/v1/responses` fallback) → crate-native `ChatModel`
         // (issue #4727 Phase 3, conservative subset). `openai`/codex, custom
         // proxy slugs, and the managed entry return `None` and fall through.
-        if let Some(result) = try_create_cloud_slug_chat_model(role, config) {
+        if let Some(result) = try_create_cloud_slug_chat_model(role, config, &EgressLedger::none()) {
             return result;
         }
     }
@@ -97,6 +97,7 @@ pub(super) fn create_chat_model_with_model_id_inner(
         role,
         &provider_for_role(role, config),
         config,
+        &EgressLedger::none(),
     ))
 }
 
@@ -163,7 +164,7 @@ pub async fn probe_inference_readiness(role: &str, config: &Config) -> Result<()
          probing readiness"
     );
     let (managed_model, model_id) =
-        resolve_managed_backend(role, config).map_err(|e| e.to_string())?;
+        resolve_managed_backend(role, config, &EgressLedger::none()).map_err(|e| e.to_string())?;
     let result = managed_model.probe_readiness().await;
     log::debug!(
         "[flows][inference-probe] role={role} model={model_id} probe result: {}",
@@ -229,26 +230,52 @@ pub(super) fn create_chat_model_from_string_with_model_id_inner(
             return make_openhuman_backend_model(role, config);
         }
         if let Some(result) =
-            try_create_claude_agent_sdk_chat_model_from_string(role, &resolved, config)
+            try_create_claude_agent_sdk_chat_model_from_string(
+                role,
+                &resolved,
+                config,
+                &EgressLedger::none(),
+            )
         {
             return result;
         }
         if let Some(result) =
-            try_create_claude_code_chat_model_from_string(role, &resolved, config, None)
+            try_create_claude_code_chat_model_from_string(
+                role,
+                &resolved,
+                config,
+                None,
+                &EgressLedger::none(),
+            )
         {
             return result;
         }
         if let Some(result) =
-            try_create_local_runtime_chat_model_from_string(role, &resolved, config)
+            try_create_local_runtime_chat_model_from_string(
+                role,
+                &resolved,
+                config,
+                &EgressLedger::none(),
+            )
         {
             return result;
         }
-        if let Some(result) = try_create_cloud_slug_chat_model_from_string(role, &resolved, config)
+        if let Some(result) = try_create_cloud_slug_chat_model_from_string(
+            role,
+            &resolved,
+            config,
+            &EgressLedger::none(),
+        )
         {
             return result;
         }
     }
-    Err(unresolved_chat_model_error(role, provider, config))
+    Err(unresolved_chat_model_error(
+        role,
+        provider,
+        config,
+        &EgressLedger::none(),
+    ))
 }
 
 pub(super) struct DefaultTemperatureChatModel {
@@ -318,6 +345,7 @@ pub(super) fn unresolved_chat_model_error(
     role: &str,
     provider: &str,
     config: &Config,
+    egress: &EgressLedger,
 ) -> anyhow::Error {
     let p = provider.trim();
 
@@ -345,6 +373,7 @@ pub(super) fn unresolved_chat_model_error(
             role,
             &resolve_primary_cloud_provider_string(config),
             config,
+            egress,
         );
     }
 
@@ -356,7 +385,7 @@ pub(super) fn unresolved_chat_model_error(
     // Preserve the legacy chokepoint's disclosure ordering for invalid custom
     // routes: after both gates pass, the attempted external destination is
     // visible even when configuration validation then fails.
-    emit_inference_egress(role, p);
+    emit_inference_egress(role, p, egress);
 
     if let Some((slug, model_with_temperature)) = p.split_once(':') {
         if slug.trim().is_empty() {

@@ -452,8 +452,10 @@ pub(crate) async fn fence_and_clear(config: &Config) -> MemoryResult<WriteFence>
 }
 
 /// Starts a scoped background drain, retaining config only in memory.
-pub(super) fn schedule(config: Arc<Config>) {
-    let file = queue_path(&config, super::scope::resolve_current(&config).root());
+///
+/// `root` is the layout root the write was queued under (`CallFacts::reach`).
+pub(super) fn schedule(config: Arc<Config>, root: &Namespace) {
+    let file = queue_path(&config, root);
     schedule_partition(config, file);
 }
 
@@ -509,7 +511,10 @@ fn schedule_partition(config: Arc<Config>, file: PathBuf) {
 /// after restart; the persisted owner binding must still match the active user.
 #[cfg(test)]
 pub(crate) async fn drain(config: &Config) -> usize {
-    let file = queue_path(config, super::scope::resolve_current(config).root());
+    let file = queue_path(
+        config,
+        super::scope::MemoryIdentity::root().resolve(config).root(),
+    );
     let owner = owner_state(config);
     let _owner = owner.barrier.read().await;
     let state = drain_state(&file);
@@ -542,6 +547,9 @@ impl WriteExecutor for Executor<'_> {
                         key: receipt.id.0,
                         category: category.to_string(),
                         namespace: "learnings".to_string(),
+                        // A queued write runs off the turn: no chat to show it in.
+                        thread_id: None,
+                        client_id: None,
                     });
                     Ok(())
                 }

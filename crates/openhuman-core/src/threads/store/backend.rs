@@ -18,7 +18,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub use tinyagents_session::threads::ConversationPurgeStats;
+use super::ConversationPurgeStats;
 use tinyagents_session::threads::{
     ConversationError, ConversationPersistence, ConversationResult, ConversationThread,
     CreateConversationThread, CrossThreadHit, DriverConversationStore, ThreadMessage,
@@ -290,11 +290,9 @@ impl ConversationStore {
 
     /// Removes every thread.
     pub fn purge_threads(&self) -> Result<ConversationPurgeStats, String> {
-        self.run(
-            "purge_threads",
-            NONE,
-            |s| async move { s.purge_threads().await },
-        )
+        self.run("purge_threads", NONE, |s| async move {
+            s.purge_threads().await.map(ConversationPurgeStats::from)
+        })
     }
 }
 

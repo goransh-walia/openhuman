@@ -1,6 +1,7 @@
 //! `web3_dapp` RPC controllers: prepare a generic EVM contract call from
 //! caller-supplied calldata and execute it. EVM-only.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -74,22 +75,27 @@ pub fn schema(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_call(params: Map<String, Value>) -> ControllerFuture {
+fn handle_call(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
-        let quote = web3_service::quote(&config, methods::WEB3_DAPP_QUOTE, Value::Object(params))
-            .await
-            .map_err(|error| error.to_string())?;
+        let config = ctx.load_config().await?;
+        let quote = web3_service::quote(
+            &config,
+            None,
+            methods::WEB3_DAPP_QUOTE,
+            Value::Object(params),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         Outcome::new(quote, vec!["web3 dapp call prepared".to_string()]).into_cli_compatible_json()
     })
 }
 
-fn handle_execute(params: Map<String, Value>) -> ControllerFuture {
+fn handle_execute(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: web3_service::ExecuteParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        let config = config_rpc::load_config_with_timeout().await?;
-        let result = web3_service::execute(&config, parsed.quote_id, parsed.confirmed)
+        let config = ctx.load_config().await?;
+        let result = web3_service::execute(&config, None, parsed.quote_id, parsed.confirmed)
             .await
             .map_err(|error| error.to_string())?;
         Outcome::new(result, vec!["web3 transaction broadcast".to_string()])

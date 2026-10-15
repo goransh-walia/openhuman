@@ -14,7 +14,7 @@ use tinyinference_llm::model::{ResolvedModelRoute, RouteRecordingModel};
 /// built once from an openhuman [`Provider`] by [`build_turn_models`] — the
 /// single place a turn's `native model adapters are constructed (issue #4249, Phase 5).
 ///
-/// [`assemble_turn_harness`](super::harness_assembly::assemble_turn_harness) takes this bundle instead of the raw provider, so
+/// [`OpenHumanTurnPlanner`](super::turn_plan::OpenHumanTurnPlanner) takes this bundle instead of the raw provider, so
 /// the harness assembly is expressed purely in crate model types; the
 /// `Provider` → `ChatModel` adaptation is confined to `build_turn_models`.
 pub(crate) struct TurnModels {
@@ -170,7 +170,7 @@ impl ModelResolver<()> for TurnModelResolver {
 /// `OpenHumanBackendModel`, local/cloud → crate `OpenAiModel`).
 ///
 /// The `TurnModels` shape is identical to [`build_turn_models`] so
-/// [`assemble_turn_harness`](super::harness_assembly::assemble_turn_harness) is unchanged. The provider metadata
+/// [`OpenHumanTurnPlanner`](super::turn_plan::OpenHumanTurnPlanner) is unchanged. The provider metadata
 /// (`provider_id` / `native_tools` / `supports_vision`) is derived by the caller
 /// ([`TurnModelSource::build`]) from the resolved provider string and config.
 /// `error_slot` is a fresh
@@ -194,6 +194,14 @@ fn build_turn_models_crate(
 ) -> anyhow::Result<TurnModels> {
     use crate::inference::provider::factory;
 
+    // One per-turn egress-dedup ledger for the primary, every workload-tier
+    // route and the summarizer: each managed construction resolves through the
+    // same `resolve_managed_backend` chokepoint and would otherwise publish a
+    // separate `ExternalTransferPending` for the same logical destination (codex
+    // P2, PR #4812). The ledger collapses same-destination repeats to one
+    // disclosure per turn while still surfacing each distinct tier model.
+    let egress = crate::security::egress::EgressLedger::per_turn();
+
     // The primary honours an explicit provider-string override when the producer's
     // effective provider differs from `provider_for_role(role)` (triage #1257).
     let build_primary = |m: &str| -> anyhow::Result<TurnChatModel> {
@@ -210,7 +218,9 @@ fn build_turn_models_crate(
             .unwrap_or_else(|| factory::resolves_to_managed_backend(role, config));
         if managed {
             let (backend, _) =
-                factory::make_openhuman_backend_model_for_thread(role, config, m, true, thread_id)?;
+                factory::make_openhuman_backend_model_for_thread(
+                    role, config, m, true, thread_id, &egress,
+                )?;
             return Ok(Arc::new(RouteRecordingModel::new(
                 crate::agent::attachments::provider::wrap(
                     backend,
@@ -229,6 +239,7 @@ fn build_turn_models_crate(
                 m,
                 temperature,
                 true,
+                &egress,
             ),
             None => factory::create_turn_chat_model_with_native_tools_and_route(
                 role,
@@ -236,6 +247,7 @@ fn build_turn_models_crate(
                 m,
                 temperature,
                 true,
+                &egress,
             ),
         }?;
         Ok(Arc::new(RouteRecordingModel::new(
@@ -249,14 +261,7 @@ fn build_turn_models_crate(
         )))
     };
 
-    // Build the primary, every workload-tier route, and the summarizer under one
-    // per-turn egress-dedup ledger: each managed construction resolves through the
-    // same `resolve_managed_backend` chokepoint and would otherwise publish a
-    // separate `ExternalTransferPending` for the same logical destination (codex
-    // P2, PR #4812). `dedup_turn_scope` collapses same-destination repeats to one
-    // disclosure per turn while still surfacing each distinct tier model.
-    let (primary, routes, summarizer): BuiltTurnModels =
-        crate::security::egress::dedup_turn_scope(|| {
+    let (primary, routes, summarizer): BuiltTurnModels = (|| {
             let primary = build_primary(model)?;
 
             // Additive workload-tier routes: one crate-native model per tier (skipping the
@@ -288,7 +293,7 @@ fn build_turn_models_crate(
                 }
                 let route = if factory::resolves_to_managed_backend(tier_role, config) {
                     factory::make_openhuman_backend_model_for_thread(
-                        tier_role, config, tier, true, thread_id,
+                        tier_role, config, tier, true, thread_id, &egress,
                     )
                     .map(|(backend, _)| (backend, "openhuman".to_string(), tier.to_string()))
                 } else {
@@ -298,6 +303,7 @@ fn build_turn_models_crate(
                         tier,
                         temperature,
                         true,
+                        &egress,
                     )
                 };
                 match route {
@@ -338,7 +344,7 @@ fn build_turn_models_crate(
             };
 
             anyhow::Ok((primary, routes, summarizer))
-        })?;
+        })()?;
 
     let supports_vision = primary.profile().is_some_and(|p| p.modalities.image_in);
     Ok(TurnModels {
@@ -677,6 +683,7 @@ impl TurnModelSource {
                     model,
                     true,
                     thread_id,
+                    &crate::security::egress::EgressLedger::none(),
                 )
                 .map(|(inner, _)| crate::agent::attachments::provider::wrap(inner, cn.config.clone(), model, "openhuman"));
             }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::agent::harness::fork_context::{with_parent_context, ParentExecutionContext};
+use crate::agent::harness::fork_context::ParentExecutionContext;
 use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::config::AgentConfig;
 use std::collections::HashSet;
@@ -483,9 +483,9 @@ async fn missing_prompt_returns_error() {
 /// `agent` node, CLI, cron) must get a clear, actionable error instead of
 /// silently accepting the spawn and later dropping its result in
 /// `background_delivery`'s "headless batch" path. Sets up a real parent
-/// turn context (so the call gets past the `current_parent()` /
-/// allowlist / registry checks) but deliberately does NOT wrap the call
-/// without an explicit parent thread, so the child has no thread — the exact
+/// turn context (so the call gets past the parent-context /
+/// allowlist / registry checks) but deliberately gives the call
+/// no explicit parent thread, so the child has no thread — the exact
 /// condition that used to sail through to `tokio::spawn` and lose the
 /// result.
 #[tokio::test]
@@ -493,16 +493,18 @@ async fn errors_clearly_when_no_parent_thread_for_delivery() {
     let _ = AgentDefinitionRegistry::init_global_builtins();
     let workspace = tempfile::TempDir::new().expect("workspace");
 
-    let result = with_parent_context(parent_context(workspace.path()), async {
-        SpawnAsyncSubagentTool::new()
-            .execute(json!({
+    let result = SpawnAsyncSubagentTool::new()
+        .execute_under_parent(
+            json!({
                 "agent_id": "task_manager_agent",
                 "prompt": "investigate x",
-            }))
-            .await
-    })
-    .await
-    .unwrap();
+            }),
+            ToolCallOptions::default(),
+            None,
+            parent_context(workspace.path()),
+        )
+        .await
+        .unwrap();
 
     assert!(result.is_error);
     let out = result.output();
@@ -537,20 +539,18 @@ async fn guard_does_not_fire_when_parent_thread_is_bound() {
     let workspace = tempfile::TempDir::new().expect("workspace");
 
     let thread = ThreadContext("t-parent");
-    let result = with_parent_context(parent_context(workspace.path()), async {
-        SpawnAsyncSubagentTool::new()
-            .execute_with_context(
-                json!({
-                    "agent_id": "task_manager_agent",
-                    "prompt": "investigate x",
-                }),
-                ToolCallOptions::default(),
-                Some(&thread),
-            )
-            .await
-    })
-    .await
-    .unwrap();
+    let result = SpawnAsyncSubagentTool::new()
+        .execute_under_parent(
+            json!({
+                "agent_id": "task_manager_agent",
+                "prompt": "investigate x",
+            }),
+            ToolCallOptions::default(),
+            Some(&thread),
+            parent_context(workspace.path()),
+        )
+        .await
+        .unwrap();
 
     assert!(
         !result.output().contains("no parent chat thread"),

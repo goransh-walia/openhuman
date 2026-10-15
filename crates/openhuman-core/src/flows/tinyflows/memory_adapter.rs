@@ -67,6 +67,8 @@ const LOG_PREFIX: &str = "[memory-node-host]";
 pub struct OpenHumanMemory {
     pub(crate) config: Arc<Config>,
     pub(crate) security: Arc<SecurityPolicy>,
+    /// The run's approval context (flow run correlation).
+    pub(crate) approval: crate::security::approval::ApprovalTurnContext,
 }
 
 impl OpenHumanMemory {
@@ -143,7 +145,8 @@ impl OpenHumanMemory {
         let summary = summarize_action(&tool_name, action);
         let redacted = redact_args(action);
         let (outcome, audit_id) =
-            gate_call_for_tier(tier_decision, &tool_name, &summary, redacted).await;
+            gate_call_for_tier(&self.approval, tier_decision, &tool_name, &summary, redacted)
+                .await;
         if let GateOutcome::Deny { reason } = outcome {
             tracing::warn!(target: "flows", op, "{LOG_PREFIX} write: approval gate denied");
             return Err(EngineError::Capability(reason));

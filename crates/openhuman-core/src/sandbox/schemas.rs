@@ -1,5 +1,6 @@
 //! Sandbox domain controller schemas and RPC handlers.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::config::rpc as config_rpc;
@@ -167,7 +168,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
 /// requested name — so `backend:"docker"` on a native-config host reports Local,
 /// matching what a real session on that host would run. Reporting the requested
 /// backend instead was the conflation fixed in #6081.
-fn handle_status(params: Map<String, Value>) -> ControllerFuture {
+fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let backend_str = params
@@ -194,7 +195,7 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
         // and the mounted workspace, not the compiled-in `RuntimeConfig::default()`
         // (#6081). A failed config load surfaces to the caller rather than
         // silently answering from defaults.
-        let config = match config_rpc::load_config_with_timeout().await {
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(err) => {
                 log::warn!("[sandbox] handle_status config load failed error={err}");
@@ -224,7 +225,7 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
+fn handle_resolve_policy(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let mode_str = params
@@ -247,7 +248,7 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
         // and the user's action dir, not the compiled-in `RuntimeConfig::default()`
         // and `default_action_dir()` (#6081). A failed config load surfaces to
         // the caller rather than silently answering from defaults.
-        let config = match config_rpc::load_config_with_timeout().await {
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(err) => {
                 log::warn!("[sandbox] handle_resolve_policy config load failed error={err}");
@@ -283,10 +284,10 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_cleanup_orphans(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async {
+fn handle_cleanup_orphans(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
         gate()?;
-        let config = match crate::config::ops::load_config_with_timeout().await {
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => return Err(error),
         };
@@ -300,7 +301,7 @@ fn handle_cleanup_orphans(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_validate_policy(params: Map<String, Value>) -> ControllerFuture {
+fn handle_validate_policy(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let policy_val = params.get("policy").cloned().unwrap_or(Value::Null);
@@ -308,7 +309,7 @@ fn handle_validate_policy(params: Map<String, Value>) -> ControllerFuture {
             Ok(p) => p,
             Err(e) => return Err(format!("Invalid policy: {e}")),
         };
-        let config = crate::config::ops::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         // The module owns the verdict; a missing one is an error, never "valid".
         let issues = super::docker::validate_docker_policy(&config, &policy)
             .await

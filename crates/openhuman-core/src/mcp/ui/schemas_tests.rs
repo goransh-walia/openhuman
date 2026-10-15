@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 #[test]
 fn every_registered_controller_is_in_the_mcp_ui_namespace() {
@@ -35,17 +36,21 @@ fn params(value: Value) -> Map<String, Value> {
 
 #[tokio::test]
 async fn resource_read_handler_rejects_a_missing_server() {
-    let error = with_workspace(handle_resource_read(params(serde_json::json!({}))))
-        .await
-        .unwrap_err();
+    let error = with_workspace(handle_resource_read(
+        DispatchCtx::process_default(),
+        params(serde_json::json!({})),
+    ))
+    .await
+    .unwrap_err();
     assert!(error.contains("server_id"));
 }
 
 #[tokio::test]
 async fn resource_read_handler_rejects_an_unknown_inline_id() {
-    let error = with_workspace(handle_resource_read(params(
-        serde_json::json!({"inline_id": "absent"}),
-    )))
+    let error = with_workspace(handle_resource_read(
+        DispatchCtx::process_default(),
+        params(serde_json::json!({"inline_id": "absent"})),
+    ))
     .await
     .unwrap_err();
     assert!(error.contains("no longer available"));
@@ -53,17 +58,21 @@ async fn resource_read_handler_rejects_an_unknown_inline_id() {
 
 #[tokio::test]
 async fn tool_call_handler_rejects_a_missing_server() {
-    let error = with_workspace(handle_tool_call(params(serde_json::json!({}))))
-        .await
-        .unwrap_err();
+    let error = with_workspace(handle_tool_call(
+        DispatchCtx::process_default(),
+        params(serde_json::json!({})),
+    ))
+    .await
+    .unwrap_err();
     assert!(error.contains("server_id"));
 }
 
 #[tokio::test]
 async fn tool_call_handler_refuses_an_unavailable_server() {
-    let result = with_workspace(handle_tool_call(params(
-        serde_json::json!({"server_id": "nowhere", "tool_name": "order"}),
-    )))
+    let result = with_workspace(handle_tool_call(
+        DispatchCtx::process_default(),
+        params(serde_json::json!({"server_id": "nowhere", "tool_name": "order"})),
+    ))
     .await;
     assert!(result.is_err());
 }

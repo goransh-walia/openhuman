@@ -27,15 +27,17 @@ pub(super) type OptionalChatModelResult = Option<anyhow::Result<ResolvedChatMode
 pub(super) fn try_create_local_runtime_chat_model(
     role: &str,
     config: &Config,
+    egress: &EgressLedger,
 ) -> OptionalChatModelResult {
     let resolved = provider_for_role(role, config);
-    try_create_local_runtime_chat_model_from_string(role, &resolved, config)
+    try_create_local_runtime_chat_model_from_string(role, &resolved, config, egress)
 }
 
 pub(super) fn try_create_local_runtime_chat_model_from_string(
     role: &str,
     provider: &str,
     config: &Config,
+    egress: &EgressLedger,
 ) -> OptionalChatModelResult {
     use tinyinference_local::local_runtime::{
         resolve_local_runtime, LocalRuntimeAuth, LocalRuntimeInputs,
@@ -65,7 +67,7 @@ pub(super) fn try_create_local_runtime_chat_model_from_string(
     // NON-external — local inference never leaves the device, so
     // `emit_external_transfer` records it without firing a pending event. This
     // is the single local chokepoint for every ChatModel/turn entry.
-    emit_inference_egress(role, &p);
+    emit_inference_egress(role, &p, egress);
 
     // Endpoint, auth, model and `@temp` resolution is the module's pure
     // `resolve_local_runtime`; the host only supplies config + env.
@@ -111,6 +113,6 @@ pub(crate) fn create_local_chat_model_from_string(
     provider: &str,
     config: &Config,
 ) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String)> {
-    try_create_local_runtime_chat_model_from_string("chat", provider, config)
+    try_create_local_runtime_chat_model_from_string("chat", provider, config, &EgressLedger::none())
         .ok_or_else(|| anyhow::anyhow!("unsupported local provider string '{provider}'"))?
 }

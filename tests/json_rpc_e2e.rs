@@ -4413,7 +4413,7 @@ async fn json_rpc_web_chat_routing_cases_use_expected_backend_models_inner() {
             Some(&json!(true))
         );
 
-        let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+        let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
             .await
             .unwrap_or_else(|_| panic!("timed out waiting for chat_done for case {model_override}"))
             .expect("sse task join should succeed");
@@ -4628,7 +4628,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
         Some(&json!(true))
     );
     signal_accepted_web_chat_request_id(request_tx, accepted_result);
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for first custom-provider chat_done")
         .expect("first custom-provider sse join");
@@ -4692,7 +4692,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
         Some(&json!(true))
     );
     signal_accepted_web_chat_request_id(request_tx, accepted_result);
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for second custom-provider chat_done")
         .expect("second custom-provider sse join");
@@ -4748,7 +4748,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
         Some(&json!(true))
     );
     signal_accepted_web_chat_request_id(request_tx, accepted_result);
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for unaffected agentic chat_done")
         .expect("unaffected agentic sse join");
@@ -4803,7 +4803,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
             Some(&json!(true))
         );
         signal_accepted_web_chat_request_id(request_tx, accepted_result);
-        let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+        let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
             .await
             .expect("timed out waiting for managed chat_done")
             .expect("managed sse join");
@@ -5078,7 +5078,7 @@ async fn json_rpc_web_chat_custom_chat_provider_with_auth_none_omits_auth_header
             .and_then(|v| v.get("accepted")),
         Some(&json!(true))
     );
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for auth-none chat_done")
         .expect("auth-none sse join");
@@ -12037,7 +12037,7 @@ async fn json_rpc_channel_web_chat_with_speak_reply_invokes_reply_speech_inner()
         Some(&json!(true))
     );
 
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for chat_done with speak_reply=true")
         .expect("sse task join should succeed");

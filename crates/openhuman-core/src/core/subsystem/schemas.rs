@@ -19,6 +19,7 @@
 //! ([`SubsystemStatus`]), so adding one is a one-line change with no wire
 //! change for existing rows.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -81,7 +82,7 @@ pub async fn subsystems_status() -> Vec<SubsystemStatus> {
     }
 }
 
-fn handle_status(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_status(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let rows = subsystems_status().await;
         log::debug!("[subsystem] status requested: {} slot(s)", rows.len());

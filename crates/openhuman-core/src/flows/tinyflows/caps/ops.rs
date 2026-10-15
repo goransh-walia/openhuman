@@ -382,6 +382,9 @@ pub(crate) async fn resolve_composio_account(
 pub struct OpenHumanTools {
     pub config: Arc<Config>,
     pub security: Arc<SecurityPolicy>,
+    /// The run's approval context (flow run correlation), handed to the gate
+    /// with every acting dispatch.
+    pub approval: crate::security::approval::ApprovalTurnContext,
 }
 
 /// Required-arg preflight for a Composio `tool_call`: fails **before** the
@@ -581,6 +584,7 @@ impl ToolInvoker for OpenHumanTools {
         let ctx = tools::ToolCallCtx {
             config: &self.config,
             security: &self.security,
+            approval: &self.approval,
         };
         match tools::backend_for(slug) {
             Some(backend) => backend.invoke(&ctx, slug, args, conn).await,
@@ -600,7 +604,20 @@ impl ToolInvoker for OpenHumanTools {
 /// per-flow namespace (e.g. `"flow:<id>"`). This KV namespace is unrelated to
 /// flow-scoped memory: `OpenHumanMemory` tags memory items with
 /// `flows::flow_tag`, derived independently from the run's trusted origin.
-pub fn build_capabilities(config: Arc<Config>, state_namespace: impl Into<String>) -> Capabilities {
+///
+/// `flow_run` is the run the capabilities serve: every acting dispatch hands it
+/// to the approval gate (with the tool call), so a parked approval is stamped
+/// with the exact flow and run. `None` for a run with no flow identity (a dry
+/// run, a preview).
+pub fn build_capabilities(
+    config: Arc<Config>,
+    state_namespace: impl Into<String>,
+    flow_run: Option<crate::security::approval::FlowRunContext>,
+) -> Capabilities {
+    let approval = crate::security::approval::ApprovalTurnContext {
+        flow_run,
+        ..Default::default()
+    };
     let security = Arc::new(SecurityPolicy::from_full_config(&config));
     let http_config = config.http_request.clone();
     let http_creds = Arc::new(HttpCredentialsStore::from_config(&config));
@@ -612,20 +629,24 @@ pub fn build_capabilities(config: Arc<Config>, state_namespace: impl Into<String
         tools: Arc::new(OpenHumanTools {
             config: config.clone(),
             security: security.clone(),
+            approval: approval.clone(),
         }),
         http: Arc::new(OpenHumanHttp {
             security: security.clone(),
             http_config,
             http_creds,
+            approval: approval.clone(),
         }),
         code: Arc::new(OpenHumanCode {
             config: config.clone(),
             security: security.clone(),
+            approval: approval.clone(),
         }),
         state: crate::flows::tinyflows::state::FlowState::open(&config, state_namespace)
             .into_state_store(),
         agent: Some(Arc::new(OpenHumanAgentRunner {
             config: config.clone(),
+            approval: approval.clone(),
         })),
         // Shell execution needs a dedicated OpenHuman adapter that applies the
         // host's autonomy and sandbox policy. Keep the capability unavailable
@@ -650,6 +671,7 @@ pub fn build_capabilities(config: Arc<Config>, state_namespace: impl Into<String
             crate::flows::tinyflows::memory_adapter::OpenHumanMemory {
                 config: config.clone(),
                 security,
+                approval,
             },
         )),
         resolver: Arc::new(OpenHumanWorkflowResolver { config }),

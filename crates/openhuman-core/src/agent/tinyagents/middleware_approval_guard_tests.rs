@@ -1,4 +1,5 @@
 use super::*;
+use crate::agent::tinyagents::middleware::approval::ApprovalSecurityMiddleware;
 
 // ── ApprovalSecurityMiddleware ──────────────────────────────────────────
 

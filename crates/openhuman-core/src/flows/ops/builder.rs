@@ -139,7 +139,7 @@ pub(crate) async fn flows_build_with_extra_hidden_tools(
     // chat thread is attached.
     //
     // - Streaming (copilot pane): run under `AgentTurnOrigin::WebChat` with
-    //   `APPROVAL_CHAT_CONTEXT` scoped alongside it — the identical
+    //   the chat approval context handed to the same turn — the identical
     //   double-scope pattern `web_chat::ops::run_turn_under_cancel_and_deadline`
     //   uses for a real interactive chat turn. The approval gate then PARKS
     //   (rather than auto-allows) any `external_effect` tool call instead of
@@ -185,24 +185,22 @@ pub(crate) async fn flows_build_with_extra_hidden_tools(
                 thread_id = %target.thread_id,
                 request_id = %target.request_id,
                 "[flows] flows_build: streaming copilot turn — WebChat origin + \
-                 APPROVAL_CHAT_CONTEXT scoped, live-run tools park for approval instead \
+                 chat approval context set, live-run tools park for approval instead \
                  of auto-allowing (shortened to COPILOT_APPROVAL_TTL via \
-                 APPROVAL_COPILOT_STREAM_CONTEXT)"
+                 the copilot_stream flag)"
             );
-            // `APPROVAL_COPILOT_STREAM_CONTEXT` scopes alongside the existing
-            // chat context so any `run_flow`/`resume_flow_run` park raised by
+            // The copilot flag rides the turn's approval context alongside the
+            // chat context, so any `run_flow`/`resume_flow_run` park raised by
             // this turn is clamped to the shorter `COPILOT_APPROVAL_TTL`
             // instead of the gate's full ten-minute default — a stale park on
             // a copilot pane the user may have already navigated away from
-            // shouldn't idle that long. Main-chat turns never scope this, so
+            // shouldn't idle that long. Main-chat turns never set it, so
             // they are unaffected.
             agent.set_thread_id(Some(target.thread_id.as_str()));
+            let approval = ApprovalTurnContext::chat(chat_ctx).with_copilot_stream();
             let run = with_origin(
-                origin,
-                APPROVAL_CHAT_CONTEXT.scope(
-                    chat_ctx,
-                    APPROVAL_COPILOT_STREAM_CONTEXT.scope((), agent.run_single(&prompt)),
-                ),
+                origin.clone(),
+                agent.run_single_with_approval(&prompt, Some(origin), approval),
             );
             let run =
                 tokio::time::timeout(std::time::Duration::from_secs(FLOW_BUILD_TIMEOUT_SECS), run);
@@ -211,9 +209,9 @@ pub(crate) async fn flows_build_with_extra_hidden_tools(
             // so a `flows_build_cancel` call landing the instant this turn
             // starts can never miss the registration window. The run stays
             // awaited INLINE (never spawned) — spawning it would drop the
-            // task-local `with_origin` / `APPROVAL_CHAT_CONTEXT.scope` /
-            // `APPROVAL_COPILOT_STREAM_CONTEXT.scope` / thread-id scope
-            // context above, which the approval gate + tracing depend on.
+            // task-local `with_origin` / thread-id scope context above, which
+            // the approval gate + tracing depend on (the approval context
+            // itself is an explicit value on the turn).
             // `tokio::select!` races the two futures on THIS task instead, so
             // every one of those scopes stays attached to the winning arm.
             let token = CancellationToken::new();

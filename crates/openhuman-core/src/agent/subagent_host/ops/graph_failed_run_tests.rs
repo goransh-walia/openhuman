@@ -124,7 +124,7 @@ async fn failed_subagent_run_keeps_its_unanswered_round_out_of_history() {
 /// data for a vision run).
 #[test]
 fn failed_run_history_keeps_the_original_seed_not_the_provider_bound_one() {
-    use crate::agent::tinyagents::TranscriptSnapshot;
+    use crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot;
     use tinyinference_llm::message::Message;
 
     let original = vec![TranscriptMessage::user("describe [IMAGE:attachment-1]")];

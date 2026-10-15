@@ -11,15 +11,14 @@ fn context() -> RunContext<crate::agent::tinyagents::host::OpenHumanRunContext> 
 #[tokio::test]
 async fn same_tool_calls_persist_artifacts_under_distinct_call_ids() {
     let temp = tempfile::tempdir().expect("temporary artifact root");
+    let store = crate::agent::harness::tool_result_artifacts::in_memory_tool_result_store(
+        temp.path().to_path_buf(),
+        "identity-session",
+    );
     let middleware = ToolOutputMiddleware {
         budget_bytes: 8,
         payload_summarizer: None,
-        artifact_store: Some(
-            crate::agent::harness::tool_result_artifacts::new_tool_result_store(
-                temp.path().to_path_buf(),
-                "identity-session",
-            ),
-        ),
+        artifact_store: Some(store.clone()),
         tokenjuice_compaction_enabled: false,
         tokenjuice_compression: AgentTokenjuiceCompression::Off,
         runtime_config: None,
@@ -46,13 +45,20 @@ async fn same_tool_calls_persist_artifacts_under_distinct_call_ids() {
         .await
         .expect("second artifact is persisted");
 
-    let root = temp.path().join("tool-results/identity-session/echo");
     assert_eq!(
-        std::fs::read_to_string(root.join("echo-1.txt")).expect("first artifact"),
+        store
+            .read("tool-results/identity-session/echo/echo-1.txt")
+            .await
+            .unwrap()
+            .expect("first artifact"),
         "first result is deliberately oversized"
     );
     assert_eq!(
-        std::fs::read_to_string(root.join("echo-2.txt")).expect("second artifact"),
+        store
+            .read("tool-results/identity-session/echo/echo-2.txt")
+            .await
+            .unwrap()
+            .expect("second artifact"),
         "second result is deliberately oversized"
     );
 }

@@ -9,6 +9,7 @@
 //! compiled into [`super::registry`], and a method that could point the loader at
 //! an arbitrary path would turn this namespace into remote code execution.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 use std::sync::Arc;
 use tinycomputer_bus::browser::SessionOptions;
@@ -199,9 +200,12 @@ fn readiness_error(detail: &str) -> String {
     }
 }
 
-fn handle_browser_check_readiness(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_browser_check_readiness(
+    ctx: DispatchCtx,
+    _params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
-        let mut config = config_rpc::load_config_with_timeout().await?;
+        let mut config = ctx.load_config().await?;
         crate::core::runtime::components::require_config(&config, "computer")?;
         // The probe never navigates. Give its disposable session a non-routable
         // origin so an empty website allowlist does not prevent a Chrome check.
@@ -238,7 +242,7 @@ fn handle_browser_check_readiness(_params: Map<String, Value>) -> ControllerFutu
     })
 }
 
-fn handle_browser_forget_sites(params: Map<String, Value>) -> ControllerFuture {
+fn handle_browser_forget_sites(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         // A blank or non-text site must not read as "every site".
         let site = match params.get("site") {
@@ -251,7 +255,7 @@ fn handle_browser_forget_sites(params: Map<String, Value>) -> ControllerFuture {
                 )
             }
         };
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         crate::core::runtime::components::require_config(&config, "computer")?;
         let forgotten = super::site_memory_host::forget(&config, site.as_deref())
             .await
@@ -265,10 +269,10 @@ fn handle_browser_forget_sites(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_computer_status(params: Map<String, Value>) -> ControllerFuture {
+fn handle_computer_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let load = params.get("load").and_then(Value::as_bool).unwrap_or(false);
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         crate::core::runtime::components::require_config(&config, "computer")?;
         controller_value(super::computer::status(&config, load).await)
     })
@@ -278,17 +282,17 @@ fn controller_value(value: impl serde::Serialize) -> Result<Value, String> {
     serde_json::to_value(value).map_err(|error| error.to_string())
 }
 
-fn handle_list(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_list(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         Ok(serde_json::json!({ "modules": ops::list(&config) }))
     })
 }
 
-fn handle_status(params: Map<String, Value>) -> ControllerFuture {
+fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let id = string_param(&params, "id").ok_or("`id` is required")?;
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         match ops::list(&config).into_iter().find(|m| m.id == id) {
             Some(module) => Ok(serde_json::json!({ "module": module })),
             None => Err(format!("unknown module '{id}'")),
@@ -296,10 +300,10 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_load(params: Map<String, Value>) -> ControllerFuture {
+fn handle_load(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let id = string_param(&params, "id").ok_or("`id` is required")?;
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         // A failed load is reported through the returned status rather than as
         // an RPC error: the caller asked "what happened", and the answer is a
         // state plus a reason, not a transport failure.

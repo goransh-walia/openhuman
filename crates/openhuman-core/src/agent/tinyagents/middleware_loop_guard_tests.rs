@@ -1,4 +1,5 @@
 use super::*;
+use crate::agent::tinyagents::middleware::repeated_failure::RepeatedToolFailureMiddleware;
 
 #[test]
 fn repeated_tool_failure_middleware_observes_outcomes_after_control_requests() {

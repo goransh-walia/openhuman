@@ -11,6 +11,7 @@
 mod bridge_types;
 mod event_bridge;
 mod event_projection;
+mod tool_progress_projection;
 
 #[cfg(test)]
 use std::sync::Arc;

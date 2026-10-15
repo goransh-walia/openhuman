@@ -9,6 +9,7 @@
 //! key storage — is intentionally NOT exposed as agent tools (exfiltration /
 //! auth-mutation risk). Those stay RPC-only.
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -28,7 +29,8 @@ async fn invoke_hosted(
     method: &str,
     params: serde_json::Map<String, Value>,
 ) -> anyhow::Result<Value> {
-    match crate::core::all::try_invoke_registered_rpc(method, params).await {
+    match crate::core::all::try_invoke_registered_rpc(DispatchCtx::ambient(), method, params).await
+    {
         Some(Ok(value)) => Ok(strip_log_envelope(value)),
         Some(Err(err)) => Err(anyhow::anyhow!("{err}")),
         None => {

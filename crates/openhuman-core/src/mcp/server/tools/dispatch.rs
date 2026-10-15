@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde_json::{json, Map, Value};
 use tinyinference_llm::tool::ToolSchema;
 
@@ -135,7 +136,7 @@ pub async fn call_tool(
         params.keys().collect::<Vec<_>>()
     );
 
-    match all::try_invoke_registered_rpc(rpc_method, params).await {
+    match all::try_invoke_registered_rpc(DispatchCtx::ambient(), rpc_method, params).await {
         Some(Ok(value)) => {
             log::debug!("[mcp_server] tools/call success tool={}", spec.name);
             Ok(tool_success(value))

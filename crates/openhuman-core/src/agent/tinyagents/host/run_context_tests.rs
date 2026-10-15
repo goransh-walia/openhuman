@@ -476,3 +476,131 @@ fn autonomous_iter_cap_is_inherited_by_children_and_lifts_subagent_caps() {
         "a cap below the base never lowers it"
     );
 }
+
+fn chat_approval(thread: &str) -> crate::security::approval::ApprovalTurnContext {
+    crate::security::approval::ApprovalTurnContext::chat(
+        crate::security::approval::ApprovalChatContext {
+            thread_id: thread.to_string(),
+            client_id: format!("client-{thread}"),
+            request_id: Some(format!("req-{thread}")),
+        },
+    )
+    .with_copilot_stream()
+}
+
+#[test]
+fn an_inline_child_inherits_the_turn_approval_context_and_a_detached_child_does_not() {
+    let mut root = OpenHumanRunContext::new();
+    root.approval = chat_approval("t-root");
+
+    // An inline sub-agent runs as part of the turn the user is watching, so its
+    // parks route to that chat like the turn's own.
+    let inline = root.child().child();
+    assert_eq!(
+        inline.approval.chat.as_ref().map(|c| c.thread_id.as_str()),
+        Some("t-root")
+    );
+    assert!(inline.approval.copilot_stream);
+
+    // A detached sub-agent can outlive the turn: it must start without the
+    // chat so its parks route through the origin as `detached` (#5499), and so
+    // must everything it spawns in turn.
+    let detached = root.detached_child();
+    assert!(detached.approval.chat.is_none());
+    assert!(!detached.approval.copilot_stream);
+    assert!(detached.child().approval.chat.is_none());
+
+    // The parent is untouched.
+    assert!(root.approval.chat.is_some());
+}
+
+#[test]
+fn the_host_turn_env_does_not_hand_its_approval_context_to_a_child_run() {
+    let env = crate::agent::turn_env::HostTurnEnv {
+        approval: chat_approval("t-env"),
+        ..Default::default()
+    };
+    // `with_host_env` builds the run context of a sub-agent from its parent's
+    // environment snapshot; the chat belongs to the root turn alone.
+    let child = OpenHumanRunContext::new().with_host_env(&env);
+    assert!(child.approval.chat.is_none());
+    assert!(!child.approval.copilot_stream);
+}
+
+#[test]
+fn tools_read_the_turn_approval_context_from_the_run_not_from_a_task_local() {
+    let mut host = OpenHumanRunContext::new();
+    host.approval = chat_approval("t-tool");
+    let run = host.into_tinyagents(tinyagents_harness::context::RunConfig::new("run-approval"));
+    let context = tinyagents_harness::tool::ToolExecutionContext::from_run_context(
+        &run,
+        tinyagents_harness::ids::CallId::new("call-1"),
+    );
+    let seen = approval_for_tool(Some(&context));
+    assert_eq!(
+        seen.chat.as_ref().map(|c| c.client_id.as_str()),
+        Some("client-t-tool")
+    );
+    assert!(seen.copilot_stream);
+    // Direct dispatch (no run context) is not a chat turn.
+    assert!(approval_for_tool(None).chat.is_none());
+}
+
+#[tokio::test]
+async fn the_approval_context_survives_await_points_and_a_move_between_tasks() {
+    let mut host = OpenHumanRunContext::new();
+    host.approval = chat_approval("t-await");
+    let run = host.into_tinyagents(tinyagents_harness::context::RunConfig::new("run-await"));
+    let context = tinyagents_harness::tool::ToolExecutionContext::from_run_context(
+        &run,
+        tinyagents_harness::ids::CallId::new("call-await"),
+    );
+    // The context is a value: it is still intact after the tool awaits and is
+    // handed to another task, which no ambient scope would survive.
+    tokio::task::yield_now().await;
+    let seen = tokio::spawn(async move {
+        tokio::task::yield_now().await;
+        approval_for_tool(Some(&context))
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        seen.chat.as_ref().map(|c| c.thread_id.as_str()),
+        Some("t-await")
+    );
+}
+
+/// The memory identity is explicit on the run: a child inherits it (the
+/// sub-agent runner then narrows it with `child(<definition id>)`), and a host
+/// environment that carries one — the team runtime's member — applies it, while
+/// an environment without one leaves the run's own alone.
+#[test]
+fn the_memory_identity_rides_the_run_and_its_children() {
+    use crate::memory::scope::MemoryIdentity;
+
+    let mut context = OpenHumanRunContext::new();
+    assert_eq!(context.memory_identity, None);
+
+    let env = crate::agent::turn_env::HostTurnEnv {
+        memory_identity: Some(MemoryIdentity::team_member("acme", "lead")),
+        ..Default::default()
+    };
+    context = context.with_host_env(&env);
+    assert_eq!(
+        context.memory_identity,
+        Some(MemoryIdentity::team_member("acme", "lead"))
+    );
+
+    let child = context.child();
+    assert_eq!(child.memory_identity, context.memory_identity);
+    assert_eq!(
+        child.memory_identity.unwrap().child("scout"),
+        MemoryIdentity::team_member("acme", "scout")
+    );
+
+    let unchanged = context.with_host_env(&crate::agent::turn_env::HostTurnEnv::default());
+    assert_eq!(
+        unchanged.memory_identity,
+        Some(MemoryIdentity::team_member("acme", "lead"))
+    );
+}

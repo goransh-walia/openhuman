@@ -464,6 +464,12 @@ impl ObserveProgress for TurnStateMirror {
                 // the turn-state snapshot; nothing to mirror, no flush.
                 false
             }
+            AgentProgress::ToolCallProgress { .. } => {
+                // A running tool's status line is live-only (`tool_progress`
+                // on the socket); the snapshot already shows the call as
+                // running, so a flush per beat would buy nothing.
+                false
+            }
         }
     }
 }

@@ -6,6 +6,7 @@
 use super::*;
 use crate::agent::session_host::stop_summary::{render_stop_summary, StopReasonKind};
 use crate::agent::session_host::turn_checkpoint::CheckpointToolResult;
+use crate::agent::tinyagents::middleware::repeated_failure::RepeatedToolFailureMiddleware;
 use tinyagents_harness::middleware::is_repeat_call_exempt;
 use tinyagents_harness::middleware::library::{
     RepeatProgressMiddleware, REPEAT_GUARD_BLOCKED, REPEAT_GUARD_HALTED, REPEAT_GUARD_METADATA_KEY,
@@ -113,7 +114,7 @@ fn response_with(calls: &[TaToolCall]) -> ModelResponse {
 
 /// Drive `rounds` model responses that each re-issue one call per
 /// `(tool, path)` in `batch`, through the repeat guard and the failure breaker assembled as
-/// `harness_assembly` does: the guard registered first (outermost), the
+/// `turn_middleware` does: the guard registered first (outermost), the
 /// breaker after it, both on one stop-note slot. The read-only batch is
 /// admitted whole before any result folds back (concurrent execution); a
 /// call the guard refuses never runs and is answered with its refusal,

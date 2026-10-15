@@ -11,7 +11,7 @@ fn sidecar(
 #[test]
 fn graph_failure_persists_only_accepted_snapshot_history() {
     let snapshot = Arc::new(std::sync::Mutex::new(
-        crate::agent::tinyagents::TranscriptSnapshot {
+        crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot {
             messages: vec![
                 Message::system("stable prefix"),
                 Message::user("request"),
@@ -42,7 +42,7 @@ fn graph_failure_persists_only_accepted_snapshot_history() {
 #[test]
 fn stalled_model_stream_reports_completed_evidence_instead_of_its_narration() {
     let snapshot = Arc::new(std::sync::Mutex::new(
-        crate::agent::tinyagents::TranscriptSnapshot {
+        crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot {
             messages: vec![Message::user("Find information about Jev")],
             accepted_len: 1,
             request_base_len: 1,
@@ -82,7 +82,7 @@ fn stalled_model_stream_reports_completed_evidence_instead_of_its_narration() {
 #[test]
 fn graph_failure_copies_snapshot_usage_and_failed_tool_outcome_to_sidecar() {
     let snapshot = Arc::new(std::sync::Mutex::new(
-        crate::agent::tinyagents::TranscriptSnapshot {
+        crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot {
             messages: vec![Message::user("request"), Message::tool("call-1", "denied")],
             accepted_len: 1,
             request_base_len: 1,
@@ -191,7 +191,7 @@ fn tool_snapshot_with_no_executable_source_fails_closed_before_graph() {
 #[test]
 fn empty_snapshot_failure_still_carries_the_typed_terminal_outcome() {
     let snapshot = Arc::new(std::sync::Mutex::new(
-        crate::agent::tinyagents::TranscriptSnapshot::default(),
+        crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot::default(),
     ));
     let typed = driver_error_with_snapshot(
         anyhow::Error::new(tinyagents_harness::TinyAgentsError::Cancelled),
@@ -306,7 +306,7 @@ fn stopped_turn_hands_back_only_its_accepted_rounds() {
     ];
     for (case, messages, accepted_len, expected) in cases {
         let snapshot = Arc::new(std::sync::Mutex::new(
-            crate::agent::tinyagents::TranscriptSnapshot {
+            crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot {
                 messages,
                 accepted_len,
                 request_base_len: 1,

@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 #[cfg(feature = "http-server")]
 use std::net::SocketAddr;
 
-use crate::{config::Config, core::logging::CliLogDefault};
+use crate::core::logging::CliLogDefault;
 
 #[cfg(feature = "http-server")]
 use super::http::{run_http, HttpServerConfig};
@@ -118,7 +118,9 @@ pub fn run_stdio_from_cli(args: &[String]) -> Result<()> {
 async fn run_stdio_module() -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
-    let config = Config::load_or_init().await?;
+    let config = crate::config::rpc::load_config_with_timeout()
+        .await
+        .map_err(anyhow::Error::msg)?;
     let session = ServerSession::open(&config).await?;
     let cancellation = tokio_util::sync::CancellationToken::new();
     let result = async {

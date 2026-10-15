@@ -23,10 +23,14 @@ pub use cloud::{
     OpenHumanCloudEmbeddingModel, DEFAULT_CLOUD_EMBEDDING_DIMENSIONS, DEFAULT_CLOUD_EMBEDDING_MODEL,
 };
 pub use factory::{
-    create_embedding_provider_with_config, create_embedding_provider_with_credentials,
+    create_embedding_provider_for_chat, create_embedding_provider_with_config,
+    create_embedding_provider_with_credentials, default_embedding_provider_for_chat,
     default_embedding_provider_with_config,
 };
 pub use rpc::provider_from_config;
+/// A shared embedding provider as this module's factories return it, nameable
+/// by hosts that hold one without depending on the embeddings crate.
+pub type SharedEmbeddingModel = std::sync::Arc<dyn tinyinference_embeddings::EmbeddingModel>;
 pub use schemas::{
     all_controller_schemas as all_embeddings_controller_schemas,
     all_registered_controllers as all_embeddings_registered_controllers,

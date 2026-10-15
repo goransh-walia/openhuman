@@ -228,8 +228,15 @@ async fn run_flow_body_inner(
     };
 
     // Scope the state store per-flow so two flows never collide on a state key.
-    let caps =
-        crate::flows::tinyflows::build_capabilities(config_arc.clone(), format!("flow:{flow_id}"));
+    let flow_run = FlowRunContext {
+        flow_id: flow_id.to_string(),
+        run_id: thread_id.clone(),
+    };
+    let caps = crate::flows::tinyflows::build_capabilities(
+        config_arc.clone(),
+        format!("flow:{flow_id}"),
+        Some(flow_run),
+    );
     let checkpointer = match crate::flows::tinyflows::open_flow_checkpointer(config) {
         Ok(checkpointer) => checkpointer,
         Err(e) => {
@@ -293,27 +300,21 @@ async fn run_flow_body_inner(
             thread_id.clone(),
         ),
     );
-    // Scope the flow/run correlation (issue flow-approval-surface, PR2)
-    // alongside the `Workflow` origin so a tool call the engine dispatches
-    // can, if it parks in the `ApprovalGate`, stamp its `PendingApproval` with
-    // `source_context = Flow { flow_id, run_id }` — the origin alone only
-    // carries `flow_id`. See `approval::gate::APPROVAL_FLOW_RUN_CONTEXT`.
-    let run = APPROVAL_FLOW_RUN_CONTEXT.scope(
-        FlowRunContext {
-            flow_id: flow_id.to_string(),
-            run_id: thread_id.clone(),
-        },
-        with_origin(
-            origin,
-            tinyflows::engine::run_with_checkpointer_journaled_observed(
-                &compiled,
-                tinyflows::engine::RunInput::new(input).with_inputs(inputs),
-                &caps,
-                checkpointer,
-                &thread_id,
-                journal.clone(),
-                &observer,
-            ),
+    // The flow/run correlation (issue flow-approval-surface, PR2) rides the
+    // capabilities built above, next to the `Workflow` origin scoped here, so a
+    // tool call the engine dispatches can, if it parks in the `ApprovalGate`,
+    // stamp its `PendingApproval` with `source_context = Flow { flow_id,
+    // run_id }` -- the origin alone only carries `flow_id`.
+    let run = with_origin(
+        origin,
+        tinyflows::engine::run_with_checkpointer_journaled_observed(
+            &compiled,
+            tinyflows::engine::RunInput::new(input).with_inputs(inputs),
+            &caps,
+            checkpointer,
+            &thread_id,
+            journal.clone(),
+            &observer,
         ),
     );
     let timed = tokio::time::timeout(std::time::Duration::from_secs(FLOW_RUN_TIMEOUT_SECS), run);

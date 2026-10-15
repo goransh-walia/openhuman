@@ -275,8 +275,10 @@ impl Tool for McpRegistryToolCallTool {
         .map_err(|e| anyhow::anyhow!("mcp_registry_tool_call: {e}"))?;
         let mut result = ToolResult::success(serde_json::to_string(&outcome.value)?);
         if let Some(raw) = outcome.value.get("result").filter(|raw| raw.is_object()) {
+            let tool_meta =
+                crate::mcp::ui::decorate::installed_tool_meta(&self.config, &sid, &tool_name).await;
             let view = crate::mcp::ui::resolve::view_from_raw_result(
-                &sid, &tool_name, None, arguments, raw,
+                &sid, &tool_name, tool_meta, arguments, raw,
             );
             result.metadata = crate::mcp::ui::resolve::presentation_from_view(&view)
                 .map(|presentation| presentation.to_metadata());

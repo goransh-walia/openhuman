@@ -79,6 +79,7 @@ pub struct Turn {
     request: TurnRequest,
     session_id: Option<String>,
     origin: Option<AgentTurnOrigin>,
+    flow_run: Option<(String, String)>,
     progress: Option<tokio::sync::mpsc::Sender<AgentProgress>>,
     seed: Option<Vec<(String, String)>>,
     attachments: Vec<openhuman_core::agent::HostAttachment>,
@@ -111,6 +112,7 @@ impl Turn {
             request: TurnRequest::new(message),
             session_id: None,
             origin: None,
+            flow_run: None,
             progress: None,
             seed: None,
             attachments: Vec::new(),
@@ -445,6 +447,17 @@ impl Turn {
     /// gate applies the narrower grant the caller actually meant.
     pub fn origin(mut self, origin: AgentTurnOrigin) -> Self {
         self.origin = Some(origin);
+        self
+    }
+
+    /// Binds the turn to one run of a saved flow, so an approval a tool call
+    /// parks on this turn is correlated back to that exact flow and run. Pair
+    /// it with a [`TrustedAutomationSource::Workflow`] [`origin`](Self::origin):
+    /// the origin only names the flow, not the run.
+    ///
+    /// [`TrustedAutomationSource::Workflow`]: crate::TrustedAutomationSource::Workflow
+    pub fn flow_run(mut self, flow_id: impl Into<String>, run_id: impl Into<String>) -> Self {
+        self.flow_run = Some((flow_id.into(), run_id.into()));
         self
     }
 

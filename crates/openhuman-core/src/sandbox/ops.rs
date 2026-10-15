@@ -306,6 +306,20 @@ pub async fn execute_in_sandbox(
     extra_env: HashMap<OsString, OsString>,
     timeout: Duration,
 ) -> anyhow::Result<SandboxExecResult> {
+    execute_in_sandbox_metered(policy, command, working_dir, extra_env, timeout, None).await
+}
+
+/// [`execute_in_sandbox`] that feeds `meter` with the command's output as it
+/// streams (the native backends; Docker reports elapsed time only), for the
+/// shell tool's progress line.
+pub(crate) async fn execute_in_sandbox_metered(
+    policy: &SandboxPolicy,
+    command: &str,
+    working_dir: &Path,
+    extra_env: HashMap<OsString, OsString>,
+    timeout: Duration,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
+) -> anyhow::Result<SandboxExecResult> {
     // The saved backend is an operator's explicit isolation requirement. It
     // must be checked at the spawn boundary, including callers that resolved
     // their policy from an older or default RuntimeConfig.
@@ -355,7 +369,16 @@ pub async fn execute_in_sandbox(
                         anyhow::anyhow!("Cannot read module configuration: {error}")
                     })?,
             };
-            execute_unsandboxed(&config, policy, command, working_dir, &extra_env, timeout).await
+            execute_unsandboxed(
+                &config,
+                policy,
+                command,
+                working_dir,
+                &extra_env,
+                timeout,
+                meter,
+            )
+            .await
         }
         SandboxBackendKind::Local => {
             crate::config::ensure_usable_cwd(working_dir)?;
@@ -376,6 +399,7 @@ pub async fn execute_in_sandbox(
                 &extra_env,
                 timeout,
                 explicitly_requested,
+                meter,
             )
             .await
         }
@@ -460,6 +484,7 @@ async fn execute_unsandboxed(
     working_dir: &Path,
     extra_env: &HashMap<OsString, OsString>,
     timeout: Duration,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
     let mut env = std::collections::BTreeMap::new();
     for (name, value) in extra_env {
@@ -478,6 +503,7 @@ async fn execute_unsandboxed(
         env,
         timeout,
         false,
+        meter,
     )
     .await
 }

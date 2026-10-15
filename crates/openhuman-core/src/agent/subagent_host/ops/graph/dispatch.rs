@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::agent::progress::AgentProgress;
 use crate::agent::subagent_host::types::SubagentRunError;
-use crate::agent::tinyagents::{run_turn_via_tinyagents_shared, SubagentScope};
+use crate::agent::tinyagents::{SubagentScope, TurnSpec};
 use tinyagents_harness::run_queue::RunQueue;
 use tinyagents_session::transcript::TranscriptMessage;
 use tinyjuice_bus::types::AgentTokenjuiceCompression;
@@ -167,7 +167,8 @@ pub(in super::super) async fn run_subagent_via_graph(
     // worker thread. Attach a snapshot middleware that mirrors each `before_model`
     // request's transcript here, so the error path below can still persist the
     // rounds that completed before the failure.
-    let transcript_snapshot = crate::agent::tinyagents::TranscriptSnapshotSink::default();
+    let transcript_snapshot =
+        crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshotSink::default();
     // The seeded history is always kept; only rounds past it are split into
     // accepted and unanswered on failure (#6281).
     transcript_snapshot
@@ -177,7 +178,7 @@ pub(in super::super) async fn run_subagent_via_graph(
 
     // A sub-agent turn runs *nested inside* the parent agent's turn (parent
     // harness → spawn_subagent tool → here), so the child's full
-    // `run_turn_via_tinyagents_shared` future would otherwise sit on the parent's
+    // `TurnSpec::run` future would otherwise sit on the parent's
     // poll stack. Heap-allocate it (as the legacy `run_inner_loop` did) so the
     // parent+child harness drives don't overflow the stack.
     // Native-tool support drives the durable-history suffix dispatcher; capture it
@@ -196,26 +197,26 @@ pub(in super::super) async fn run_subagent_via_graph(
     child_context.thread_id = thread_id.clone();
     child_context.progress = on_progress.clone().or(child_context.progress);
     child_context.workspace = workspace_descriptor.clone().or(child_context.workspace);
-    let run_result = Box::pin(run_turn_via_tinyagents_shared(
-        child_context,
+    let run_result = TurnSpec {
+        run_context: child_context,
         turn_models,
         provider_id,
         model,
-        dispatch_history,
+        history: dispatch_history,
         // Dynamic (per-spawn) tools first so a dynamic tool that intentionally
         // shadows a parent-registry tool of the same name is the one that
         // *executes* — matching the advertisement order (`dedup_tool_specs_by_name`
         // lists dynamic specs before parent specs in `runner.rs`). The shared
         // adapter resolves a name by scanning the sets in order, so a
         // parent-first order would run the parent impl for a shadowed name.
-        vec![Arc::new(dynamic_tools), parent_tools],
+        tool_sets: vec![Arc::new(dynamic_tools), parent_tools],
         // Fail-closed (issue #4452): a sub-agent ALWAYS carries a concrete,
         // resolved allowlist (`allowed_names`), so pass it as `Some(..)`. An empty
         // set is therefore a genuine deny-all — a tool-less agent
         // (`ToolScope::Named([])`), a zero-match `skill_filter`, or a `named` list
         // that resolved to nothing registers ZERO tools instead of implicitly
         // inheriting the parent's full surface (shell/file-write/spawn).
-        Some(allowed_names),
+        allowed: Some(allowed_names),
         max_iterations,
         subagent_scope,
         // Resolved above — drives the sub-agent context-window summarization step.
@@ -223,31 +224,32 @@ pub(in super::super) async fn run_subagent_via_graph(
         // Mid-flight steering: forward queued steer messages into the run.
         run_queue,
         // Pause + checkpoint when the child asks the user a clarifying question.
-        &["ask_user_clarification"],
+        early_exit_tools: &["ask_user_clarification"],
         // Pause gracefully at the model-call cap so we can summarize a resumable
         // checkpoint (below) instead of erroring — legacy cap-summary parity.
-        true,
+        pause_at_cap: true,
         // Bound the sub-agent's per-call output at its configured budget.
-        Some(max_output_tokens),
+        max_output_tokens: Some(max_output_tokens),
         // Context middlewares (#4466): config-sourced TokenJuice compaction +
         // tool-result byte cap + microcompact + summarization opt-outs (built
         // above), plus the live transcript-snapshot sink for error recovery.
-        {
+        context_mw: {
             let mut mw = context_mw;
             mw.transcript_snapshot = Some(transcript_snapshot.clone());
             mw
         },
         // Sub-agents gate via their own SubagentToolSource policy path, not the
         // session `.tool_policy()`; no enforcement threaded here.
-        None,
+        tool_policy: None,
         // Sub-agent turns run tools with external effects; not a deterministic
         // internal run, so response caching stays off (safe default).
-        false,
+        deterministic_cacheable: false,
         // #4457 (defect C): irrelevant for sub-agents — they carry a
         // `subagent_scope`, so the seam never emits a top-level `TurnCompleted`
         // (they report via `Subagent*` events). Pass `false` for clarity.
-        false,
-    ))
+        defer_turn_completed_to_caller: false,
+    }
+    .run()
     .await;
 
     if let Some(config) = config.filter(|config| config.observability.share_usage_data) {
@@ -529,8 +531,9 @@ pub(crate) fn inherited_thread_id(
 fn build_subagent_context_mw(
     tokenjuice_compression: AgentTokenjuiceCompression,
     config: Option<&crate::config::Config>,
-) -> crate::agent::tinyagents::TurnContextMiddleware {
-    let mut mw = crate::agent::tinyagents::TurnContextMiddleware::defaults();
+) -> crate::agent::tinyagents::middleware::turn_context::TurnContextMiddleware {
+    let mut mw =
+        crate::agent::tinyagents::middleware::turn_context::TurnContextMiddleware::defaults();
     // Always thread the agent's compression profile — even on the config-default
     // path — so the definition's TokenJuice choice is honored.
     mw.tokenjuice_compression = tokenjuice_compression;

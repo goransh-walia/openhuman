@@ -5,7 +5,7 @@
 //! Each running async sub-agent registers here (via [`register`]), keyed by
 //! its `task_id`, with:
 //! - an `Arc<RunQueue>` — the same steering channel the steering forwarder in
-//!   `run_turn_via_tinyagents_shared` drains mid-turn, so `steer_subagent` can
+//!   `TurnSpec::run` drains mid-turn, so `steer_subagent` can
 //!   inject a message when no crate-native steering handle is registered;
 //! - a TinyAgents `SteeringHandle` in the process-local
 //!   `SteeringRegistry` while the child TinyAgents run is active, so

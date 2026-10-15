@@ -67,7 +67,7 @@ pub(crate) async fn spawn_parallel_turn(
                 task_cancel_token,
                 origin.clone(),
                 approval_ctx,
-                |host_env| {
+                |host_env, activity, approval| {
                     run_chat_task(
                         &client_id_task,
                         &thread_id_task,
@@ -81,6 +81,8 @@ pub(crate) async fn spawn_parallel_turn(
                         origin.clone(),
                         /* fork */ true,
                         host_env,
+                        activity,
+                        approval,
                     )
                 },
             )

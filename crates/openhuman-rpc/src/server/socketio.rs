@@ -360,6 +360,9 @@ pub fn attach_socketio() -> (socketioxide::layer::SocketIoLayer, SocketIo) {
 
                     // Invoke the method through the same logic used by the HTTP RPC endpoint.
                     let response = match crate::core_host::core::invoke::invoke_method(
+                        // A Socket.IO event is not scoped to a request, so it
+                        // runs under the process default context.
+                        crate::core_host::core::runtime::DispatchCtx::process_default(),
                         crate::core_host::core::invoke::default_state(),
                         payload.method.as_str(),
                         payload.params,

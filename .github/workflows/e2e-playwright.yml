@@ -84,6 +84,7 @@ jobs:
       - name: Run Playwright web E2E suite
         env:
           OPENHUMAN_WORKSPACE: ${{ runner.temp }}/openhuman-playwright-workspace
+          OPENHUMAN_E2E_ALLOW_EPHEMERAL_KEY: "1"
         run: |
           mkdir -p "$OPENHUMAN_WORKSPACE"
           workspace_root="$OPENHUMAN_WORKSPACE"

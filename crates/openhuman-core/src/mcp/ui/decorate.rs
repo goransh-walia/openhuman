@@ -86,6 +86,49 @@ async fn configured_tool_meta(config: &Config, server: &str, tool: &str) -> Opti
         .and_then(|remote| remote.meta)
 }
 
+/// An installed server's listing of `tool`, when it passes the agent safety
+/// scan.
+pub(crate) async fn installed_tool(
+    client: &McpConfiguredClient,
+    client_config: &tinymcp_bus::McpClientConfig,
+    server_id: &str,
+    tool: &str,
+) -> Option<tinymcp_bus::McpTool> {
+    let listed: Vec<tinymcp_bus::McpTool> = client
+        .call(
+            client_config,
+            tinymcp_bus::names::methods::LIST_TOOLS,
+            (server_id,),
+        )
+        .await
+        .map_err(|error| {
+            tracing::debug!(
+                server_id,
+                tool,
+                ?error,
+                "[mcp_ui] could not list installed tools"
+            );
+        })
+        .ok()?;
+    let candidate = listed.into_iter().find(|listed| listed.name == tool)?;
+    crate::mcp::registry::tools_safe_for_agent(server_id, vec![candidate])
+        .into_iter()
+        .next()
+}
+
+/// The descriptor `_meta` of an installed server's `tool`.
+pub(crate) async fn installed_tool_meta(
+    config: &Config,
+    server_id: &str,
+    tool: &str,
+) -> Option<Value> {
+    let client = McpConfiguredClient::for_config(config).ok()?;
+    let client_config = host::client_config(config);
+    installed_tool(&client, &client_config, server_id, tool)
+        .await
+        .and_then(|listed| listed.meta)
+}
+
 /// Which part of a call's arguments the remote tool received.
 #[derive(Debug, Clone, Copy)]
 pub enum ToolInput {

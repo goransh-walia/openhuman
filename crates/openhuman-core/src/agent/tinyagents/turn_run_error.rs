@@ -1,5 +1,5 @@
 //! Map a failed `tinyagents` harness run onto the typed OpenHuman error the
-//! caller expects, for [`run_turn_via_tinyagents_shared`](super::run_turn_via_tinyagents_shared).
+//! caller expects, for [`TurnSpec::run`](TurnSpec::run).
 
 use crate::agent::tinyagents::journal::TurnJournal;
 use tinyagents_harness::turn_run_error::{classify_run_failure, RunFailureKind};

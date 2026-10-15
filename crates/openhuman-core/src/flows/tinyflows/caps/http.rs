@@ -46,6 +46,9 @@ pub struct OpenHumanHttp {
     pub security: Arc<SecurityPolicy>,
     pub http_config: HttpRequestConfig,
     pub http_creds: Arc<HttpCredentialsStore>,
+    /// The run's approval context (flow run correlation), handed to the gate
+    /// with every acting dispatch.
+    pub approval: crate::security::approval::ApprovalTurnContext,
 }
 
 /// Resolves an optional HTTP `connection_ref` to the stored credential to
@@ -181,7 +184,8 @@ impl HttpClient for OpenHumanHttp {
         let summary = crate::security::approval::summarize_action(TOOL_NAME, &request);
         let redacted = crate::security::approval::redact_args(&request);
         let (outcome, audit_id) =
-            gate_call_for_tier(tier_decision, TOOL_NAME, &summary, redacted).await;
+            gate_call_for_tier(&self.approval, tier_decision, TOOL_NAME, &summary, redacted)
+                .await;
         if let crate::security::approval::GateOutcome::Deny { reason } = outcome {
             return Err(EngineError::Capability(reason));
         }

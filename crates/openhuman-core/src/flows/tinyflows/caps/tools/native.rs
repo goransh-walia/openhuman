@@ -49,7 +49,8 @@ impl ToolBackend for NativeToolBackend {
         let summary = crate::security::approval::summarize_action(tool_name, &args);
         let redacted = crate::security::approval::redact_args(&args);
         let (outcome, audit_id) =
-            super::super::gate_call_for_tier(tier_decision, tool_name, &summary, redacted).await;
+            super::super::gate_call_for_tier(ctx.approval, tier_decision, tool_name, &summary, redacted)
+                .await;
         if let crate::security::approval::GateOutcome::Deny { reason } = outcome {
             return Err(EngineError::Capability(reason));
         }

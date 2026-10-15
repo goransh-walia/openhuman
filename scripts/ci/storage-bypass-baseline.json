@@ -9,7 +9,7 @@
   {
     "rule": "json-write",
     "path": "crates/openhuman-core/src/agent/attachments/mod.rs",
-    "line": 287,
+    "line": 288,
     "text": "let mut file = tokio::fs::OpenOptions::new()",
     "occurrence": 1
   },

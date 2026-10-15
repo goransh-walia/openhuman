@@ -15,9 +15,10 @@
 //!
 //! Needs a released TinyMCP library on `OPENHUMAN_MODULE_PATH` (the runner,
 //! `scripts/test-rust-e2e.sh`, stages the registry-pinned release) or a build
-//! from `scripts/modules/build.mjs tinymcp`, so it is ignored in a bare
-//! `cargo test`. Nothing here reaches the network: the server is a stub that is
-//! added disabled and never dialled.
+//! from `scripts/modules/build.mjs tinymcp`, so the target is opt-in via
+//! `e2e-test-support` rather than included in a bare `cargo test`. Nothing here
+//! reaches the network: the server is a stub that is added disabled and never
+//! dialled.
 
 #![cfg(all(feature = "mcp", feature = "modules", feature = "storage-sqlite"))]
 
@@ -164,7 +165,6 @@ fn files(dir: &Path) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "requires a TinyMCP library: stage the release (scripts/test-rust-e2e.sh) or node scripts/modules/build.mjs tinymcp"]
 fn a_server_added_through_the_released_module_survives_a_restart_in_the_storage_backend() {
     let artifact = openhuman_core::modules::local_artifact("tinymcp")
         .expect("build or stage tinymcp (OPENHUMAN_MODULE_SOURCE_DIR / OPENHUMAN_MODULE_PATH)");

@@ -44,6 +44,11 @@ pub(crate) async fn run_chat_task(
     // This turn's host environment (its Stop cancellation, the wall-clock
     // backstop's deadline), handed to the session so the whole run tree sees it.
     host_env: crate::agent::turn_env::HostTurnEnv,
+    // The web-turn guard's activity record for this turn, passed explicitly by
+    // `run_turn_under_cancel_and_deadline`.
+    activity: super::turn_activity::TurnActivity,
+    // Where this turn's parked approvals surface, handed to the turn itself.
+    approval: crate::security::approval::ApprovalTurnContext,
 ) -> Result<WebChatTaskResult, String> {
     // One turn at a time per profile: wait behind its relay and cron turns.
     let _turn = crate::profiles::turn_gate::acquire().await;
@@ -122,6 +127,9 @@ pub(crate) async fn run_chat_task(
         log::debug!("[web-channel] thread working folder applied thread_id={thread_id}");
         config.action_dir = dir.clone();
     }
+    // A guard that stops this turn closes it from this turn's own config and
+    // reply language, not from whatever profile is active when it fires.
+    activity.remember_turn(std::sync::Arc::new(config.clone()), locale.clone());
     let model_override = normalize_model_override(model_override);
     // The cached session (or a cold-boot resumed one) is the thread's single
     // live history; every turn on the thread checks it out through this path.
@@ -151,6 +159,9 @@ pub(crate) async fn run_chat_task(
     // defense-in-depth; extraction of durable state (like a workflow
     // proposal) must not depend on any single progress event surviving.
     let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(256);
+    // Under the web-turn guard, fold every event into the turn's activity
+    // record (the idle guard's input) on its way to the bridge.
+    let progress_rx = super::turn_activity::tap(activity, progress_rx, 256);
     // The channel is fresh here. Record the user input even if the turn fails
     // before a committed reply can emit its final TurnContent event.
     let _ = progress_tx.try_send(AgentProgress::TurnContent {
@@ -194,7 +205,7 @@ pub(crate) async fn run_chat_task(
     // default test-thread stack — see the channels web-turn coverage tests).
     #[cfg(feature = "tinymemes")]
     let turn_started = std::time::Instant::now();
-    let turn = Box::pin(agent.run_single_with_origin(message, Some(origin)));
+    let turn = Box::pin(agent.run_single_with_approval(message, Some(origin), approval));
     let mut result = match turn.await {
         Ok(response) => {
             // A successful turn proves the thread's balance is usable, so drop
@@ -327,6 +338,15 @@ pub(crate) async fn run_chat_task(
             turn_elapsed,
         )
         .await;
+    }
+
+    // Test hook: wedge the turn after its run, as a stuck save would.
+    #[cfg(any(test, debug_assertions))]
+    if super::ops::TEST_PARK_AFTER_RUN.load(std::sync::atomic::Ordering::SeqCst) {
+        log::debug!(
+            "[web-channel][test] parking run_chat_task after the run request_id={request_id}"
+        );
+        std::future::pending::<()>().await;
     }
 
     agent.set_on_progress(None);

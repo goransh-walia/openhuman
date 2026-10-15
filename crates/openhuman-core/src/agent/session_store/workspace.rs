@@ -386,3 +386,7 @@ impl SessionStoreProvider for WorkspaceSessionStores {
         Some("workspace-default".to_string())
     }
 }
+
+#[cfg(test)]
+#[path = "workspace_tests.rs"]
+mod tests;

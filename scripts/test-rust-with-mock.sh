@@ -90,10 +90,22 @@ local_source_ids=()
 if local_module_source_is_source; then
   local_source_ids+=(tinyconnectors tinyjuice tinysearch tinyhosts tinymcp tinysecurity)
 else
-  for released_id in tinyjuice tinysearch tinysecurity; do
+  for released_id in tinychannels tinyjuice tinysearch tinysecurity; do
     released_dir="$(stage_release_module "$released_id" "$wallet_platform" "$module_ext")"
+    if [ "$released_id" = "tinychannels" ]; then
+      tinychannels_dir="$released_dir"
+    fi
     export OPENHUMAN_MODULE_PATH="$released_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
   done
+fi
+
+# TinyChannels host unit tests use the pinned module artifact through the
+# regular loader. Its source module is not linked into the core: tinychannels-
+# module currently requires TinyBus 0.1.4 while this host pins 0.1.3.
+if local_module_source_is_source; then
+  released_dir="$(stage_release_module tinychannels "$wallet_platform" "$module_ext")"
+  tinychannels_dir="$released_dir"
+  export OPENHUMAN_MODULE_PATH="$released_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
 fi
 
 # Wallet JSON-RPC E2E sends a recovery phrase only to an attested module. Build
@@ -234,6 +246,11 @@ run_raw_coverage_modules() {
        true; then
       OPENHUMAN_MODULE_PATH="$connectors_module_path" \
         cargo_test --test raw_coverage_all -- "${module}::" --test-threads=1 "$@"
+    elif [ "$module" = "automation_scheduling_e2e" ]; then
+      # This target executes a scheduled shell job through the verified TinyBox
+      # release, which the ordinary isolated raw-coverage processes do not see.
+      OPENHUMAN_MODULE_PATH="$connectors_module_path" \
+        cargo_test --test raw_coverage_all -- "${module}::" --test-threads=1 "$@"
     else
       cargo_test --test raw_coverage_all -- "${module}::" --test-threads=1 "$@"
     fi
@@ -287,6 +304,22 @@ run_build_only_reaper_test() {
     -- --exact --test-threads=1 "$@"
 }
 
+run_tinychannels_linked_fixture_tests() {
+  # These confidential calls use the linked test module and run in fresh
+  # processes so process-wide module-loader state cannot leak into the unit
+  # suite. The linked source is explicit and never falls back to downloading.
+  OPENHUMAN_MODULE_PATH="$tinychannels_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}" \
+    cargo_test --features e2e-test-support --lib channels::module_fixture:: \
+      -- --test-threads=1 "$@"
+  OPENHUMAN_MODULE_PATH="$tinychannels_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}" \
+    cargo_test --features e2e-test-support --lib \
+      modules::ops::tests::a_registered_linked_factory_serves_the_module_and_status_says_so \
+      -- --exact --test-threads=1 "$@"
+  OPENHUMAN_MODULE_PATH="$tinychannels_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}" \
+    cargo_test --lib \
+    channels::host::channel_events::tests:: -- --test-threads=1 "$@"
+}
+
 run_full_suite() {
   # Several unit fixtures mutate process-wide state (provider overrides and
   # temporary executable paths). Keep this aggregate invocation deterministic;
@@ -298,6 +331,7 @@ run_full_suite() {
   # `--workspace --bins` picks them up there (plus the TUI binary).
   cargo_test --bins -- --test-threads=1 "$@"
   run_build_only_reaper_test "$@"
+  run_tinychannels_linked_fixture_tests "$@"
   cargo_test --doc -- "$@"
 
   while IFS= read -r target; do
@@ -316,6 +350,9 @@ run_full_suite() {
       run_in_process_modules "$@"
     elif [ "$target" = "json_rpc_e2e" ]; then
       run_json_rpc_e2e "$@"
+    elif [ "$target" = "tinymcp_storage_smoke_e2e" ]; then
+      OPENHUMAN_MODULE_PATH="$tinymcp_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}" \
+        cargo_test --features e2e-test-support --test "$target" -- "$@"
     elif [ "$target" = "mcp_registry_e2e" ]; then
       # The TinyMCP module owns process-level directory transitions; this
       # binary exercises several workspaces against that shared module object.
@@ -371,6 +408,13 @@ elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "mcp_registry_e2e" ]; the
   fi
   OPENHUMAN_MODULE_PATH="$connectors_module_path" \
     cargo_test --test mcp_registry_e2e -- --ignored --test-threads=1 "$@"
+elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "tinymcp_storage_smoke_e2e" ]; then
+  shift 2
+  if [ "${1:-}" = "--" ]; then
+    shift
+  fi
+  OPENHUMAN_MODULE_PATH="$tinymcp_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}" \
+    cargo_test --features e2e-test-support --test tinymcp_storage_smoke_e2e -- "$@"
 elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "mcp_registry_multi_server" ]; then
   shift 2
   if [ "${1:-}" = "--" ]; then

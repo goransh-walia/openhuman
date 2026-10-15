@@ -6,6 +6,7 @@
 //! fetch an offloaded original. Mirrors the controller pattern in
 //! `threads/schemas.rs`.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
 use crate::core::all::{ControllerFuture, RegisteredController};
@@ -281,7 +282,7 @@ fn str_param(params: &Map<String, Value>, key: &str) -> Option<String> {
     params.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-fn handle_detect(params: Map<String, Value>) -> ControllerFuture {
+fn handle_detect(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let content = str_param(&params, "content").ok_or("missing 'content'")?;
@@ -330,7 +331,7 @@ fn compress_hint_from_params(params: &Map<String, Value>) -> Result<ContentHint,
     })
 }
 
-fn handle_compress(params: Map<String, Value>) -> ControllerFuture {
+fn handle_compress(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let content = str_param(&params, "content").ok_or("missing 'content'")?;
@@ -349,7 +350,7 @@ fn handle_compress(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_cache_stats(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_cache_stats(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let stats = super::cache_stats().await?;
@@ -357,7 +358,7 @@ fn handle_cache_stats(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_retrieve(params: Map<String, Value>) -> ControllerFuture {
+fn handle_retrieve(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let token = str_param(&params, "token").ok_or("missing 'token'")?;
@@ -368,10 +369,11 @@ fn handle_retrieve(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_settings_get(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_settings_get(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
-        let config = crate::config::Config::load_or_init()
+        let config = ctx
+            .load_config()
             .await
             .map_err(|e| format!("load config: {e}"))?;
         let settings = serde_json::to_value(&config.tokenjuice)
@@ -380,7 +382,7 @@ fn handle_settings_get(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_settings_update(params: Map<String, Value>) -> ControllerFuture {
+fn handle_settings_update(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         // Accept either {"patch": {...}} or a bare object of fields.
@@ -391,7 +393,8 @@ fn handle_settings_update(params: Map<String, Value>) -> ControllerFuture {
         let patch: super::config_patch::TokenjuiceSettingsPatch =
             serde_json::from_value(patch).map_err(|e| format!("invalid patch: {e}"))?;
 
-        let mut config = crate::config::Config::load_or_init()
+        let mut config = ctx
+            .load_config()
             .await
             .map_err(|e| format!("load config: {e}"))?;
         patch.apply(&mut config.tokenjuice);
@@ -409,13 +412,11 @@ fn handle_settings_update(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_savings_stats(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_savings_stats(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
         let cache = super::cache_stats().await?;
-        let config = crate::config::Config::load_or_init()
-            .await
-            .map_err(|e| e.to_string())?;
+        let config = ctx.load_config().await.map_err(|e| e.to_string())?;
         super::install_from_config(&config).await?;
         let agg = super::savings::stats(&super::client(&config)).await?;
         Ok(serde_json::json!({
@@ -428,12 +429,10 @@ fn handle_savings_stats(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_savings_reset(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_savings_reset(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         gate()?;
-        let config = crate::config::Config::load_or_init()
-            .await
-            .map_err(|e| e.to_string())?;
+        let config = ctx.load_config().await.map_err(|e| e.to_string())?;
         super::install_from_config(&config).await?;
         super::savings::reset(&super::client(&config)).await?;
         Ok(serde_json::json!({ "ok": true }))

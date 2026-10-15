@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use tinytools::{PermissionLevel, Tool, ToolCategory, ToolContent, ToolResult};
 
 use super::MediaArtifactTool;
-use crate::agent::artifacts::ArtifactKind;
+use crate::agent::artifacts::{ArtifactKind, ArtifactStatus};
 
 /// A minimal stand-in for `GenerateImageTool` / `GenerateVideoTool`: writes
 /// a fixed number of files under `<action_dir>/generated-media/` and reports
@@ -96,11 +96,16 @@ async fn files_a_single_generated_artifact() {
 
     // Original staged file is gone (moved).
     assert!(!staging.join("stub-0.png").exists());
-    // Artifact metadata + file both landed under the artifacts root.
-    let artifact_dir = workspace.join("artifacts").join(artifact_id);
-    assert!(artifact_dir.join("meta.json").exists());
-    let meta_raw = std::fs::read_to_string(artifact_dir.join("meta.json")).unwrap();
-    assert!(meta_raw.contains("\"image\""));
+    // Metadata may live in the configured storage backend; resolve it through
+    // the artifact store and verify the user-facing file it records.
+    let meta = crate::agent::artifacts::store::get_artifact(&workspace, artifact_id)
+        .await
+        .expect("artifact metadata is persisted");
+    assert_eq!(meta.kind, ArtifactKind::Image);
+    assert_eq!(meta.status, ArtifactStatus::Ready);
+    let file = meta.file.expect("artifact points at its visible file");
+    assert!(std::path::Path::new(&file).exists(), "{file}");
+    assert_eq!(std::fs::read(file).unwrap(), b"bytes-0");
 }
 
 #[tokio::test]
@@ -130,11 +135,14 @@ async fn files_every_artifact_when_n_greater_than_one() {
     for entry in artifacts {
         let id = entry["artifact_id"].as_str().expect("artifact_id set");
         assert!(ids.insert(id.to_string()), "artifact ids must be unique");
-        assert!(workspace
-            .join("artifacts")
-            .join(id)
-            .join("meta.json")
-            .exists());
+        let meta = crate::agent::artifacts::store::get_artifact(&workspace, id)
+            .await
+            .expect("artifact metadata is persisted");
+        assert_eq!(meta.status, ArtifactStatus::Ready);
+        assert!(meta
+            .file
+            .as_deref()
+            .is_some_and(|file| std::path::Path::new(file).exists()));
     }
 }
 
@@ -175,4 +183,89 @@ async fn host_metadata_forwards_to_the_inner_tool() {
     assert_eq!(wrapped.name(), "stub_generate");
     assert_eq!(wrapped.permission_level(), PermissionLevel::ReadOnly);
     assert_eq!(wrapped.category(), ToolCategory::System);
+}
+
+/// A video-like tool whose poll observer is the one its call was built with:
+/// it polls a job state, then waits like a long job.
+struct PollingTool {
+    observer: tinyagents_harness::tinyinference_video::ProgressFn,
+    state: tinyagents_harness::tinyinference_video::JobState,
+}
+
+#[async_trait]
+impl Tool for PollingTool {
+    fn name(&self) -> &str {
+        "polling_generate"
+    }
+    fn description(&self) -> &str {
+        "polling"
+    }
+    fn parameters_schema(&self) -> Value {
+        json!({ "type": "object" })
+    }
+    async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
+        self.execute_with_context(args, tinytools::ToolCallOptions::default(), None)
+            .await
+    }
+    async fn execute_with_context(
+        &self,
+        _args: Value,
+        _options: tinytools::ToolCallOptions,
+        _context: Option<&dyn tinytools::ToolRunContext>,
+    ) -> anyhow::Result<ToolResult> {
+        (self.observer)(&tinyagents_harness::tinyinference_video::VideoJobStatus {
+            id: "job".into(),
+            state: self.state.clone(),
+            outputs: 0,
+            output_indices: Vec::new(),
+            cost_usd: None,
+            error: None,
+        });
+        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+        Ok(ToolResult::error("no files"))
+    }
+}
+
+#[derive(Default)]
+struct Recorder(std::sync::Mutex<Vec<String>>);
+
+impl tinytools::ToolRunContext for Recorder {
+    fn report_progress(&self, update: tinytools::ToolProgress) {
+        self.0
+            .lock()
+            .unwrap()
+            .push(update.message.unwrap_or_default());
+    }
+}
+
+/// The per-call inner tool binds the poll observer to the call it serves, so
+/// two concurrent video calls each report their own job state.
+#[tokio::test(start_paused = true)]
+async fn per_call_observer_reports_each_calls_own_job_state() {
+    use tinyagents_harness::tinyinference_video::JobState;
+    let root = tempfile::tempdir().unwrap();
+    let states = std::sync::Mutex::new(vec![JobState::InProgress, JobState::Pending]);
+    let wrapped = MediaArtifactTool::new(
+        PollingTool {
+            observer: std::sync::Arc::new(|_| {}),
+            state: JobState::Pending,
+        },
+        ArtifactKind::Video,
+        root.path().join("workspace"),
+        root.path().join("Files"),
+    )
+    .with_per_call_inner(move |observer, _chat| PollingTool {
+        observer,
+        state: states.lock().unwrap().pop().unwrap(),
+    });
+    let (a, b) = (Recorder::default(), Recorder::default());
+    let (ra, rb) = tokio::join!(
+        wrapped.execute_with_context(json!({}), tinytools::ToolCallOptions::default(), Some(&a)),
+        wrapped.execute_with_context(json!({}), tinytools::ToolCallOptions::default(), Some(&b)),
+    );
+    ra.unwrap();
+    rb.unwrap();
+    let (ma, mb) = (a.0.lock().unwrap().clone(), b.0.lock().unwrap().clone());
+    assert_eq!(ma, vec!["Generating video — 15s elapsed (job pending)"]);
+    assert_eq!(mb, vec!["Generating video — 15s elapsed (job in_progress)"]);
 }

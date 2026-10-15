@@ -1,5 +1,5 @@
 use super::*;
-use crate::agent::harness::fork_context::{with_parent_context, ParentExecutionContext};
+use crate::agent::harness::fork_context::ParentExecutionContext;
 use crate::agent::harness::host_definition::AgentDefinition;
 use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::agent::orchestration::spawn_parallel::{
@@ -112,7 +112,7 @@ async fn typed_dispatch_uses_the_parent_token_for_fanout_cancellation() {
         .into_tinyagents(tinyagents_harness::context::RunConfig::new("parent"));
 
     cancellation.cancel();
-    let result = with_parent_context(parent, async {
+    let result = (async {
         dispatch
             .execute(
                 &(),

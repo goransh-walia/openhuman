@@ -517,6 +517,9 @@ impl SpanCollector {
                 }
             }
             AgentProgress::SubagentAwaitingUser { .. } => {}
+            // A running tool's status line can quote its output (a shell
+            // call's last line), so it is content and never exported.
+            AgentProgress::ToolCallProgress { .. } => {}
         }
     }
 }

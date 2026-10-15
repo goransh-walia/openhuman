@@ -1,5 +1,6 @@
 //! Controller-registry schemas for `openhuman.agent_registry_*`.
 
+use crate::core::runtime::DispatchCtx;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
@@ -213,56 +214,56 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_list(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::ListRequest>(Value::Object(params))?;
         to_json(rpc::list_rpc(req).await?)
     })
 }
 
-fn handle_available_tools(params: Map<String, Value>) -> ControllerFuture {
+fn handle_available_tools(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::AvailableToolsRequest>(Value::Object(params))?;
         to_json(rpc::available_tools_rpc(req).await?)
     })
 }
 
-fn handle_get(params: Map<String, Value>) -> ControllerFuture {
+fn handle_get(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::GetRequest>(Value::Object(params))?;
         to_json(rpc::get_rpc(req).await?)
     })
 }
 
-fn handle_create_custom(params: Map<String, Value>) -> ControllerFuture {
+fn handle_create_custom(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::CreateCustomRequest>(Value::Object(params))?;
         to_json(rpc::create_custom_rpc(req).await?)
     })
 }
 
-fn handle_upsert_custom(params: Map<String, Value>) -> ControllerFuture {
+fn handle_upsert_custom(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::UpsertCustomRequest>(Value::Object(params))?;
         to_json(rpc::upsert_custom_rpc(req).await?)
     })
 }
 
-fn handle_update(params: Map<String, Value>) -> ControllerFuture {
+fn handle_update(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::UpdateRequest>(Value::Object(params))?;
         to_json(rpc::update_rpc(req).await?)
     })
 }
 
-fn handle_set_enabled(params: Map<String, Value>) -> ControllerFuture {
+fn handle_set_enabled(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::SetEnabledRequest>(Value::Object(params))?;
         to_json(rpc::set_enabled_rpc(req).await?)
     })
 }
 
-fn handle_remove(params: Map<String, Value>) -> ControllerFuture {
+fn handle_remove(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let req = parse_value::<rpc::RemoveRequest>(Value::Object(params))?;
         to_json(rpc::remove_rpc(req).await?)

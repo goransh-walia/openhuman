@@ -14,6 +14,7 @@
 //! the thread stays alive and the user expects to see that their sub-agent was
 //! cancelled.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{json, Map, Value};
 
 use crate::agent::orchestration::running_subagents::{CancelledSubagent, SteerError};
@@ -100,7 +101,7 @@ fn schema_for(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_subagent_cancel(params: Map<String, Value>) -> ControllerFuture {
+fn handle_subagent_cancel(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         let task_id = require_str(&params, "taskId")?;
@@ -182,7 +183,7 @@ fn handle_subagent_cancel(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_subagent_steer(params: Map<String, Value>) -> ControllerFuture {
+fn handle_subagent_steer(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         let task_id = require_str(&params, "taskId")?;

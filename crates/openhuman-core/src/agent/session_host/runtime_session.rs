@@ -36,7 +36,7 @@ use crate::agent::{
     session_host::{
         driver::OpenHumanSessionDriver, OpenHumanSessionHooks, OpenHumanTranscriptCodec,
     },
-    tinyagents::{host::OpenHumanRunContext, TurnContextMiddleware},
+    tinyagents::{host::OpenHumanRunContext, middleware::turn_context::TurnContextMiddleware},
 };
 
 #[path = "runtime_session_progress.rs"]
@@ -244,7 +244,7 @@ impl OpenHumanTurnPrelude {
                     )
                     .filter(|spec| {
                         self.thread_id.is_some()
-                            || !crate::agent::tinyagents::harness_tool_registration::is_thread_goal_tool(
+                            || !crate::agent::tinyagents::tool_registration::is_thread_goal_tool(
                                 &spec.name,
                             )
                     })
@@ -278,7 +278,7 @@ impl OpenHumanTurnPrelude {
             .filter(|spec| !withheld.contains(&spec.name))
             .filter(|spec| {
                 self.thread_id.is_some()
-                    || !crate::agent::tinyagents::harness_tool_registration::is_thread_goal_tool(
+                    || !crate::agent::tinyagents::tool_registration::is_thread_goal_tool(
                         &spec.name,
                     )
             })
@@ -291,7 +291,7 @@ impl OpenHumanTurnPrelude {
             .chain(surface.synthesized_tools.iter())
             .filter(|tool| {
                 self.thread_id.is_some()
-                    || !crate::agent::tinyagents::harness_tool_registration::is_thread_goal_tool(
+                    || !crate::agent::tinyagents::tool_registration::is_thread_goal_tool(
                         tool.name(),
                     )
             })
@@ -305,7 +305,7 @@ impl OpenHumanTurnPrelude {
         visible_tool_names.retain(|name| !surface.permanent_tool_names.contains(name));
         if self.thread_id.is_none() {
             visible_tool_names.retain(|name| {
-                !crate::agent::tinyagents::harness_tool_registration::is_thread_goal_tool(name)
+                !crate::agent::tinyagents::tool_registration::is_thread_goal_tool(name)
             });
         }
         crate::agent::prompts::swap_deferred_for_discovery_bridge(
@@ -482,7 +482,7 @@ impl OpenHumanTurnPrelude {
             mutable.last_memory_context = (!context.is_empty()).then_some(context);
         }
         run_context.response_shape = turn.response_shape.clone();
-        run_context.attach_parent(self.parent_context());
+        run_context.attach_parent(self.parent_context(run_context.parent.as_ref()));
         self.apply_pending_announcements(&mut enriched);
         run_context.attachment_placeholders = Arc::new(
             crate::agent::multimodal::extract_image_placeholders_in_text(original_user_message),
@@ -812,7 +812,7 @@ impl OpenHumanSessionHost {
                         + usize::from(view.history.last() != Some(&request.input));
                     Box::pin(async move {
                         let transcript_snapshot =
-                            crate::agent::tinyagents::TranscriptSnapshotSink::default();
+                            crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshotSink::default();
                         transcript_snapshot
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner)

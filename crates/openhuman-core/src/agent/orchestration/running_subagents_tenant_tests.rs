@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet, Mode};
 use crate::tools::toolpacks::ToolGroups;
 
@@ -127,7 +128,7 @@ async fn control(function: &str, task: &str) -> serde_json::Value {
     if function == "steer" {
         params.insert("message".into(), serde_json::json!("ownership regression"));
     }
-    (controller.handler)(params)
+    (controller.handler)(DispatchCtx::process_default(), params)
         .await
         .expect("control response")
 }
@@ -146,6 +147,7 @@ async fn dispatched_control(function: &str, task: &str) -> Result<serde_json::Va
         params["message"] = serde_json::json!("scoped dispatch regression");
     }
     crate::core::invoke::invoke_method(
+        DispatchCtx::process_default(),
         crate::core::invoke::default_state(),
         &format!("openhuman.subagent_{function}"),
         params,
@@ -213,6 +215,7 @@ async fn saas_dispatch_exposes_only_the_callers_detached_worker_controls() {
         assert!(crate::core::all::schema_for_rpc_method(&method).is_none());
         assert!(
             crate::core::invoke::invoke_method(
+                DispatchCtx::process_default(),
                 crate::core::invoke::default_state(),
                 &method,
                 serde_json::json!({}),

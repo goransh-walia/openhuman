@@ -424,7 +424,7 @@ async fn an_erase_fence_waits_for_only_the_current_write_and_preserves_later_enq
         &facts(&config),
     )
     .unwrap();
-    schedule(Arc::new(config.clone()));
+    schedule(Arc::new(config.clone()), &Namespace::ROOT);
     engine.entered.notified().await;
     let fence_config = config.clone();
     let fencing = tokio::spawn(async move { fence_and_clear(&fence_config).await });
@@ -458,7 +458,7 @@ async fn an_erase_fence_waits_for_only_the_current_write_and_preserves_later_enq
         &facts(&config),
     )
     .unwrap();
-    schedule(Arc::new(config.clone()));
+    schedule(Arc::new(config.clone()), &Namespace::ROOT);
     assert_eq!(read(&config.workspace_dir).unwrap().len(), 2);
     drop(fence);
     drain(&config).await;

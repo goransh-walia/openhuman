@@ -3,6 +3,8 @@ use async_trait::async_trait;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tinyagents_definition::{DefinitionSource, ModelSpec, PromptSource, SandboxMode, ToolScope};
 use tinyagents_harness::context::RunConfig;
+use tinyagents_harness::runtime::AgentHarness;
+use tinyinference_llm::message::Message;
 use tinyinference_llm::model::{ChatModel, ModelRequest, ModelResponse, ModelStream};
 
 fn dummy_definition() -> AgentDefinition {

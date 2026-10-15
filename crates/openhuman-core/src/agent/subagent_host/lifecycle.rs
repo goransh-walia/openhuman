@@ -36,15 +36,9 @@ use super::{
 fn root_context_from_options(
     options: &SubagentRunOptions,
 ) -> crate::agent::tinyagents::host::OpenHumanRunContext {
-    let mut context = options.run_context.clone();
-    // The public convenience entrypoint is also used inside a parent turn by
-    // legacy callers and test fixtures. Preserve that parent lineage when the
-    // explicit carrier has not already supplied one; an explicit value always
-    // wins so a caller cannot be silently re-bound to an ambient turn.
-    if context.parent.is_none() {
-        context.parent = crate::agent::harness::current_parent();
-    }
-    context
+    // The parent lineage is exactly what the caller put on the explicit
+    // carrier (`run_context.parent`); nothing is re-bound from an ambient turn.
+    options.run_context.clone()
 }
 
 /// Runs one host subagent through a neutral driver using a real direct child.

@@ -310,15 +310,6 @@ tinyinference-voice = { path = "../../vendor/tinyagents/vendor/tinyinference/cra
 # `Connection`) instead of a second one compiled only for the storage wire types.
 tinybus = { path = "../../vendor/tinybus/crates/tinybus" }
 
-[patch."https://github.com/tinyhumansai/tinystoragedrivers"]
-# tinyflows names the storage crates by git tag (v0.7.0); redirect them to the
-# copy tinyagents vendors so this world links one `DocumentStore` trait and one
-# `libsqlite3-sys`. Still needed although the versions agree: a git and a path
-# source are distinct packages. Mirrors the root Cargo.toml.
-tinystoragedrivers-core = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
-tinystoragedrivers-sqlite = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
-tinystoragedrivers-secrets = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
-
 [patch.crates-io]
 # Keep reqwest defaults disabled in this independent Cargo world too. Without
 # this patch, the registry release reintroduces native-tls/OpenSSL on Linux.

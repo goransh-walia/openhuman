@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde::de::{self, DeserializeOwned};
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -92,7 +93,7 @@ pub fn app_state_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_snapshot(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_snapshot(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         crate::desktop::app_state::snapshot()
             .await?
@@ -100,7 +101,7 @@ fn handle_snapshot(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_update_local_state(params: Map<String, Value>) -> ControllerFuture {
+fn handle_update_local_state(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload: UpdateLocalStateParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;

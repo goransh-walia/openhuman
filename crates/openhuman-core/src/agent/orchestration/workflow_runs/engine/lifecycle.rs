@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tinyagents_orchestration::workflow::{reset_running_phases, WorkflowEngine};
 
+use crate::agent::harness::ParentExecutionContext;
 use crate::agent::orchestration::parent_context::with_root_parent;
 use crate::config::Config;
 use tinyagents_session::run_ledger::{WorkflowRun, WorkflowRunStatus, WorkflowRunUpsert};
@@ -48,6 +49,7 @@ pub async fn start_workflow_run(
             &run_id,
             None,
             safety_tier,
+            None,
         )),
     );
     let run = initial_engine
@@ -70,7 +72,7 @@ pub async fn start_workflow_run(
             Ok(task_config) => {
                 crate::agent::turn_origin::with_inherited_origin(
                     inherited_origin,
-                    run_engine_loop(&task_config, &task_run_id, definition, cancel),
+                    run_engine_loop(&task_config, &task_run_id, definition, cancel, None),
                 )
                 .await;
             }
@@ -209,7 +211,7 @@ pub async fn resume_workflow_run(config: &Config, id: &str) -> Result<WorkflowRu
             Ok(task_config) => {
                 crate::agent::turn_origin::with_inherited_origin(
                     inherited_origin,
-                    run_engine_loop(&task_config, &task_run_id, definition, cancel),
+                    run_engine_loop(&task_config, &task_run_id, definition, cancel, None),
                 )
                 .await;
             }
@@ -237,6 +239,7 @@ pub(crate) async fn run_engine_loop(
     run_id: &str,
     definition: WorkflowDefinition,
     cancel: WorkflowCancelSignal,
+    parent_override: Option<ParentExecutionContext>,
 ) {
     let model_override = get_workflow_run(config, run_id)
         .ok()
@@ -282,24 +285,32 @@ pub(crate) async fn run_engine_loop(
             return;
         }
     };
-    let engine = WorkflowEngine::new(
-        store,
-        Arc::new(super::super::host::OpenHumanWorkflowExecutor::new(
-            run_id,
-            model_override,
-            safety_tier,
-        )),
+    let cancel_token = cancel.token.clone();
+    let outcome = with_root_parent(
+        parent_override,
+        config,
+        "workflow_engine",
+        "workflow",
+        "workflow",
+        |parent| async move {
+            let engine = WorkflowEngine::new(
+                store,
+                Arc::new(super::super::host::OpenHumanWorkflowExecutor::new(
+                    run_id,
+                    model_override,
+                    safety_tier,
+                    Some(parent),
+                )),
+            )
+            .with_event_sink(Arc::new(tinyagents_graph::GraphTracingSink::new(format!(
+                "workflow:{run_id}"
+            ))));
+            engine
+                .drive(run_id, &definition, cancel_token)
+                .await
+                .map_err(anyhow::Error::msg)
+        },
     )
-    .with_event_sink(Arc::new(tinyagents_graph::GraphTracingSink::new(format!(
-        "workflow:{run_id}"
-    ))));
-
-    let outcome = with_root_parent(config, "workflow_engine", "workflow", "workflow", async {
-        engine
-            .drive(run_id, &definition, cancel.token.clone())
-            .await
-            .map_err(anyhow::Error::msg)
-    })
     .await
     // Flatten: outer Err = root-parent build failure, inner = drive_phases result.
     .unwrap_or_else(Err);

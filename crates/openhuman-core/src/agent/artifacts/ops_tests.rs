@@ -255,6 +255,7 @@ async fn regenerate_errors_when_args_missing() {
         ArtifactKind::Presentation,
         "Old Deck",
         "pptx",
+        None,
     )
     .await
     .unwrap();
@@ -285,6 +286,7 @@ async fn regenerate_reruns_producer_and_reuses_id() {
         ArtifactKind::Presentation,
         "Q3 Deck",
         "pptx",
+        None,
     )
     .await
     .unwrap();
@@ -364,11 +366,12 @@ async fn get_returns_the_files_folder_path() {
         ArtifactKind::Document,
         "Plan",
         "docx",
+        None,
     )
     .await
     .unwrap();
     std::fs::write(&path, b"plan").unwrap();
-    finalize_artifact(tmp.path(), &meta.id, 4).await.unwrap();
+    finalize_artifact(tmp.path(), &meta.id, 4, None).await.unwrap();
 
     let value = ai_get_artifact(&config, &meta.id)
         .await
@@ -395,11 +398,12 @@ async fn get_reports_a_ready_file_removed_outside_openhuman() {
         ArtifactKind::Document,
         "Plan",
         "docx",
+        None,
     )
     .await
     .unwrap();
     std::fs::write(&path, b"plan").unwrap();
-    finalize_artifact(tmp.path(), &meta.id, 4).await.unwrap();
+    finalize_artifact(tmp.path(), &meta.id, 4, None).await.unwrap();
     std::fs::remove_file(&path).unwrap();
 
     let err = ai_get_artifact(&config, &meta.id).await.unwrap_err();

@@ -40,6 +40,27 @@ mod legacy_import_tests;
 use backend as store;
 use tinyagents_session::threads as types;
 
+/// Counts returned when the host purges stored conversations.
+///
+/// This keeps the host-facing store contract independent of the underlying
+/// session-store crate's concrete return type.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ConversationPurgeStats {
+    /// Number of conversations removed.
+    pub thread_count: usize,
+    /// Number of messages removed across those conversations.
+    pub message_count: usize,
+}
+
+impl From<types::ConversationPurgeStats> for ConversationPurgeStats {
+    fn from(stats: types::ConversationPurgeStats) -> Self {
+        Self {
+            thread_count: stats.thread_count,
+            message_count: stats.message_count,
+        }
+    }
+}
+
 // Only the hosted-channel relay (`channels`) claims turns.
 #[cfg(feature = "channels")]
 pub(crate) use bus::claim_channel_turn;
@@ -47,7 +68,7 @@ pub use bus::register_conversation_persistence_subscriber;
 pub use store::{
     append_message, delete_messages_from, delete_thread, ensure_thread, get_messages, list_threads,
     purge_threads, update_message, update_thread_labels, update_thread_title,
-    update_thread_working_dir, ConversationPurgeStats, ConversationStore,
+    update_thread_working_dir, ConversationStore,
 };
 pub use types::{
     is_deterministic_message_id, reply_run_id, run_reply_message_id, ConversationThread,

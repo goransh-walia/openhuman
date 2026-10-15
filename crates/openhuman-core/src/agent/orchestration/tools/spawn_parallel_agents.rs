@@ -239,17 +239,6 @@ impl Tool for SpawnParallelAgentsTool {
         tool_context: Option<&dyn ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
         let parent_call_id = crate::tools::host_extensions::tool_call_id(tool_context);
-        if let Some(live_parent) = super::ambient_parent_run_context("direct-spawn-parallel") {
-            return execute_spawn_parallel_agents(
-                args,
-                live_parent.cancellation.clone(),
-                live_parent.workspace.clone(),
-                live_parent.data.child(),
-                Some(&live_parent),
-                parent_call_id,
-            )
-            .await;
-        }
         let workspace_descriptor = tool_context.and_then(|ctx| ctx.workspace().cloned());
         execute_spawn_parallel_agents(
             args,
@@ -258,6 +247,29 @@ impl Tool for SpawnParallelAgentsTool {
             crate::agent::tinyagents::host::OpenHumanRunContext::new(),
             None,
             parent_call_id,
+        )
+        .await
+    }
+}
+
+#[cfg(test)]
+impl SpawnParallelAgentsTool {
+    /// Drive the tool the way a live parent turn does, over an explicit
+    /// `parent` execution context. Tests only: production turns reach the tool
+    /// through [`SpawnParallelAgentsDispatch`] with their own carrier.
+    pub(crate) async fn execute_under_parent(
+        &self,
+        args: serde_json::Value,
+        parent: crate::agent::harness::ParentExecutionContext,
+    ) -> anyhow::Result<ToolResult> {
+        let live_parent = super::live_parent_run_context("direct-spawn-parallel", parent);
+        execute_spawn_parallel_agents(
+            args,
+            live_parent.cancellation.clone(),
+            live_parent.workspace.clone(),
+            live_parent.data.child(),
+            Some(&live_parent),
+            None,
         )
         .await
     }

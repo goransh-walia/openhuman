@@ -112,16 +112,8 @@ impl UiServerPort for HostUiPort {
         let client = self.client()?;
         let client_config = host::client_config(&self.config);
         if self.is_installed_connected(server_id).await {
-            let live: Vec<tinymcp_bus::McpTool> = client
-                .call(
-                    &client_config,
-                    tinymcp_bus::names::methods::LIST_TOOLS,
-                    (server_id,),
-                )
-                .await
-                .ok()?;
-            let safe = crate::mcp::registry::tools_safe_for_agent(server_id, live);
-            let candidate = safe.into_iter().find(|candidate| candidate.name == tool)?;
+            let candidate =
+                super::decorate::installed_tool(&client, &client_config, server_id, tool).await?;
             return Some(UiToolDescriptor {
                 meta: candidate.meta,
                 annotations: None,

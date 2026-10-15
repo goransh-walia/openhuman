@@ -1,5 +1,6 @@
 //! `mcp_ui` controller schemas and handlers.
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 use serde_json::{Map, Value};
@@ -89,25 +90,25 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_resource_read(params: Map<String, Value>) -> ControllerFuture {
+fn handle_resource_read(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let server_id = read_optional::<String>(&params, "server_id")?;
         let uri = read_optional::<String>(&params, "uri")?;
         let inline_id = read_optional::<String>(&params, "inline_id")?;
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let port = HostUiPort::new(Arc::new(config));
         let outcome = ops::resource_read(&port, server_id, uri, inline_id).await?;
         Ok(outcome.value)
     })
 }
 
-fn handle_tool_call(params: Map<String, Value>) -> ControllerFuture {
+fn handle_tool_call(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let server_id = read_optional::<String>(&params, "server_id")?;
         let tool_name = read_optional::<String>(&params, "tool_name")?;
         let arguments = params.get("arguments").cloned();
         let confirmed = read_optional::<bool>(&params, "confirmed")?.unwrap_or(false);
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let security = crate::security::live_policy::current().unwrap_or_else(|| {
             Arc::new(SecurityPolicy::from_config(
                 &config.autonomy,

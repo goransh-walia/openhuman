@@ -101,7 +101,7 @@ impl Tool for ComposioExecuteTool {
         ToolCategory::Workflow
     }
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        let (config, outcome) = Box::pin(self.execute_unredacted(args, None, None)).await;
+        let (config, outcome) = Box::pin(self.execute_unredacted(args, None, None, None)).await;
         redact_composio_outcome(&config, outcome)
     }
     async fn execute_with_context(
@@ -114,6 +114,9 @@ impl Tool for ComposioExecuteTool {
             args,
             sandbox_mode_for_tool(context),
             task_recency_window_for_tool(context),
+            crate::agent::tinyagents::host::run_context::approval_for_tool(context)
+                .chat
+                .as_ref(),
         ))
         .await;
         redact_composio_outcome(&config, outcome)
@@ -130,6 +133,7 @@ impl ComposioExecuteTool {
         args: Value,
         sandbox_mode: Option<SandboxMode>,
         task_recency_window: Option<std::time::Duration>,
+        chat: Option<&crate::security::approval::ApprovalChatContext>,
     ) -> (Box<Config>, anyhow::Result<ToolResult>) {
         let tool = args
             .get("tool")
@@ -307,6 +311,7 @@ impl ComposioExecuteTool {
         // (#1710, #1797)).
         let res = super::super::execute_dispatch::execute_composio_action(
             &live_config,
+            chat,
             &tool,
             arguments,
             None,

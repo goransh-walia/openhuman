@@ -1,38 +1,38 @@
-//! The two standard web-channel turn guards — the wall-clock backstop and
-//! cooperative cancellation — plus the Sentry-suppression / timeout-tagging
-//! policy applied to whatever error a guarded turn produces.
+//! The standard web-channel turn guards — the idle guard, the wall-clock
+//! backstop and cooperative cancellation — plus the Sentry-suppression /
+//! timeout-tagging policy applied to whatever error a guarded turn produces.
 
 use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
+use super::super::turn_activity::{self, TurnActivity};
+use super::super::turn_close::{StopCause, StoppedTurn};
 use super::super::types::WebChatTaskResult;
 use crate::agent::turn_env::HostTurnEnv;
 
 /// Resolve the per-turn wall-clock backstop. Returns `None` when disabled
 /// (env `OPENHUMAN_WEB_TURN_TIMEOUT_SECS=0`).
 ///
-/// This is the OUTER safety net (issue #4746), and the single source of truth
-/// for the turn's deadlines (`agent::session_host::turn_backstop`, default 900s). The
-/// harness derives two earlier points from it:
+/// This is the turn's fixed total ceiling (issue #4746), and the single source
+/// of truth for the turn's deadlines (`agent::session_host::turn_backstop`, default 3600s,
+/// the harness's own turn ceiling). The harness derives two earlier points
+/// from it:
 ///
-/// * **wind-down** at backstop minus `min(120s, backstop/5)`, 780s by default.
-///   The harness pauses the run at its next safe point, and the session driver
-///   writes the grounded close from the work already done, so a long turn
-///   still delivers an answer.
-/// * **hard stop** at backstop minus `min(60s, backstop/10)`, 840s by default.
-///   The harness policy's `max_wall_clock_ms` (`tinyagents::run_policy_for`,
-///   3600s on its own) is clamped to it, so a tool or sub-agent call that runs
-///   across the wind-down point ends in the harness's own typed `Timeout` →
-///   `chat_error`.
+/// * **wind-down** at backstop minus `min(120s, backstop/5)`, 3480s by
+///   default. The harness pauses the run at its next safe point, and the
+///   session driver writes the grounded close from the work already done, so a
+///   long turn still delivers an answer.
+/// * **hard stop** at backstop minus `min(60s, backstop/10)`, 3540s by default.
+///   The harness policy's `max_wall_clock_ms` (`tinyagents::run_policy_for`)
+///   is clamped to it, so a tool or sub-agent call that runs across the
+///   wind-down point ends in the harness's own typed `Timeout` → `chat_error`.
 ///
-/// So this backstop only fires if a turn wedges OUTSIDE the harness run, e.g.
-/// in session assembly, the grounded close or the persistence plumbing. The
-/// client then still gets a terminal `turn_timeout` event instead of an empty
-/// reply or an endless `inference_heartbeat` stream. Before the derived
-/// deadlines existed, the harness ceiling sat at 3600s, *after* this 900s
-/// backstop. Long orchestrator turns were then dropped here, mid-work, with
-/// nothing delivered. Override via `OPENHUMAN_WEB_TURN_TIMEOUT_SECS`; set it to
+/// It is not the hang detector. That is the idle guard
+/// ([`turn_activity`](super::super::turn_activity)), which ends a turn that has
+/// been silent with no model or tool call in flight. The backstop used to be
+/// both, at 900s: a turn working steadily for 15 minutes was dropped exactly
+/// like a wedged one. Override via `OPENHUMAN_WEB_TURN_TIMEOUT_SECS`; set it to
 /// `0` to disable the backstop and the derived deadlines with it.
 fn web_turn_deadline() -> Option<Duration> {
     crate::agent::session_host::turn_backstop::configured_backstop()
@@ -41,8 +41,8 @@ fn web_turn_deadline() -> Option<Duration> {
 /// The backstop for a turn that has to be allowed to run long: one on a local /
 /// self-hosted provider (#6042), whose prefill alone can take many minutes. The
 /// explicit `OPENHUMAN_WEB_TURN_TIMEOUT_SECS` override still wins; otherwise the
-/// default is the local turn ceiling plus a grace period, never the hosted 900s,
-/// which sat below the harness's own ceilings and pre-empted them.
+/// default is the local turn ceiling plus a grace period, never the hosted
+/// backstop, which sits below the local harness ceilings and would pre-empt them.
 async fn resolve_web_turn_deadline() -> Option<Duration> {
     if std::env::var("OPENHUMAN_WEB_TURN_TIMEOUT_SECS").is_ok() {
         return web_turn_deadline();
@@ -62,41 +62,128 @@ async fn resolve_web_turn_deadline() -> Option<Duration> {
     web_turn_deadline()
 }
 
-/// Drive a chat-turn future under the wall-clock backstop.
+/// The turn a guard may have to close: its thread and request ids.
+pub(super) struct TurnIds {
+    pub(super) thread_id: String,
+    pub(super) request_id: String,
+}
+
+/// Upper bound on closing a stopped turn: config, snapshot read and the
+/// closing model call (itself bounded at 45s). Past it the stop is reported as
+/// a `turn_timeout` error, so closing can never be what hangs the turn.
+const CLOSE_REPLY_BUDGET: Duration = Duration::from_secs(60);
+
+/// Which guard stopped the turn.
+enum Stop {
+    Ceiling(Duration),
+    Idle(Duration),
+}
+
+/// Drive a chat-turn future under the idle guard and the wall-clock backstop.
 ///
-/// On elapse the inner future is dropped (cooperative teardown at its next
-/// await point) and a synthetic `turn_timeout` error is returned, so the
-/// caller's existing `chat_error` emission path fires. This is the outermost
-/// guarantee that a wedged turn always ends in a terminal event rather than an
-/// empty reply / an endless `inference_heartbeat` stream (issue #4746).
-async fn drive_turn_with_deadline<F>(
+/// Either guard drops the inner future (cooperative teardown at its next
+/// await point). The turn is then closed with a reply that says what it got
+/// done and where it got stuck ([`turn_close`](super::super::turn_close)),
+/// delivered like any other reply. Without `ids`, or when that reply cannot be
+/// built, a synthetic `turn_timeout` error is returned instead, so the
+/// caller's existing `chat_error` emission path fires. Either way a wedged
+/// turn always ends in a terminal event rather than an empty reply / an
+/// endless `inference_heartbeat` stream (issue #4746).
+///
+/// The idle guard fires first for a turn that stopped emitting progress with
+/// nothing in flight; the backstop bounds a turn that stays busy past the
+/// harness wind-down. `run_chat_task` taps the turn's progress stream into the
+/// [`TurnActivity`] built here and handed to the turn.
+async fn drive_turn_with_deadline<B, F>(
     deadline: Option<Duration>,
-    fut: F,
+    idle_window: Option<Duration>,
+    ids: Option<TurnIds>,
+    build: B,
 ) -> Result<WebChatTaskResult, String>
 where
+    B: FnOnce(TurnActivity) -> F,
     F: std::future::Future<Output = Result<WebChatTaskResult, String>>,
 {
-    match deadline {
+    let activity = TurnActivity::new();
+    // The turn future is boxed: it is very large, and the scope wrappers would
+    // otherwise hold it inline again and overflow the worker stack. It receives
+    // the activity record explicitly.
+    let turn = Box::pin(build(activity.clone()));
+    let bounded_turn = async move {
+        let Some(d) = deadline else {
+            return Ok(turn.await);
+        };
         // The session turn carries the matching `TurnDeadline` on its explicit
         // host environment (`run_turn_under_cancel_and_deadline`), so the
-        // harness (`agent::session_host::turn_backstop`) winds down before `d`. The turn
-        // future is boxed: it is very large and would otherwise be held inline
-        // by the timeout wrapper and overflow the worker stack.
-        Some(d) => match tokio::time::timeout(d, Box::pin(fut)).await {
-            Ok(res) => res,
-            Err(_elapsed) => {
-                log::warn!(
-                    "[web-channel] turn wall-clock backstop fired after {}s with no terminal event \
-                     (the harness wind-down did not close the turn in time); emitting graceful \
-                     turn_timeout chat_error (issue #4746)",
-                    d.as_secs()
-                );
-                Err(super::super::web_errors::turn_timeout_error_message(
-                    d.as_secs(),
-                ))
-            }
+        // harness (`agent::session_host::turn_backstop`) winds down before `d`.
+        tokio::time::timeout(d, turn)
+            .await
+            .map_err(|_elapsed| Stop::Ceiling(d))
+    };
+    let watched = activity.clone();
+    let watchdog = async move {
+        match idle_window {
+            Some(window) => turn_activity::idle_watchdog(watched, window).await,
+            None => std::future::pending().await,
+        }
+    };
+    let stop = tokio::select! {
+        biased;
+        res = bounded_turn => match res {
+            Ok(res) => return res,
+            Err(stop) => stop,
         },
-        None => fut.await,
+        idle = watchdog => Stop::Idle(idle),
+    };
+    let stuck = activity.stuck_point();
+    let (cause, fallback) = match stop {
+        Stop::Ceiling(d) => {
+            log::warn!(
+                "[web-channel] turn wall-clock backstop fired after {}s with no terminal event \
+                 (the harness wind-down did not close the turn in time); stuck={stuck:?} \
+                 (issue #4746)",
+                d.as_secs()
+            );
+            (
+                StopCause::Ceiling(d),
+                super::super::web_errors::turn_timeout_error_message(d.as_secs()),
+            )
+        }
+        Stop::Idle(idle) => {
+            log::warn!(
+                "[web-channel] turn idle guard fired: no progress for {}s with no model or tool \
+                 call in flight; stuck={stuck:?}",
+                idle.as_secs()
+            );
+            (
+                StopCause::Idle(idle),
+                super::super::web_errors::turn_idle_error_message(idle.as_secs()),
+            )
+        }
+    };
+    let Some(ids) = ids else {
+        return Err(fallback);
+    };
+    let (config, locale) = activity.turn_context();
+    let stopped = StoppedTurn {
+        thread_id: &ids.thread_id,
+        request_id: &ids.request_id,
+        cause,
+        stuck,
+        config,
+        locale,
+    };
+    let close = super::super::turn_close::close_reply(stopped);
+    match tokio::time::timeout(CLOSE_REPLY_BUDGET, close).await {
+        Ok(Some(reply)) => Ok(reply),
+        Ok(None) => Err(fallback),
+        Err(_) => {
+            log::warn!(
+                "[web-channel] closing the stopped turn took over {}s; reporting turn_timeout",
+                CLOSE_REPLY_BUDGET.as_secs()
+            );
+            Err(fallback)
+        }
     }
 }
 
@@ -115,10 +202,10 @@ fn turn_host_env(
     (env, turn_cancellation)
 }
 
-/// Run a chat-turn future under the two standard web-channel guards, inside the
+/// Run a chat-turn future under the standard web-channel guards, inside the
 /// shared origin + approval-context scope: the cooperative cancel token
-/// (interrupt/cancel paths tear the turn down at its next await point) and the
-/// wall-clock backstop ([`drive_turn_with_deadline`]).
+/// (interrupt/cancel paths tear the turn down at its next await point), the
+/// idle guard and the wall-clock backstop ([`drive_turn_with_deadline`]).
 ///
 /// Returns `None` when the turn was cancelled cooperatively before producing a
 /// result — the cancelling side already emitted the user-facing `chat_error`,
@@ -129,7 +216,8 @@ fn turn_host_env(
 /// `run_chat_task` when building `fut`.
 ///
 /// `build_turn` receives the turn's [`HostTurnEnv`] -- its own cancellation
-/// token (fired by a Stop) and the backstop's [`TurnDeadline`] -- and returns
+/// token (fired by a Stop) and the backstop's [`TurnDeadline`] -- the guard's
+/// [`TurnActivity`] record and the turn's [`ApprovalTurnContext`], and returns
 /// the turn future, which hands the env to the session it runs. The env is an
 /// explicit value, so it reaches the turn's whole run tree without any ambient
 /// scope.
@@ -142,21 +230,32 @@ pub(crate) async fn run_turn_under_cancel_and_deadline<B, F>(
     build_turn: B,
 ) -> Option<Result<WebChatTaskResult, String>>
 where
-    B: FnOnce(HostTurnEnv) -> F,
+    B: FnOnce(HostTurnEnv, TurnActivity, crate::security::approval::ApprovalTurnContext) -> F,
     F: std::future::Future<Output = Result<WebChatTaskResult, String>>,
 {
+    let ids = approval_ctx.request_id.clone().map(|request_id| TurnIds {
+        thread_id: approval_ctx.thread_id.clone(),
+        request_id,
+    });
     let deadline = resolve_web_turn_deadline().await;
     let (env, turn_cancellation) = turn_host_env(deadline);
-    let fut = build_turn(env);
     run_until_stopped(
         cancel_token,
         turn_cancellation,
         drive_turn_with_deadline(
             deadline,
-            crate::agent::turn_origin::with_origin(
-                origin,
-                crate::security::approval::APPROVAL_CHAT_CONTEXT.scope(approval_ctx, fut),
-            ),
+            turn_activity::configured_idle_window(),
+            ids,
+            |activity| {
+                crate::agent::turn_origin::with_origin(
+                    origin,
+                    build_turn(
+                        env,
+                        activity,
+                        crate::security::approval::ApprovalTurnContext::chat(approval_ctx),
+                    ),
+                )
+            },
         ),
     )
     .await

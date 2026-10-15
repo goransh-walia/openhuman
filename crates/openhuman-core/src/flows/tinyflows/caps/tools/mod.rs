@@ -50,6 +50,8 @@ pub(crate) struct ToolCallCtx<'a> {
     pub config: &'a Config,
     /// The autonomy tier / approval policy in force for this run.
     pub security: &'a SecurityPolicy,
+    /// The run's approval context, handed to the gate with each acting call.
+    pub approval: &'a crate::security::approval::ApprovalTurnContext,
 }
 
 /// One `tool_call` slug namespace.

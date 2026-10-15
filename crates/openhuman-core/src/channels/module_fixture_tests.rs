@@ -12,7 +12,9 @@ use crate::config::schema::ModuleSourceMode;
 use crate::config::Config;
 use crate::modules::linked::register_linked;
 use crate::modules::{ops, runtime};
+use std::sync::Arc;
 use tinybus::module::ModuleClient;
+#[cfg(feature = "e2e-test-support")]
 use tinychannels_bus::methods;
 
 const MODULE_ID: &str = "tinychannels";
@@ -21,6 +23,7 @@ const MODULE_ID: &str = "tinychannels";
 pub(crate) async fn client() -> ModuleClient {
     register_linked(MODULE_ID, tinychannels_module::linked_module);
     let mut config = Config::default();
+    config.modules.allow_download = false;
     config.modules.source = ModuleSourceMode::Linked;
     ops::ensure_loaded(&config, MODULE_ID)
         .await
@@ -36,8 +39,31 @@ pub(crate) async fn client() -> ModuleClient {
     ops::fixture_client(proxy)
 }
 
+/// Temporarily install in-memory storage for module callbacks in isolated tests.
+pub(crate) struct MemoryStorageGuard {
+    previous: Option<Arc<dyn crate::storage::StorageBackend>>,
+}
+
+/// Give the linked module a writable backend for storage-backed fixture calls.
+pub(crate) fn install_memory_storage() -> MemoryStorageGuard {
+    MemoryStorageGuard {
+        previous: crate::storage::install(Arc::new(crate::storage::MemoryStorage::new())),
+    }
+}
+
+impl Drop for MemoryStorageGuard {
+    fn drop(&mut self) {
+        crate::storage::clear();
+        if let Some(previous) = self.previous.take() {
+            crate::storage::install(previous);
+        }
+    }
+}
+
 #[tokio::test]
+#[cfg(feature = "e2e-test-support")]
 async fn linked_module_prepares_runtime_limits_over_confidential_bus_call() {
+    let _storage = install_memory_storage();
     use tinychannels_bus::module_control::{ChannelControlRequest, ChannelControlResult};
 
     let response: ChannelControlResult = client()
@@ -63,7 +89,9 @@ async fn linked_module_prepares_runtime_limits_over_confidential_bus_call() {
 }
 
 #[tokio::test]
+#[cfg(feature = "e2e-test-support")]
 async fn linked_module_prepares_legacy_inbound_facts_over_confidential_bus_call() {
+    let _storage = install_memory_storage();
     use tinychannels_bus::module_inbound::{
         ChannelInboundSource, PrepareChannelInboundRequest, PreparedChannelInbound,
     };

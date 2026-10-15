@@ -34,9 +34,11 @@ With no usable engine (signed out and no CortexDB key), memory is **off**:
 ## Who is acting (`memory::scope`)
 
 A `MemoryIdentity` (an agent definition and, for a team member, its team) is
-scoped around every turn: by the session host and channel dispatch for
-top-level agents, the sub-agent runner for children, the team runtime for
-members. Memory resolves it against the config of whoever reads or writes,
+carried explicitly on every turn's run context (`OpenHumanRunContext::memory_identity`):
+set by the session host and channel dispatch for top-level agents, derived with
+`child` by the sub-agent runner for children, and handed down by the team
+runtime for members. RPC handlers and the embed facade act as the root
+identity. Memory resolves it against the config of whoever reads or writes,
 first match wins:
 
 | | memory agent id | layout root |

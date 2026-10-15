@@ -76,6 +76,7 @@ async fn http_adapter_blocks_under_readonly_tier() {
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
         http_config: HttpRequestConfig::default(),
         http_creds: Arc::new(creds),
+        approval: Default::default(),
     };
 
     let request = json!({ "method": "GET", "url": "https://example.com" });
@@ -106,6 +107,7 @@ async fn composio_tool_call_blocks_under_readonly_tier() {
     let tools = OpenHumanTools {
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
+        approval: Default::default(),
     };
 
     let err = tools
@@ -151,6 +153,7 @@ async fn composio_read_action_allowed_under_readonly_tier() {
     let tools = OpenHumanTools {
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
+        approval: Default::default(),
     };
     let err = tools
         .invoke("TWITTER_RECENT_SEARCH", json!({}), None)
@@ -187,6 +190,7 @@ async fn composio_read_action_does_not_prompt_under_supervised_tier() {
     let tools = OpenHumanTools {
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::Supervised)),
+        approval: Default::default(),
     };
     let err = tools
         .invoke("TWITTER_RECENT_SEARCH", json!({}), None)
