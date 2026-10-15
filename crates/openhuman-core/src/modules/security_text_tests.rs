@@ -142,3 +142,16 @@ fn bridge_without_a_ready_module_leaves_the_floor_result() {
     let out = crate::core::log_redaction::scrub_secrets("Bearer abcdefghijklmnop");
     assert!(!out.contains("abcdefghijklmnop"), "{out}");
 }
+
+#[test]
+fn blocking_redact_without_a_module_runtime_never_returns_the_text() {
+    let mut config = Config::default();
+    config.modules.enabled = false;
+    let out = redact_blocking(
+        &config,
+        mode_text(),
+        "Bearer zzzsecretzzz",
+        std::time::Duration::from_millis(50),
+    );
+    assert!(out.is_err(), "{out:?}");
+}

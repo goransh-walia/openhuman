@@ -93,8 +93,22 @@ where
     T: Send + 'static,
     F: Future<Output = Result<T, String>> + Send + 'static,
 {
-    let target = TARGET.get().ok_or(SeamError::Unavailable)?;
-    run_on(&IN_FLIGHT, MAX_IN_FLIGHT, target, timeout, future)
+    run_slot(&TARGET, &IN_FLIGHT, MAX_IN_FLIGHT, timeout, future)
+}
+
+fn run_slot<T, F>(
+    slot: &OnceLock<Handle>,
+    in_flight: &AtomicUsize,
+    limit: usize,
+    timeout: Duration,
+    future: F,
+) -> Result<T, SeamError>
+where
+    T: Send + 'static,
+    F: Future<Output = Result<T, String>> + Send + 'static,
+{
+    let target = slot.get().ok_or(SeamError::Unavailable)?;
+    run_on(in_flight, limit, target, timeout, future)
 }
 
 pub(crate) fn run_on<T, F>(
