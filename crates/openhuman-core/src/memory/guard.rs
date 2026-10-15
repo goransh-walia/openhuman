@@ -2,7 +2,8 @@
 //!
 //! Every write leaves the process through [`ScrubbingEngine`]: each text a
 //! `StoreItem` carries is scrubbed of secrets and PII under the host policy
-//! (`security::scrub::host_policy`) before the engine sees it. Wrapping the
+//! (`tinyredact::Policy::corroborated`: a bare digit run must look like a card
+//! before it is redacted, so timestamps and ids survive) before the engine sees it. Wrapping the
 //! engine, rather than scrubbing at each call site, covers the paths that
 //! write through TinyMemory's own types (`AgentMemory::pre_turn` /
 //! `post_turn`, `Brain::ingest`, background ingests) as well as the host's.

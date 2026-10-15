@@ -54,9 +54,10 @@ impl ArtifactPathPolicy for WorkspaceGuard {
 }
 
 /// Scrubs credentials and PII out of an artifact body before it is stored,
-/// using the same `sanitize_text` pass that persists oversized tool results.
+/// through the TinySecurity module's `Text` redaction (`security::redact::text`),
+/// the same pass that persists oversized tool results.
 ///
-/// Sharing that function is the point: an artifact on disk is exactly as
+/// Sharing that pass is the point: an artifact on disk is exactly as
 /// readable as a persisted tool result, so a second, weaker redaction path here
 /// would be a hole in the same wall.
 #[derive(Debug)]
