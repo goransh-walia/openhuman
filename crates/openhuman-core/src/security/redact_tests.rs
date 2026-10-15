@@ -2,7 +2,7 @@ use super::*;
 
 /// A config whose module is the published archive, downloaded into a scratch
 /// install under `target/tmp` (a `TMPDIR` under `/tmp` breaks the policy tests).
-pub(super) fn released_config() -> (tempfile::TempDir, crate::config::Config) {
+pub(crate) fn released_config() -> (tempfile::TempDir, crate::config::Config) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();
     let dir = tempfile::tempdir_in(&root).unwrap();
@@ -17,7 +17,7 @@ pub(super) fn released_config() -> (tempfile::TempDir, crate::config::Config) {
 }
 
 /// Load the module and arm the log bridge through an ordinary async call.
-pub(super) async fn arm(config: &crate::config::Config) {
+pub(crate) async fn arm(config: &crate::config::Config) {
     crate::modules::security::text::redact(
         config,
         crate::modules::security::text::RedactMode::Text,

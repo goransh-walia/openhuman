@@ -73,23 +73,8 @@ fn rank_puts_an_unassessed_part_above_every_assessed_one() {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn sensitive_assessment_on_the_released_archive() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
-    std::fs::create_dir_all(&root).unwrap();
-    let dir = tempfile::tempdir_in(&root).unwrap();
-    let base = dir.path().canonicalize().unwrap();
-    let mut config = crate::config::Config::default();
-    config.modules.enabled = true;
-    config.modules.allow_download = true;
-    config.modules.install_dir = Some(base.join("modules").to_string_lossy().into_owned());
-    config.action_dir = base.join("action");
-    config.workspace_dir = base.join("state");
-    crate::modules::security::text::redact(
-        &config,
-        crate::modules::security::text::RedactMode::Text,
-        "warm",
-    )
-    .await
-    .expect("the released module must answer");
+    let (_dir, config) = crate::security::redact::tests::released_config();
+    crate::security::redact::tests::arm(&config).await;
 
     let _scope = test_privacy_scope(PrivacyMode::Sensitive);
     let clean = EgressDescriptor::composio("TOOL").assessed("summarise the quarterly plan");

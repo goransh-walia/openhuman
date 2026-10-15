@@ -363,3 +363,31 @@ fn other_modes_never_assess_the_arguments() {
     assert!(gate.payload.is_none());
     assert!(gate.local_only_block("example.com").is_none());
 }
+
+/// The released module decides a real network call: a plain GET is permitted
+/// under Sensitive, one whose headers carry a credential is refused.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn sensitive_network_gate_on_the_released_archive() {
+    use crate::config::PrivacyMode;
+    use crate::security::live_policy::test_privacy_scope;
+    let (_dir, config) = crate::security::redact::tests::released_config();
+    crate::security::redact::tests::arm(&config).await;
+    let _mode = test_privacy_scope(PrivacyMode::Sensitive);
+    let security = policy(AutonomyLevel::Supervised, 100);
+
+    let plain = RoutedGate::new(
+        Arc::clone(&security),
+        None,
+        &json!({"url": "https://example.com/docs", "method": "GET"}),
+    );
+    assert!(plain.local_only_block("example.com").is_none());
+
+    let secret = format!("Bearer {}", "abcdefghijklmnopqrstuvwxyz0123456789");
+    let leaking = RoutedGate::new(
+        security,
+        None,
+        &json!({"url": "https://example.com/", "headers": {"Authorization": secret}}),
+    );
+    assert!(leaking.local_only_block("example.com").is_some());
+}
