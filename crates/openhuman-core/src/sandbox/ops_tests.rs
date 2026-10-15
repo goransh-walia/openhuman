@@ -436,6 +436,52 @@ async fn saas_requires_the_sandbox_even_when_the_host_turns_it_off() {
     assert!(!crate::core::runtime::is_saas());
 }
 
+const SAAS_REFUSAL_CHILD: &str = "OPENHUMAN_SANDBOX_SAAS_REFUSAL_CHILD";
+
+/// A SaaS spawn whose policy resolved to no backend never reaches the host
+/// shell, whatever the host off switch says.
+#[tokio::test]
+async fn saas_refuses_an_unsandboxed_spawn() {
+    let module = module_path!().split_once("::").expect("crate module").1;
+    let test = format!("{module}::saas_refuses_an_unsandboxed_spawn");
+    if std::env::var(SAAS_REFUSAL_CHILD).as_deref() == Ok(test.as_str()) {
+        crate::core::runtime::mode::lock_mode(crate::core::runtime::Mode::Saas).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let policy = resolve_sandbox_policy(
+            SandboxMode::None,
+            dir.path(),
+            dir.path(),
+            &crate::config::RuntimeConfig::default(),
+            false,
+        );
+        assert_eq!(policy.backend, SandboxBackendKind::None);
+        let error = execute_in_sandbox(
+            &DispatchCtx::process_default(),
+            &policy,
+            "echo unconfined",
+            dir.path(),
+            HashMap::new(),
+            Duration::from_secs(5),
+        )
+        .await
+        .expect_err("SaaS must refuse an unsandboxed spawn");
+        assert!(error.to_string().contains("SaaS"), "{error}");
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", &test, "--nocapture", "--test-threads=1"])
+        .env(SAAS_REFUSAL_CHILD, &test)
+        .env(SANDBOX_OFF_ENV, "off")
+        .output()
+        .expect("run isolated SaaS test");
+    assert!(
+        output.status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+        "isolated test {test} failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn untrusted_isolation_denies_noop_and_unsuitable_jails() {
     assert!(require_untrusted_isolation(true, true).is_ok());

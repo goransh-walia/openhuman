@@ -384,6 +384,13 @@ pub(crate) async fn execute_in_sandbox_metered(
         }
     };
     let policy = &effective_policy;
+    // SaaS never runs a command unisolated: a caller that resolved a policy with
+    // no backend (an agent mode of `None`, a stale default) is refused here, at
+    // the one spawn boundary, instead of falling through to the host shell.
+    if crate::core::runtime::is_saas() && policy.backend == SandboxBackendKind::None {
+        tracing::warn!("[sandbox] refusing an unsandboxed spawn under SaaS");
+        anyhow::bail!("SaaS commands must run in the user's sandbox; an unsandboxed spawn is refused");
+    }
     // Validate the working directory up front so a missing/bad action_dir
     // surfaces an actionable, path-naming error here rather than an opaque OS
     // error 267 (ERROR_DIRECTORY) at spawn time — parity with the unsandboxed
