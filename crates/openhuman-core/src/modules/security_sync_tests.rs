@@ -149,3 +149,19 @@ fn callers_over_the_limit_are_refused_and_permits_are_returned() {
 fn the_global_seam_is_unavailable_until_armed_outside_a_runtime() {
     assert!(!arm_current());
 }
+
+/// The module bus's own runtime outlives any caller's, so once it is armed the
+/// global seam answers from a plain thread even when the runtime that first
+/// called the module is gone.
+#[tokio::test]
+async fn the_module_bus_runtime_serves_the_global_seam_from_a_plain_thread() {
+    super::super::super::runtime::runtime()
+        .await
+        .expect("module runtime starts");
+    assert!(arm_module_runtime());
+    assert!(arm_module_runtime(), "arming is idempotent");
+    let answered = std::thread::spawn(|| run(Duration::from_secs(5), ok(7)))
+        .join()
+        .unwrap();
+    assert_eq!(answered, Ok(7));
+}
