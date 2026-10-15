@@ -527,6 +527,10 @@ fn validate_path_response(result: &tinysecurity_bus::PathValidationResult) -> Re
 mod native_tests;
 
 #[cfg(test)]
+#[path = "security_production_tests.rs"]
+mod production_tests;
+
+#[cfg(test)]
 #[path = "security_tenant_tests.rs"]
 mod tenant_tests;
 
