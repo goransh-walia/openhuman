@@ -14,8 +14,8 @@ fn changed_payload_is_high_risk_and_sensitive_refuses_it() {
     let assessment = assessment_from_answer("Bearer abc", Ok("[REDACTED]".to_string()));
     assert_eq!(assessment.level, IdentificationRisk::High);
     assert_eq!(assessment.categories, vec![CATEGORY_SENSITIVE_CONTENT]);
-    let desc = EgressDescriptor::composio("TOOL")
-        .with_risk(assessment.level, assessment.categories);
+    let desc =
+        EgressDescriptor::composio("TOOL").with_risk(assessment.level, assessment.categories);
     assert!(sensitive_blocks(PrivacyMode::Sensitive, &desc));
 }
 
@@ -96,12 +96,15 @@ async fn sensitive_assessment_on_the_released_archive() {
     assert_eq!(clean.risk_level, IdentificationRisk::None);
     assert!(!sensitive_blocks(PrivacyMode::Sensitive, &clean));
 
-    let secret = format!("send Authorization: Bearer {}", "abcdefghijklmnopqrstuvwxyz0123456789");
+    let secret = format!(
+        "send Authorization: Bearer {}",
+        "abcdefghijklmnopqrstuvwxyz0123456789"
+    );
     let dirty = EgressDescriptor::composio("TOOL").assessed(&secret);
     assert_eq!(dirty.risk_level, IdentificationRisk::High);
     assert!(sensitive_blocks(PrivacyMode::Sensitive, &dirty));
 
-    let batch = EgressDescriptor::embedding("cloud", "m")
-        .assessed_parts(["fine text", secret.as_str()]);
+    let batch =
+        EgressDescriptor::embedding("cloud", "m").assessed_parts(["fine text", secret.as_str()]);
     assert_eq!(batch.risk_level, IdentificationRisk::High);
 }

@@ -39,8 +39,11 @@ use crate::security::credentials::session_support::{
 pub const OPENROUTER_PROXY_PATH: &str = "/agent-integrations/openrouter";
 
 /// Rebuilds the generators so their egress disclosures reach `chat`.
-type GeneratorRouter =
-    Arc<dyn Fn(Option<ApprovalChatContext>) -> (Arc<dyn ImageGenerator>, Arc<dyn VideoGenerator>) + Send + Sync>;
+type GeneratorRouter = Arc<
+    dyn Fn(Option<ApprovalChatContext>) -> (Arc<dyn ImageGenerator>, Arc<dyn VideoGenerator>)
+        + Send
+        + Sync,
+>;
 
 /// The image and video generators for this process.
 pub struct MediaGenerators {
@@ -176,12 +179,7 @@ impl Guard {
     /// so under Sensitive the module assesses it. Reference images and frames
     /// are file content the host cannot assess; with any present the call stays
     /// unassessed, which Sensitive refuses.
-    fn admit_prompt(
-        &self,
-        route: &str,
-        prompt: &str,
-        has_media: bool,
-    ) -> ti_image::Result<()> {
+    fn admit_prompt(&self, route: &str, prompt: &str, has_media: bool) -> ti_image::Result<()> {
         use crate::security::egress::DataKind;
         let descriptor = Self::descriptor(route).with_data_kind(DataKind::Prompt);
         let descriptor = if has_media {
@@ -236,11 +234,8 @@ impl ImageGenerator for GuardedImage {
     }
 
     async fn generate(&self, request: ImageRequest) -> ti_image::Result<ImageResponse> {
-        self.guard.admit_prompt(
-            "images",
-            &request.prompt,
-            !request.references.is_empty(),
-        )?;
+        self.guard
+            .admit_prompt("images", &request.prompt, !request.references.is_empty())?;
         self.guard.budget().await?;
         self.inner.generate(request).await
     }

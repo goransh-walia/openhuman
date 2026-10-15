@@ -18,7 +18,8 @@ use tinyinference_llm::model::ModelRequest;
 
 use crate::config::PrivacyMode;
 use crate::security::egress::{
-    assess::{assess_for_mode, Assessment}, egress_blocks_message, EgressDescriptor, IdentificationRisk,
+    assess::{assess_for_mode, Assessment},
+    egress_blocks_message, EgressDescriptor, IdentificationRisk,
 };
 use crate::security::live_policy::current_privacy_mode;
 

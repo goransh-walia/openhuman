@@ -10,7 +10,13 @@ fn assessed(level: IdentificationRisk, categories: &[&str]) -> Option<Assessment
 #[test]
 fn non_sensitive_modes_never_refuse() {
     for mode in [PrivacyMode::Standard, PrivacyMode::LocalOnly] {
-        assert!(refusal_with(mode, "openai", "gpt", assessed(IdentificationRisk::High, &["credential_or_identifier"])).is_none());
+        assert!(refusal_with(
+            mode,
+            "openai",
+            "gpt",
+            assessed(IdentificationRisk::High, &["credential_or_identifier"])
+        )
+        .is_none());
         assert!(refusal_with(mode, "openai", "gpt", None).is_none());
     }
 }
@@ -33,8 +39,8 @@ fn sensitive_refuses_identifying_unassessed_and_missing_assessments() {
         assessed(IdentificationRisk::Unknown, &[]),
         None,
     ] {
-        let message = refusal_with(PrivacyMode::Sensitive, "openai", "gpt", assessment)
-            .expect("refused");
+        let message =
+            refusal_with(PrivacyMode::Sensitive, "openai", "gpt", assessment).expect("refused");
         assert!(message.contains("Sensitive privacy mode"), "{message}");
     }
 }
