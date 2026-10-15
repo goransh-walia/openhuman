@@ -31,25 +31,55 @@ pub(super) fn backend_egress_descriptor(path: &str) -> crate::security::egress::
     crate::security::egress::EgressDescriptor::integration(endpoint)
 }
 
-/// Egress spine (privacy epic S2, #4436): disclose an OpenHuman managed-backend
-/// round-trip before it leaves the device. Fire-and-forget — never fails the
-/// caller.
-pub(super) fn emit_backend_egress(approval: &ApprovalTurnContext, path: &str) {
-    crate::security::egress::emit_external_transfer(
-        approval.chat.as_ref(),
-        backend_egress_descriptor(path),
-    );
+/// What a managed-backend round-trip carries besides its endpoint.
+#[derive(Clone, Copy)]
+pub(super) enum BackendPayload<'a> {
+    /// Nothing but the path (GET, DELETE, download).
+    None,
+    /// A JSON body the module can assess.
+    Json(&'a serde_json::Value),
+    /// Bytes the host cannot assess before they stream (multipart upload).
+    Opaque,
 }
 
-/// Local-only enforcement (privacy epic S7, #4441): refuse a managed-backend
-/// round-trip that ships user data when the live policy is `LocalOnly`. Returns
-/// `Ok(())` for control-plane paths (session / team / billing / integration
-/// connection-management + catalog) even under `LocalOnly` — blocking those
-/// would break sign-in and the Connections UI for no privacy benefit. See
-/// [`is_control_plane`](crate::security::egress). Call before
-/// [`emit_backend_egress`] so a blocked call is neither disclosed nor sent.
-pub(super) fn enforce_backend_egress(path: &str) -> anyhow::Result<()> {
-    crate::security::egress::enforce_egress(&backend_egress_descriptor(path))
+/// The descriptor for one round-trip, with the payload's identification risk
+/// filled in from the real body (privacy epic S5): the endpoint is the "to
+/// where", the query string and body are the "what leaves". A body-less call
+/// stays metadata-only; a call that carries a body is content-bearing, so under
+/// Sensitive it needs a clean assessment. An opaque payload cannot be assessed
+/// and stays `Unknown`, which Sensitive refuses.
+pub(super) fn backend_egress_for(
+    path: &str,
+    payload: BackendPayload<'_>,
+) -> crate::security::egress::EgressDescriptor {
+    use crate::security::egress::DataKind;
+    let descriptor = backend_egress_descriptor(path);
+    let query = path.split_once('?').map_or("", |(_, query)| query);
+    match payload {
+        BackendPayload::None => descriptor.assessed(query),
+        BackendPayload::Json(body) => descriptor
+            .with_data_kind(DataKind::ToolArguments)
+            .assessed(&format!("{query}\n{body}")),
+        BackendPayload::Opaque => descriptor.with_data_kind(DataKind::FileContent),
+    }
+}
+
+/// Local-only and Sensitive enforcement (privacy epic S7, #4441), then the
+/// egress disclosure (S2, #4436), for one managed-backend round-trip, both from
+/// the one descriptor so the decision and the disclosure describe the same
+/// payload. Control-plane paths (session / team / billing / integration
+/// connection-management + catalog) stay permitted even under `LocalOnly`; see
+/// [`is_control_plane`](crate::security::egress). A blocked call is neither
+/// disclosed nor sent. Disclosure is fire-and-forget.
+pub(super) fn admit_backend_egress(
+    approval: &ApprovalTurnContext,
+    path: &str,
+    payload: BackendPayload<'_>,
+) -> anyhow::Result<()> {
+    let descriptor = backend_egress_for(path, payload);
+    crate::security::egress::enforce_egress(&descriptor)?;
+    crate::security::egress::emit_external_transfer(approval.chat.as_ref(), descriptor);
+    Ok(())
 }
 
 impl IntegrationClient {
@@ -131,8 +161,11 @@ impl IntegrationClient {
     ) -> anyhow::Result<T> {
         self.validate_credential_endpoint()?;
         reject_privileged_backend_path(method.as_str(), path)?;
-        enforce_backend_egress(path)?;
-        emit_backend_egress(approval, path);
+        admit_backend_egress(
+            approval,
+            path,
+            body.map_or(BackendPayload::None, BackendPayload::Json),
+        )?;
         self.ensure_budget_available(path).await?;
         let url = crate::util::url::join_url(&self.backend_url, path);
         let method_name = method.as_str().to_ascii_lowercase();
@@ -182,8 +215,7 @@ impl IntegrationClient {
     ) -> anyhow::Result<T> {
         self.validate_credential_endpoint()?;
         reject_privileged_backend_path("POST", path)?;
-        enforce_backend_egress(path)?;
-        emit_backend_egress(approval, path);
+        admit_backend_egress(approval, path, BackendPayload::Opaque)?;
         self.ensure_budget_available(path).await?;
         let url = crate::util::url::join_url(&self.backend_url, path);
         tracing::debug!("[integrations] POST(multipart) {}", url);

@@ -22,7 +22,7 @@ use construct::sanitize_backend_url;
 #[cfg(test)]
 use errors::is_composio_soft_auth_path;
 #[cfg(test)]
-use requests::{backend_egress_descriptor, enforce_backend_egress, managed_budget_applies_to_path};
+use requests::{backend_egress_descriptor, managed_budget_applies_to_path};
 
 #[cfg(test)]
 #[path = "client_tests.rs"]
