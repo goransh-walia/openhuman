@@ -205,16 +205,35 @@ async fn absent_module_fails_closed_instead_of_allowing() {
 }
 
 #[test]
-fn production_config_enables_password_crypt_and_keeps_keyring_and_pairing_denied() {
-    let crypto = module_config(&config()).crypto.expect("crypto surface");
-    assert!(
-        crypto.keyring.is_none(),
-        "keyring stays host-owned until rerouted"
+fn production_config_enables_password_crypt_and_the_encrypted_file_keyring_but_not_pairing() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
+    std::fs::create_dir_all(&root).unwrap();
+    let dir = tempfile::tempdir_in(&root).unwrap();
+    let mut config = config();
+    config.workspace_dir = dir.path().canonicalize().unwrap().join("state");
+
+    let crypto = module_config(&config).crypto.expect("crypto surface");
+    let keyring = crypto.keyring.expect("keyring is configured");
+    let expected = config.workspace_dir.join("security-keyring");
+    assert_eq!(
+        keyring.backend,
+        tinysecurity_bus::KeyringBackend2::EncryptedFile {
+            directory: expected.to_string_lossy().into_owned()
+        }
     );
+    assert!(expected.is_dir(), "the module-owned directory exists");
     assert!(
         crypto.pairing.is_none(),
-        "pairing stays host-owned until rerouted"
+        "the host has no pairing account to register"
     );
     assert!((1..=4096).contains(&crypto.operations_per_minute));
     assert!((1..=tinysecurity_bus::MAX_CRYPTO_PAYLOAD_BYTES).contains(&crypto.max_payload_bytes));
+}
+
+#[test]
+fn a_relative_workspace_leaves_the_keyring_denied() {
+    let mut config = config();
+    config.workspace_dir = std::path::PathBuf::from("relative-state");
+    let crypto = module_config(&config).crypto.expect("crypto surface");
+    assert!(crypto.keyring.is_none());
 }
