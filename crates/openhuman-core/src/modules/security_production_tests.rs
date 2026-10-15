@@ -251,3 +251,61 @@ async fn production_client_gates_shell_and_network_on_the_released_archive() {
     };
     assert_eq!(from_thread, Ok(GateDecision::Block));
 }
+
+/// The production keyring on the released archive: `module_config` configures
+/// the module's encrypted-file store and registers its backend for the consent
+/// callback, which the real module runtime serves. A declined answer refuses
+/// the store (whatever the host OS keyring probes as), an explicit
+/// local-encrypted answer admits it, and nothing is written in between.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key (downloads the published archive)"]
+async fn production_keyring_follows_recorded_consent_on_the_released_archive() {
+    use crate::security::keyring_consent::policy;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
+    std::fs::create_dir_all(&root).unwrap();
+    let dir = tempfile::tempdir_in(&root).unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let mut config = Config::default();
+    config.modules.enabled = true;
+    config.modules.allow_download = true;
+    config.modules.install_dir = Some(base.join("modules").to_string_lossy().into_owned());
+    config.action_dir = base.join("action");
+    config.workspace_dir = base.join("state");
+
+    let proxy = {
+        let mut guard = state().lock().await;
+        proxy(&config, &mut guard).await.expect("production proxy")
+    };
+    let caller = || CallerContext {
+        agent: "agent".into(),
+        thread: None,
+        flow: None,
+        call_id: "call-1".into(),
+        origin: tinysecurity_bus::Origin::Operator,
+        tier: tinysecurity_bus::AccessTier::Full,
+    };
+    let name = "user:production-keyring";
+
+    policy::apply_consent(&policy::build_consent_preference("declined"));
+    let refused = crypto::keyring_set(&proxy, caller(), "store", name, b"v".to_vec()).await;
+    assert!(refused.is_err(), "declined consent must refuse the store");
+
+    policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
+    assert_eq!(
+        crypto::keyring_get(&proxy, caller(), "read", name)
+            .await
+            .unwrap(),
+        None,
+        "a refused store must not have reached the backend"
+    );
+    crypto::keyring_set(&proxy, caller(), "store", name, b"v".to_vec())
+        .await
+        .expect("explicit local-encrypted consent admits the store");
+    assert_eq!(
+        crypto::keyring_get(&proxy, caller(), "read", name)
+            .await
+            .unwrap(),
+        Some(b"v".to_vec())
+    );
+    policy::initialize(None);
+}

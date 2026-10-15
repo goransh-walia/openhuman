@@ -42,6 +42,47 @@ fn consent_is_granted_only_when_the_host_policy_proceeds() {
     }
 }
 
+fn encrypted_file_backend() -> KeyringBackend2 {
+    KeyringBackend2::EncryptedFile {
+        directory: "/x".into(),
+    }
+}
+
+#[test]
+fn encrypted_file_consent_ignores_whether_the_os_keyring_is_available() {
+    // `check_secret_access` answers Proceed whenever the OS keyring probes
+    // available; the local encrypted file is a different store, so only the
+    // recorded answer may decide it.
+    let backend = encrypted_file_backend();
+    for recorded in [PolicyDecision::Declined, PolicyDecision::ConsentRequired] {
+        assert_eq!(consent_decision(Some(&backend), || recorded), recorded);
+    }
+    assert_eq!(
+        consent_decision(Some(&backend), || PolicyDecision::Proceed),
+        PolicyDecision::Proceed
+    );
+}
+
+#[test]
+fn platform_credential_stores_need_no_local_storage_consent() {
+    for backend in [
+        KeyringBackend2::Os,
+        KeyringBackend2::LinuxKernel,
+        KeyringBackend2::SecretService,
+    ] {
+        let decision = consent_decision(Some(&backend), || {
+            panic!("a platform store must not read recorded consent")
+        });
+        assert_eq!(decision, PolicyDecision::Proceed);
+    }
+}
+
+#[test]
+fn consent_is_refused_when_no_keyring_backend_is_configured() {
+    let decision = consent_decision(None, || PolicyDecision::Proceed);
+    assert_eq!(decision, PolicyDecision::Declined);
+}
+
 #[test]
 fn legacy_host_payload_shape_is_the_bus_payload_shape() {
     let payload: LegacyPayload = serde_json::from_str(LEGACY_PAYLOAD).unwrap();

@@ -7,9 +7,10 @@
 //! Messages never carry secret material: errors are fixed strings.
 
 use tinysecurity_bus::{
-    names, CallerContext, CryptoConfig2, KeyringAccess2, KeyringBackend2, KeyringConsentRequest2, KeyringConsentResponse2,
-    KeyringOperation2, KeyringRequest2, KeyringResponse2, PairingOperation2, PairingRequest2,
-    PairingResponse2, PasswordOperation2, PasswordPayload2, PasswordRequest2, PasswordResponse2,
+    names, CallerContext, CryptoConfig2, KeyringAccess2, KeyringBackend2, KeyringConsentRequest2,
+    KeyringConsentResponse2, KeyringOperation2, KeyringRequest2, KeyringResponse2,
+    PairingOperation2, PairingRequest2, PairingResponse2, PasswordOperation2, PasswordPayload2,
+    PasswordRequest2, PasswordResponse2,
 };
 
 use crate::security::keyring_consent::types::PolicyDecision;
@@ -181,7 +182,10 @@ static KEYRING_BACKEND: parking_lot::RwLock<Option<KeyringBackend2>> =
 
 /// Records the keyring backend of `config` for the consent callback.
 pub(crate) fn register_keyring_backend(config: &CryptoConfig2) {
-    let backend = config.keyring.as_ref().map(|keyring| keyring.backend.clone());
+    let backend = config
+        .keyring
+        .as_ref()
+        .map(|keyring| keyring.backend.clone());
     log::debug!(
         "{LOG_PREFIX} keyring backend registered kind={}",
         backend.as_ref().map_or("none", backend_kind)
