@@ -118,7 +118,7 @@ const GRAPH_CHANGED_SINCE_PARK_ERROR: &str = "the workflow changed after this ru
 //   state (kv)       — (host-internal flow KV; not an outbound act)
 //
 //   ¹ tool_call routes through the deny-by-default curation/scope gate plus the
-//     ApprovalGate rather than `gate_decision`; a Network-class Composio action
+//     ApprovalGate rather than the class gate; a Network-class Composio action
 //     still prompts under supervised/full and the curation gate is the hard
 //     allowlist. See `caps.rs::OpenHumanTools`.
 //
