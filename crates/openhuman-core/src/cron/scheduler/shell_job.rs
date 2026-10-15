@@ -162,22 +162,35 @@ pub(super) async fn run_job_command_with_timeout(
         );
     }
 
-    // Cron keeps host execution semantics (the host's own network, no jail)
-    // and a pipeline's default exit status: retries are spent on it.
-    let output = match crate::sandbox::shell_exec::run_host(
+    // A scheduled command is text typed into a schedule, so it runs under the
+    // untrusted-spawn gate: the TinyBox jail (or the configured container),
+    // refused when the isolation floor cannot be met. The host's own network
+    // stays available and a pipeline keeps its default exit status, because
+    // retries are spent on it.
+    let output = match crate::sandbox::untrusted::run(crate::sandbox::untrusted::UntrustedShell {
         config,
-        &job.command,
-        &config.action_dir,
-        &config.workspace_dir,
-        std::collections::BTreeMap::new(),
+        command: &job.command,
+        cwd: &config.action_dir,
+        state_dir: &config.workspace_dir,
         timeout,
-        true,
-        None,
-    )
+        preserve_pipeline_status: true,
+    })
     .await
     {
         Ok(output) => output,
-        Err(_) => return (false, "Command execution is unavailable.".to_owned()),
+        Err(error) if error.is::<crate::sandbox::ops::IsolationFloor>() => {
+            log::warn!("[cron][shell] refused: the sandbox is below the isolation floor");
+            // The `blocked by security policy:` prefix halts the retry loop: a
+            // missing jail does not appear by waiting.
+            return (
+                false,
+                format!("blocked by security policy: {error}"),
+            );
+        }
+        Err(error) => {
+            log::warn!("[cron][shell] sandboxed execution failed: {error}");
+            return (false, "Command execution is unavailable.".to_owned());
+        }
     };
     if output.timed_out {
         return (

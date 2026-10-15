@@ -18,6 +18,7 @@ pub mod schemas;
 pub(crate) mod shell_exec;
 pub(crate) mod shell_progress;
 pub mod types;
+pub(crate) mod untrusted;
 
 pub use ops::{
     build_elevated_op, command_requires_sandbox, create_sandbox_backend, execute_in_sandbox,
