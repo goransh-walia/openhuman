@@ -73,6 +73,7 @@ impl SpawnSubagentTool {
             >,
         >,
     ) -> anyhow::Result<ToolResult> {
+        let dispatch = run_context.dispatch_ctx();
         // ── Argument extraction with back-compat ───────────────────────
         let agent_id = args
             .get("agent_id")
@@ -256,6 +257,7 @@ impl SpawnSubagentTool {
             let parent_thread_id = parent_thread_id.as_ref()?;
             let title: String = prompt.chars().take(60).collect();
             super::worker_thread::create_worker_thread(
+                &dispatch,
                 p.workspace_dir.clone(),
                 parent_thread_id,
                 &definition.id,
@@ -408,6 +410,7 @@ impl SpawnSubagentTool {
                                 .clone()
                                 .unwrap_or_else(|| PathBuf::from("."));
                             let parent_visible = match persist_worker_thread(
+                                &dispatch,
                                 &workspace_dir,
                                 &definition.id,
                                 &prompt,

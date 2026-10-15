@@ -23,7 +23,7 @@ pub const TINYAGENTS_SESSION_KV_STORE: &str = "openhuman_sessions";
 /// Best-effort: `None` when the config (hence workspace) cannot be resolved and
 /// no store is installed.
 pub async fn session_kv_store(ctx: &DispatchCtx) -> Option<Arc<dyn Store>> {
-    if let Some(stores) = crate::agent::session_store::current() {
+    if let Some(stores) = crate::agent::session_store::current(ctx) {
         log::debug!("[session-store] registering the host session store's kv on RunContext.stores");
         return Some(stores.kv);
     }

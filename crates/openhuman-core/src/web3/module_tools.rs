@@ -74,6 +74,7 @@ impl Web3ModuleTool {
         };
         let result: anyhow::Result<Value> = match self.name() {
             "web3_swap_quote" => crate::modules::web3_service::quote(
+                ctx,
                 &config,
                 owner.clone(),
                 tinywallet_bus::names::methods::WEB3_SWAP_QUOTE,
@@ -83,6 +84,7 @@ impl Web3ModuleTool {
             .map_err(|error| anyhow::anyhow!(error.to_string()))
             .and_then(|value| serde_json::to_value(value).map_err(Into::into)),
             "web3_bridge_quote" => crate::modules::web3_service::quote(
+                ctx,
                 &config,
                 owner.clone(),
                 tinywallet_bus::names::methods::WEB3_BRIDGE_QUOTE,
@@ -92,6 +94,7 @@ impl Web3ModuleTool {
             .map_err(|error| anyhow::anyhow!(error.to_string()))
             .and_then(|value| serde_json::to_value(value).map_err(Into::into)),
             "web3_dapp_call" => crate::modules::web3_service::quote(
+                ctx,
                 &config,
                 owner.clone(),
                 tinywallet_bus::names::methods::WEB3_DAPP_QUOTE,
@@ -100,12 +103,13 @@ impl Web3ModuleTool {
             .await
             .map_err(|error| anyhow::anyhow!(error.to_string()))
             .and_then(|value| serde_json::to_value(value).map_err(Into::into)),
-            "web3_swap_routes" => crate::modules::web3_service::routes(&config)
+            "web3_swap_routes" => crate::modules::web3_service::routes(ctx, &config)
                 .await
                 .map_err(|error| anyhow::anyhow!(error.to_string())),
             "web3_swap_execute" | "web3_bridge_execute" | "web3_dapp_execute" => {
                 match serde_json::from_value::<crate::modules::web3_service::ExecuteParams>(args) {
                     Ok(params) => crate::modules::web3_service::execute(
+                        ctx,
                         &config,
                         owner,
                         params.quote_id,

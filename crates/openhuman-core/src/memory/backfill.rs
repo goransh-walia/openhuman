@@ -23,6 +23,7 @@
 //! - **Consent.** It uploads chat history to the selected engine, so
 //!   [`start`] refuses without `consent`.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
@@ -135,13 +136,17 @@ async fn plan(
     bound: Option<&BoundEngine>,
     stored: &BTreeMap<String, u32>,
 ) -> MemoryResult<Vec<ThreadPlan>> {
-    let listed = threads::list_threads(workspace_dir.to_path_buf())
+    let listed = threads::list_threads(DispatchCtx::ambient(), workspace_dir.to_path_buf())
         .await
         .map_err(|error| MemoryError::Engine(format!("reading chat threads failed: {error}")))?;
     let mut plans = Vec::new();
     for thread in listed {
-        let messages = match threads::get_messages(workspace_dir.to_path_buf(), thread.id.clone())
-            .await
+        let messages = match threads::get_messages(
+            DispatchCtx::ambient(),
+            workspace_dir.to_path_buf(),
+            thread.id.clone(),
+        )
+        .await
         {
             Ok(messages) => messages,
             Err(error) => {

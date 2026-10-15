@@ -159,6 +159,12 @@ impl ChannelHostCallbacks {
                 let context = self.context()?;
                 let tenant = &self.tenant;
                 let cancellation = &self.cancellation;
+                // The captured context is the carrier; without one the caller's
+                // own ambient context is what the handlers read before.
+                let dispatch_ctx = match &self.core_context {
+                    Some(core) => crate::core::runtime::DispatchCtx::new(Arc::clone(core)),
+                    None => crate::core::runtime::DispatchCtx::ambient(),
+                };
                 let dispatch = async {
                     tokio::select! {
                         biased;
@@ -166,6 +172,7 @@ impl ChannelHostCallbacks {
                             Err(Error::failed("channel session ended"))
                         }
                         result = crate::channels::host::remote_control::dispatch_callback(
+                            &dispatch_ctx,
                             context.as_ref(),
                             tenant,
                             cancellation,

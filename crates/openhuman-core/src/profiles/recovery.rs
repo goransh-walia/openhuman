@@ -29,7 +29,9 @@ pub(crate) fn recover_workspace(id: &ProfileId, workspace_dir: &std::path::Path)
 /// store, which the workspace sweep cannot see: the profile's default
 /// session key is swept through the installed provider.
 pub(crate) fn recover_session_store(id: &ProfileId, context: &Arc<CoreContext>) {
-    let Some(provider) = crate::agent::session_store::installed() else {
+    let Some(provider) = crate::agent::session_store::installed_in(
+        &crate::core::runtime::DispatchCtx::new(Arc::clone(context)),
+    ) else {
         return;
     };
     if provider.workspace_dir().is_some() {

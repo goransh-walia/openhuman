@@ -152,7 +152,11 @@ pub(super) async fn run_agent_job_for_run(
                 target = ?job.session_target,
                 "[cron] building isolated agent for scheduled job"
             );
-            match build_agent_for_cron_job(&effective, job) {
+            match build_agent_for_cron_job(
+                &crate::core::runtime::DispatchCtx::ambient(),
+                &effective,
+                job,
+            ) {
                 Ok(BuiltCronAgent { mut agent, context }) => {
                     // Tag events so downstream subscribers can correlate
                     // cron-triggered turns. `cron` is the channel so the
@@ -269,6 +273,7 @@ pub(super) struct BuiltCronAgent {
 /// Build the session a cron agent job runs: the host-registered agent named
 /// by `job.agent_id` when there is one, else the registry definition.
 pub(super) fn build_agent_for_cron_job(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     job: &CronJob,
 ) -> anyhow::Result<BuiltCronAgent> {
@@ -276,10 +281,11 @@ pub(super) fn build_agent_for_cron_job(
         .agent_id
         .as_deref()
         .and_then(crate::agent::host_agents::resolve);
-    build_cron_agent(config, job, host_agent)
+    build_cron_agent(ctx, config, job, host_agent)
 }
 
 fn build_cron_agent(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     job: &CronJob,
     host_agent: Option<crate::agent::host_agents::HostAgent>,
@@ -304,7 +310,7 @@ fn build_cron_agent(
         });
     }
     let agent_id = job.agent_id.as_deref().unwrap_or("orchestrator");
-    match OpenHumanSessionHost::from_config_for_agent(config, agent_id) {
+    match OpenHumanSessionHost::from_config_for_agent(ctx, config, agent_id) {
         Ok(agent) => {
             tracing::debug!(
                 job_id = %job.id,
@@ -323,7 +329,7 @@ fn build_cron_agent(
                 error = %e,
                 "[cron] failed to build agent from definition; falling back to canonical orchestrator"
             );
-            OpenHumanSessionHost::from_config_for_agent(config, "orchestrator").map(|agent| {
+            OpenHumanSessionHost::from_config_for_agent(ctx, config, "orchestrator").map(|agent| {
                 BuiltCronAgent {
                     agent,
                     context: None,

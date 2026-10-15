@@ -5,7 +5,7 @@
 //! directly, with the same argument and the same answer. No policy is decided
 //! here; the adapter only names the questions.
 
-use tinytools_std::network::NetGate;
+use tinytools_std::network::{Destination, DestinationFuture, NetGate};
 
 use crate::config::PrivacyMode;
 use crate::security::egress::assess::{assess_payload, Assessment};
@@ -111,6 +111,13 @@ impl NetGate for RoutedGate {
         );
     }
 
+    fn authorize_destination<'a>(
+        &'a self,
+        destination: &'a Destination<'a>,
+    ) -> DestinationFuture<'a> {
+        NetGate::authorize_destination(&*self.policy, destination)
+    }
+
     fn prepare_client(
         &self,
         service: &str,
@@ -126,6 +133,39 @@ impl NetGate for RoutedGate {
         connect_timeout_secs: u64,
     ) -> reqwest::Client {
         NetGate::timeout_client(&*self.policy, service, timeout_secs, connect_timeout_secs)
+    }
+}
+
+/// The module's authorization for a tool destination, in the gate's terms.
+///
+/// `None` only where there is no module to ask (a build without
+/// `security-module`): the tool then keeps its own DNS check. With the module
+/// built in, every destination is judged by it, and a module that is missing,
+/// untrusted, faulted or slow is a refusal carrying the tool-facing message.
+async fn module_destination(
+    policy: &SecurityPolicy,
+    destination: &Destination<'_>,
+) -> Option<Result<Vec<std::net::SocketAddr>, String>> {
+    #[cfg(feature = "security-module")]
+    {
+        use crate::modules::security::egress::{authorize_tool_destination, ToolDestination};
+        Some(
+            authorize_tool_destination(
+                &policy.workspace_dir,
+                &ToolDestination {
+                    url: destination.url,
+                    method: destination.method,
+                    headers: destination.headers,
+                    body: destination.body,
+                },
+            )
+            .await,
+        )
+    }
+    #[cfg(not(feature = "security-module"))]
+    {
+        let _ = (policy, destination);
+        None
     }
 }
 
@@ -165,6 +205,13 @@ impl NetGate for SecurityPolicy {
 
     fn local_only_block(&self, host: &str) -> Option<String> {
         local_only_tool_block(&EgressDescriptor::network_fetch(host))
+    }
+
+    fn authorize_destination<'a>(
+        &'a self,
+        destination: &'a Destination<'a>,
+    ) -> DestinationFuture<'a> {
+        Box::pin(module_destination(self, destination))
     }
 
     fn disclose(&self, host: &str, has_body: bool, has_headers: bool) {

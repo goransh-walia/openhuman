@@ -68,3 +68,26 @@ fn reply_remix_capability_shows_disabled_when_the_memes_component_is_off() {
     assert_eq!(apply_components(send, &off("memes")).status, send.status);
     assert_eq!(apply_components(cap, &off("voice")).status, cap.status);
 }
+
+#[tokio::test]
+async fn an_explicit_context_decides_which_capabilities_are_disabled() {
+    use crate::core::runtime::context::CoreContext;
+    use crate::core::runtime::DispatchCtx;
+
+    let mut voice_off = ComponentSet::all();
+    voice_off.voice = false;
+    let off = DispatchCtx::new(CoreContext::for_test_with_components(voice_off));
+    let on = DispatchCtx::new(CoreContext::for_test_with_components(ComponentSet::all()));
+
+    // The two contexts answer independently, concurrently and across awaits.
+    let ask = |ctx: DispatchCtx| async move {
+        tokio::task::yield_now().await;
+        lookup_capability(&ctx, "voice.ptt")
+            .expect("voice.ptt")
+            .value
+            .status
+    };
+    let (disabled, enabled) = tokio::join!(ask(off), ask(on));
+    assert_eq!(disabled, CapabilityStatus::Disabled);
+    assert_ne!(enabled, CapabilityStatus::Disabled);
+}

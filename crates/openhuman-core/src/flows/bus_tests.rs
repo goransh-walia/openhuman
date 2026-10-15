@@ -142,3 +142,47 @@ async fn a_trigger_handled_as_an_agent_uses_the_agent_config() {
     .await;
     assert_eq!(seen, std::path::PathBuf::from("/tmp/flows-trigger-agent"));
 }
+
+/// The dedup settle path reads the flow from the config its explicit context
+/// carries, concurrently with another tenant's, across an await and in a
+/// spawned task, with no task scope anywhere.
+#[tokio::test]
+async fn dedup_nodes_are_read_from_the_explicit_contexts_config() {
+    use crate::core::runtime::{ContextOverlay, CoreContext, DispatchCtx, DomainSet};
+    let registered_tmp = tempfile::tempdir().unwrap();
+    let registered = test_config(&registered_tmp);
+    let subscriber = Arc::new(DedupCommitSubscriber::new(Arc::clone(&registered)));
+
+    let mut contexts = Vec::new();
+    for (name, dedup_id) in [("tenant-a", "dedup-a"), ("tenant-b", "dedup-b")] {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = test_config(&tmp);
+        store::upsert_flow(&config, &flow_with_dedup_node("shared-flow", dedup_id)).unwrap();
+        let ctx = DispatchCtx::new(
+            CoreContext::for_test(DomainSet::full(), None).derive_with(
+                ContextOverlay::new((*config).clone(), DomainSet::full(), Default::default())
+                    .session_agent(name),
+            ),
+        );
+        contexts.push((tmp, ctx, dedup_id));
+    }
+
+    let mut tasks = Vec::new();
+    for (tmp, ctx, dedup_id) in contexts {
+        let subscriber = Arc::clone(&subscriber);
+        tasks.push(tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            let ids = subscriber.dedup_node_ids(&ctx, "shared-flow");
+            drop(tmp);
+            (ids, dedup_id)
+        }));
+    }
+    for task in tasks {
+        let (ids, expected) = task.await.unwrap();
+        assert_eq!(ids, vec![expected.to_string()]);
+    }
+    // The registered config has no such flow: it is never consulted.
+    assert!(subscriber
+        .dedup_node_ids(&DispatchCtx::unbound(), "shared-flow")
+        .is_empty());
+}

@@ -132,6 +132,8 @@ pub(super) async fn finalize_committed_turn(
     receipt: tinyagents_runtime::CommitReceipt<crate::agent::tinyagents::host::OpenHumanRunContext>,
 ) {
     let commit_started = std::time::Instant::now();
+    // The turn's own context, taken before the receipt is dropped.
+    let dispatch = receipt.options.context.dispatch_ctx();
     let output = receipt.outcome.output.clone().unwrap_or_default();
     // Skips compaction checkpoints (user-role, not the user's words).
     let input = tinyagents_harness::summarization::last_user_message(&receipt.outcome.history)
@@ -235,6 +237,7 @@ pub(super) async fn finalize_committed_turn(
     }
     crate::agent::hooks::fire_hooks(
         post_turn_hooks,
+        &dispatch,
         crate::agent::hooks::TurnContext {
             user_message: input,
             assistant_response: output,

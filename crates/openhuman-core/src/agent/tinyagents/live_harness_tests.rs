@@ -32,6 +32,7 @@ fn surface(allowed: &[&str]) -> LiveToolSurface {
         tool_policy: None,
         has_thread: true,
         tool_hooks: Vec::new(),
+        dispatch: crate::core::runtime::DispatchCtx::ambient(),
     }
 }
 

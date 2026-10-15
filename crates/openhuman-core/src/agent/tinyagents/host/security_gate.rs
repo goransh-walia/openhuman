@@ -124,7 +124,7 @@ pub struct OpenHumanSecurityGate {
     /// Fallback policy used when no process-global live policy is installed.
     ///
     /// Per-call resolution prefers
-    /// [`crate::security::live_policy::effective`] so an autonomy
+    /// [`crate::security::live_policy::effective_in`] so an autonomy
     /// change made mid-session is observed on the very next tool call — the
     /// same live-first / snapshot-fallback discipline `ApprovalGate` uses for
     /// `auto_approve`. The trait explicitly forbids the runtime caching a
@@ -228,7 +228,16 @@ impl OpenHumanSecurityGate {
     /// The policy to answer this call against: the agent's or the live one when
     /// installed, else the constructor snapshot.
     fn effective_policy(&self) -> Arc<SecurityPolicy> {
-        crate::security::live_policy::effective().unwrap_or_else(|| self.policy.clone())
+        crate::security::live_policy::effective_in(&DispatchCtx::from_weak(self.dispatch.as_ref()))
+            .unwrap_or_else(|| self.policy.clone())
+    }
+
+    /// The origin of the turn this gate authorizes for: the run's own context
+    /// when it carries one, else the calling task's turn scope.
+    fn turn_origin(&self) -> Option<crate::agent::turn_origin::AgentTurnOrigin> {
+        DispatchCtx::from_weak(self.dispatch.as_ref())
+            .turn_origin()
+            .or_else(|| DispatchCtx::ambient_turn().turn_origin())
     }
 
     /// Finds the registered [`Tool`] named `name`, if any.
@@ -538,7 +547,7 @@ impl OpenHumanSecurityGate {
         // This check precedes the shell shortcut and all approval settings,
         // including installations where the approval gate is disabled.
         if matches!(
-            crate::agent::turn_origin::current(),
+            self.turn_origin(),
             Some(
                 crate::agent::turn_origin::AgentTurnOrigin::TrustedAutomation {
                     source: crate::agent::turn_origin::TrustedAutomationSource::Cron,

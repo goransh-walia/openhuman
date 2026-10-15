@@ -27,8 +27,8 @@
 
 use std::path::Path;
 
-use crate::core::runtime::is_saas;
 use crate::core::runtime::saas::SaasSandboxConfig;
+use crate::core::runtime::{is_saas, DispatchCtx};
 use crate::sandbox::{DockerOverrides, SandboxBackendKind, SandboxPolicy};
 
 /// A group of host tools an operator can opt users into.
@@ -170,14 +170,20 @@ pub fn allowlisted() -> Vec<SaasToolGroup> {
 /// The tool-list filter. Outside SaaS this is the domain filter, plus the
 /// [`OPERATOR_ADMITTABLE`] tools the current agent names in its scope.
 pub fn admits(tool: &str, domain_ok: bool) -> bool {
+    // Transitional (#7801): the tool-list filter has no context of its own yet.
+    admits_in(&DispatchCtx::ambient(), tool, domain_ok)
+}
+
+/// [`admits`] for the agent `ctx` runs for.
+pub fn admits_in(ctx: &DispatchCtx, tool: &str, domain_ok: bool) -> bool {
     if !is_saas() {
-        return domain_ok || admitted_by_name(tool, current_named_tools().as_deref());
+        return domain_ok || admitted_by_name(tool, current_named_tools(ctx).as_deref());
     }
     let mut admitted = admits_with(tool, domain_ok, &allowlisted());
     if !admitted
         && !domain_ok
         && !is_hard_denied(tool)
-        && super::capabilities::ProfileCapabilities::current()
+        && super::capabilities::ProfileCapabilities::in_ctx(ctx)
             .is_some_and(|caps| caps.names_admittable(tool))
     {
         admitted = true;
@@ -199,11 +205,11 @@ pub fn admitted_by_name(tool: &str, named: Option<&std::collections::HashSet<Str
     admitted
 }
 
-/// The named tool scope of the agent the current context serves, if any.
-fn current_named_tools() -> Option<std::sync::Arc<std::collections::HashSet<String>>> {
-    crate::core::runtime::context::CoreContext::current()?
-        .host_overrides()?
-        .named_tools()
+/// The named tool scope of the agent `ctx` serves, if any.
+fn current_named_tools(
+    ctx: &DispatchCtx,
+) -> Option<std::sync::Arc<std::collections::HashSet<String>>> {
+    ctx.host_overrides()?.named_tools()
 }
 
 /// The approval gate's answer in SaaS, where it never parks: `Ok` for a tool
@@ -218,11 +224,11 @@ pub fn gate_verdict_with(tool: &str, groups: &[SaasToolGroup]) -> Result<(), Str
 }
 
 /// [`gate_verdict_with`] for the running deployment.
-pub fn gate_verdict(tool: &str) -> Result<(), String> {
-    let verdict = if super::capabilities::ProfileCapabilities::current()
-        .is_some_and(|caps| caps.authorizes_approval(tool))
+pub fn gate_verdict(ctx: &crate::core::runtime::DispatchCtx, tool: &str) -> Result<(), String> {
+    let verdict = if super::capabilities::ProfileCapabilities::in_ctx(ctx)
+        .is_some_and(|caps| caps.authorizes_approval(ctx, tool))
     {
-        super::host::ensure_hosted()
+        super::host::ensure_hosted(ctx)
     } else {
         gate_verdict_with(tool, &allowlisted())
     };

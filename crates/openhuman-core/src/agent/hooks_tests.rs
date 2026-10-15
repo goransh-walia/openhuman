@@ -111,17 +111,17 @@ async fn fire_hooks_accepts_empty_hook_list() {
         iteration_count: 1,
     };
     // Should not panic
-    fire_hooks(&[], ctx);
+    fire_hooks(&[], &crate::core::runtime::DispatchCtx::unbound(), ctx);
 }
 
 // ── Detached hooks keep the dispatch's CoreContext ────────────────────────────
 
-/// A detached hook task must observe the same ambient [`CoreContext`] as the
-/// dispatch that fired it. A bare `tokio::spawn` loses the `CURRENT_CONTEXT`
+/// A detached hook task must observe the same [`CoreContext`] as the dispatch
+/// that fired it, handed over explicitly. A bare `tokio::spawn` loses the `CURRENT_CONTEXT`
 /// task-local — under a scoped multi-tenant dispatch that meant the hook fell
 /// back to the process default context, and any context-derived work behind
 /// it read and wrote another tenant's workspace. `fire_hooks` now re-enters
-/// the captured scope inside the spawned task; this pins that.
+/// the context it was given inside the spawned task; this pins that.
 #[tokio::test]
 async fn fired_hooks_observe_the_firing_dispatchs_core_context() {
     use crate::core::runtime::context::CoreContext;
@@ -164,10 +164,13 @@ async fn fired_hooks_observe_the_firing_dispatchs_core_context() {
         iteration_count: 0,
     };
 
-    CoreContext::scope(std::sync::Arc::clone(&tenant_ctx), async {
-        fire_hooks(&[probe], turn);
-    })
-    .await;
+    // The explicit context is what the hook runs under; no task scope is
+    // entered around the call.
+    fire_hooks(
+        &[probe],
+        &crate::core::runtime::DispatchCtx::new(std::sync::Arc::clone(&tenant_ctx)),
+        turn,
+    );
 
     let seen = tokio::time::timeout(std::time::Duration::from_secs(5), rx)
         .await

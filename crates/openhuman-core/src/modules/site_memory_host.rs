@@ -177,7 +177,8 @@ async fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 struct SiteMemoryHost;
 
 async fn config() -> tinybus::Result<crate::config::Config> {
-    crate::config::rpc::load_config_with_timeout()
+    crate::core::runtime::DispatchCtx::host_default()
+        .load_config()
         .await
         .map_err(|e| method_error(format!("config unavailable: {e}")))
 }

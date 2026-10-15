@@ -25,9 +25,9 @@ pub struct ProfileProviderSettings {
 }
 
 impl ProfileProviderSettings {
-    /// Binding of the authenticated task's own profile, never a process fallback.
-    pub fn current() -> Option<Arc<Self>> {
-        let context = crate::core::runtime::CoreContext::scoped()?;
+    /// Binding of the profile `ctx` runs for, never a process fallback.
+    pub fn in_ctx(ctx: &crate::core::runtime::DispatchCtx) -> Option<Arc<Self>> {
+        let context = ctx.core()?;
         context.profile()?;
         context.embedder_config()?.profile_providers.clone()
     }

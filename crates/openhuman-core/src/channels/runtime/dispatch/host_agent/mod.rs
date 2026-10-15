@@ -24,6 +24,7 @@ use crate::channels::{ChannelSendExt, SendMessage};
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
+use crate::core::runtime::DispatchCtx;
 use tinychannels_bus as traits;
 
 pub(crate) mod posture;
@@ -53,9 +54,13 @@ pub(crate) fn bound_agent_id<'a>(config: &'a Config, channel: &str) -> Option<&'
 
 /// Resolve `channel`'s binding against the installed host agents.
 pub(crate) fn route(ctx: &ChannelRuntimeContext, channel: &str) -> HostRoute {
-    if let Some(capabilities) = crate::profiles::capabilities::ProfileCapabilities::current() {
+    // Transitional (#7801): the channel runtime context carries no core yet.
+    let dispatch = DispatchCtx::ambient();
+    if let Some(capabilities) =
+        crate::profiles::capabilities::ProfileCapabilities::in_ctx(&dispatch)
+    {
         if let (Some(context), Some(config), Some(definitions)) = (
-            crate::core::runtime::CoreContext::scoped(),
+            dispatch.core().cloned(),
             ctx.config.as_ref(),
             crate::agent::harness::host_definition::AgentDefinitionRegistry::current(),
         ) {

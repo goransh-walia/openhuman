@@ -71,8 +71,8 @@ fn other_origins_have_no_job_origin() {
 
 #[tokio::test]
 async fn current_job_origin_reads_the_scoped_turn() {
-    assert_eq!(current_job_origin(), None);
-    let got = with_origin(web_turn("t-9"), async { current_job_origin() }).await;
+    assert_eq!(current_job_origin(crate::agent::turn_origin::current().as_ref()), None);
+    let got = with_origin(web_turn("t-9"), async { current_job_origin(crate::agent::turn_origin::current().as_ref()) }).await;
     assert!(matches!(got, Some(JobOrigin::Web { thread_id, .. }) if thread_id == "t-9"));
 }
 

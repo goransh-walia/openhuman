@@ -233,11 +233,19 @@ async fn agents_parked_on_one_thread_id_are_routed_and_decided_apart() {
     .expect("ApprovalRequested for alpha");
     assert_eq!(seen.as_deref(), Some("route-alpha"));
 
-    let alpha_rows = gate.list_pending_for_agent(Some("route-alpha")).unwrap();
+    let alpha_rows = gate
+        .list_pending_for_agent(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            Some("route-alpha"),
+        )
+        .unwrap();
     assert_eq!(alpha_rows.len(), 1);
     assert_eq!(alpha_rows[0].request_id, alpha_request);
     assert_eq!(alpha_rows[0].agent_id.as_deref(), Some("route-alpha"));
-    assert!(gate.list_pending_for_agent(None).unwrap().is_empty());
+    assert!(gate
+        .list_pending_for_agent(&crate::core::runtime::DispatchCtx::ambient(), None)
+        .unwrap()
+        .is_empty());
 
     let refused = gate
         .decide_for_agent("route-alpha", &beta_request, ApprovalDecision::ApproveOnce)
@@ -267,7 +275,11 @@ async fn agents_parked_on_one_thread_id_are_routed_and_decided_apart() {
     );
 
     let denied = gate
-        .deny_all_for_agent("route-beta", "agent_removed")
+        .deny_all_for_agent(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            "route-beta",
+            "agent_removed",
+        )
         .unwrap();
     assert_eq!(denied, 1);
     let (outcome, _) = beta.await.unwrap();
@@ -295,7 +307,10 @@ async fn agents_parked_on_one_thread_id_are_routed_and_decided_apart() {
         other => panic!("unexpected event {other:?}"),
     }
     assert!(gate
-        .list_pending_for_agent(Some("route-beta"))
+        .list_pending_for_agent(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            Some("route-beta")
+        )
         .unwrap()
         .is_empty());
 }

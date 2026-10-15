@@ -371,7 +371,9 @@ async fn cron_runs_returns_empty_history_for_new_job() {
 async fn cron_run_rejects_empty_job_id() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let err = cron_run(&config, "").await.unwrap_err();
+    let err = cron_run(&crate::core::runtime::DispatchCtx::ambient(), &config, "")
+        .await
+        .unwrap_err();
     assert!(err.contains("Missing 'job_id'"));
 }
 
@@ -379,7 +381,13 @@ async fn cron_run_rejects_empty_job_id() {
 async fn cron_run_rejects_whitespace_job_id() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let err = cron_run(&config, "   ").await.unwrap_err();
+    let err = cron_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "   ",
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("Missing 'job_id'"));
 }
 
@@ -387,7 +395,13 @@ async fn cron_run_rejects_whitespace_job_id() {
 async fn cron_run_errors_when_cron_disabled() {
     let tmp = TempDir::new().unwrap();
     let config = disabled_cron_config(&tmp);
-    let err = cron_run(&config, "some-id").await.unwrap_err();
+    let err = cron_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "some-id",
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("cron is disabled"));
 }
 
@@ -397,7 +411,13 @@ async fn cron_run_returns_queued_immediately_for_valid_job() {
     let config = test_config(&tmp);
     let job = make_job(&config, "*/5 * * * *", None, "echo hello");
 
-    let out = cron_run(&config, &job.id).await.unwrap();
+    let out = cron_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job.id,
+    )
+    .await
+    .unwrap();
     assert_eq!(out.value["job_id"], json!(job.id));
     assert_eq!(out.value["status"], json!("queued"));
     assert!(out.logs.iter().any(|l| l.contains("enqueued")));
@@ -418,7 +438,13 @@ async fn cron_run_response_conforms_to_its_declared_schema() {
     let config = test_config(&tmp);
     let job = make_job(&config, "*/5 * * * *", None, "echo hello");
 
-    let out = cron_run(&config, &job.id).await.unwrap();
+    let out = cron_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job.id,
+    )
+    .await
+    .unwrap();
     let result = out.value.as_object().expect("result payload is an object");
 
     let schema = cron_schemas("run");
@@ -483,7 +509,13 @@ async fn cron_run_rejects_duplicate_concurrent_execution() {
     // Hold the run claim directly to simulate an in-flight execution without
     // spawning a real long-running subprocess (deterministic, no timing dependency).
     let running = try_acquire_run(&job.id).expect("the job is free");
-    let err = cron_run(&config, &job.id).await.unwrap_err();
+    let err = cron_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job.id,
+    )
+    .await
+    .unwrap_err();
     drop(running);
 
     assert!(
@@ -527,7 +559,13 @@ async fn run_job_now_runs_and_records_the_handler_result() {
         std::sync::Arc::new(|_ctx| Box::pin(async { Err("nope".to_string()) })),
     );
     let job = single_flight_system_job(&config, "ops-run-now");
-    let (success, output) = run_job_now(&config, &job.id).await.unwrap();
+    let (success, output) = run_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job.id,
+    )
+    .await
+    .unwrap();
     assert!(!success);
     assert!(output.contains("nope"), "{output}");
     let runs = cron::list_runs(&config, &job.id, 10).unwrap();
@@ -548,9 +586,21 @@ async fn run_job_now_refuses_a_job_that_is_already_running() {
     let config = test_config(&tmp);
     let job = single_flight_system_job(&config, "ops-run-now-busy");
     let _running = try_acquire_run(&job.id).expect("the job is free");
-    let err = run_job_now(&config, &job.id).await.unwrap_err();
+    let err = run_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job.id,
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("already running"), "{err}");
-    let err = cron_run(&config, &job.id).await.unwrap_err();
+    let err = cron_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job.id,
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("already running"), "{err}");
 }
 
@@ -558,5 +608,11 @@ async fn run_job_now_refuses_a_job_that_is_already_running() {
 async fn run_job_now_reports_an_unknown_job() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    assert!(run_job_now(&config, "no-such-job").await.is_err());
+    assert!(run_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "no-such-job"
+    )
+    .await
+    .is_err());
 }

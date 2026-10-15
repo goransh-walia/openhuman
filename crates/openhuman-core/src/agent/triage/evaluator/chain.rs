@@ -83,10 +83,10 @@ pub async fn run_triage(
     let config = crate::config::ops::load_current_or_init(ctx)
         .await
         .context("loading config for triage turn")?;
-    let cloud = resolve_provider_with_config(&config)
+    let cloud = resolve_provider_with_config(ctx, &config)
         .await
         .context("resolving provider for triage turn")?;
-    let local = build_local_provider_with_config(&config);
+    let local = build_local_provider_with_config(ctx, &config);
 
     let outcome = run_triage_with_arms_inner(cloud, local, envelope, Some(retry_state()), || {
         crate::cron::scheduler_gate::wait_for_capacity()

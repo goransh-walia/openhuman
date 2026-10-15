@@ -43,11 +43,11 @@ fn web_turn_deadline() -> Option<Duration> {
 /// explicit `OPENHUMAN_WEB_TURN_TIMEOUT_SECS` override still wins; otherwise the
 /// default is the local turn ceiling plus a grace period, never the hosted
 /// backstop, which sits below the local harness ceilings and would pre-empt them.
-async fn resolve_web_turn_deadline() -> Option<Duration> {
+async fn resolve_web_turn_deadline(ctx: &crate::core::runtime::DispatchCtx) -> Option<Duration> {
     if std::env::var("OPENHUMAN_WEB_TURN_TIMEOUT_SECS").is_ok() {
         return web_turn_deadline();
     }
-    let local = match crate::config::rpc::load_config_with_timeout().await {
+    let local = match ctx.load_config().await {
         Ok(config) => crate::agent::tinyagents::chat_provider_is_local(&config),
         Err(error) => {
             log::debug!("[web-channel] backstop locality probe skipped: {error}");
@@ -224,6 +224,7 @@ fn turn_host_env(
 ///
 /// [`TurnDeadline`]: tinyagents_harness::turn_deadline::TurnDeadline
 pub(crate) async fn run_turn_under_cancel_and_deadline<B, F>(
+    ctx: &crate::core::runtime::DispatchCtx,
     cancel_token: CancellationToken,
     origin: crate::agent::turn_origin::AgentTurnOrigin,
     approval_ctx: crate::security::approval::ApprovalChatContext,
@@ -237,7 +238,7 @@ where
         thread_id: approval_ctx.thread_id.clone(),
         request_id,
     });
-    let deadline = resolve_web_turn_deadline().await;
+    let deadline = resolve_web_turn_deadline(ctx).await;
     let (env, turn_cancellation) = turn_host_env(deadline);
     run_until_stopped(
         cancel_token,

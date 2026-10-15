@@ -122,3 +122,43 @@ fn oauth_redirect_port_parser_accepts_only_explicit_url_ports() {
     assert_eq!(explicit_port("http://127.0.0.1/rpc"), None);
     assert_eq!(explicit_port("not a URL"), None);
 }
+
+/// The config comes from the dispatch context passed in, not from the calling
+/// task's scope: two agents resolved concurrently, across awaits and on spawned
+/// tasks, each get their own, and an unbound context gets neither.
+#[tokio::test]
+async fn ambient_config_follows_the_explicit_context() {
+    use crate::core::runtime::{ContextOverlay, CoreContext, DispatchCtx, DomainSet};
+    let agent = |name: &str| {
+        let config = Config {
+            workspace_dir: std::path::PathBuf::from(format!("/tmp/mcp-host-{name}")),
+            ..Config::default()
+        };
+        DispatchCtx::new(CoreContext::for_test(DomainSet::full(), None).derive_with(
+            ContextOverlay::new(config, DomainSet::full(), Default::default()).session_agent(name),
+        ))
+    };
+    let (alice, bob) = (agent("alice"), agent("bob"));
+    let resolve = |ctx: DispatchCtx| {
+        tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            ambient_config(&ctx).map(|config| config.workspace_dir)
+        })
+    };
+    let (a, b) = tokio::join!(resolve(alice), resolve(bob));
+    assert_eq!(
+        a.unwrap().as_deref(),
+        Some(std::path::Path::new("/tmp/mcp-host-alice"))
+    );
+    assert_eq!(
+        b.unwrap().as_deref(),
+        Some(std::path::Path::new("/tmp/mcp-host-bob"))
+    );
+    assert_eq!(
+        ambient_config(&DispatchCtx::unbound()).map(|config| config.workspace_dir),
+        DEFAULT_CONFIG
+            .get()
+            .map(|config| config.workspace_dir.clone()),
+        "an unbound context falls back to the process default, never a scope"
+    );
+}

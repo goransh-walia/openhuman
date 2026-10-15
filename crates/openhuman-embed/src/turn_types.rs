@@ -241,4 +241,9 @@ pub struct TurnOutcome {
     /// The model the provider says answered the final call. `None` when the
     /// provider did not say, or on a caller-built runtime's orchestrator.
     pub answered_model: Option<String>,
+    /// Messages sent through [`Turn::steering_handle`](crate::Turn::steering_handle)
+    /// that the turn ended without applying, in the order they were sent. The
+    /// turn's reply never saw them; run them as the next turn if they still
+    /// matter. Empty when every steer was applied or none was sent.
+    pub unapplied_steers: Vec<String>,
 }

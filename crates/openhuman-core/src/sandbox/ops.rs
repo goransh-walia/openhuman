@@ -55,7 +55,7 @@ pub async fn command_requires_sandbox(
         // language tools whose agent definition does not request a sandbox.
         return Ok(true);
     }
-    if sandbox_disabled_by_host() {
+    if sandbox_disabled_by_host(ctx) {
         return Ok(false);
     }
     if matches!(sandbox_mode, Some(SandboxMode::Sandboxed)) {
@@ -86,12 +86,13 @@ pub(crate) async fn resolve_command_policy(
         .load_config()
         .await
         .map_err(|error| format!("Cannot read sandbox configuration: {error}"))?;
-    resolve_command_policy_with_config(&config, action_dir, state_dir).await
+    resolve_command_policy_with_config(ctx, &config, action_dir, state_dir).await
 }
 
 /// [`resolve_command_policy`] for a caller that already holds the loaded
 /// configuration (the scheduler). SaaS still wins over everything else.
 pub(crate) async fn resolve_command_policy_with_config(
+    ctx: &DispatchCtx,
     config: &crate::config::Config,
     action_dir: &Path,
     state_dir: &Path,
@@ -100,13 +101,14 @@ pub(crate) async fn resolve_command_policy_with_config(
         return crate::profiles::tools::sandbox_policy(action_dir, state_dir);
     }
     let mut policy = resolve_sandbox_policy(
+        ctx,
         SandboxMode::Sandboxed,
         action_dir,
         state_dir,
         &config.runtime,
         false,
     );
-    if !config_disables_sandbox(config) && !sandbox_disabled_by_host() {
+    if !config_disables_sandbox(config) && !sandbox_disabled_by_host(ctx) {
         apply_requested_backend(&mut policy, &config.sandbox, &config.runtime, config)
             .await
             .map_err(|error| error.to_string())?;
@@ -114,15 +116,14 @@ pub(crate) async fn resolve_command_policy_with_config(
     Ok(policy)
 }
 
-pub(crate) fn sandbox_disabled_by_host() -> bool {
-    sandbox_off_value(std::env::var(SANDBOX_OFF_ENV).ok().as_deref()) || sandbox_component_off()
+pub(crate) fn sandbox_disabled_by_host(ctx: &DispatchCtx) -> bool {
+    sandbox_off_value(std::env::var(SANDBOX_OFF_ENV).ok().as_deref()) || sandbox_component_off(ctx)
 }
 
-/// `[components] sandbox = false` in the ambient core context. With no context
-/// the component is on, since the set only narrows.
-pub(crate) fn sandbox_component_off() -> bool {
-    let off = crate::core::runtime::context::CoreContext::current()
-        .is_some_and(|ctx| !ctx.components().sandbox);
+/// `[components] sandbox = false` in the context `ctx` runs under. With no
+/// context the component is on, since the set only narrows.
+pub(crate) fn sandbox_component_off(ctx: &DispatchCtx) -> bool {
+    let off = !ctx.components().sandbox;
     if off {
         tracing::debug!("[sandbox] component 'sandbox' disabled, using the unsandboxed fallback");
     }
@@ -146,6 +147,7 @@ pub(crate) fn config_disables_sandbox(config: &crate::config::Config) -> bool {
 /// `state_dir` is the core's internal `workspace_dir`; host-side scratch such
 /// as output capture goes there instead of into `action_dir`.
 pub fn resolve_sandbox_policy(
+    ctx: &DispatchCtx,
     mode: SandboxMode,
     action_dir: &Path,
     state_dir: &Path,
@@ -155,7 +157,7 @@ pub fn resolve_sandbox_policy(
     let backend = match mode {
         SandboxMode::None => SandboxBackendKind::None,
         SandboxMode::ReadOnly => SandboxBackendKind::None,
-        SandboxMode::Sandboxed if sandbox_disabled_by_host() => {
+        SandboxMode::Sandboxed if sandbox_disabled_by_host(ctx) => {
             tracing::debug!(
                 env = SANDBOX_OFF_ENV,
                 "[sandbox] host disabled the sandbox; running sandboxed mode unconfined"
@@ -228,10 +230,9 @@ pub fn resolve_sandbox_policy(
 /// passes unnoticed. That is exactly how the original defect survived.
 #[cfg(any(feature = "modules", test))]
 pub(crate) fn local_status_for_jail(
-    available: bool,
-    suitable_for_untrusted_code: bool,
+    isolation: Option<super::types::SandboxIsolation>,
 ) -> SandboxStatus {
-    if available && suitable_for_untrusted_code {
+    if isolation.is_some() {
         SandboxStatus::Ready
     } else {
         SandboxStatus::Inactive
@@ -260,9 +261,10 @@ pub(crate) fn require_untrusted_isolation(
     available: bool,
     suitable_for_untrusted_code: bool,
 ) -> Result<(), IsolationFloor> {
-    match local_status_for_jail(available, suitable_for_untrusted_code) {
-        SandboxStatus::Ready => Ok(()),
-        _ => Err(IsolationFloor),
+    if available && suitable_for_untrusted_code {
+        Ok(())
+    } else {
+        Err(IsolationFloor)
     }
 }
 
@@ -277,6 +279,7 @@ pub async fn create_sandbox_backend(
                 kind: policy.backend,
                 status: SandboxStatus::Error,
                 backend_id: None,
+                isolation: None,
             });
     }
     let config = match ctx.load_config().await {
@@ -301,9 +304,10 @@ pub async fn create_sandbox_backend_with_config(
             kind: SandboxBackendKind::None,
             status: SandboxStatus::Ready,
             backend_id: None,
+            isolation: None,
         }),
         SandboxBackendKind::Local => {
-            let (backend_name, status) = super::native_jail::status(config).await?;
+            let (backend_name, status, isolation) = super::native_jail::status(config).await?;
             if status == SandboxStatus::Inactive {
                 tracing::warn!(
                     backend = backend_name,
@@ -314,6 +318,7 @@ pub async fn create_sandbox_backend_with_config(
                 kind: SandboxBackendKind::Local,
                 status,
                 backend_id: Some(backend_name),
+                isolation,
             })
         }
         SandboxBackendKind::Docker => docker::docker_backend_handle(config).await,
@@ -325,6 +330,7 @@ fn docker_error_handle() -> SandboxBackendHandle {
         kind: SandboxBackendKind::Docker,
         status: SandboxStatus::Error,
         backend_id: None,
+        isolation: None,
     }
 }
 
@@ -359,11 +365,11 @@ pub(crate) async fn execute_in_sandbox_metered(
     // must be checked at the spawn boundary, including callers that resolved
     // their policy from an older or default RuntimeConfig.
     let mut effective_policy = policy.clone();
-    if !crate::core::runtime::is_saas() && sandbox_disabled_by_host() {
+    if !crate::core::runtime::is_saas() && sandbox_disabled_by_host(ctx) {
         effective_policy.backend = SandboxBackendKind::None;
     }
     let mut module_config = None;
-    let explicitly_requested = if crate::core::runtime::is_saas() || sandbox_disabled_by_host() {
+    let explicitly_requested = if crate::core::runtime::is_saas() || sandbox_disabled_by_host(ctx) {
         false
     } else {
         let config = ctx

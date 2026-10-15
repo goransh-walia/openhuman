@@ -348,11 +348,16 @@ pub enum CronError {
 /// [`Runtime::cron`](crate::Runtime::cron).
 pub struct Cron<'a> {
     config: &'a Config,
+    /// The runtime's own context: what a Run Now executes and delivers under.
+    dispatch: openhuman_core::core::runtime::DispatchCtx,
 }
 
 impl<'a> Cron<'a> {
-    pub(crate) fn new(config: &'a Config) -> Self {
-        Self { config }
+    pub(crate) fn new(
+        config: &'a Config,
+        dispatch: openhuman_core::core::runtime::DispatchCtx,
+    ) -> Self {
+        Self { config, dispatch }
     }
 
     fn enabled(&self) -> Result<(), CronError> {
@@ -458,9 +463,10 @@ impl<'a> Cron<'a> {
             .find(name)?
             .ok_or_else(|| CronError::NotFound(name.to_string()))?;
         log::debug!("[embed][cron] run_now name={name} id={}", job.id);
-        let (success, output) = openhuman_core::cron::ops::run_job_now(self.config, &job.id)
-            .await
-            .map_err(CronError::Run)?;
+        let (success, output) =
+            openhuman_core::cron::ops::run_job_now(&self.dispatch, self.config, &job.id)
+                .await
+                .map_err(CronError::Run)?;
         Ok(JobRun { success, output })
     }
 

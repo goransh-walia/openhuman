@@ -85,6 +85,18 @@ pub struct AgentChatEnv {
     /// The host environment installed on the session
     /// ([`OpenHumanSessionHost::set_host_env`]).
     pub host: crate::agent::turn_env::HostTurnEnv,
+    /// Messages to steer the turn while it runs
+    /// ([`OpenHumanSessionHost::set_run_queue`]). Items pushed on its
+    /// [`QueueLane::Steer`](tinyagents_harness::run_queue::QueueLane::Steer)
+    /// lane before or during the turn are injected as user messages at the
+    /// loop's next safe checkpoint; a steer that arrives while the model is
+    /// writing its final answer earns one more model call. Steers the turn
+    /// did not apply are back on the lane once this call returns.
+    pub run_queue: Option<
+        std::sync::Arc<
+            tinyagents_harness::run_queue::RunQueue<crate::agent::queued_turn::QueuedTurn>,
+        >,
+    >,
 }
 
 /// The log line every successful agent chat turn carries.
@@ -256,16 +268,17 @@ fn definition_for_turn(
 }
 
 fn build_turn_agent(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     target: &AgentChatTarget<'_>,
     session_id: Option<&str>,
     temperature: Option<f64>,
 ) -> Result<OpenHumanSessionHost, String> {
     match target {
-        AgentChatTarget::Orchestrator => OpenHumanSessionHost::from_config(config),
+        AgentChatTarget::Orchestrator => OpenHumanSessionHost::from_config(ctx, config),
         AgentChatTarget::AgentId(id) => {
             log::debug!("[inference] agent_chat building agent_id={id}");
-            OpenHumanSessionHost::from_config_for_agent(config, id)
+            OpenHumanSessionHost::from_config_for_agent(ctx, config, id)
         }
         AgentChatTarget::Definition {
             definition,
@@ -274,7 +287,7 @@ fn build_turn_agent(
             ..
         } => {
             let definition = definition_for_turn(definition, temperature);
-            OpenHumanSessionHost::from_config_host_only(config, &definition, *host, session_id)
+            OpenHumanSessionHost::from_config_host_only(ctx, config, &definition, *host, session_id)
         }
         AgentChatTarget::Definition {
             definition, host, ..
@@ -282,12 +295,13 @@ fn build_turn_agent(
             let definition = definition_for_turn(definition, temperature);
             match host {
                 Some(host) => OpenHumanSessionHost::from_config_with_host_tools(
+                    ctx,
                     config,
                     &definition,
                     host,
                     session_id,
                 ),
-                None => OpenHumanSessionHost::from_config_with_definition(config, &definition),
+                None => OpenHumanSessionHost::from_config_with_definition(ctx, config, &definition),
             }
         }
     }
@@ -416,6 +430,8 @@ pub async fn agent_chat_reply_for(
         .map(str::trim)
         .filter(|id| !id.is_empty());
     let turn_cwd = resolve_turn_cwd(cwd)?;
+    // The turn's context: the host environment's bound one, else the task's.
+    let turn_ctx = crate::core::runtime::DispatchCtx::from_weak(env.host.core.as_ref());
     let mut agent = match turn_cwd.as_ref() {
         // Per-turn root. Building from a config clone whose `action_dir` is the
         // requested directory is what makes this a *turn-scoped* override: the
@@ -433,14 +449,15 @@ pub async fn agent_chat_reply_for(
                 "[inference] agent_chat rooting turn tools at cwd={}",
                 root.display()
             );
-            let mut agent = build_turn_agent(&scoped, &target, turn_session_id, temperature)?;
+            let mut agent =
+                build_turn_agent(&turn_ctx, &scoped, &target, turn_session_id, temperature)?;
             // Also thread it as the turn's workspace descriptor so acting tools
             // that read `ToolExecutionContext::workspace` (shell) resolve their
             // default cwd here, and so spawned sub-agents inherit the same root.
             agent.set_workspace_descriptor(Some(tinytools::WorkspaceDescriptor::new(root.clone())));
             agent
         }
-        None => build_turn_agent(config, &target, turn_session_id, temperature)?,
+        None => build_turn_agent(&turn_ctx, config, &target, turn_session_id, temperature)?,
     };
     // Thread-correct resume. `OpenHumanSessionHost::turn` would otherwise auto-load the
     // newest transcript for the agent *name*, which is another thread's
@@ -540,6 +557,10 @@ pub async fn agent_chat_reply_for(
     // tool-belt authority) rides the session explicitly.
     let approval = env.host.approval.clone();
     agent.set_host_env(env.host);
+    if let Some(queue) = env.run_queue {
+        log::debug!("[inference] agent_chat attached a run queue for mid-turn steering");
+        agent.set_run_queue(Some(queue));
+    }
     // Live progress for in-process embedders. `OpenHumanSessionHost::from_config` never
     // attaches a sink itself, so there is nothing to clobber here; callers that
     // set one explicitly (web chat, platform socket, flows, skills) hold their

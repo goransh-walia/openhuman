@@ -76,6 +76,7 @@ fn a_host_only_session_registers_and_advertises_only_the_host_belt() {
     let config = test_config(&tmp);
 
     let agent = crate::agent::OpenHumanSessionHost::from_config_host_only(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &orchestrator_def(),
         Some(&host_belt()),
@@ -106,6 +107,7 @@ fn a_host_only_session_without_a_belt_has_no_tools() {
     let config = test_config(&tmp);
 
     let agent = crate::agent::OpenHumanSessionHost::from_config_host_only(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &orchestrator_def(),
         None,
@@ -123,6 +125,7 @@ fn a_host_only_session_runs_a_definition_that_cannot_delegate_or_act() {
     let config = test_config(&tmp);
 
     let agent = crate::agent::OpenHumanSessionHost::from_config_host_only(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &orchestrator_def(),
         Some(&host_belt()),
@@ -196,6 +199,7 @@ fn only_a_host_only_session_accepts_untrusted_input() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
     let mut host_only = crate::agent::OpenHumanSessionHost::from_config_host_only(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &orchestrator_def(),
         Some(&host_belt()),
@@ -203,6 +207,7 @@ fn only_a_host_only_session_accepts_untrusted_input() {
     )
     .expect("host-only session");
     let mut normal = crate::agent::OpenHumanSessionHost::from_config_with_host_tools(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &orchestrator_def(),
         &host_belt(),
@@ -223,6 +228,7 @@ async fn a_host_only_session_enforces_the_deny_by_default_gate() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
     let agent = crate::agent::OpenHumanSessionHost::from_config_host_only(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &orchestrator_def(),
         Some(&host_belt()),

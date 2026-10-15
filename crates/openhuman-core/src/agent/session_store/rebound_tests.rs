@@ -11,12 +11,13 @@ fn put_marker(stores: &ReboundSessionStores, backend: &Arc<dyn StorageBackend>) 
 fn a_rebind_moves_new_agents_to_the_new_backend() {
     let first: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
     let second: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
-    let stores = ReboundSessionStores::new(Arc::clone(&first), true).unwrap();
+    let registry = StoreRegistry::default();
+    let stores = ReboundSessionStores::new_in(&registry, Arc::clone(&first), true).unwrap();
     put_marker(&stores, &first);
     let before = stores.destination_key();
 
-    // Other tests' live stores in this process are rebound too.
-    assert!(rebind_all(&second) >= 1);
+    // Only the stores of this registry move; tests beside this one keep theirs.
+    assert_eq!(registry.rebind(&second), 1);
 
     // The destination names the backend driver and a per-provider id; a
     // rebound store is a different provider underneath.
@@ -28,9 +29,10 @@ fn a_rebind_moves_new_agents_to_the_new_backend() {
 fn handles_opened_before_a_rebind_keep_their_backend() {
     let first: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
     let second: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
-    let stores = ReboundSessionStores::new(Arc::clone(&first), false).unwrap();
+    let registry = StoreRegistry::default();
+    let stores = ReboundSessionStores::new_in(&registry, Arc::clone(&first), false).unwrap();
     let old = stores.try_for_agent("agent").unwrap();
-    rebind_all(&second);
+    registry.rebind(&second);
     let new = stores.try_for_agent("agent").unwrap();
     old.turn_states
         .put(&tinyagents_session::turn_state::TurnState::started(
@@ -49,16 +51,28 @@ fn handles_opened_before_a_rebind_keep_their_backend() {
 #[test]
 fn dropped_stores_are_not_rebound() {
     let backend: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
-    let stores = ReboundSessionStores::new(Arc::clone(&backend), false).unwrap();
-    drop(stores);
-    let live_before = LIVE
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .iter()
-        .filter(|weak| weak.strong_count() > 0)
-        .count();
-    let rebound = rebind_all(&backend);
-    assert!(rebound <= live_before);
+    let registry = StoreRegistry::default();
+    let kept = ReboundSessionStores::new_in(&registry, Arc::clone(&backend), false).unwrap();
+    let dropped = ReboundSessionStores::new_in(&registry, Arc::clone(&backend), false).unwrap();
+    drop(dropped);
+    assert_eq!(registry.rebind(&backend), 1, "only the live store moves");
+    drop(kept);
+    assert_eq!(registry.rebind(&backend), 0);
+}
+
+#[test]
+fn a_registry_rebind_leaves_other_registries_alone() {
+    let first: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
+    let second: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
+    let (mine, theirs) = (StoreRegistry::default(), StoreRegistry::default());
+    let moved = ReboundSessionStores::new_in(&mine, Arc::clone(&first), false).unwrap();
+    let untouched = ReboundSessionStores::new_in(&theirs, Arc::clone(&first), false).unwrap();
+    let before = untouched.destination_key();
+
+    assert_eq!(mine.rebind(&second), 1);
+
+    assert_eq!(untouched.destination_key(), before);
+    drop(moved);
 }
 
 #[test]
@@ -66,7 +80,8 @@ fn the_provider_surface_forwards_to_the_current_backend() {
     use tinyagents_harness::store::SchemaAdmission;
 
     let backend: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
-    let stores = ReboundSessionStores::new(Arc::clone(&backend), false).unwrap();
+    let registry = StoreRegistry::default();
+    let stores = ReboundSessionStores::new_in(&registry, Arc::clone(&backend), false).unwrap();
 
     // Debug names the live destination rather than the wrapper's internals.
     let rendered = format!("{stores:?}");

@@ -86,7 +86,7 @@ pub(crate) async fn flows_build_with_extra_hidden_tools(
     // resolves the per-agent iteration cap from the `workflow_builder`
     // `AgentDefinition` itself (`iteration_policy = "extended"` ->
     // `effective_max_iterations()` = 50), so no override is needed here.
-    let mut agent = OpenHumanSessionHost::from_config_for_agent(config, "workflow_builder")
+    let mut agent = OpenHumanSessionHost::from_config_for_agent(ctx, config, "workflow_builder")
         .map_err(|e| format!("failed to build workflow_builder agent: {e:#}"))?;
     agent.set_agent_definition_name("workflow_builder".to_string());
     start_builder_turn_clean(&mut agent);
@@ -134,7 +134,7 @@ pub(crate) async fn flows_build_with_extra_hidden_tools(
     // `propose_workflow` tool result the frontend renders as a proposal card.
     // Best-effort — with no target the run stays headless (CLI / tests).
     if let Some(target) = &stream {
-        attach_flow_progress_bridge(&mut agent, target, "flows_build", config);
+        attach_flow_progress_bridge(ctx, &mut agent, target, "flows_build", config);
     }
 
     // Run to completion, bounded by a wall-clock timeout. PR3

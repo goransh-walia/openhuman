@@ -95,13 +95,12 @@ impl EventHandler<DomainEvent> for DeviceTunnelSubscriber {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .get(channel_id.as_str())
                     .cloned();
-                match super::owner::owner_of(&DispatchCtx::ambient(), channel_id, pending.as_ref())
-                    .await
-                {
+                let ctx = DispatchCtx::ambient();
+                match super::owner::owner_of(&ctx, channel_id, pending.as_ref()).await {
                     Ok(owner) => {
                         let handled = crate::storage::agents::within_agent(
                             owner.as_deref(),
-                            handle_tunnel_frame(&DispatchCtx::ambient(), channel_id, payload_b64),
+                            handle_tunnel_frame(&ctx, channel_id, payload_b64),
                         )
                         .await;
                         // Fail closed: no context can act for the owner.
@@ -407,9 +406,7 @@ async fn handle_tunnel_frame(ctx: &DispatchCtx, channel_id: &str, payload_b64: &
             Ok(device) => {
                 super::owner::remember(
                     channel_id,
-                    crate::core::runtime::current_tenant()
-                        .ok()
-                        .and_then(|tenant| tenant.agent),
+                    ctx.tenant().ok().and_then(|tenant| tenant.agent),
                 );
                 log::info!(
                     "[devices/bus] device persisted channel_id={} label={}",

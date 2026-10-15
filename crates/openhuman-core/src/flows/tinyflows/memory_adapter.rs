@@ -80,7 +80,7 @@ impl OpenHumanMemory {
     /// so a `scope: "flow"` node can never be pointed at another flow's
     /// namespace by a crafted `=`-binding.
     fn trusted_flow_id(&self) -> Result<String> {
-        match turn_origin::current() {
+        match crate::core::runtime::DispatchCtx::ambient_turn().turn_origin() {
             Some(AgentTurnOrigin::TrustedAutomation {
                 job_id,
                 source: TrustedAutomationSource::Workflow { .. },

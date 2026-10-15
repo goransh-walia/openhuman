@@ -274,7 +274,12 @@ fn build_registry_entries(config: Option<&Config>) -> Vec<ToolRegistryEntry> {
                                 Some(config) => {
                                     connections::all_connected_tools_for_config(config).await
                                 }
-                                None => connections::all_connected_tools().await,
+                                None => {
+                                    connections::all_connected_tools(
+                                        &crate::core::runtime::DispatchCtx::ambient(),
+                                    )
+                                    .await
+                                }
                             }
                         })
                     })

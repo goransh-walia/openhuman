@@ -36,11 +36,12 @@ async fn run_role_tool(
     method: &str,
 ) -> Result<Value, String> {
     let config = ctx.load_config().await?;
-    run_role_tool_with(&config, tool, arguments, method).await
+    run_role_tool_with(ctx, &config, tool, arguments, method).await
 }
 
 #[cfg(feature = "modules")]
 async fn run_role_tool_with(
+    ctx: &DispatchCtx,
     config: &crate::config::Config,
     tool: &'static str,
     arguments: Value,
@@ -59,7 +60,7 @@ async fn run_role_tool_with(
         name: tool.to_string(),
         arguments,
     };
-    let response = crate::modules::search::execute_tool(config, request)
+    let response = crate::modules::search::execute_tool(ctx, config, request)
         .await
         .map_err(|error| crate::search::tools::user_facing_error(&error))?;
     let payload = json!({
@@ -119,6 +120,7 @@ fn ensure_servable(
 
 #[cfg(not(feature = "modules"))]
 async fn run_role_tool_with(
+    _ctx: &DispatchCtx,
     _config: &crate::config::Config,
     _tool: &'static str,
     _arguments: Value,

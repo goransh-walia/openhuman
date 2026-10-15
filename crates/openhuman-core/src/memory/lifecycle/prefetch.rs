@@ -11,7 +11,7 @@ use futures::future::BoxFuture;
 use tinymemory_tools::prefetch::{Limits, PrefetchRuntime, Prefetcher, WorkerPool};
 
 use crate::config::Config;
-use crate::core::runtime::{current_slot, spawn_scoped};
+use crate::core::runtime::{slot_for, spawn_scoped, DispatchCtx};
 use crate::memory::scope::ResolvedIdentity;
 
 use super::hooks::{self, PreTurnInput, TurnPack};
@@ -88,8 +88,8 @@ impl Default for Cache {
     }
 }
 
-fn cache() -> Arc<Cache> {
-    let cache = current_slot::<Cache>();
+fn cache(ctx: &DispatchCtx) -> Arc<Cache> {
+    let cache = slot_for::<Cache>(ctx);
     let mut caches = CACHES.lock().unwrap_or_else(PoisonError::into_inner);
     caches.retain(|known| known.strong_count() > 0);
     if !caches
@@ -144,6 +144,7 @@ fn enqueue(cache: Arc<Cache>, key: Key, work: Work) {
 /// refreshes its context in the background. A cold cache returns `None`.
 /// Omitted recall still logs, but cannot consume another identity's pack.
 pub(crate) fn pre_turn(
+    ctx: &DispatchCtx,
     config: Arc<Config>,
     identity: ResolvedIdentity,
     input: PreTurnInput,
@@ -152,12 +153,12 @@ pub(crate) fn pre_turn(
     if !config.memory.conversations.enabled && !identity.recall {
         return None;
     }
-    let cache = cache();
+    let cache = cache(ctx);
     let key = Key::new(&config, &identity, &input.thread_id, false);
     let pack = identity.recall.then(|| completed(&cache, &key)).flatten();
     tracing::debug!(thread_id = %key.thread, agent_id = %key.identity.agent_id, cache_hit = pack.is_some(), "[memory:prefetch] pre_turn cache");
     if let Some(pack) = &pack {
-        crate::memory::tools::record_pack_citations(&input.thread_id, pack.citations.clone());
+        crate::memory::tools::record_pack_citations(ctx, &input.thread_id, pack.citations.clone());
     }
     enqueue(
         cache,
@@ -197,6 +198,7 @@ fn cached_notice(mut pack: TurnPack) -> TurnPack {
 /// Uses only completed context while queuing recall of the folded span. The
 /// authoritative summarizer never waits for this refresh.
 pub(crate) fn compaction(
+    ctx: &DispatchCtx,
     config: Arc<Config>,
     identity: ResolvedIdentity,
     thread: String,
@@ -205,7 +207,7 @@ pub(crate) fn compaction(
     if !identity.recall || dropped.is_empty() {
         return None;
     }
-    let cache = cache();
+    let cache = cache(ctx);
     let key = Key::new(&config, &identity, &thread, true);
     let pack = completed(&cache, &key)
         .or_else(|| completed(&cache, &Key::new(&config, &identity, &thread, false)));
@@ -221,12 +223,13 @@ pub(crate) fn compaction(
 
 #[cfg(test)]
 pub(crate) async fn settle_for_test(
+    ctx: &DispatchCtx,
     config: &Config,
     identity: &ResolvedIdentity,
     thread: &str,
     compaction: bool,
 ) {
-    let cache = cache();
+    let cache = cache(ctx);
     let key = Key::new(config, identity, thread, compaction);
     tokio::time::timeout(Duration::from_secs(2), async {
         while !cache.0.is_idle(&key) {

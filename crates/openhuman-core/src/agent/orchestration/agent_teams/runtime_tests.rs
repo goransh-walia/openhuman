@@ -267,6 +267,7 @@ async fn run_member_loop_drives_member_under_an_explicit_parent() {
         fail: false,
     });
     run_member_loop(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         "team-1",
         "m1",
@@ -372,9 +373,16 @@ async fn start_member_run_blocks_on_unmet_dependency() {
     );
 
     // Explicit task-b: its dep task-a is not done → Blocked, no spawn.
-    let outcome = start_member_run(&config, "team-1", "m1", Some("task-b"), None)
-        .await
-        .unwrap();
+    let outcome = start_member_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "team-1",
+        "m1",
+        Some("task-b"),
+        None,
+    )
+    .await
+    .unwrap();
     match outcome {
         StartMemberOutcome::Blocked { unmet } => assert_eq!(unmet, vec!["task-a".to_string()]),
         other => panic!("expected Blocked, got {other:?}"),
@@ -399,9 +407,16 @@ async fn start_member_run_reports_already_claimed() {
     run_ledger::claim_agent_team_task(&config.workspace_dir, "team-1", "task-a", "m2", "tok")
         .unwrap();
 
-    let outcome = start_member_run(&config, "team-1", "m1", Some("task-a"), None)
-        .await
-        .unwrap();
+    let outcome = start_member_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "team-1",
+        "m1",
+        Some("task-a"),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(outcome, StartMemberOutcome::AlreadyClaimed);
 }
 
@@ -411,21 +426,42 @@ async fn start_member_run_no_claimable_and_unknown_task() {
     seed_team(&config, "team-1");
     seed_member(&config, "team-1", "m1", Some("task_manager_agent"));
     // No tasks at all → nothing claimable.
-    let none = start_member_run(&config, "team-1", "m1", None, None)
-        .await
-        .unwrap();
+    let none = start_member_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "team-1",
+        "m1",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(none, StartMemberOutcome::NoClaimableTask);
 
     // Explicit unknown task id → UnknownTask.
-    let unknown = start_member_run(&config, "team-1", "m1", Some("ghost"), None)
-        .await
-        .unwrap();
+    let unknown = start_member_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "team-1",
+        "m1",
+        Some("ghost"),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(unknown, StartMemberOutcome::UnknownTask);
 
     // Unknown member → typed error.
-    let err = start_member_run(&config, "team-1", "ghost", None, None)
-        .await
-        .unwrap_err();
+    let err = start_member_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "team-1",
+        "ghost",
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         err.downcast::<TeamError>().unwrap(),
         TeamError::UnknownMember {
@@ -463,9 +499,16 @@ async fn start_member_run_rejects_already_active_member_without_side_effects() {
         vec![],
     );
 
-    let outcome = start_member_run(&config, "team-1", "m1", None, None)
-        .await
-        .unwrap();
+    let outcome = start_member_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "team-1",
+        "m1",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(outcome, StartMemberOutcome::AlreadyActive);
 
     // No claim happened — the free task is untouched and the member still points

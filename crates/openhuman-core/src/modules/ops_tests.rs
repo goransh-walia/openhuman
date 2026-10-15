@@ -613,7 +613,8 @@ fn status_reports_the_source_that_serves_a_module() {
 }
 
 #[tokio::test]
-#[cfg(feature = "e2e-test-support")]
+// The tinychannels fixture compiles only with `channels` (channels/mod.rs).
+#[cfg(all(feature = "e2e-test-support", feature = "channels"))]
 async fn a_registered_linked_factory_serves_the_module_and_status_says_so() {
     use crate::config::schema::ModuleSourceMode;
     use crate::modules::types::ModuleSource;

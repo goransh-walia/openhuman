@@ -37,8 +37,8 @@ pub async fn acquire_profile(profile: &str) -> TurnGuard {
 
 /// Wait for the gate of the profile the calling task runs for, or return
 /// `None` at once when it runs for no profile.
-pub async fn acquire() -> Option<TurnGuard> {
-    let profile = crate::core::runtime::current_tenant().ok()?.profile?;
+pub async fn acquire(ctx: &crate::core::runtime::DispatchCtx) -> Option<TurnGuard> {
+    let profile = ctx.tenant().ok()?.profile?;
     Some(acquire_profile(&profile).await)
 }
 

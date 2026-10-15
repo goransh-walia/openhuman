@@ -4611,10 +4611,12 @@ async fn todo_list_ticks_off_five_items_across_turns_inner() {
     // Turn 1 writes the plan (item 1 in progress). Turns 2-6 each complete
     // one more item; the final write has every item completed. Every todo write
     // also triggers verify-before-finish, so reserve a separate scripted answer
-    // for its extra model request on each turn.
+    // for its extra model request on each turn. A turn that ends with steps
+    // still open is held once more first, by the plan-order check.
     let mut script = vec![
         todo_write(&FIVE_STEPS, 0),
         text_completion("Plan written; starting on the first step."),
+        text_completion("The remaining steps continue in the next turns."),
         // A todo write triggers the orchestrator's verify-before-finish
         // middleware, which makes one more model request before the turn ends.
         // Keep that completion separate so each following turn advances one
@@ -4624,6 +4626,11 @@ async fn todo_list_ticks_off_five_items_across_turns_inner() {
     for completed in 1..=FIVE_STEPS.len() {
         script.push(todo_write(&FIVE_STEPS, completed));
         script.push(text_completion(&format!("Step {completed} done.")));
+        if completed < FIVE_STEPS.len() {
+            script.push(text_completion(
+                "The remaining steps continue in the next turns.",
+            ));
+        }
         script.push(text_completion(
             "The completed work matches the requested step.",
         ));
@@ -4789,18 +4796,18 @@ async fn todo_list_ticks_off_five_items_across_turns_inner() {
     stack.shutdown();
 }
 
-/// Two `in_progress` items break the single-focus invariant: the store
-/// refuses the write, the agent gets a tool error it can correct, and the
-/// list it wrote before is untouched.
+/// Two `in_progress` items break the single-focus invariant: the store keeps
+/// the first, sets the other back to pending and says so in the result, so
+/// the agent sees the list it now has instead of an error.
 #[test]
-fn todo_list_rejects_two_items_in_progress() {
+fn todo_list_keeps_one_item_in_progress() {
     run_on_agent_stack(
-        "todo_list_rejects_two_items_in_progress",
-        todo_list_rejects_two_items_in_progress_inner,
+        "todo_list_keeps_one_item_in_progress",
+        todo_list_keeps_one_item_in_progress_inner,
     );
 }
 
-async fn todo_list_rejects_two_items_in_progress_inner() {
+async fn todo_list_keeps_one_item_in_progress_inner() {
     let _lock = env_lock();
     reset_script(vec![
         todo_write(&["Only step", "Next step"], 0),
@@ -4811,7 +4818,7 @@ async fn todo_list_rejects_two_items_in_progress_inner() {
                 { "content": "Next step", "status": "in_progress" }
             ] }),
         ),
-        // A read (no `todos`) shows the earlier write survived the rejection.
+        // A read (no `todos`) shows the list the fix left.
         tool_call_completion("todo", json!({})),
         text_completion("Kept one thing in progress."),
     ]);
@@ -4850,28 +4857,28 @@ async fn todo_list_rejects_two_items_in_progress_inner() {
     assert_eq!(
         todo_frames.len(),
         3,
-        "write, rejected write, read: {results:?}"
+        "write, fixed write, read: {results:?}"
     );
     assert_eq!(todo_frames[0]["success"], json!(true), "{}", todo_frames[0]);
     assert_eq!(
         todo_frames[1]["success"],
-        json!(false),
-        "two in_progress must be rejected: {}",
+        json!(true),
+        "two in_progress are fixed, not rejected: {}",
         todo_frames[1]
     );
     assert!(
         todo_frames[1]["output"]
             .as_str()
             .unwrap_or("")
-            .contains("in_progress"),
-        "the error names the invariant: {}",
+            .contains("Only one step may be in progress"),
+        "the result says what was fixed: {}",
         todo_frames[1]
     );
     let read: Value = serde_json::from_str(todo_frames[2]["output"].as_str().unwrap()).unwrap();
     assert_eq!(
         todo_statuses(&read),
         vec!["in_progress", "pending"],
-        "the rejected write left the list untouched: {read}"
+        "the second in_progress went back to pending: {read}"
     );
 
     stack.shutdown();

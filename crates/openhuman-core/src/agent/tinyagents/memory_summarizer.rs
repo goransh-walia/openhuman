@@ -50,6 +50,7 @@ impl MemoryRecallSummarizer {
         summary: impl std::future::Future<Output = Result<SummaryRecord>>,
     ) -> Result<SummaryRecord> {
         let pack = crate::memory::lifecycle::prefetch::compaction(
+            &self.turn.dispatch_ctx(),
             self.turn.config.clone(),
             self.turn.identity.clone(),
             self.turn.thread_id.clone(),

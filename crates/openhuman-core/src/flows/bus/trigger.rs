@@ -113,7 +113,7 @@ impl FlowTriggerSubscriber {
 
     /// The configuration to handle an event under (`super::owner::config_for_scope`).
     pub(super) fn config_for_scope(&self) -> Arc<Config> {
-        super::owner::config_for_scope(&self.config)
+        super::owner::config_for_scope(&crate::core::runtime::DispatchCtx::ambient(), &self.config)
     }
 
     /// A `flow`-type cron job fired (`cron::scheduler`'s trigger sink calls

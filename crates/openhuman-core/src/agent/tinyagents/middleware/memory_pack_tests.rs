@@ -19,6 +19,7 @@ fn context(pack: Option<TurnPack>) -> RunContext<OpenHumanRunContext> {
         config: Arc::new(config),
         thread_id: "t".into(),
         pack,
+        core: None,
     }));
     RunContext::new(RunConfig::new("memory-pack-test"), data)
 }

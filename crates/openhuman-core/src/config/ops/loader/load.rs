@@ -37,16 +37,7 @@ pub async fn load_config_with_timeout() -> Result<Config, String> {
     // read the task's ambient context. SaaS reads only the task's own scope, as
     // `Config::load_or_init` does, so a task that lost its user scope fails
     // rather than getting the operator's.
-    let ambient = if crate::core::runtime::is_saas() {
-        crate::core::runtime::CoreContext::scoped()
-    } else {
-        crate::core::runtime::CoreContext::current()
-    };
-    let ctx = ambient.map_or_else(
-        crate::core::runtime::DispatchCtx::unbound,
-        crate::core::runtime::DispatchCtx::new,
-    );
-    load_config_in(&ctx).await
+    load_config_in(&crate::core::runtime::DispatchCtx::ambient()).await
 }
 
 /// [`load_config_with_timeout`] for the context the caller was handed.

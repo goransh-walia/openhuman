@@ -89,7 +89,7 @@ impl SteerSubagentTool {
         &self,
         args: serde_json::Value,
         parent: Option<ParentExecutionContext>,
-        _tool_context: Option<&dyn tinytools::ToolRunContext>,
+        tool_context: Option<&dyn tinytools::ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
         let task_id = args
             .get("task_id")
@@ -132,9 +132,12 @@ impl SteerSubagentTool {
             }
         };
         let parent_session = parent.session_id;
+        let dispatch =
+            crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context);
 
         let resolved_task_id = if task_id.is_empty() {
             match running_subagents::task_id_for_session_in_workspace(
+                &dispatch,
                 &subagent_session_id,
                 &parent_session,
                 &parent.workspace_dir,
@@ -173,7 +176,7 @@ impl SteerSubagentTool {
             message.chars().count()
         );
 
-        match running_subagents::steer(&resolved_task_id, &parent_session, message, lane).await {
+        match running_subagents::steer(&dispatch, &resolved_task_id, &parent_session, message, lane).await {
             Ok(()) => Ok(ToolResult::success(format!(
                 "Steered sub-agent `{resolved_task_id}` ({mode}). It will pick this up at its next step. \
                  Use wait_subagent with its subagent_session_id or task_id to collect its result."

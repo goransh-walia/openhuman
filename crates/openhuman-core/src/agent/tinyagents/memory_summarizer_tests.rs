@@ -23,6 +23,7 @@ async fn bound_turn(tmp: &tempfile::TempDir) -> Arc<MemoryTurn> {
     bind_reference(&config);
     let identity = MemoryIdentity::agent("orchestrator").resolve(&config);
     pre_turn(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &identity,
         PreTurnInput {
@@ -53,6 +54,7 @@ async fn bound_turn(tmp: &tempfile::TempDir) -> Arc<MemoryTurn> {
         identity,
         thread_id: "t".into(),
         pack: None,
+        core: None,
     })
 }
 
@@ -81,6 +83,7 @@ async fn the_checkpoint_uses_completed_memory_without_waiting_for_refresh() {
     let cold = summarizer.summarize(&dropped()).await.unwrap();
     assert!(!cold.summary.text().contains(RECALLED_HEADING));
     crate::memory::lifecycle::prefetch::settle_for_test(
+        &turn.dispatch_ctx(),
         &turn.config,
         &turn.identity,
         &turn.thread_id,
@@ -141,6 +144,7 @@ async fn a_second_compaction_keeps_one_recall_section() {
     let summarizer = MemoryRecallSummarizer::wrap(Box::new(ConcatSummarizer), Some(turn.clone()));
     summarizer.summarize(&dropped()).await.unwrap();
     crate::memory::lifecycle::prefetch::settle_for_test(
+        &turn.dispatch_ctx(),
         &turn.config,
         &turn.identity,
         &turn.thread_id,
@@ -233,6 +237,7 @@ async fn a_held_memory_engine_does_not_delay_transcript_compaction() {
         identity,
         thread_id: "held".into(),
         pack: None,
+        core: None,
     });
     let summarizer = MemoryRecallSummarizer::wrap(Box::new(ConcatSummarizer), Some(turn));
     let record = tokio::time::timeout(

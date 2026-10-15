@@ -434,7 +434,9 @@ export interface ChatPlanReviewRequestEvent {
  */
 export interface ChatThreadTodoItem {
   content: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  /** Why the step was cancelled; only on a `cancelled` item. */
+  reason?: string;
 }
 
 /**

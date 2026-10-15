@@ -391,3 +391,53 @@ async fn sensitive_network_gate_on_the_released_archive() {
     );
     assert!(leaking.local_only_block("example.com").is_some());
 }
+
+fn destination_of<'a>(url: &'a str) -> Destination<'a> {
+    Destination {
+        url,
+        host: "example.com",
+        port: 443,
+        method: "GET",
+        headers: &[],
+        body: None,
+    }
+}
+
+/// With the module built in, every destination is the module's to judge: a
+/// process where it cannot answer (modules disabled here) refuses with the
+/// tool-facing policy message instead of letting the tool resolve and connect.
+#[cfg(feature = "security-module")]
+#[tokio::test]
+async fn a_destination_the_module_cannot_judge_is_refused_not_passed_to_the_tool() {
+    let dir = tempfile::tempdir().unwrap();
+    let security = Arc::new(SecurityPolicy {
+        workspace_dir: dir.path().to_path_buf(),
+        ..SecurityPolicy::default()
+    });
+    let destination = destination_of("https://example.com/");
+    for answer in [
+        NetGate::authorize_destination(&*security, &destination).await,
+        RoutedGate::new(security.clone(), None, &json!({}))
+            .authorize_destination(&destination)
+            .await,
+    ] {
+        let refusal = answer
+            .expect("the module owns the decision")
+            .expect_err("no module answers in a unit test");
+        assert!(
+            refusal.starts_with(tinytools::status::POLICY_BLOCKED_MARKER),
+            "{refusal}"
+        );
+    }
+}
+
+/// A build without the module leaves the tool's own DNS check in force.
+#[cfg(not(feature = "security-module"))]
+#[tokio::test]
+async fn without_the_module_the_tool_keeps_its_own_destination_check() {
+    let security = SecurityPolicy::default();
+    let destination = destination_of("https://example.com/");
+    assert!(NetGate::authorize_destination(&security, &destination)
+        .await
+        .is_none());
+}

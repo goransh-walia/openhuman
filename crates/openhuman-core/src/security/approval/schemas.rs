@@ -180,10 +180,10 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_list_pending(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_list_pending(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let agent_id = read_optional_string(&params, "agent_id")?;
-        let outcome = approval_rpc::approval_list_pending(agent_id.as_deref())
+        let outcome = approval_rpc::approval_list_pending(&ctx, agent_id.as_deref())
             .await
             .map_err(|e| e.to_string())?;
         to_json(outcome)

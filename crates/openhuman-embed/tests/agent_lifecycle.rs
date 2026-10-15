@@ -158,7 +158,10 @@ fn removing_an_agent_releases_everything_it_held() {
             removed(closing_turn.await.unwrap(), "closing");
             assert!(!scratch.path().join("closing-wrote").exists());
             assert!(gate
-                .list_pending_for_agent(Some("closing"))
+                .list_pending_for_agent(
+                    &openhuman_core::core::runtime::DispatchCtx::ambient(),
+                    Some("closing")
+                )
                 .unwrap()
                 .is_empty());
 

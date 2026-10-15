@@ -153,6 +153,7 @@ impl CloseSubagentTool {
             ));
         }
         let cancelled = running_subagents::cancel_by_session_in_workspace(
+            &crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context),
             &subagent_session_id,
             &parent.session_id,
             &parent.workspace_dir,

@@ -302,6 +302,20 @@ impl OpenHumanSessionHost {
         self.sync_runtime_tool_surface();
     }
 
+    /// Route this session's transcripts to `locator` instead of the store its
+    /// agent key resolves to. Must be set before the first turn: the session
+    /// binds its transcript target once.
+    pub fn set_session_history_locator(
+        &mut self,
+        locator: std::sync::Arc<dyn tinyagents_session::transcript::TranscriptLocator>,
+    ) {
+        if self.runtime_session.is_some() {
+            tracing::debug!("transcript store already bound for this session; keeping it");
+            return;
+        }
+        self.session_history_locator = Some(locator);
+    }
+
     /// Bind the OpenHuman conversation thread for the next and subsequent
     /// turns. Empty input intentionally clears the binding.
     ///

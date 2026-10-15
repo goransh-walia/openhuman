@@ -27,11 +27,13 @@ use openhuman_core::config::Config;
 use openhuman_core::storage::import::{self, Outcome};
 use openhuman_core::storage::{rusqlite, DocumentStoreExt, Scope, ScopedStorage, StorageBackend};
 use sha2::Digest;
-use tinyagents_session::transcript::{
-    session_stem, write_transcript, SessionRef, TranscriptMessage, TranscriptMeta,
-};
+use tinyagents_session::transcript::{session_stem, SessionRef, TranscriptMessage, TranscriptMeta};
 use tinyagents_session::turn_state::TurnState;
 use tinystoragedrivers_core::Query;
+
+// The classic-transcript fixture writer, shared with the core's unit tests.
+#[path = "../crates/openhuman-core/src/util/classic_transcript_fixture.rs"]
+mod classic_transcript_fixture;
 
 #[macro_use]
 #[path = "support/storage_drivers.rs"]
@@ -127,13 +129,11 @@ fn legacy_sessions(workspace: &Path) {
         session_id: None,
         parent_session_id: None,
     };
-    write_transcript(
+    classic_transcript_fixture::write_classic(
         &raw.join(format!("{stem}.jsonl")),
         &[TranscriptMessage::new("user", "hello from the old layout")],
         &meta,
-        None,
-    )
-    .unwrap();
+    );
     let snapshot = TurnState::started("thread-1", "req-1", 4, "2026-01-01T00:00:00Z");
     let thread_dir = workspace
         .join("memory/conversations/turn_states")

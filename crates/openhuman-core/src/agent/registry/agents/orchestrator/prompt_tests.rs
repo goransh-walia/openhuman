@@ -505,6 +505,7 @@ fn build_never_mandates_plan_review_and_allows_a_lead_in() {
     assert!(!body.contains("request_plan_review"), "{body}");
     assert!(!body.contains("before doing any of the work"));
     assert!(body.contains("3+ steps: `todo`, then execute."));
+    assert!(body.contains("tick each with `todo {\"complete\": N}` as soon as it's done"));
     assert!(body.contains("Make a tool call in the message that announces it"));
 }
 

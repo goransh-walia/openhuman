@@ -15,6 +15,7 @@
 //! The migration is idempotent and guarded by a marker file under
 //! `state/migrations/`.
 
+use crate::core::runtime::DispatchCtx;
 use std::fs;
 use std::path::Path;
 
@@ -92,7 +93,7 @@ fn migrate_welcome_thread_labels(
         WELCOME_THREAD_LABEL
     );
 
-    let threads = conversations::list_threads(workspace_dir.to_path_buf())
+    let threads = conversations::list_threads(&DispatchCtx::ambient(), workspace_dir.to_path_buf())
         .map_err(|e| format!("[migration::welcome-to-orchestrator] list_threads failed: {e}"))?;
 
     let mut threads_updated = 0usize;
@@ -115,6 +116,7 @@ fn migrate_welcome_thread_labels(
 
         let updated_at = chrono::Utc::now().to_rfc3339();
         match conversations::update_thread_labels(
+            &DispatchCtx::ambient(),
             workspace_dir.to_path_buf(),
             &thread.id,
             new_labels,

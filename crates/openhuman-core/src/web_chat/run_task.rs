@@ -4,11 +4,11 @@
 //! to a failed turn. Called from `start_chat` and `spawn_parallel_turn`
 //! (`ops/start_chat.rs`/`ops/parallel_turn.rs`) once the message has been validated.
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 use tinyagents_harness::run_queue::RunQueue;
 
 use crate::agent::progress::AgentProgress;
-use crate::config::rpc as config_rpc;
 
 use super::ops::BudgetCorrelation;
 use super::progress_bridge::spawn_progress_bridge;
@@ -26,6 +26,7 @@ use tinyinference_llm::failure::is_empty_provider_response_text;
 use super::ops::TEST_FORCED_RUN_CHAT_TASK_ERROR;
 
 pub(crate) async fn run_chat_task(
+    ctx: &crate::core::runtime::DispatchCtx,
     client_id: &str,
     thread_id: &str,
     request_id: &str,
@@ -51,7 +52,7 @@ pub(crate) async fn run_chat_task(
     approval: crate::security::approval::ApprovalTurnContext,
 ) -> Result<WebChatTaskResult, String> {
     // One turn at a time per profile: wait behind its relay and cron turns.
-    let _turn = crate::profiles::turn_gate::acquire().await;
+    let _turn = crate::profiles::turn_gate::acquire(ctx).await;
 
     #[cfg(any(test, debug_assertions))]
     {
@@ -116,13 +117,14 @@ pub(crate) async fn run_chat_task(
         }
     }
 
-    let mut config = config_rpc::load_config_with_timeout().await?;
+    let mut config = ctx.load_config().await?;
     // A thread started in a chosen folder acts there, not in the global
     // `action_dir`. Applied before checkout so the session agent, its security
     // policy (which grants `action_dir` as a trusted root) and its tools are
     // all built on the thread's folder.
     let thread_dir =
-        crate::threads::ops::thread_working_dir(config.workspace_dir.clone(), thread_id).await?;
+        crate::threads::ops::thread_working_dir(&ctx, config.workspace_dir.clone(), thread_id)
+            .await?;
     if let Some(dir) = &thread_dir {
         log::debug!("[web-channel] thread working folder applied thread_id={thread_id}");
         config.action_dir = dir.clone();
@@ -137,6 +139,7 @@ pub(crate) async fn run_chat_task(
         mut agent,
         fingerprint: current_fp,
     } = checkout_session_agent(
+        ctx,
         &config,
         client_id,
         thread_id,
@@ -197,6 +200,7 @@ pub(crate) async fn run_chat_task(
         turn_state_store,
         bridge_metadata,
         config.clone(),
+        ctx.clone(),
     );
 
     // `run_single`'s future is very large; box it so the two ambient-scope
@@ -211,8 +215,8 @@ pub(crate) async fn run_chat_task(
             // A successful turn proves the thread's balance is usable, so drop
             // any stale budget-exhausted signal before it could mislabel a
             // later genuine empty response. See #3386.
-            super::ops::clear_budget_signal(thread_id).await;
-            let citations = crate::memory::tools::take_turn_citations(thread_id);
+            super::ops::clear_budget_signal(ctx, thread_id).await;
+            let citations = crate::memory::tools::take_turn_citations(ctx, thread_id);
             let usage = agent.take_last_turn_usage_totals();
             Ok(WebChatTaskResult {
                 full_response: response,
@@ -229,7 +233,8 @@ pub(crate) async fn run_chat_task(
             // Only consult the cross-turn signal for an empty response that is
             // not already a budget error — avoids taking the lock on every turn.
             let has_fresh_signal = if !is_budget && is_empty {
-                super::ops::has_fresh_budget_signal(thread_id, &current_fp.provider_binding).await
+                super::ops::has_fresh_budget_signal(ctx, thread_id, &current_fp.provider_binding)
+                    .await
             } else {
                 false
             };
@@ -239,7 +244,8 @@ pub(crate) async fn run_chat_task(
                     // so a follow-up empty 200 on this thread+provider (managed
                     // route closes the SSE clean under credit exhaustion, no
                     // inline marker) reclassifies as budget. #3386.
-                    super::ops::record_budget_signal(thread_id, &current_fp.provider_binding).await;
+                    super::ops::record_budget_signal(ctx, thread_id, &current_fp.provider_binding)
+                        .await;
                     log::warn!(
                         "[web-channel] inference budget exhausted for client={} thread={} request_id={} error_category=budget_exhausted",
                         client_id,
@@ -426,7 +432,7 @@ pub(crate) async fn run_chat_task(
                 request_id
             );
         } else {
-            checkin_session_agent(thread_id, agent, current_fp).await;
+            checkin_session_agent(ctx, thread_id, agent, current_fp).await;
         }
     }
 

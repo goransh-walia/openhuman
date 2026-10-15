@@ -300,14 +300,6 @@ pub(crate) fn instantiate(runtime: &Runtime, spec: AgentSpec) -> Result<AgentInn
     for hook in parts.tool_hooks {
         overrides.tool_hook(hook.name(), Some(hook.clone()));
     }
-    let approval_subscription = parts.approval_handler.map(|handler| {
-        super::approval_handler::ApprovalSubscription::new(
-            &id,
-            handler,
-            lifecycle.removed(),
-            lifecycle.approval_state(),
-        )
-    });
     let overlay = ContextOverlay {
         host_overrides: Some(overrides.clone()),
         config: context_config,
@@ -325,6 +317,15 @@ pub(crate) fn instantiate(runtime: &Runtime, spec: AgentSpec) -> Result<AgentInn
         definitions,
     };
     let ctx = runtime.core_runtime().context().derive_with(overlay);
+    let approval_subscription = parts.approval_handler.map(|handler| {
+        super::approval_handler::ApprovalSubscription::new(
+            &id,
+            handler,
+            lifecycle.removed(),
+            lifecycle.approval_state(),
+            Some(std::sync::Arc::downgrade(&ctx)),
+        )
+    });
     openhuman_core::core::runtime::AgentContextRegistry::register(&id, &ctx);
 
     log::debug!(

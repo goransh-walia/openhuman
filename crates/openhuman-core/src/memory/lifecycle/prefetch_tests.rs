@@ -313,23 +313,43 @@ async fn slow_engine_results_survive_the_manual_pre_turn_cutoff() {
         observed_actor: None,
     };
     let config = Arc::new(config);
-    assert!(pre_turn(config.clone(), identity.clone(), input(0), None).is_none());
+    assert!(pre_turn(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        config.clone(),
+        identity.clone(),
+        input(0),
+        None
+    )
+    .is_none());
     // Even after the old one-millisecond cutoff, the pack remains owned by
     // the background worker instead of being discarded by the live turn.
     tokio::time::sleep(Duration::from_millis(5)).await;
-    let cache = cache();
+    let cache = cache(&crate::core::runtime::DispatchCtx::ambient());
     let key = Key::new(&config, &identity, "slow", false);
     assert!(completed(&cache, &key).is_none());
     release.add_permits(100);
     drain(&cache, &key).await;
-    let pack = pre_turn(config.clone(), identity.clone(), input(2), None)
-        .expect("next turn uses completed slow lookup");
+    let pack = pre_turn(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        config.clone(),
+        identity.clone(),
+        input(2),
+        None,
+    )
+    .expect("next turn uses completed slow lookup");
     assert!(pack.markdown.contains("teal"));
     assert!(pack.markdown.contains("earlier turn"));
     drain(&cache, &key).await;
     let mut omitted = identity;
     omitted.recall = false;
-    assert!(pre_turn(config.clone(), omitted.clone(), input(4), None).is_none());
+    assert!(pre_turn(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        config.clone(),
+        omitted.clone(),
+        input(4),
+        None
+    )
+    .is_none());
     drain(&cache, &Key::new(&config, &omitted, "slow", false)).await;
     let turns = crate::memory::test_fixtures::stored(
         &engine.inner,
@@ -351,7 +371,7 @@ async fn queued_work_keeps_the_callers_core_context() {
     crate::core::runtime::CoreContext::scope(ctx.clone(), async {
         let identity = MemoryIdentity::agent("scoped-agent").resolve(&config);
         let key = Key::new(&config, &identity, "t", false);
-        let cache = cache();
+        let cache = cache(&crate::core::runtime::DispatchCtx::ambient());
         let expected = ctx.clone();
         enqueue(
             cache.clone(),

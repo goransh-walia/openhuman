@@ -104,6 +104,9 @@ pub struct OpenHumanBudgetGate {
     /// The ledger budgets are checked against; `None` reads the process-wide
     /// cost tracker. Set by tests.
     tracker: Option<Arc<cost::CostTracker>>,
+    /// The context the session runs under: budgets attributed to the user
+    /// agent (`session_agent`) read its tenant from here.
+    dispatch: crate::core::runtime::DispatchCtx,
 }
 
 impl OpenHumanBudgetGate {
@@ -128,6 +131,7 @@ impl OpenHumanBudgetGate {
             last_model: RwLock::new(fallback),
             background: false,
             tracker: None,
+            dispatch: crate::core::runtime::DispatchCtx::unbound(),
         }
     }
 
@@ -143,6 +147,12 @@ impl OpenHumanBudgetGate {
     #[cfg(test)]
     pub(crate) fn with_tracker(mut self, tracker: Arc<cost::CostTracker>) -> Self {
         self.tracker = Some(tracker);
+        self
+    }
+
+    /// Resolves the tenant of budget checks from `dispatch`.
+    pub fn with_dispatch(mut self, dispatch: crate::core::runtime::DispatchCtx) -> Self {
+        self.dispatch = dispatch;
         self
     }
 
@@ -214,9 +224,9 @@ impl OpenHumanBudgetGate {
         policies: &[crate::config::BudgetPolicy],
         tracker: &cost::CostTracker,
     ) -> Option<String> {
-        // The user agent (`session_agent` budgets) comes from the ambient
+        // The user agent (`session_agent` budgets) comes from the gate's
         // context; the agent and thread from the estimate.
-        let mut scope = cost::UsageScope::ambient(None, None);
+        let mut scope = cost::UsageScope::in_ctx(&self.dispatch, None, None);
         if let Some(agent) = est.agent_id.as_ref().filter(|a| !a.is_empty()) {
             scope.agent_id = Some(agent.clone());
         }

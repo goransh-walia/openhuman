@@ -70,6 +70,7 @@ fn send_registered_steering(
 /// TinyAgents steering registry when the child run has registered its live
 /// handle, and fall back to the OpenHuman `RunQueue` compatibility path.
 pub async fn steer(
+    ctx: &crate::core::runtime::DispatchCtx,
     task_id: &str,
     parent_session: &str,
     text: String,
@@ -84,7 +85,7 @@ pub async fn steer(
         return Err(SteerError::UnsupportedLane);
     }
     let task_id_key = TaskId::new(task_id);
-    let owner = owner_key(parent_session).map_err(|_| SteerError::NotOwned)?;
+    let owner = owner_key(ctx, parent_session).map_err(|_| SteerError::NotOwned)?;
     let snapshot = registry()
         .snapshot(&task_id_key, &owner)
         .map_err(steer_error_from_registry)?;
@@ -137,6 +138,7 @@ pub async fn steer(
 /// retain authority over the process user's workers. Unknown, foreign or
 /// terminal tasks are refused, and steered text is never logged.
 pub(crate) async fn steer_control(
+    ctx: &crate::core::runtime::DispatchCtx,
     task_id: &str,
     text: String,
     lane: QueueLane,
@@ -153,7 +155,7 @@ pub(crate) async fn steer_control(
     let snapshot = registry()
         .snapshot_trusted(&task_id_key)
         .map_err(steer_error_from_registry)?;
-    if !control_admits(&snapshot.metadata) {
+    if !control_admits(ctx, &snapshot.metadata) {
         return Err(SteerError::NotOwned);
     }
     if snapshot.status.is_terminal() {

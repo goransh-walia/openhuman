@@ -59,29 +59,14 @@ impl CoreContext {
         self.agent.host_overrides.clone()
     }
 
-    /// Host adapters of the ambient agent, without changing process globals.
-    pub fn current_host_overrides() -> Option<Arc<crate::agent::host_overrides::HostOverrides>> {
-        Self::current().and_then(|ctx| ctx.host_overrides())
-    }
-
     /// The security policy of the agent this context was derived for.
     pub fn agent_policy(&self) -> Option<Arc<crate::security::SecurityPolicy>> {
         self.agent.policy.clone()
     }
 
-    /// [`agent_policy`](Self::agent_policy) of the ambient context.
-    pub fn current_agent_policy() -> Option<Arc<crate::security::SecurityPolicy>> {
-        Self::current().and_then(|ctx| ctx.agent.policy.clone())
-    }
-
     /// Whether the interactive approval gate is off for this context's agent.
     pub fn approvals_disabled(&self) -> bool {
         self.agent.approvals_disabled
-    }
-
-    /// [`approvals_disabled`](Self::approvals_disabled) of the ambient context.
-    pub fn current_approvals_disabled() -> bool {
-        Self::current().is_some_and(|ctx| ctx.agent.approvals_disabled)
     }
 
     /// The sub-agent catalogue of the agent this context was derived for.

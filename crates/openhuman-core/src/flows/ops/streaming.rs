@@ -56,6 +56,7 @@ impl FlowStreamTarget {
 /// (turn end). `source` is a short trace-attribution label (e.g.
 /// `"flows_build"`).
 pub(super) fn attach_flow_progress_bridge(
+    ctx: &DispatchCtx,
     agent: &mut crate::agent::OpenHumanSessionHost,
     target: &FlowStreamTarget,
     source: &str,
@@ -81,6 +82,7 @@ pub(super) fn attach_flow_progress_bridge(
             ..Default::default()
         },
         config.clone(),
+        ctx.clone(),
     );
 }
 
@@ -100,6 +102,7 @@ pub(super) async fn finalize_flow_stream(
     match result {
         Ok(text) => {
             crate::web_chat::presentation::deliver_response(
+                ctx,
                 "system",
                 &target.thread_id,
                 &target.request_id,

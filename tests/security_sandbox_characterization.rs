@@ -32,7 +32,14 @@ fn resolve(
     runtime: &RuntimeConfig,
     remote: bool,
 ) -> openhuman_core::sandbox::SandboxPolicy {
-    resolve_sandbox_policy(mode, Path::new(ACTION), Path::new(STATE), runtime, remote)
+    resolve_sandbox_policy(
+        &DispatchCtx::process_default(),
+        mode,
+        Path::new(ACTION),
+        Path::new(STATE),
+        runtime,
+        remote,
+    )
 }
 
 async fn scratch_config(

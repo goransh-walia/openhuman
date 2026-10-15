@@ -485,6 +485,7 @@ fn handle_start_member(ctx: DispatchCtx, params: Map<String, Value>) -> Controll
         // Test-only seam: pin the spawned worker to a model (e.g. the e2e mock).
         let model_override = opt_str(&params, "modelOverride");
         let outcome = runtime::start_member_run(
+            &ctx,
             &config,
             &team_id,
             &member_id,

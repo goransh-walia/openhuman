@@ -5,6 +5,7 @@
 
 mod budget_correlation;
 mod channel_ops;
+mod followups;
 mod parallel_turn;
 mod start_chat;
 mod state;

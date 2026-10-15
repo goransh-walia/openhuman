@@ -42,7 +42,7 @@ pub async fn get_sandbox_settings(ctx: &DispatchCtx) -> Result<Outcome<serde_jso
     // (or cannot be asked). Naming a backend this build cannot run would invite
     // a selection that fails closed at the first command.
     let detected_backend = match crate::sandbox::native_jail::status(&config).await {
-        Ok((backend, _)) if !backend.is_empty() => backend,
+        Ok((backend, _, _)) if !backend.is_empty() => backend,
         Ok(_) | Err(_) => "none".to_owned(),
     };
 

@@ -52,6 +52,7 @@ pub async fn approval_get_gate_state() -> anyhow::Result<Outcome<ApprovalGateBoo
 ///
 /// `agent_id` narrows the list to the rows one embedded agent parked.
 pub async fn approval_list_pending(
+    ctx: &DispatchCtx,
     agent_id: Option<&str>,
 ) -> anyhow::Result<Outcome<Vec<PendingApproval>>> {
     tracing::debug!(
@@ -63,7 +64,7 @@ pub async fn approval_list_pending(
         return Ok(Outcome::new(Vec::new(), vec![]));
     };
     let listed = match agent_id {
-        Some(agent) => gate.list_pending_for_agent(Some(agent)),
+        Some(agent) => gate.list_pending_for_agent(ctx, Some(agent)),
         None => gate.list_pending(),
     };
     let rows = match listed {

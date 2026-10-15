@@ -96,6 +96,11 @@ pub fn with_claim_at<T>(
     let heartbeat = {
         let (repo, id) = (repo.clone(), id.clone());
         let interval = std::time::Duration::from_millis((ttl_ms / 3).max(1) as u64);
+        // A bare OS thread on purpose (baselined in the SaaS ambient ratchet):
+        // the heartbeat reads no ambient state, only the `repo` handed to it,
+        // and is joined below before this returns. `with_claim` is synchronous
+        // and may run outside a tokio runtime, so `spawn_blocking_scoped`
+        // (which needs `Handle::current()`) is not available here.
         std::thread::spawn(move || {
             let started = std::time::Instant::now();
             let mut version = held;

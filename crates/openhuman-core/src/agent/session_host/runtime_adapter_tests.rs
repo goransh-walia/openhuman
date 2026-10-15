@@ -6,7 +6,8 @@ use tinyagents_runtime::{
     SessionTerminal, SessionTurnRequest, ToolSnapshot, TranscriptCodec, TranscriptTurnOptions,
     TurnOptions,
 };
-use tinyagents_session::transcript::{FileTranscriptLocator, TranscriptMeta};
+use tinyagents_session::port::{InMemorySessionStores, SessionStoreProvider};
+use tinyagents_session::transcript::TranscriptMeta;
 use tinyinference_llm::message::Message;
 
 use super::announcement_notes::{
@@ -393,10 +394,9 @@ async fn runtime_adapter_passes_host_context_commits_before_finalize_and_emits_o
             }
         },
     ));
-    let root = std::env::temp_dir().join(format!(
-        "openhuman-session-adapter-{}",
-        uuid::Uuid::new_v4()
-    ));
+    let locator = InMemorySessionStores::new()
+        .for_agent("adapter-test")
+        .transcripts;
     let context = OpenHumanRunContext::new();
     let cancellation = context.cancellation.clone();
     let mut session = OpenHumanSessionFactory::build(
@@ -404,7 +404,7 @@ async fn runtime_adapter_passes_host_context_commits_before_finalize_and_emits_o
         hooks,
         PrefixSnapshot::default(),
         ToolSnapshot::default(),
-        Arc::new(FileTranscriptLocator::new(&root)),
+        Arc::clone(&locator),
         "adapter-test",
         meta(),
     )
@@ -435,10 +435,10 @@ async fn runtime_adapter_passes_host_context_commits_before_finalize_and_emits_o
         [SessionTerminal::Completed(_)]
     ));
     assert!(
-        root.join("session_raw").exists(),
+        locator.latest_for_agent("adapter-test").is_some()
+            || locator.root_for_thread("thread-1").is_some(),
         "commit precedes finalization"
     );
-    let _ = std::fs::remove_dir_all(root);
 }
 
 /// Mid-conversation availability notes are prepended to the user's next
@@ -489,8 +489,9 @@ fn a_subagent_thread_binding_claims_no_session_identity() {
     };
     std::fs::create_dir_all(&config.workspace_dir).unwrap();
 
+    let ctx = crate::core::runtime::DispatchCtx::ambient();
     let mut root =
-        super::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator").unwrap();
+        super::OpenHumanSessionHost::from_config_for_agent(&ctx, &config, "orchestrator").unwrap();
     root.set_thread_id(Some("thread-1"));
     // The exact stem encoding (sanitisation, per-component digest, generation
     // suffix) belongs to tinyagents and is pinned by its own tests. What
@@ -505,7 +506,7 @@ fn a_subagent_thread_binding_claims_no_session_identity() {
     );
 
     let mut child =
-        super::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator").unwrap();
+        super::OpenHumanSessionHost::from_config_for_agent(&ctx, &config, "orchestrator").unwrap();
     child.session_parent_prefix = Some("1713000000_orchestrator".into());
     child.set_thread_id(Some("thread-1"));
     assert_eq!(child.session_id(), None);

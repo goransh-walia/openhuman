@@ -95,6 +95,7 @@ pub enum StartMemberOutcome {
 /// unknown, or the member has nothing claimable. An unknown member surfaces as
 /// [`TeamError::UnknownMember`].
 pub async fn start_member_run(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     team_id: &str,
     member_id: &str,
@@ -178,6 +179,7 @@ pub async fn start_member_run(
         .clone()
         .unwrap_or_else(|| DEFAULT_TEAMMATE_AGENT_ID.to_string());
     let cfg = config.clone();
+    let task_ctx = ctx.clone();
     let team = team_id.to_string();
     let mem = member_id.to_string();
     let task_for_loop = claimed.clone();
@@ -191,6 +193,7 @@ pub async fn start_member_run(
         crate::agent::turn_origin::with_inherited_origin(
             inherited_origin,
             run_member_loop(
+                &task_ctx,
                 &cfg,
                 &team,
                 &mem,
@@ -220,6 +223,7 @@ pub async fn start_member_run(
 /// and idle the member so the work is reclaimable; they are recorded, not
 /// propagated (there is no caller on the spawned task).
 async fn run_member_loop(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     team_id: &str,
     member_id: &str,
@@ -236,6 +240,7 @@ async fn run_member_loop(
     // host environment, so every run started from that parent keeps it.
     let identity = crate::memory::scope::MemoryIdentity::team_member(team_id, agent_id);
     let member_turn = with_root_parent(
+        ctx,
         parent_override,
         config,
         "agent_team_runtime",

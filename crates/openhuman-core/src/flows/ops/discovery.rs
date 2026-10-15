@@ -58,7 +58,7 @@ pub async fn flows_discover(
     )
     .map_err(|e| format!("failed to initialise agent registry: {e}"))?;
 
-    let mut agent = OpenHumanSessionHost::from_config_for_agent(config, "flow_discovery")
+    let mut agent = OpenHumanSessionHost::from_config_for_agent(ctx, config, "flow_discovery")
         .map_err(|e| format!("failed to build flow_discovery agent: {e:#}"))?;
     agent.set_agent_definition_name("flow_discovery".to_string());
 
@@ -66,7 +66,7 @@ pub async fn flows_discover(
     // an interactive turn (see `FlowStreamTarget`). Best-effort — with no target
     // the run stays headless, exactly as before.
     if let Some(target) = &stream {
-        attach_flow_progress_bridge(&mut agent, target, "flows_discover", config);
+        attach_flow_progress_bridge(ctx, &mut agent, target, "flows_discover", config);
         agent.set_thread_id(Some(target.thread_id.as_str()));
     }
 

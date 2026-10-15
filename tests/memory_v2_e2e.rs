@@ -927,6 +927,7 @@ async fn the_agent_learn_returns_on_accept_and_recall_finds_it() {
     // recall may lag.
     let before = f.mock.request_rows().await.len();
     let learned = openhuman_core::memory::tools::run_action(
+        &openhuman_core::core::runtime::DispatchCtx::ambient(),
         &config,
         &json!({"action": "learn", "text": "Dave takes his coffee with oat milk"}),
         &facts,

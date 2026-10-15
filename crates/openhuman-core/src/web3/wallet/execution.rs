@@ -24,7 +24,7 @@ pub async fn network_defaults(
     ctx: &DispatchCtx,
 ) -> Result<Outcome<Vec<WalletNetworkDefaults>>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::with_native_wallet(&config, |service| async {
+    let result = wallet_service::with_native_wallet(ctx, &config, |service| async {
         wallet_module::call(
             &config,
             methods::NATIVE_WALLET_NETWORK_DEFAULTS,
@@ -43,7 +43,7 @@ pub async fn network_defaults(
 /// Every asset the wallet catalogues.
 pub async fn supported_assets(ctx: &DispatchCtx) -> Result<Outcome<Vec<SupportedAsset>>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::with_native_wallet(&config, |service| async {
+    let result = wallet_service::with_native_wallet(ctx, &config, |service| async {
         wallet_module::call(
             &config,
             methods::NATIVE_WALLET_SUPPORTED_ASSETS,
@@ -62,7 +62,7 @@ pub async fn supported_assets(ctx: &DispatchCtx) -> Result<Outcome<Vec<Supported
 /// Which chains have an account and a provider.
 pub async fn chain_status(ctx: &DispatchCtx) -> Result<Outcome<Vec<ChainStatus>>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::with_native_wallet(&config, |service| async {
+    let result = wallet_service::with_native_wallet(ctx, &config, |service| async {
         wallet_module::call(
             &config,
             methods::NATIVE_WALLET_CHAIN_STATUS,
@@ -81,7 +81,7 @@ pub async fn chain_status(ctx: &DispatchCtx) -> Result<Outcome<Vec<ChainStatus>>
 /// Live native balances.
 pub async fn balances(ctx: &DispatchCtx) -> Result<Outcome<Vec<BalanceInfo>>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::with_native_wallet(&config, |service| async {
+    let result = wallet_service::with_native_wallet(ctx, &config, |service| async {
         wallet_module::call(
             &config,
             methods::NATIVE_WALLET_BALANCES,
@@ -104,7 +104,7 @@ pub async fn prepare_transfer(
     owner: Option<tinywallet_bus::wire::QuoteOwner>,
 ) -> Result<Outcome<PreparedTransaction>, String> {
     let config = ctx.load_config().await?;
-    let quote = wallet_service::prepare_native_transfer(&config, owner, params)
+    let quote = wallet_service::prepare_native_transfer(ctx, &config, owner, params)
         .await
         .map_err(|error| error.to_string())?;
     Ok(Outcome::new(
@@ -120,7 +120,7 @@ pub async fn execute_prepared(
     owner: Option<tinywallet_bus::wire::QuoteOwner>,
 ) -> Result<Outcome<ExecutionResult>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::execute_native_transfer(&config, owner, params)
+    let result = wallet_service::execute_native_transfer(ctx, &config, owner, params)
         .await
         .map_err(|error| error.to_string())?;
     Ok(Outcome::new(
@@ -137,7 +137,7 @@ pub async fn tx_status(
     hash: &str,
 ) -> Result<Outcome<TxStatusInfo>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::with_native_wallet(&config, |service| async {
+    let result = wallet_service::with_native_wallet(ctx, &config, |service| async {
         wallet_module::call(
             &config,
             methods::NATIVE_WALLET_TX_STATUS,
@@ -166,7 +166,7 @@ pub async fn tx_receipt(
     hash: &str,
 ) -> Result<Outcome<TxReceiptInfo>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::with_native_wallet(&config, |service| async {
+    let result = wallet_service::with_native_wallet(ctx, &config, |service| async {
         wallet_module::call(
             &config,
             methods::NATIVE_WALLET_TX_RECEIPT,
@@ -195,7 +195,7 @@ pub async fn lookup_tx(
     hash: &str,
 ) -> Result<Outcome<TxLookupInfo>, String> {
     let config = ctx.load_config().await?;
-    let result = wallet_service::with_native_wallet(&config, |service| async {
+    let result = wallet_service::with_native_wallet(ctx, &config, |service| async {
         wallet_module::call(
             &config,
             methods::NATIVE_WALLET_LOOKUP_TX,

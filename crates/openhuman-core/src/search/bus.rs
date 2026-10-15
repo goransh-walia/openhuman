@@ -29,14 +29,15 @@ impl EventHandler<DomainEvent> for CredentialRefreshSubscriber {
         let DomainEvent::CredentialChanged { kind } = event else {
             return;
         };
-        let config = match DispatchCtx::ambient().load_config().await {
+        let ctx = DispatchCtx::ambient();
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => {
                 tracing::warn!(kind = %kind, %error, "[search][bus] config unavailable; skipping refresh");
                 return;
             }
         };
-        match crate::modules::search::refresh_loaded(&config).await {
+        match crate::modules::search::refresh_loaded(&ctx, &config).await {
             Ok(()) => {
                 tracing::debug!(kind = %kind, "[search][bus] module refreshed after credential change")
             }

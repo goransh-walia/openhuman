@@ -80,7 +80,14 @@ impl Tool for CronAddTool {
         // asked for it needs no approval: the asker is the sole recipient and
         // its runs stay gated as that channel's turns. Everything else keeps
         // the unconditional gate above.
-        !current_turn_may_skip_approval(args)
+        // The trait predicate carries no run context, so it reads the calling
+        // task's turn scope.
+        !current_turn_may_skip_approval(
+            args,
+            crate::core::runtime::DispatchCtx::ambient_turn()
+                .turn_origin()
+                .as_ref(),
+        )
     }
 
     async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
@@ -93,6 +100,17 @@ impl Tool for CronAddTool {
         args: serde_json::Value,
         options: ToolCallOptions,
     ) -> anyhow::Result<ToolResult> {
+        self.execute_with_context(args, options, None).await
+    }
+
+    async fn execute_with_context(
+        &self,
+        args: serde_json::Value,
+        options: ToolCallOptions,
+        tool_context: Option<&dyn tinytools::ToolRunContext>,
+    ) -> anyhow::Result<ToolResult> {
+        let origin =
+            crate::agent::tinyagents::host::run_context::turn_origin_for_tool(tool_context);
         if !self.config.cron.enabled {
             return Ok(ToolResult::error(
                 "cron is disabled by config (cron.enabled=false)".to_string(),
@@ -227,7 +245,7 @@ impl Tool for CronAddTool {
                         delivery,
                         delete_after_run,
                     },
-                    current_job_origin(),
+                    current_job_origin(origin.as_ref()),
                 )
                 .map_err(anyhow::Error::msg)
             }

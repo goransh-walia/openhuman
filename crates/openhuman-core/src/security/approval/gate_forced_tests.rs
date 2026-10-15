@@ -130,13 +130,13 @@ async fn forced_approval_still_denies_automation_and_channel_origins() {
 
 #[test]
 fn saas_outcome_is_absent_outside_saas() {
-    assert!(saas_outcome_with(false, "shell").is_none());
+    assert!(saas_outcome_with(&crate::core::runtime::DispatchCtx::ambient(), false, "shell").is_none());
 }
 
 #[test]
 fn saas_outcome_never_parks_and_denies_without_an_allowlisted_group() {
     // No agent host is installed here, so no tool group is allowlisted.
-    match saas_outcome_with(true, "shell") {
+    match saas_outcome_with(&crate::core::runtime::DispatchCtx::ambient(), true, "shell") {
         Some(GateOutcome::Deny { reason }) => {
             assert!(reason.starts_with(POLICY_DENIED_MARKER), "{reason}");
             assert!(reason.contains("no approval surface"), "{reason}");

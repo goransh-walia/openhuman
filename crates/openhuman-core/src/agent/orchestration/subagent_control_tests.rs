@@ -112,6 +112,7 @@ async fn cancel_of_a_finished_run_reports_its_outcome_and_rewrites_nothing() {
     ] {
         let (tx, rx) = status_channel();
         register(
+            &crate::core::runtime::DispatchCtx::ambient(),
             task_id.into(),
             "agent_memory".into(),
             "session-rpc".into(),

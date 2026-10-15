@@ -17,8 +17,12 @@ fn the_three_spec_views_share_their_leaf_schemas() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
 
-    let agent = crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator")
-        .expect("orchestrator session build");
+    let agent = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "orchestrator",
+    )
+    .expect("orchestrator session build");
 
     let durable = agent.durable_tool_specs_arc();
     let all = agent.tool_specs_arc();

@@ -53,7 +53,12 @@ impl ApprovalGate {
         // `AgentTurnOrigin` around `run_turn`. Unlabelled callers map to
         // `Unknown`, which is denied — the gate refuses to execute an
         // external_effect tool from an unlabelled call site.
-        let origin = turn_origin::current().unwrap_or(AgentTurnOrigin::Unknown);
+        // The gate has no context of its own yet (the approval-gate carrier is
+        // a separate #7801 step), so it reads the task's turn scope once and
+        // asks that for the origin, the agent's approval posture and its host
+        // overrides.
+        let turn_ctx = crate::core::runtime::DispatchCtx::ambient_turn();
+        let origin = turn_ctx.turn_origin().unwrap_or(AgentTurnOrigin::Unknown);
         // Approval of job creation grants the scheduler permission to run the
         // saved prompt and deliver its answer, not permission for arbitrary
         // future external effects. Enforce this before global auto-approval,
@@ -79,7 +84,11 @@ impl ApprovalGate {
         }
         // SaaS has no per-user approval surface: never park, allow only what
         // the deployment's sandboxed tool groups open.
-        if let Some(outcome) = saas_outcome_with(crate::core::runtime::is_saas(), tool_name) {
+        if let Some(outcome) = saas_outcome_with(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            crate::core::runtime::is_saas(),
+            tool_name,
+        ) {
             return (outcome, None);
         }
         if forced
@@ -101,7 +110,7 @@ impl ApprovalGate {
         tracing::debug!(
             tool = tool_name,
             ?origin,
-            auto_approve_all = self.is_auto_approve_all_enabled(),
+            auto_approve_all = self.is_auto_approve_all_enabled(&turn_ctx),
             bypass_auto = matches!(
                 &origin,
                 AgentTurnOrigin::TrustedAutomation {
@@ -197,7 +206,7 @@ impl ApprovalGate {
         // below pins that outcome, so a change to this exclusion list has to
         // confront the decision rather than discover it.
         let auto_all =
-            self.is_auto_approve_all_enabled() && !matches!(&origin, AgentTurnOrigin::Unknown);
+            self.is_auto_approve_all_enabled(&turn_ctx) && !matches!(&origin, AgentTurnOrigin::Unknown);
 
         if auto_all && !forced {
             // `origin_class` is the sanitized variant label (no thread/client
@@ -221,7 +230,7 @@ impl ApprovalGate {
 
         if !forced
             && !matches!(&origin, AgentTurnOrigin::Unknown)
-            && crate::core::runtime::CoreContext::current_approvals_disabled()
+            && turn_ctx.approvals_disabled()
         {
             tracing::info!(
                 tool = tool_name,
@@ -244,7 +253,7 @@ impl ApprovalGate {
         // live policy) takes effect on the very next tool call; fall back to the
         // gate's boot-time config when no live policy is installed (e.g. a CLI
         // invocation that never started a session runtime, or a unit test).
-        if !forced && !bypass_auto_approve_shortcut && self.tool_is_auto_approved(tool_name) {
+        if !forced && !bypass_auto_approve_shortcut && self.tool_is_auto_approved(&turn_ctx, tool_name) {
             tracing::debug!(
                 tool = tool_name,
                 "[approval::gate] auto_approve allowlist hit, skipping prompt"
@@ -516,7 +525,8 @@ impl ApprovalGate {
         // to time out and return `Deny` incorrectly. (CodeRabbit
         // review on PR #2149.)
         let (tx, rx) = oneshot::channel::<ApprovalDecision>();
-        let scope = crate::core::runtime::CoreContext::current_host_overrides()
+        let scope = turn_ctx
+            .host_overrides()
             .and_then(|overrides| overrides.approval_scope());
         let register = |workspace| -> anyhow::Result<()> {
             {
@@ -725,12 +735,16 @@ impl ApprovalGate {
 /// The gate's outcome in SaaS, `None` outside it. SaaS has no per-user approval
 /// surface, so the gate never parks there; the verdict comes from the
 /// deployment's allowlisted tool groups.
-pub(crate) fn saas_outcome_with(saas: bool, tool_name: &str) -> Option<GateOutcome> {
+pub(crate) fn saas_outcome_with(
+    ctx: &crate::core::runtime::DispatchCtx,
+    saas: bool,
+    tool_name: &str,
+) -> Option<GateOutcome> {
     if !saas {
         return None;
     }
     Some(saas_outcome(crate::profiles::tools::gate_verdict(
-        tool_name,
+        ctx, tool_name,
     )))
 }
 

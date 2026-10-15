@@ -46,6 +46,7 @@ pub(super) async fn finalize_turn_outcome(
     tool_outcome_sink: &ToolOutcomeSink,
     resolved_route: Option<tinyinference_llm::model::ResolvedModelRoute>,
     request_base_len: usize,
+    dispatch: &crate::core::runtime::DispatchCtx,
 ) -> TinyagentsTurnOutcome {
     // Durable journal: the harness returned a transcript, so stamp the terminal
     // completed status (best-effort, non-fatal). The event stream carries no
@@ -117,7 +118,7 @@ pub(super) async fn finalize_turn_outcome(
                     .with_cached_input_tokens(cached),
             );
             crate::agent::tinyagents::turn_outcome::record_unobserved_turn_usage(
-                model, input, output, cached, estimate,
+                dispatch, model, input, output, cached, estimate,
             );
             let mut cost = tinyagents_harness::cost::CostTally::default();
             cost.add(match estimate {

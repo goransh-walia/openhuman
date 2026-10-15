@@ -66,6 +66,8 @@ pub(super) struct TurnMiddlewareInputs {
     pub(super) deterministic_cacheable: bool,
     /// Whether the run has a cross-route fallback chain.
     pub(super) has_route_fallback: bool,
+    /// The turn's dispatch context (its embedder tool hooks come from it).
+    pub(super) dispatch: crate::core::runtime::DispatchCtx,
     /// Hosted roots authorize tools through `OpenHumanSecurityGate`; installing
     /// the legacy approval middleware as well would issue a second approval.
     pub(super) hosted_security_gate: bool,
@@ -91,6 +93,10 @@ pub(super) struct TurnMiddlewareInputs {
     pub(super) provider_usage_carry: ProviderUsageCarry,
     /// Per-call tool success/content capture for honest `ToolCallRecord`s.
     pub(super) tool_outcome_sink: ToolOutcomeSink,
+    /// The store the `todo` tool writes this turn's plan to; `Some` lets the
+    /// plan-order middleware read it. `None` for a turn with no workspace or
+    /// without the `todo` tool.
+    pub(super) todo_store: Option<Arc<dyn tinyagents_harness::store::Store>>,
 }
 
 /// The handles the run loop reads after the drive returns.
@@ -131,6 +137,7 @@ pub(super) fn install_turn_middleware(
         required_capabilities,
         deterministic_cacheable,
         has_route_fallback,
+        dispatch,
         hosted_security_gate,
         pause_at_cap,
         run_mode,
@@ -139,6 +146,7 @@ pub(super) fn install_turn_middleware(
         failure_map,
         provider_usage_carry,
         tool_outcome_sink,
+        todo_store,
     } = inputs;
     let super::host::HarnessHostPolicy {
         stop_hooks,
@@ -432,6 +440,22 @@ pub(super) fn install_turn_middleware(
             "[unmet_deliverable] not installed for this turn"
         );
     }
+    // Plan steps run in order: no work while no step is in progress, a final
+    // answer is held once while steps are open, a step stuck in progress gets
+    // one reminder. Same scope as the requirements check, and registered after
+    // it so its `after_model` runs first and the plan check comes first.
+    match todo_store {
+        Some(store) if verify_before_finish::applies(is_subagent, agent_id) => {
+            harness.push_middleware(Arc::new(
+                tinyagents_graph::todos::TodoSequenceMiddleware::new(store),
+            ));
+        }
+        _ => tracing::debug!(
+            is_subagent,
+            agent = agent_id.unwrap_or("<none>"),
+            "[todo_sequence] not installed for this turn"
+        ),
+    }
 
     // Direct web lookup is bounded. Once enough search/fetch results have
     // returned, the web tools leave the request so the run works with what it
@@ -543,7 +567,7 @@ pub(super) fn install_turn_middleware(
     // observation-only (never mutates the result), so running first in the
     // reverse-order `after_tool` chain is safe — it cannot perturb the
     // summarization/cap or tool-outcome capture layers.
-    let mut embedder_tool_hooks = crate::agent::hooks::embedder_tool_hooks();
+    let mut embedder_tool_hooks = crate::agent::hooks::embedder_tool_hooks_in(&dispatch);
     embedder_tool_hooks.extend(scoped_tool_hooks);
     if !embedder_tool_hooks.is_empty() {
         harness.push_middleware(Arc::new(

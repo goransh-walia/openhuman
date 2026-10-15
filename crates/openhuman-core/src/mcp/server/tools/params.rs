@@ -14,10 +14,11 @@ use super::types::{
 };
 
 pub async fn build_rpc_params(
+    ctx: &DispatchCtx,
     tool_name: &str,
     arguments: Value,
 ) -> Result<Map<String, Value>, ToolCallError> {
-    let args = validate_tool_arguments(tool_name, arguments).await?;
+    let args = validate_tool_arguments(ctx, tool_name, arguments).await?;
     build_rpc_params_from_validated(tool_name, &args)
 }
 
@@ -141,6 +142,7 @@ pub(crate) fn build_rpc_params_for_test(
 }
 
 async fn validate_tool_arguments(
+    ctx: &DispatchCtx,
     tool_name: &str,
     arguments: Value,
 ) -> Result<Map<String, Value>, ToolCallError> {
@@ -216,7 +218,7 @@ async fn validate_tool_arguments(
         }
     };
 
-    let config = crate::config::ops::load_current_or_init(&DispatchCtx::ambient())
+    let config = crate::config::ops::load_current_or_init(ctx)
         .await
         .map_err(|_| ToolCallError::Internal("MCP argument validation is unavailable".into()))?;
     let client = crate::mcp::module_client::McpConfiguredClient::for_config(&config)

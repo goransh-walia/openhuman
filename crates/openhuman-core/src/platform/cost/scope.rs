@@ -11,18 +11,22 @@
 //! [`CoreContext`]: crate::core::runtime::CoreContext
 
 use crate::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
+use crate::core::runtime::DispatchCtx;
 
 use super::types::UsageScope;
 
 impl UsageScope {
-    /// The scope of the calling task, with `provider` and the sub-agent (its
-    /// definition and task id) supplied by the recording site.
-    pub fn ambient(provider: Option<&str>, subagent: Option<(&str, &str)>) -> Self {
-        let origin = crate::core::runtime::CoreContext::current_turn_origin();
+    /// The scope of a call running under `ctx`, with `provider` and the
+    /// sub-agent (its definition and task id) supplied by the recording site.
+    /// The user agent comes from `ctx`'s tenant, not from task state.
+    pub fn in_ctx(
+        ctx: &DispatchCtx,
+        provider: Option<&str>,
+        subagent: Option<(&str, &str)>,
+    ) -> Self {
+        let origin = ctx.turn_origin_or_scoped();
         let (thread_id, origin) = describe_origin(origin.as_ref());
-        let session_agent = crate::core::runtime::current_tenant()
-            .ok()
-            .and_then(|tenant| tenant.agent);
+        let session_agent = ctx.tenant().ok().and_then(|tenant| tenant.agent);
         let (agent_id, subagent_task_id) = match subagent {
             Some((agent, task)) => (Some(agent.to_string()), Some(task.to_string())),
             None => (None, None),

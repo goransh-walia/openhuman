@@ -30,5 +30,5 @@ pub use schemas::{
 };
 pub use types::{
     DockerOverrides, ElevatedOp, SandboxBackendHandle, SandboxBackendKind, SandboxExecRequest,
-    SandboxExecResult, SandboxPolicy, SandboxStatus,
+    SandboxExecResult, SandboxIsolation, SandboxPolicy, SandboxStatus,
 };

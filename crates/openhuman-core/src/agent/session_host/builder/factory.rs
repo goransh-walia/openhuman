@@ -8,6 +8,7 @@ use crate::agent::host_runtime;
 use crate::agent::prompts::SystemPromptBuilder;
 use crate::agent::session_host::types::OpenHumanSessionHost;
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 use crate::security::SecurityPolicy;
 use crate::tools;
 use anyhow::Result;
@@ -40,8 +41,8 @@ impl OpenHumanSessionHost {
     /// time (for example the Tauri web chat path, which routes to the
     /// welcome agent pre-onboarding) should call
     /// [`OpenHumanSessionHost::from_config_for_agent`] directly.
-    pub fn from_config(config: &Config) -> Result<Self> {
-        Self::from_config_for_agent(config, "orchestrator")
+    pub fn from_config(ctx: &DispatchCtx, config: &Config) -> Result<Self> {
+        Self::from_config_for_agent(ctx, config, "orchestrator")
     }
 
     /// Constructs an `OpenHumanSessionHost` instance scoped to a specific agent
@@ -76,12 +77,14 @@ impl OpenHumanSessionHost {
     ///
     /// The welcome agent uses this entry point when routed from the
     /// Tauri web channel (see `channels::provider::web::build_session_agent`).
-    pub fn from_config_for_agent(config: &Config, agent_id: &str) -> Result<Self> {
+    pub fn from_config_for_agent(
+        ctx: &DispatchCtx,
+        config: &Config,
+        agent_id: &str,
+    ) -> Result<Self> {
         // A hosted profile never receives the ordinary config-derived belt.
-        // Its operator-selected factory carries registration and permission
-        // boundaries into the same session builder, under this profile scope.
-        if crate::profiles::capabilities::ProfileCapabilities::current().is_some() {
-            return Self::from_config_for_agent_session(config, agent_id, None);
+        if crate::profiles::capabilities::ProfileCapabilities::in_ctx(ctx).is_some() {
+            return Self::from_config_for_agent_session(ctx, config, agent_id, None);
         }
         let target_def = resolve_target_definition(config, agent_id)?;
 
@@ -108,29 +111,15 @@ impl OpenHumanSessionHost {
                 .unwrap_or(config.default_temperature)
         );
 
-        Self::build_session_agent_inner(config, agent_id, target_def.as_ref(), false, None, None)
-    }
-
-    /// Build a session agent from a definition the caller already holds,
-    /// rather than an id resolved through `AgentDefinitionRegistry::current()`
-    /// or `config.agent_registry`.
-    ///
-    /// The definition is authoritative for this agent's prompt, tool scope,
-    /// sandbox mode and delegation allowlist; it is stamped on the session so
-    /// in-turn readers ([`OpenHumanSessionHost::resolved_definition`]) never fall back to a
-    /// registry entry that happens to share its id. This is the constructor a
-    /// library host uses to run many independently specified agents on one
-    /// booted core.
-    pub fn from_config_with_definition(
-        config: &Config,
-        definition: &crate::agent::harness::host_definition::AgentDefinition,
-    ) -> Result<Self> {
-        log::debug!(
-            "[agent] from_config_with_definition id={} sandbox={:?}",
-            definition.id,
-            definition.sandbox_mode,
-        );
-        Self::build_session_agent_inner(config, &definition.id, Some(definition), false, None, None)
+        Self::build_session_agent_inner(
+            ctx,
+            config,
+            agent_id,
+            target_def.as_ref(),
+            false,
+            None,
+            None,
+        )
     }
 
     /// Internal constructor that consumes the optionally-resolved agent
@@ -144,6 +133,7 @@ impl OpenHumanSessionHost {
     // of the crate's public API.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn build_session_agent_inner(
+        ctx: &DispatchCtx,
         config: &Config,
         agent_id: &str,
         target_def: Option<&crate::agent::harness::host_definition::AgentDefinition>,
@@ -385,7 +375,7 @@ impl OpenHumanSessionHost {
             None => SystemPromptBuilder::with_defaults(),
         };
         let post_turn_hooks: Vec<Arc<dyn crate::agent::hooks::PostTurnHook>> =
-            crate::agent::hooks::embedder_post_turn_hooks();
+            crate::agent::hooks::embedder_post_turn_hooks_in(ctx);
 
         // Best-effort prewarm from the shared Composio cache. This avoids
         // building the session with a knowingly stale `&[]` integration view
@@ -783,7 +773,7 @@ impl OpenHumanSessionHost {
             super::host_only::session_policy(host_only, &tools, merged_host_tools.policy);
         let withheld_tool_names = merged_host_tools.withheld;
         let mut builder = OpenHumanSessionHost::builder()
-            .crate_native_provider(provider_role, Arc::clone(&base_config))
+            .crate_native_provider(ctx, provider_role, Arc::clone(&base_config))
             .tools(tools)
             .synthesized_tools(delegation_tools)
             .visible_tool_names(visible)

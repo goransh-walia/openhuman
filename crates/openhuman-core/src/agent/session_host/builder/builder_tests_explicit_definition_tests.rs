@@ -29,8 +29,12 @@ async fn from_config_with_definition_stamps_the_definition_on_the_session() {
     let config = test_config(&tmp);
     let def = explicit_definition("embedded-alpha");
 
-    let agent = OpenHumanSessionHost::from_config_with_definition(&config, &def)
-        .expect("build from an explicit definition");
+    let agent = OpenHumanSessionHost::from_config_with_definition(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &def,
+    )
+    .expect("build from an explicit definition");
 
     assert_eq!(agent.agent_definition_id, "embedded-alpha");
     let resolved = agent
@@ -60,8 +64,12 @@ async fn resolved_definition_prefers_the_sessions_own_over_a_same_id_registry_en
         "the registry's orchestrator is not read-only, so a leak is observable"
     );
 
-    let agent = OpenHumanSessionHost::from_config_with_definition(&config, &def)
-        .expect("build from an explicit definition");
+    let agent = OpenHumanSessionHost::from_config_with_definition(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &def,
+    )
+    .expect("build from an explicit definition");
 
     assert_eq!(
         agent.resolved_definition().map(|d| d.sandbox_mode),
@@ -77,7 +85,9 @@ async fn registry_built_sessions_resolve_the_registry_definition() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
 
-    let agent = OpenHumanSessionHost::from_config(&config).expect("orchestrator session");
+    let agent =
+        OpenHumanSessionHost::from_config(&crate::core::runtime::DispatchCtx::ambient(), &config)
+            .expect("orchestrator session");
     let resolved = agent.resolved_definition().expect("registry definition");
     assert_eq!(resolved.id, "orchestrator");
     let registry_mode = AgentDefinitionRegistry::global()

@@ -137,10 +137,17 @@ fn history_tokens(context_tokens: usize, fixed_prompt_tokens: usize) -> usize {
     context_tokens.saturating_sub(fixed_prompt_tokens)
 }
 
-async fn history_section(thread_id: &str, fixed_prompt_tokens: usize) -> Option<ContextSection> {
-    let outcome = crate::threads::ops::token_usage(crate::threads::ops::ThreadTokenUsageRequest {
-        thread_id: thread_id.to_string(),
-    })
+async fn history_section(
+    ctx: &DispatchCtx,
+    thread_id: &str,
+    fixed_prompt_tokens: usize,
+) -> Option<ContextSection> {
+    let outcome = crate::threads::ops::token_usage(
+        ctx,
+        crate::threads::ops::ThreadTokenUsageRequest {
+            thread_id: thread_id.to_string(),
+        },
+    )
     .await
     .ok()?;
     let usage = outcome.value.data?;
@@ -205,7 +212,7 @@ pub async fn context_breakdown(
         .map(str::trim)
         .filter(|s| !s.is_empty())
     {
-        if let Some(history) = history_section(thread_id, fixed_prompt_tokens).await {
+        if let Some(history) = history_section(ctx, thread_id, fixed_prompt_tokens).await {
             sections.push(history);
         }
     }

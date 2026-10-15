@@ -155,16 +155,18 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_chat(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_chat(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebChatParams>(params)?;
         // Recorded before the turn starts so it reads the new choice.
         crate::agent::tinyagents::apply_requested_effort(
+            &ctx,
             &p.thread_id,
             p.reasoning_effort.as_deref(),
         )?;
         to_json(
             channel_web_chat(
+                &ctx,
                 &p.client_id,
                 &p.thread_id,
                 &p.message,
@@ -190,31 +192,33 @@ fn handle_chat(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutur
     })
 }
 
-fn handle_queue_status(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_queue_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebQueueParams>(params)?;
-        to_json(channel_web_queue_status(&p.thread_id).await?)
+        to_json(channel_web_queue_status(&ctx, &p.thread_id).await?)
     })
 }
 
-fn handle_queue_clear(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_queue_clear(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebQueueParams>(params)?;
-        to_json(channel_web_queue_clear(&p.thread_id).await?)
+        to_json(channel_web_queue_clear(&ctx, &p.thread_id).await?)
     })
 }
 
-fn handle_queue_remove(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_queue_remove(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebQueueRemoveParams>(params)?;
-        to_json(channel_web_queue_remove(&p.client_id, &p.thread_id, &p.item_id).await?)
+        to_json(channel_web_queue_remove(&ctx, &p.client_id, &p.thread_id, &p.item_id).await?)
     })
 }
 
-fn handle_cancel(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_cancel(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = deserialize_params::<WebCancelParams>(params)?;
-        to_json(channel_web_cancel(&p.client_id, &p.thread_id, p.request_id.as_deref()).await?)
+        to_json(
+            channel_web_cancel(&ctx, &p.client_id, &p.thread_id, p.request_id.as_deref()).await?,
+        )
     })
 }
 

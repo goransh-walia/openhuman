@@ -44,6 +44,9 @@ impl OpenHumanSessionHost {
         context.task_recency_window = self.task_recency_window;
         context.autonomous_iter_cap = self.autonomous_iter_cap;
         context.workspace = self.workspace_descriptor.clone();
+        // Sub-agents of this turn write their transcripts to this session's
+        // store, under the key it resolved for its own.
+        context.transcripts = Some(self.session_locator());
         // The web backstop's deadline (`host_env.turn_deadline`), when this
         // turn runs under one, is already on the context: the harness winds
         // down before it instead of being dropped by it.

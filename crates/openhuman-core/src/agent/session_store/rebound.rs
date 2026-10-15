@@ -17,9 +17,51 @@ use tinyagents_session::port::{AgentStores, SessionStoreProvider};
 use tinyagents_session::DriverSessionStores;
 use tinystoragedrivers::{Blocking, StorageBackend, StorageError};
 
-/// Every live [`ReboundSessionStores`], so a rebind reaches the one a host
-/// installed however it was installed (process-wide, per runtime, per task).
-static LIVE: LazyLock<Mutex<Vec<Weak<ReboundSessionStores>>>> = LazyLock::new(Mutex::default);
+/// The live [`ReboundSessionStores`] of one owner, so a rebind reaches the one
+/// a host installed however it was installed (process-wide, per runtime, per
+/// task).
+///
+/// The process has one ([`rebind_all`] moves every store in it). A registry of
+/// its own scopes a rebind to the stores created in it, which is how a test
+/// exercises rebinding without moving the stores of tests running beside it.
+#[derive(Default)]
+pub struct StoreRegistry {
+    live: Mutex<Vec<Weak<ReboundSessionStores>>>,
+}
+
+impl StoreRegistry {
+    fn register(&self, stores: &Arc<ReboundSessionStores>) {
+        let mut live = self.live.lock().unwrap_or_else(PoisonError::into_inner);
+        live.retain(|weak| weak.strong_count() > 0);
+        live.push(Arc::downgrade(stores));
+    }
+
+    fn live(&self) -> Vec<Arc<ReboundSessionStores>> {
+        self.live
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect()
+    }
+
+    /// Rebinds every live store of this registry to `backend`; returns how many.
+    pub fn rebind(&self, backend: &Arc<dyn StorageBackend>) -> usize {
+        let live = self.live();
+        for stores in &live {
+            stores.rebind(Arc::clone(backend));
+        }
+        tracing::debug!(
+            target: "openhuman::storage",
+            rebound = live.len(),
+            "[session_store] registry rebind finished"
+        );
+        live.len()
+    }
+}
+
+/// The process's registry, the one [`ReboundSessionStores::new`] joins.
+static PROCESS: LazyLock<StoreRegistry> = LazyLock::new(StoreRegistry::default);
 
 /// [`DriverSessionStores`] over a backend [`rebind_all`] can replace.
 pub struct ReboundSessionStores {
@@ -47,6 +89,20 @@ impl ReboundSessionStores {
         backend: Arc<dyn StorageBackend>,
         recover_on_open: bool,
     ) -> Result<Arc<Self>, StorageError> {
+        Self::new_in(&PROCESS, backend, recover_on_open)
+    }
+
+    /// [`Self::new`], joining `registry` instead of the process's, so only a
+    /// rebind of that registry reaches it.
+    ///
+    /// # Errors
+    ///
+    /// When the blocking bridge cannot start.
+    pub fn new_in(
+        registry: &StoreRegistry,
+        backend: Arc<dyn StorageBackend>,
+        recover_on_open: bool,
+    ) -> Result<Arc<Self>, StorageError> {
         let bridge = Blocking::new()?;
         let inner = DriverSessionStores::with_bridge(backend, bridge.clone())
             .recover_on_open(recover_on_open);
@@ -55,9 +111,7 @@ impl ReboundSessionStores {
             bridge,
             recover_on_open,
         });
-        let mut live = LIVE.lock().unwrap_or_else(PoisonError::into_inner);
-        live.retain(|weak| weak.strong_count() > 0);
-        live.push(Arc::downgrade(&this));
+        registry.register(&this);
         Ok(this)
     }
 
@@ -78,18 +132,10 @@ impl ReboundSessionStores {
     }
 }
 
-/// Rebinds every live [`ReboundSessionStores`] to `backend`; returns how many.
+/// Rebinds every live [`ReboundSessionStores`] of the process to `backend`;
+/// returns how many.
 pub fn rebind_all(backend: &Arc<dyn StorageBackend>) -> usize {
-    let live: Vec<Arc<ReboundSessionStores>> = LIVE
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .iter()
-        .filter_map(Weak::upgrade)
-        .collect();
-    for stores in &live {
-        stores.rebind(Arc::clone(backend));
-    }
-    live.len()
+    PROCESS.rebind(backend)
 }
 
 impl SessionStoreProvider for ReboundSessionStores {

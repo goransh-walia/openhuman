@@ -265,7 +265,25 @@ impl Turn {
             .clone()
     }
 
+    /// Obtain a cloneable handle that adds messages to this turn while it
+    /// runs. Acquire it before moving the turn to `send()`.
+    ///
+    /// Each [`TurnSteering::steer`](crate::TurnSteering::steer) is applied at
+    /// the agent loop's next safe checkpoint: before the first model call,
+    /// after a tool batch, or in place of finishing when the model has just
+    /// written its final answer, which earns the turn one more model call.
+    /// Steers the turn did not apply come back on
+    /// [`TurnOutcome::unapplied_steers`] (or, when the turn fails,
+    /// [`TurnSteering::take_unapplied`](crate::TurnSteering::take_unapplied)),
+    /// and a steer sent after the turn ended is refused with its text.
+    pub fn steering_handle(&mut self) -> crate::TurnSteering {
+        self.steering.get_or_insert_with(Default::default).clone()
+    }
+
     async fn send_inner(mut self, usage: &UsageSink) -> Result<TurnOutcome, CoreError> {
+        // Declared first so it drops last, after the dispatch future: by then
+        // every steer the turn did not apply is back in the queue.
+        let steering = crate::turn_steering::SteeringScope::new(self.steering.take());
         // The core neither mints nor returns a session id, so continuing a
         // conversation would otherwise be impossible without the caller
         // inventing an id scheme — which every embedder has then done
@@ -352,6 +370,7 @@ impl Turn {
                 },
                 ..Default::default()
             },
+            run_queue: steering.queue(),
         };
         let options = AgentTurnOptions {
             chat_env,
@@ -436,6 +455,13 @@ impl Turn {
         );
 
         let report = report.unwrap_or_default();
+        let unapplied_steers = steering.close();
+        if !unapplied_steers.is_empty() {
+            log::debug!(
+                "[embed][agent] turn session={session_id} ended with {} unapplied steer(s)",
+                unapplied_steers.len()
+            );
+        }
         Ok(TurnOutcome {
             reply,
             session_id,
@@ -446,6 +472,7 @@ impl Turn {
             structured,
             finish_reason: report.finish_reason,
             answered_model: report.answered_model,
+            unapplied_steers,
         })
     }
 

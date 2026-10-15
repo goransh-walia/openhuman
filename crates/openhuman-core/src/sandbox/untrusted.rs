@@ -50,8 +50,12 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         preserve_pipeline_status,
     } = spawn;
     let saas = crate::core::runtime::is_saas();
+    // The scheduler has no dispatch context of its own; the task's ambient one
+    // answers the component question (#7801 transitional).
+    let ctx = crate::core::runtime::DispatchCtx::ambient();
     if !saas
-        && (super::ops::sandbox_disabled_by_host() || super::ops::config_disables_sandbox(config))
+        && (super::ops::sandbox_disabled_by_host(&ctx)
+            || super::ops::config_disables_sandbox(config))
     {
         // The operator turned isolation off for this process. This is the only
         // unjailed path, it is never reachable under SaaS, and it is logged.
@@ -72,7 +76,7 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         .await;
     }
 
-    let mut policy = super::ops::resolve_command_policy_with_config(config, cwd, state_dir)
+    let mut policy = super::ops::resolve_command_policy_with_config(&ctx, config, cwd, state_dir)
         .await
         .map_err(|error| anyhow::anyhow!(error))?;
     // Landlock named explicitly in the config must really be the backend.

@@ -14,9 +14,12 @@ fn visible_names_for(
 ) -> std::collections::HashSet<String> {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let agent =
-        crate::agent::OpenHumanSessionHost::from_config_with_definition(&config, definition)
-            .unwrap_or_else(|e| panic!("{} session build: {e}", definition.id));
+    let agent = crate::agent::OpenHumanSessionHost::from_config_with_definition(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        definition,
+    )
+    .unwrap_or_else(|e| panic!("{} session build: {e}", definition.id));
     agent
         .visible_tool_specs_arc()
         .iter()
@@ -29,9 +32,12 @@ fn resetting_wildcard_visibility_keeps_collapsed_exposure() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
     let definition = super::wildcard_probe_def();
-    let mut agent =
-        crate::agent::OpenHumanSessionHost::from_config_with_definition(&config, &definition)
-            .expect("build wildcard agent");
+    let mut agent = crate::agent::OpenHumanSessionHost::from_config_with_definition(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &definition,
+    )
+    .expect("build wildcard agent");
 
     agent.set_visible_tool_names(std::collections::HashSet::new());
 
@@ -45,9 +51,12 @@ fn hiding_and_reseeding_wildcard_visibility_keeps_collapsed_exposure() {
     let tmp = tempfile::TempDir::new().unwrap();
     let config = test_config(&tmp);
     let definition = super::wildcard_probe_def();
-    let mut agent =
-        crate::agent::OpenHumanSessionHost::from_config_with_definition(&config, &definition)
-            .expect("build wildcard agent");
+    let mut agent = crate::agent::OpenHumanSessionHost::from_config_with_definition(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &definition,
+    )
+    .expect("build wildcard agent");
 
     agent.set_visible_tool_names(std::collections::HashSet::new());
     agent.hide_tools(&["todo"]);
@@ -223,9 +232,12 @@ fn orchestrator_reaches_the_replaced_specialists_tools_through_discovery() {
             .get("orchestrator")
             .cloned()
             .expect("orchestrator built-in definition");
-    let agent =
-        crate::agent::OpenHumanSessionHost::from_config_with_definition(&config, &definition)
-            .expect("orchestrator session build");
+    let agent = crate::agent::OpenHumanSessionHost::from_config_with_definition(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &definition,
+    )
+    .expect("orchestrator session build");
     let deferred = agent.deferred_tool_names_for_test();
     let visible = agent.visible_tool_names_for_test();
     let policy = agent.tool_policy_session_for_test();

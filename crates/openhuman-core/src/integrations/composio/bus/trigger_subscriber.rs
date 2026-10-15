@@ -83,7 +83,8 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
         // let the event through rather than silently dropping it. The
         // existing env-var / config triage flags below remain the
         // backend-mode gates.
-        if let Ok(config) = DispatchCtx::ambient().load_config().await {
+        let ctx = DispatchCtx::ambient();
+        if let Ok(config) = ctx.load_config().await {
             if config.composio.mode == crate::config::schema::COMPOSIO_MODE_DIRECT {
                 tracing::info!(
                     toolkit = %toolkit,
@@ -95,7 +96,7 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
         }
 
         if let Some(store) = trigger_history::global() {
-            match DispatchCtx::ambient().load_config().await {
+            match ctx.load_config().await {
                 Ok(config) => {
                     let event = super::super::types::ComposioTriggerEvent {
                         toolkit: toolkit.clone(),
@@ -104,6 +105,7 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
                         metadata: super::super::types::ComposioTriggerMetadata {
                             id: metadata_id.clone(),
                             uuid: metadata_uuid.clone(),
+                            ..Default::default()
                         },
                     };
                     if let Err(error) = store.record(&config, event).await {
@@ -129,7 +131,7 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
         // remains a global emergency kill-switch that works even when the
         // config file is corrupt. Fail-open on load error: if we can't read
         // the config we let triage run rather than silently drop events.
-        match DispatchCtx::ambient().load_config().await {
+        match ctx.load_config().await {
             Ok(config) => {
                 if config.composio.triage_disabled {
                     tracing::debug!(
@@ -184,7 +186,9 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
         // Spawn so the bus dispatch loop stays non-blocking — the
         // triage turn is an LLM round-trip that may take seconds.
         tokio::spawn(async move {
-            match run_triage(&crate::core::runtime::DispatchCtx::ambient(), &envelope).await {
+            // A spawned task does not inherit the handler's task scope: bind its own.
+            let ctx = DispatchCtx::ambient();
+            match run_triage(&ctx, &envelope).await {
                 Ok(TriageOutcome::Decision(run)) => {
                     // Remote payload: a Composio trigger body is
                     // attacker-influenceable, so the dispatch parks rather than
@@ -194,11 +198,7 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
                     let origin = remote_trigger_origin(&envelope);
                     if let Err(e) = with_origin(
                         origin,
-                        apply_decision(
-                            &crate::core::runtime::DispatchCtx::ambient(),
-                            run,
-                            &envelope,
-                        ),
+                        apply_decision(&ctx, run, &envelope),
                     )
                     .await
                     {

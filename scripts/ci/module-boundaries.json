@@ -115,6 +115,11 @@
   "pendingContracts": [],
   "exceptions": [
     {
+      "scope": "hosts",
+      "package": "tinymcp",
+      "reason": "#7205 tinymcp::ui pure rules; move to tinymcp-bus tracked under #7868"
+    },
+    {
       "scope": "tinychannels-bus",
       "package": "anyhow",
       "reason": "tinychannels-bus (vendor/tinychannels) still carries a provider trait with async-trait/anyhow/tokio::sync; the contract needs to be split upstream in tinyhumansai/tinychannels before this edge can go (tracked under #7523)."

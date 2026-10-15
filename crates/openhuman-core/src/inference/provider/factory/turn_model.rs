@@ -2,6 +2,7 @@
 //! (the `TurnModelSource` constructors), by role or by explicit provider string.
 
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 /// Build a crate-native [`ChatModel`] for the **turn path**, pinned to an explicit
 /// `model` string — the turn's effective/dispatched model after any config-level
@@ -25,15 +26,17 @@ use super::*;
 /// Respects the native test-model override, exactly as
 /// [`create_chat_model_with_model_id`].
 pub(crate) fn create_turn_chat_model(
+    ctx: &DispatchCtx,
     role: &str,
     config: &Config,
     model: &str,
     temperature: f64,
 ) -> anyhow::Result<Arc<dyn ChatModel<()>>> {
-    create_turn_chat_model_with_native_tools(role, config, model, temperature, true)
+    create_turn_chat_model_with_native_tools(ctx, role, config, model, temperature, true)
 }
 
 pub(crate) fn create_turn_chat_model_with_native_tools(
+    ctx: &DispatchCtx,
     role: &str,
     config: &Config,
     model: &str,
@@ -41,6 +44,7 @@ pub(crate) fn create_turn_chat_model_with_native_tools(
     native_tool_calling: bool,
 ) -> anyhow::Result<Arc<dyn ChatModel<()>>> {
     create_turn_chat_model_with_native_tools_and_route(
+        ctx,
         role,
         config,
         model,
@@ -57,6 +61,7 @@ pub(crate) fn create_turn_chat_model_with_native_tools(
 /// branches avoids re-parsing a provider string before cloud default-model and
 /// abstract-tier remapping has run.
 pub(crate) fn create_turn_chat_model_with_native_tools_and_route(
+    ctx: &DispatchCtx,
     role: &str,
     config: &Config,
     model: &str,
@@ -65,6 +70,7 @@ pub(crate) fn create_turn_chat_model_with_native_tools_and_route(
     egress: &EgressLedger,
 ) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String, String)> {
     create_turn_chat_model_with_native_tools_and_route_inner(
+        ctx,
         role,
         config,
         model,
@@ -75,15 +81,14 @@ pub(crate) fn create_turn_chat_model_with_native_tools_and_route(
 }
 
 pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
+    ctx: &DispatchCtx,
     role: &str,
     config: &Config,
     model: &str,
     native_tool_calling: bool,
     egress: &EgressLedger,
 ) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String, String)> {
-    if let Some(chat) = crate::core::runtime::CoreContext::current_host_overrides()
-        .and_then(|local| local.model_for(role))
-    {
+    if let Some(chat) = ctx.host_overrides().and_then(|local| local.model_for(role)) {
         return Ok((chat, "host".into(), model.to_owned()));
     }
     #[cfg(any(test, feature = "e2e-test-support", feature = "rss-bench"))]
@@ -151,14 +156,12 @@ pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
             return result
                 .map(|(chat, resolved_model)| (chat, provider_name.clone(), resolved_model));
         }
-        if let Some(result) =
-            try_create_cloud_slug_chat_model_with_native_tools(
-                role,
-                config,
-                native_tool_calling,
-                egress,
-            )
-        {
+        if let Some(result) = try_create_cloud_slug_chat_model_with_native_tools(
+            role,
+            config,
+            native_tool_calling,
+            egress,
+        ) {
             return result
                 .map(|(chat, resolved_model)| (chat, provider_name.clone(), resolved_model));
         }
@@ -188,6 +191,7 @@ pub(super) fn create_turn_chat_model_with_native_tools_and_route_inner(
 ///
 /// Respects the test-provider override (bespoke/`Provider` path), like its siblings.
 pub(crate) fn create_turn_chat_model_from_string(
+    ctx: &DispatchCtx,
     role: &str,
     provider_string: &str,
     config: &Config,
@@ -195,6 +199,7 @@ pub(crate) fn create_turn_chat_model_from_string(
     temperature: f64,
 ) -> anyhow::Result<Arc<dyn ChatModel<()>>> {
     create_turn_chat_model_from_string_with_native_tools(
+        ctx,
         role,
         provider_string,
         config,
@@ -205,6 +210,7 @@ pub(crate) fn create_turn_chat_model_from_string(
 }
 
 pub(crate) fn create_turn_chat_model_from_string_with_native_tools(
+    ctx: &DispatchCtx,
     role: &str,
     provider_string: &str,
     config: &Config,
@@ -213,6 +219,7 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools(
     native_tool_calling: bool,
 ) -> anyhow::Result<Arc<dyn ChatModel<()>>> {
     create_turn_chat_model_from_string_with_native_tools_and_route(
+        ctx,
         role,
         provider_string,
         config,
@@ -225,6 +232,7 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools(
 }
 
 pub(crate) fn create_turn_chat_model_from_string_with_native_tools_and_route(
+    ctx: &DispatchCtx,
     role: &str,
     provider_string: &str,
     config: &Config,
@@ -233,9 +241,7 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools_and_route(
     native_tool_calling: bool,
     egress: &EgressLedger,
 ) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String, String)> {
-    if let Some(chat) = crate::core::runtime::CoreContext::current_host_overrides()
-        .and_then(|local| local.model_for(role))
-    {
+    if let Some(chat) = ctx.host_overrides().and_then(|local| local.model_for(role)) {
         return Ok((chat, "host".into(), model.to_owned()));
     }
     #[cfg(any(test, feature = "e2e-test-support", feature = "rss-bench"))]
@@ -280,6 +286,7 @@ pub(crate) fn create_turn_chat_model_from_string_with_native_tools_and_route(
     // A concrete non-managed string equals the role's resolution (triage only
     // honours a BYOK **cloud** route as-is), so the role-based builder matches.
     create_turn_chat_model_with_native_tools_and_route(
+        ctx,
         role,
         config,
         model,

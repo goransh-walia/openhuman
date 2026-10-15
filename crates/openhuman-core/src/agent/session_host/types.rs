@@ -320,22 +320,22 @@ pub struct OpenHumanSessionHost {
     ///
     /// [`AgentDefinitionRegistry`]: crate::agent::harness::host_definition::AgentDefinitionRegistry
     pub(super) agent_definition_id: String,
-    /// Injected transcript locator, or `None` to use real files.
+    /// Injected transcript locator, or `None` to resolve the session store for
+    /// this agent key.
     ///
     /// The single injection point for the whole transcript seam: it resolves
     /// both resume reads (`latest_for_agent`, `root_for_thread`) and binds this
     /// session's write handle (`open_stem`). `None` is the production default
     /// and is resolved *lazily* by
-    /// [`OpenHumanSessionHost::session_locator`][Self::session_locator] into a
-    /// [`FileTranscriptLocator`][tinyagents_session::transcript::FileTranscriptLocator]
-    /// over the **current** `workspace_dir` — never
+    /// [`OpenHumanSessionHost::session_locator`][Self::session_locator] into the
+    /// session store's transcripts for the **current** `workspace_dir` — never
     /// captured at build time, because callers (tests especially) reassign
     /// `workspace_dir` after `build()` and a frozen locator would silently keep
     /// reading the old directory.
     pub(super) session_history_locator:
         Option<std::sync::Arc<dyn tinyagents_session::transcript::TranscriptLocator>>,
     /// First-call memo for [`OpenHumanSessionHost::session_locator`][Self::session_locator]'s
-    /// lazily-constructed `FileTranscriptLocator` (the `session_history_locator` `None` branch).
+    /// lazily-resolved store locator (the `session_history_locator` `None` branch).
     ///
     /// tinyagents' `SessionBuilder` only accepts a later transcript-target
     /// change when it is the *same* locator object (`Arc::ptr_eq`), not merely

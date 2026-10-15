@@ -40,6 +40,7 @@ pub struct WorkflowRunStarted {
 pub async fn spawn_workflow_run_background(
     skill_id_param: String,
     inputs_param: Option<Value>,
+    parent_origin: Option<crate::agent::turn_origin::AgentTurnOrigin>,
 ) -> Result<WorkflowRunStarted, String> {
     let workspace = resolve_workspace_dir().await;
     let skill = registry::get_workflow(&workspace, &skill_id_param)
@@ -148,8 +149,8 @@ pub async fn spawn_workflow_run_background(
     // toolchain are loaded fresh per run; the parent returns the handle
     // immediately. Same flow handle_skills_run used to inline — extracted
     // so the `run_workflow` agent tool can re-use it for skill chaining.
-    let inherited_origin = crate::agent::turn_origin::current()
-        .unwrap_or(crate::agent::turn_origin::AgentTurnOrigin::Unknown);
+    let inherited_origin =
+        parent_origin.unwrap_or(crate::agent::turn_origin::AgentTurnOrigin::Unknown);
     {
         let run_id = run_id.clone();
         let workflow_id = workflow_id.clone();
@@ -181,20 +182,23 @@ pub async fn spawn_workflow_run_background(
             if config.http_request.allowed_domains.is_empty() {
                 config.http_request.allowed_domains = vec!["*".to_string()];
             }
-            let mut agent =
-                match OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator") {
-                    Ok(a) => a,
-                    Err(e) => {
-                        let _ = run_log::write_footer(
-                            &log_path,
-                            "FAILED",
-                            0,
-                            &format!("build agent: {e:#}"),
-                        )
-                        .await;
-                        return;
-                    }
-                };
+            let mut agent = match OpenHumanSessionHost::from_config_for_agent(
+                &crate::core::runtime::DispatchCtx::ambient(),
+                &config,
+                "orchestrator",
+            ) {
+                Ok(a) => a,
+                Err(e) => {
+                    let _ = run_log::write_footer(
+                        &log_path,
+                        "FAILED",
+                        0,
+                        &format!("build agent: {e:#}"),
+                    )
+                    .await;
+                    return;
+                }
+            };
             // Issue #4868 — apply the workflow-run iteration budget AFTER
             // construction. The session builder now stamps `orchestrator`'s
             // definition cap (15) onto the agent; a full workflow run

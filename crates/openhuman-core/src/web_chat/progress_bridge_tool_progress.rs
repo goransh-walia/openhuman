@@ -10,6 +10,7 @@ use crate::web_chat::WebChannelEvent;
 /// Publish one status line for the running call `call_id`. `ids` is
 /// `(client_id, thread_id, request_id)`.
 pub(super) fn publish(
+    dispatch: &crate::core::runtime::DispatchCtx,
     emit_seq: &mut u64,
     (client_id, thread_id, request_id): (&str, &str, &str),
     call_id: String,
@@ -17,6 +18,7 @@ pub(super) fn publish(
 ) {
     log::trace!("[web_channel][bridge] tool_progress call_id={call_id} request_id={request_id}");
     super::publish_seq_stamped(
+        dispatch,
         emit_seq,
         WebChannelEvent {
             event: "tool_progress".to_string(),

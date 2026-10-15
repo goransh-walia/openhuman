@@ -83,9 +83,8 @@ async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<(
 
     // The summary callback exists for the module alone; with the component off
     // the module never loads, so nothing would call it.
-    let juice_on = crate::core::runtime::context::CoreContext::current()
-        .is_none_or(|ctx| ctx.components().juice);
-    if juice_on {
+    let host = crate::core::runtime::DispatchCtx::host_default();
+    if host.components().juice {
         super::tokenjuice_host::install(connection).await?;
     } else {
         tracing::debug!("[modules] juice component off; MlHost not served");
@@ -98,9 +97,7 @@ async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<(
     super::storage_host::install(connection, runtime.host()).await?;
     #[cfg(feature = "tinymemes")]
     {
-        let memes_on = crate::core::runtime::context::CoreContext::current()
-            .is_none_or(|ctx| ctx.components().memes);
-        if memes_on {
+        if host.components().memes {
             crate::tinymemes::service::install(connection).await?;
         } else {
             tracing::debug!("[modules] memes component off; Host callbacks not served");

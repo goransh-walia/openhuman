@@ -9,7 +9,8 @@ use crate::threads::turn_state::mirror::ObserveProgress;
 use crate::web_chat::{SubagentProgressDetail, WebChannelEvent};
 use tinyagents_session::{port::TurnStates, turn_state::TurnStateMirror};
 
-use super::event_bus::publish_web_channel_event;
+use super::event_bus::publish_web_channel_event_in;
+use crate::core::runtime::DispatchCtx;
 use super::types::ChatRequestMetadata;
 
 #[path = "progress_bridge_subagent_events.rs"]
@@ -95,6 +96,7 @@ impl ProgressBridgeHandle {
 /// vanishing when the turn settles. Clears `buffer` unconditionally; emits
 /// nothing for narration that is empty or too short to stand alone.
 fn flush_interim_narration(
+    ctx: &crate::core::runtime::DispatchCtx,
     buffer: &mut String,
     round: u32,
     client_id: &str,
@@ -113,6 +115,7 @@ fn flush_interim_narration(
         request_id,
     );
     publish_seq_stamped(
+        ctx,
         emit_seq,
         WebChannelEvent {
             event: "chat_interim".to_string(),
@@ -133,10 +136,10 @@ fn flush_interim_narration(
 /// identically to the persisted turn-state snapshot
 /// (conversations-timeline-refactor, Phase 4). The counter advances once per
 /// emitted event so each `(request_id, seq)` pair is unique within a turn.
-fn publish_seq_stamped(next_seq: &mut u64, mut event: WebChannelEvent) {
+fn publish_seq_stamped(ctx: &DispatchCtx, next_seq: &mut u64, mut event: WebChannelEvent) {
     event.seq = Some(*next_seq);
     *next_seq = next_seq.saturating_add(1);
-    publish_web_channel_event(event);
+    publish_web_channel_event_in(ctx, event);
 }
 
 /// The trimmed narration to surface as an interim bubble, or `None` when it is
@@ -278,7 +281,7 @@ pub(crate) fn spawn_progress_bridge(
     request_id: String,
     turn_state_store: std::sync::Arc<dyn TurnStates>,
     metadata: ChatRequestMetadata,
-    config: crate::config::Config,
+    config: crate::config::Config, dispatch_ctx: crate::core::runtime::DispatchCtx,
 ) -> ProgressBridgeHandle {
     use crate::agent::progress::AgentProgress;
     use std::collections::HashMap;
@@ -364,7 +367,7 @@ pub(crate) fn spawn_progress_bridge(
                             thread_id,
                             request_id,
                         );
-                        publish_seq_stamped(&mut emit_seq, WebChannelEvent {
+                        publish_seq_stamped(&dispatch_ctx, &mut emit_seq, WebChannelEvent {
                             event: "inference_heartbeat".to_string(),
                             client_id: client_id.clone(),
                             thread_id: thread_id.clone(),
@@ -499,6 +502,7 @@ pub(crate) fn spawn_progress_bridge(
                         },
                     );
                     publish_seq_stamped(
+                        &dispatch_ctx,
                         &mut emit_seq,
                         WebChannelEvent {
                             event: "inference_start".to_string(),
@@ -516,6 +520,7 @@ pub(crate) fn spawn_progress_bridge(
                     round = iteration;
                     parent_max_iterations = max_iterations;
                     publish_seq_stamped(
+                        &dispatch_ctx,
                         &mut emit_seq,
                         WebChannelEvent {
                             event: "iteration_start".to_string(),
@@ -541,6 +546,7 @@ pub(crate) fn spawn_progress_bridge(
                     // once it calls a tool — flush it as an interim bubble so it
                     // persists interleaved with the tool activity.
                     flush_interim_narration(
+                        &dispatch_ctx,
                         &mut pending_narration,
                         iteration,
                         &client_id,
@@ -570,6 +576,7 @@ pub(crate) fn spawn_progress_bridge(
                         },
                     );
                     publish_seq_stamped(
+                        &dispatch_ctx,
                         &mut emit_seq,
                         WebChannelEvent {
                             event: "tool_call".to_string(),
@@ -631,6 +638,7 @@ pub(crate) fn spawn_progress_bridge(
                         request_id
                     );
                     publish_seq_stamped(
+                        &dispatch_ctx,
                         &mut emit_seq,
                         WebChannelEvent {
                             event: "tool_result".to_string(),
@@ -676,12 +684,7 @@ pub(crate) fn spawn_progress_bridge(
                     parent_call_id,
                     ..
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_spawned(
                         &ctx,
                         &mut emit_seq,
@@ -710,12 +713,7 @@ pub(crate) fn spawn_progress_bridge(
                     dirty_status,
                     ..
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_completed(
                         &ctx,
                         &mut emit_seq,
@@ -739,12 +737,7 @@ pub(crate) fn spawn_progress_bridge(
                     task_id,
                     error,
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_failed(
                         &ctx,
                         &mut emit_seq,
@@ -763,12 +756,7 @@ pub(crate) fn spawn_progress_bridge(
                     worker_thread_id,
                     checkpoint_path,
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_awaiting_user(
                         &ctx,
                         &mut emit_seq,
@@ -788,12 +776,7 @@ pub(crate) fn spawn_progress_bridge(
                     max_iterations,
                     extended_policy,
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_iteration_started(
                         &ctx,
                         &mut emit_seq,
@@ -815,12 +798,7 @@ pub(crate) fn spawn_progress_bridge(
                     display_label,
                     display_detail,
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_tool_call_started(
                         &ctx,
                         &mut emit_seq,
@@ -852,12 +830,7 @@ pub(crate) fn spawn_progress_bridge(
                     display_detail,
                     structured,
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_tool_call_completed(
                         &ctx,
                         &mut emit_seq,
@@ -884,12 +857,7 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_text_delta(
                         &ctx,
                         &mut emit_seq,
@@ -906,12 +874,7 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx = BridgeCtx {
-                        client_id: &client_id,
-                        thread_id: &thread_id,
-                        request_id: &request_id,
-                        config: &config,
-                    };
+                    let ctx = BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
                     subagent_events::on_subagent_thinking_delta(
                         &ctx,
                         &mut emit_seq,
@@ -929,6 +892,7 @@ pub(crate) fn spawn_progress_bridge(
                     pending_narration.push_str(&delta);
                     if !metadata.hold_text_stream {
                         text_events::publish_text_delta(
+                            &dispatch_ctx,
                             &mut emit_seq,
                             &client_id,
                             &thread_id,
@@ -940,6 +904,7 @@ pub(crate) fn spawn_progress_bridge(
                 }
                 AgentProgress::ThinkingDelta { delta, iteration } => {
                     publish_seq_stamped(
+                        &dispatch_ctx,
                         &mut emit_seq,
                         WebChannelEvent {
                             event: "thinking_delta".to_string(),
@@ -960,6 +925,7 @@ pub(crate) fn spawn_progress_bridge(
                     iteration,
                 } => {
                     publish_seq_stamped(
+                        &dispatch_ctx,
                         &mut emit_seq,
                         WebChannelEvent {
                             event: "tool_args_delta".to_string(),
@@ -1070,6 +1036,7 @@ pub(crate) fn spawn_progress_bridge(
                     // sub-agent attribution shows up.
                     if turn_cost_throttle.should_emit() {
                         publish_seq_stamped(
+                            &dispatch_ctx,
                             &mut emit_seq,
                             WebChannelEvent {
                                 event: "turn_cost".to_string(),
@@ -1097,7 +1064,7 @@ pub(crate) fn spawn_progress_bridge(
                 }
                 AgentProgress::ToolCallProgress { call_id, message } => {
                     let ids = (client_id.as_str(), thread_id.as_str(), request_id.as_str());
-                    tool_progress::publish(&mut emit_seq, ids, call_id, message);
+                    tool_progress::publish(&dispatch_ctx, &mut emit_seq, ids, call_id, message);
                 }
                 AgentProgress::TurnContent { .. } => {
                     // Prompt/reply content is attached to the trace span by the
@@ -1164,10 +1131,7 @@ pub(crate) fn spawn_progress_bridge(
             let live_spans = collector.spans().to_vec();
             let journal_export = if let Some(trace_ctx) = journal_trace_ctx.take() {
                 super::journal_shadow::shadow_compare_journal_projection(
-                    &request_id,
-                    trace_ctx.clone(),
-                    parent_max_iterations,
-                    &live_spans,
+                    &dispatch_ctx, &request_id, trace_ctx.clone(), parent_max_iterations, &live_spans,
                 )
                 .await
                 .map(|observations| (trace_ctx, observations))

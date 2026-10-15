@@ -60,14 +60,14 @@ use tinyagents_harness::store::AppendStore;
 /// Best-effort live request → durable tinyagents journal stream map. The web
 /// progress bridge uses this at turn end to shadow-project spans from the
 /// journal and compare them against the live `SpanCollector` path during C4 S3.
-fn request_journal_runs() -> std::sync::Arc<RequestJournalRuns> {
-    crate::core::runtime::current_slot::<RequestJournalRuns>()
+fn request_journal_runs(ctx: &DispatchCtx) -> std::sync::Arc<RequestJournalRuns> {
+    crate::core::runtime::slot_for::<RequestJournalRuns>(ctx)
 }
 
 type RequestJournalRuns = Mutex<HashMap<String, String>>;
 
-pub(crate) fn register_request_journal_run(request_id: &str, run_id: &str) {
-    match request_journal_runs().lock() {
+pub(crate) fn register_request_journal_run(ctx: &DispatchCtx, request_id: &str, run_id: &str) {
+    match request_journal_runs(ctx).lock() {
         Ok(mut runs) => {
             runs.insert(request_id.to_string(), run_id.to_string());
             log::debug!(
@@ -85,8 +85,8 @@ pub(crate) fn register_request_journal_run(request_id: &str, run_id: &str) {
     }
 }
 
-pub(crate) fn take_request_journal_run(request_id: &str) -> Option<String> {
-    request_journal_runs()
+pub(crate) fn take_request_journal_run(ctx: &DispatchCtx, request_id: &str) -> Option<String> {
+    request_journal_runs(ctx)
         .lock()
         .ok()
         .and_then(|mut runs| runs.remove(request_id))

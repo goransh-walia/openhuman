@@ -70,12 +70,13 @@ const VOICE_MODEL: &str = "hint:chat";
 /// channel closes. Runs entirely on the background task, so the ack deadline in
 /// the caller covers both the build and the model round-trips.
 pub(super) async fn run_voice_turn(
+    ctx: &crate::core::runtime::DispatchCtx,
     correlation_id: &str,
     messages: &[Value],
     prompt: &str,
     progress_tx: tokio::sync::mpsc::Sender<AgentProgress>,
 ) -> Result<String, String> {
-    let mut agent = build_voice_agent(correlation_id, messages, prompt).await?;
+    let mut agent = build_voice_agent(ctx, correlation_id, messages, prompt).await?;
 
     // Attach the streaming sink before the turn: its presence switches the harness
     // onto the true per-token streaming path, and each `AgentProgress::TextDelta`
@@ -93,12 +94,13 @@ pub(super) async fn run_voice_turn(
 /// Construct the per-turn voice orchestrator: load config, pin the fast voice
 /// model, isolate the transcript namespace, and seed the relayed history.
 async fn build_voice_agent(
+    ctx: &crate::core::runtime::DispatchCtx,
     correlation_id: &str,
     messages: &[Value],
     prompt: &str,
 ) -> Result<OpenHumanSessionHost, String> {
-    let config = crate::config::ops::load_config_with_timeout().await?;
-    let mut agent = OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator")
+    let config = ctx.load_config().await?;
+    let mut agent = OpenHumanSessionHost::from_config_for_agent(ctx, &config, "orchestrator")
         .map_err(|e| format!("orchestrator build failed: {e}"))?;
     agent.set_event_context(format!("voice_{correlation_id}"), "voice_agent");
     // Isolate the voice transcript namespace from the chat orchestrator so a

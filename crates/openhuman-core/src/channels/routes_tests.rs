@@ -245,7 +245,10 @@ async fn sign_out_cancels_remote_invalidation_while_it_waits_for_the_session_tab
         crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None);
     let expected_core_context = Arc::clone(&core_context);
     crate::core::runtime::CoreContext::scope(core_context, async {
-        let guard = crate::web_chat::lock_thread_sessions_for_test().await;
+        let guard = crate::web_chat::lock_thread_sessions_for_test(
+            &crate::core::runtime::DispatchCtx::ambient(),
+        )
+        .await;
         let cancellation = tokio_util::sync::CancellationToken::new();
         let callback = RouteCallbacks::new(
             runtime_context(PathBuf::from("/tmp/channel-callback")),

@@ -10,7 +10,15 @@ async fn deliver_if_configured_empty_success_skips_chat_and_alert() {
     let config = test_config(&tmp).await;
     let job = proactive_job();
     // Successful but empty: nothing delivered anywhere.
-    assert!(deliver_if_configured(&config, &job, "", true).await.is_ok());
+    assert!(deliver_if_configured(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "",
+        true
+    )
+    .await
+    .is_ok());
     assert_eq!(cron_alerts(&config).await, 0);
 }
 

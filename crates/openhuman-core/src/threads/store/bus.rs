@@ -242,7 +242,7 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                     return;
                 }
                 if let Err(error) = persist_channel_turn(
-                    &DispatchCtx::ambient(),
+                    &DispatchCtx::host_default(),
                     &my_workspace,
                     ChannelTurnDescriptor {
                         channel,
@@ -301,7 +301,7 @@ impl EventHandler<DomainEvent> for ConversationPersistenceSubscriber {
                     return;
                 }
                 if let Err(error) = persist_channel_turn(
-                    &DispatchCtx::ambient(),
+                    &DispatchCtx::host_default(),
                     &my_workspace,
                     ChannelTurnDescriptor {
                         channel,
@@ -403,6 +403,7 @@ async fn persist_channel_turn(
     let created_at = Utc::now().to_rfc3339();
 
     ensure_thread(
+        &DispatchCtx::host_default(),
         workspace_dir.to_path_buf(),
         CreateConversationThread {
             id: thread_id.clone(),
@@ -416,9 +417,13 @@ async fn persist_channel_turn(
     )?;
 
     let persisted_message_id = format!("{}:{}", descriptor.role, descriptor.message_id);
-    if get_messages(workspace_dir.to_path_buf(), &thread_id)?
-        .iter()
-        .any(|message| message.id == persisted_message_id)
+    if get_messages(
+        &DispatchCtx::host_default(),
+        workspace_dir.to_path_buf(),
+        &thread_id,
+    )?
+    .iter()
+    .any(|message| message.id == persisted_message_id)
     {
         log::debug!(
             "{LOG_PREFIX} skipping duplicate persisted turn thread_id={} message_id={}",
@@ -429,6 +434,7 @@ async fn persist_channel_turn(
     }
 
     append_message(
+        &DispatchCtx::host_default(),
         workspace_dir.to_path_buf(),
         &thread_id,
         ConversationMessage {

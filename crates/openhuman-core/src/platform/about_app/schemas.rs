@@ -104,7 +104,7 @@ pub fn about_app_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_about_app_list(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_about_app_list(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload = deserialize_params::<AboutAppListParams>(params)?;
         let category = payload
@@ -114,23 +114,29 @@ fn handle_about_app_list(_ctx: DispatchCtx, params: Map<String, Value>) -> Contr
             .transpose()?;
 
         tracing::debug!(?category, "[about_app] list capabilities");
-        to_json(crate::platform::about_app::list_capabilities(category))
+        to_json(crate::platform::about_app::list_capabilities(
+            &ctx, category,
+        ))
     })
 }
 
-fn handle_about_app_lookup(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_about_app_lookup(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload = deserialize_params::<AboutAppLookupParams>(params)?;
         tracing::debug!(id = %payload.id, "[about_app] lookup capability");
-        to_json(crate::platform::about_app::lookup_capability(&payload.id)?)
+        to_json(crate::platform::about_app::lookup_capability(
+            &ctx,
+            &payload.id,
+        )?)
     })
 }
 
-fn handle_about_app_search(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+fn handle_about_app_search(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload = deserialize_params::<AboutAppSearchParams>(params)?;
         tracing::debug!(query = %payload.query, "[about_app] search capabilities");
         to_json(crate::platform::about_app::search_capabilities(
+            &ctx,
             &payload.query,
         ))
     })

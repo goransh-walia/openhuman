@@ -75,7 +75,14 @@ pub async fn start_workflow_run(
             Ok(task_config) => {
                 crate::agent::turn_origin::with_inherited_origin(
                     inherited_origin,
-                    run_engine_loop(&task_config, &task_run_id, definition, cancel, None),
+                    run_engine_loop(
+                        &task_ctx,
+                        &task_config,
+                        &task_run_id,
+                        definition,
+                        cancel,
+                        None,
+                    ),
                 )
                 .await;
             }
@@ -219,7 +226,14 @@ pub async fn resume_workflow_run(
             Ok(task_config) => {
                 crate::agent::turn_origin::with_inherited_origin(
                     inherited_origin,
-                    run_engine_loop(&task_config, &task_run_id, definition, cancel, None),
+                    run_engine_loop(
+                        &task_ctx,
+                        &task_config,
+                        &task_run_id,
+                        definition,
+                        cancel,
+                        None,
+                    ),
                 )
                 .await;
             }
@@ -243,6 +257,7 @@ pub async fn resume_workflow_run(
 /// an owned [`Config`]. Errors are recorded on the run row (status `Failed`)
 /// rather than propagated — there is no caller to receive them.
 pub(crate) async fn run_engine_loop(
+    ctx: &DispatchCtx,
     config: &Config,
     run_id: &str,
     definition: WorkflowDefinition,
@@ -295,6 +310,7 @@ pub(crate) async fn run_engine_loop(
     };
     let cancel_token = cancel.token.clone();
     let outcome = with_root_parent(
+        ctx,
         parent_override,
         config,
         "workflow_engine",

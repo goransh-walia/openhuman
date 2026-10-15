@@ -128,7 +128,7 @@ impl LiveAgentSchedulers {
                         return;
                     }
                 };
-                let Some(security) = crate::security::live_policy::effective() else {
+                let Some(security) = crate::security::live_policy::effective_in(&dispatch) else {
                     tracing::warn!(agent = %agent_id, "[cron:scheduler] agent has no policy; jobs skipped");
                     return;
                 };

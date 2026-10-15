@@ -3,35 +3,16 @@
 //! domain events onto it for Socket.IO and the JSON-RPC `/events` stream.
 
 use async_trait::async_trait;
-use once_cell::sync::Lazy;
 use std::sync::{Arc, OnceLock};
-use tokio::sync::broadcast;
 
 use crate::core::events::DomainEvent;
 use crate::web_chat::WebChannelEvent;
 use tinybus::EventHandler;
 use tinybus::SubscriptionHandle;
 
-static EVENT_BUS: Lazy<broadcast::Sender<WebChannelEvent>> = Lazy::new(|| {
-    let (tx, _rx) = broadcast::channel(512);
-    tx
-});
-
-pub fn subscribe_web_channel_events() -> broadcast::Receiver<WebChannelEvent> {
-    EVENT_BUS.subscribe()
-}
-
-/// Publish `event` to every subscribed socket bridge and the JSON-RPC
-/// `/events` stream, stamping `ts` (epoch ms) when the caller left it unset
-/// so every emitted event carries a wall-clock time the frontend can use for
-/// ordering/latency display without guessing at receive time.
-pub fn publish_web_channel_event(mut event: WebChannelEvent) {
-    if event.ts.is_none() {
-        event.ts = Some(crate::web_chat::progress_bridge::unix_epoch_ms());
-    }
-    event.stamp_tenant(crate::core::runtime::current_tenant().ok());
-    let _ = EVENT_BUS.send(event);
-}
+pub use super::event_bus_channel::{
+    publish_web_channel_event, publish_web_channel_event_in, subscribe_web_channel_events,
+};
 
 static APPROVAL_SURFACE_HANDLE: OnceLock<SubscriptionHandle> = OnceLock::new();
 

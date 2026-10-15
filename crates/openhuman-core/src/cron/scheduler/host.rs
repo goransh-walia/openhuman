@@ -64,6 +64,12 @@ impl Binding {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = config.clone();
     }
 
+    /// The dispatch context the bound context stands for: the bound one, or
+    /// (when it has since been dropped, or none was bound) the calling task's.
+    pub(crate) fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
+        crate::core::runtime::DispatchCtx::from_weak(self.context.as_ref())
+    }
+
     /// Runs `fut` under the bound context. A context that has since been
     /// dropped (its agent is no longer live) runs `fut` as the caller is.
     pub(crate) async fn within<F: Future>(&self, fut: F) -> F::Output {

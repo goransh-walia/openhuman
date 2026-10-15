@@ -295,7 +295,7 @@ pub async fn set_credential(
         logs.push("credential refreshed (same secret, same user)".to_string());
         config.clone()
     } else {
-        logs.extend(activate_user_scope(&user_id)?);
+        logs.extend(activate_user_scope(ctx, &user_id)?);
         // Reload so auth-profiles.json, the encryption key and the workspace
         // resolve to the user-scoped location before the profile is written.
         let effective = reload_config_or(&ctx, config).await?;

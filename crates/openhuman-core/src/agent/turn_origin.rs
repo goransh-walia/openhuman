@@ -174,12 +174,6 @@ impl AgentTurnOrigin {
     }
 }
 
-/// Whether the current turn's text was written by a person — `false` outside
-/// any origin scope, matching [`AgentTurnOrigin::is_user_authored`]'s allowlist.
-pub fn current_is_user_authored() -> bool {
-    current().is_some_and(|origin| origin.is_user_authored())
-}
-
 /// Run `fut` as a turn labelled `origin`.
 ///
 /// The label rides the [`CoreContext`](crate::core::runtime::CoreContext) the
@@ -208,9 +202,15 @@ pub async fn with_origin<F: std::future::Future>(origin: AgentTurnOrigin, fut: F
 /// `CoreContext`. The process default never supplies authority. `None` when no
 /// caller scoped one; the gate maps that to [`AgentTurnOrigin::Unknown`]
 /// (fail closed).
+///
+/// The one place the origin is read from task state, for the library and test
+/// boundary and for [`capture`]. Production readers take the origin from the
+/// context they were handed ([`DispatchCtx::turn_origin`]) or from the tool
+/// run carrier.
+///
+/// [`DispatchCtx::turn_origin`]: crate::core::runtime::DispatchCtx::turn_origin
 pub fn current() -> Option<AgentTurnOrigin> {
-    crate::core::runtime::CoreContext::scoped_for_turn()
-        .and_then(|context| context.turn_origin().cloned())
+    crate::core::runtime::DispatchCtx::ambient_turn().turn_origin()
 }
 
 /// Capture the ambient origin so it can be carried across a `tokio::spawn`

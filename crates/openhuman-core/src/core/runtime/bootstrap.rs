@@ -97,7 +97,7 @@ pub(crate) async fn bootstrap_core_runtime(
     //
     // An installed host session store repairs itself, once; with none, the
     // workspace default store is swept.
-    let host_store = crate::agent::session_store::installed();
+    let host_store = crate::agent::session_store::installed_in(&DispatchCtx::ambient());
     if let Some(provider) = &host_store {
         match provider.recover() {
             Ok(()) => log::info!("[runtime] host session store recovered"),
@@ -162,8 +162,10 @@ pub(crate) async fn bootstrap_core_runtime(
         // result never reached its chat thread is still pending in the durable
         // completion log (`<workspace>/.openhuman/background_completions.jsonl`).
         // Schedule its delivery turn through the normal idle-gated path.
-        let redelivering =
-            crate::agent::orchestration::background_delivery::recover_on_boot(&workspace_dir);
+        let redelivering = crate::agent::orchestration::background_delivery::recover_on_boot(
+            &DispatchCtx::ambient(),
+            &workspace_dir,
+        );
         if redelivering > 0 {
             log::info!(
                 "[runtime] scheduled redelivery of undelivered background completions for \

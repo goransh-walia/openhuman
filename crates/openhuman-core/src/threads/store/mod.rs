@@ -33,6 +33,7 @@ pub mod blocking;
 
 mod bus;
 mod legacy_import;
+mod transcript_key;
 #[cfg(test)]
 #[path = "legacy_import_tests.rs"]
 mod legacy_import_tests;
@@ -65,6 +66,7 @@ impl From<types::ConversationPurgeStats> for ConversationPurgeStats {
 #[cfg(feature = "channels")]
 pub(crate) use bus::claim_channel_turn;
 pub use bus::register_conversation_persistence_subscriber;
+pub(crate) use transcript_key::bind_transcript_key;
 pub use store::{
     append_message, delete_messages_from, delete_thread, ensure_thread, get_messages, list_threads,
     purge_threads, update_message, update_thread_labels, update_thread_title,

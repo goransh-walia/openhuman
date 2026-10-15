@@ -61,7 +61,10 @@ impl FlowRunDigestSubscriber {
 
     async fn handle_finished(&self, flow_id: &str, run_id: &str, status: &str) {
         // As the flow's owner: its own configuration (`super::owner`).
-        let config = super::owner::config_for_scope(&self.config);
+        let config = super::owner::config_for_scope(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            &self.config,
+        );
         if status != "completed" && status != "completed_with_warnings" {
             tracing::trace!(target: "flows", %flow_id, %run_id, %status, "[flows] digest: ignoring non-success terminal status");
             return;

@@ -40,22 +40,37 @@ async fn create_append_read_round_trips_through_the_blocking_pool() {
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().to_path_buf();
 
-    let thread = ensure_thread(dir.clone(), create("thread-a"))
-        .await
-        .expect("ensure_thread");
+    let thread = ensure_thread(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.clone(),
+        create("thread-a"),
+    )
+    .await
+    .expect("ensure_thread");
     assert_eq!(thread.id, "thread-a");
 
-    append_message(dir.clone(), "thread-a".to_string(), message("m1", "hello"))
-        .await
-        .expect("append_message");
+    append_message(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.clone(),
+        "thread-a".to_string(),
+        message("m1", "hello"),
+    )
+    .await
+    .expect("append_message");
 
-    let messages = get_messages(dir.clone(), "thread-a".to_string())
-        .await
-        .expect("get_messages");
+    let messages = get_messages(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.clone(),
+        "thread-a".to_string(),
+    )
+    .await
+    .expect("get_messages");
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].content, "hello");
 
-    let threads = list_threads(dir.clone()).await.expect("list_threads");
+    let threads = list_threads(crate::core::runtime::DispatchCtx::ambient(), dir.clone())
+        .await
+        .expect("list_threads");
     assert_eq!(threads.len(), 1);
     assert_eq!(threads[0].message_count, 1);
 }
@@ -68,9 +83,14 @@ async fn store_errors_surface_unchanged() {
     // Appending to a thread that was never created is the store's own error,
     // not a join failure — the wrapper must pass it through verbatim so the
     // RPC layer's thread-scoped error mapping still recognises it.
-    let error = append_message(dir, "missing".to_string(), message("m1", "hello"))
-        .await
-        .expect_err("append to a missing thread must fail");
+    let error = append_message(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir,
+        "missing".to_string(),
+        message("m1", "hello"),
+    )
+    .await
+    .expect_err("append to a missing thread must fail");
     assert!(
         error.contains("not found"),
         "expected the store's own error, got: {error}"
@@ -167,10 +187,15 @@ async fn concurrent_operations_complete_without_stalling_the_single_async_worker
     for idx in 0..8 {
         let dir = dir.clone();
         handles.push(tokio::spawn(async move {
-            let thread = ensure_thread(dir.clone(), create(&format!("thread-{idx}")))
-                .await
-                .expect("ensure_thread");
+            let thread = ensure_thread(
+                crate::core::runtime::DispatchCtx::ambient(),
+                dir.clone(),
+                create(&format!("thread-{idx}")),
+            )
+            .await
+            .expect("ensure_thread");
             append_message(
+                crate::core::runtime::DispatchCtx::ambient(),
                 dir,
                 thread.id.clone(),
                 message(&format!("m{idx}"), "concurrent"),
@@ -211,7 +236,9 @@ async fn concurrent_operations_complete_without_stalling_the_single_async_worker
         "every concurrent create must land its own thread"
     );
 
-    let threads = list_threads(dir).await.expect("list_threads");
+    let threads = list_threads(crate::core::runtime::DispatchCtx::ambient(), dir)
+        .await
+        .expect("list_threads");
     assert_eq!(threads.len(), 8);
     assert!(threads.iter().all(|thread| thread.message_count == 1));
 }
@@ -220,11 +247,16 @@ async fn concurrent_operations_complete_without_stalling_the_single_async_worker
 async fn title_labels_delete_and_purge_round_trip() {
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().to_path_buf();
-    ensure_thread(dir.clone(), create("thread-a"))
-        .await
-        .expect("ensure_thread");
+    ensure_thread(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.clone(),
+        create("thread-a"),
+    )
+    .await
+    .expect("ensure_thread");
 
     let retitled = update_thread_title(
+        crate::core::runtime::DispatchCtx::ambient(),
         dir.clone(),
         "thread-a".to_string(),
         "Renamed".to_string(),
@@ -235,6 +267,7 @@ async fn title_labels_delete_and_purge_round_trip() {
     assert_eq!(retitled.title, "Renamed");
 
     let relabelled = update_thread_labels(
+        crate::core::runtime::DispatchCtx::ambient(),
         dir.clone(),
         "thread-a".to_string(),
         vec!["general".to_string()],
@@ -247,6 +280,7 @@ async fn title_labels_delete_and_purge_round_trip() {
 
     assert!(
         delete_thread(
+            crate::core::runtime::DispatchCtx::ambient(),
             dir.clone(),
             "thread-a".to_string(),
             "2026-07-30T00:03:00Z".to_string()
@@ -255,23 +289,44 @@ async fn title_labels_delete_and_purge_round_trip() {
         .expect("delete_thread"),
         "deleting a live thread reports true"
     );
-    assert!(list_threads(dir.clone()).await.unwrap().is_empty());
+    assert!(
+        list_threads(crate::core::runtime::DispatchCtx::ambient(), dir.clone())
+            .await
+            .unwrap()
+            .is_empty()
+    );
 
-    ensure_thread(dir.clone(), create("thread-b"))
+    ensure_thread(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.clone(),
+        create("thread-b"),
+    )
+    .await
+    .expect("ensure_thread");
+    purge_threads(crate::core::runtime::DispatchCtx::ambient(), dir.clone())
         .await
-        .expect("ensure_thread");
-    purge_threads(dir.clone()).await.expect("purge_threads");
-    assert!(list_threads(dir).await.unwrap().is_empty());
+        .expect("purge_threads");
+    assert!(
+        list_threads(crate::core::runtime::DispatchCtx::ambient(), dir)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
 async fn update_message_patches_metadata_and_search_finds_content() {
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().to_path_buf();
-    ensure_thread(dir.clone(), create("thread-a"))
-        .await
-        .expect("ensure_thread");
+    ensure_thread(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.clone(),
+        create("thread-a"),
+    )
+    .await
+    .expect("ensure_thread");
     append_message(
+        crate::core::runtime::DispatchCtx::ambient(),
         dir.clone(),
         "thread-a".to_string(),
         message("m1", "quarterly roadmap review"),
@@ -280,6 +335,7 @@ async fn update_message_patches_metadata_and_search_finds_content() {
     .expect("append_message");
 
     let patched = update_message(
+        crate::core::runtime::DispatchCtx::ambient(),
         dir.clone(),
         "thread-a".to_string(),
         "m1".to_string(),
@@ -291,11 +347,68 @@ async fn update_message_patches_metadata_and_search_finds_content() {
     .expect("update_message");
     assert_eq!(patched.extra_metadata, json!({"pinned": true}));
 
-    let hits = search_cross_thread_messages(dir, "roadmap".to_string(), 10, None)
-        .await
-        .expect("search_cross_thread_messages");
+    let hits = search_cross_thread_messages(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir,
+        "roadmap".to_string(),
+        10,
+        None,
+    )
+    .await
+    .expect("search_cross_thread_messages");
     assert!(
         hits.iter().any(|hit| hit.thread_id == "thread-a"),
         "cross-thread search must find the appended message, got: {hits:?}"
     );
+}
+
+fn profile_ctx(workspace: &std::path::Path, profile: &str) -> crate::core::runtime::DispatchCtx {
+    use crate::core::runtime::{ContextOverlay, CoreContext, DispatchCtx, DomainSet};
+    let config = crate::config::Config {
+        workspace_dir: workspace.to_path_buf(),
+        action_dir: workspace.to_path_buf(),
+        config_path: workspace.join("config.toml"),
+        ..Default::default()
+    };
+    let context = CoreContext::for_test(DomainSet::none(), Some(workspace.to_path_buf()))
+        .derive_with(
+            ContextOverlay::new(config, DomainSet::full(), Default::default()).profile(profile),
+        );
+    DispatchCtx::new(context)
+}
+
+/// The tenant is read from the context handed in, never from the task: two
+/// profiles driven concurrently over one workspace, with no ambient scope,
+/// each see only their own threads.
+#[tokio::test]
+async fn explicit_context_picks_the_conversation_scope_without_an_ambient_scope() {
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().to_path_buf();
+    // Unique names: the storage fence registry is process-wide, and another
+    // test's lease for a shared name would be consulted for these writes.
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let alice = profile_ctx(&dir, &format!("alice-{suffix}"));
+    let bob = profile_ctx(&dir, &format!("bob-{suffix}"));
+
+    let (a, b) = tokio::join!(
+        ensure_thread(alice.clone(), dir.clone(), create("alice-thread")),
+        ensure_thread(bob.clone(), dir.clone(), create("bob-thread")),
+    );
+    a.expect("alice ensure");
+    b.expect("bob ensure");
+
+    let alice_ids: Vec<String> = list_threads(alice, dir.clone())
+        .await
+        .expect("alice list")
+        .into_iter()
+        .map(|t| t.id)
+        .collect();
+    let bob_ids: Vec<String> = list_threads(bob, dir.clone())
+        .await
+        .expect("bob list")
+        .into_iter()
+        .map(|t| t.id)
+        .collect();
+    assert_eq!(alice_ids, vec!["alice-thread".to_string()]);
+    assert_eq!(bob_ids, vec!["bob-thread".to_string()]);
 }

@@ -353,14 +353,14 @@ struct StateProbe;
 /// `scoped` answer as they do when nothing is scoped.
 #[tokio::test]
 async fn a_bare_origin_scope_is_invisible_to_every_other_reader() {
-    use crate::core::runtime::{current_slot, CoreContext};
+    use crate::core::runtime::{slot_for, CoreContext, DispatchCtx};
 
-    let outside_slot = current_slot::<StateProbe>();
+    let outside_slot = slot_for::<StateProbe>(&DispatchCtx::ambient());
     let outside_current = CoreContext::current();
     let (inside_slot, inside_current, inside_scoped, origin) =
         with_origin(AgentTurnOrigin::Cli, async {
             (
-                current_slot::<StateProbe>(),
+                slot_for::<StateProbe>(&DispatchCtx::ambient()),
                 CoreContext::current(),
                 CoreContext::scoped(),
                 current(),

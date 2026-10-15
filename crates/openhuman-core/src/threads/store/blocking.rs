@@ -51,6 +51,7 @@
 
 use std::path::PathBuf;
 
+use crate::core::runtime::DispatchCtx;
 use crate::threads::store;
 
 use super::{
@@ -86,122 +87,170 @@ where
 
 /// [`store::ensure_thread`] on the blocking pool.
 pub async fn ensure_thread(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     request: CreateConversationThread,
 ) -> Result<ConversationThread, String> {
     run("ensure_thread", move || {
-        store::ensure_thread(workspace_dir, request)
+        store::ensure_thread(&ctx, workspace_dir, request)
     })
     .await
 }
 
 /// [`store::list_threads`] on the blocking pool.
-pub async fn list_threads(workspace_dir: PathBuf) -> Result<Vec<ConversationThread>, String> {
-    run("list_threads", move || store::list_threads(workspace_dir)).await
+pub async fn list_threads(
+    ctx: DispatchCtx,
+    workspace_dir: PathBuf,
+) -> Result<Vec<ConversationThread>, String> {
+    run("list_threads", move || {
+        store::list_threads(&ctx, workspace_dir)
+    })
+    .await
 }
 
 /// [`store::get_messages`] on the blocking pool.
 pub async fn get_messages(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
 ) -> Result<Vec<ConversationMessage>, String> {
     run("get_messages", move || {
-        store::get_messages(workspace_dir, &thread_id)
+        store::get_messages(&ctx, workspace_dir, &thread_id)
     })
     .await
 }
 
 /// [`store::append_message`] on the blocking pool.
 pub async fn append_message(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     message: ConversationMessage,
 ) -> Result<ConversationMessage, String> {
     run("append_message", move || {
-        store::append_message(workspace_dir, &thread_id, message)
+        store::append_message(&ctx, workspace_dir, &thread_id, message)
     })
     .await
 }
 
 /// [`store::update_message`] on the blocking pool.
 pub async fn update_message(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     message_id: String,
     patch: ConversationMessagePatch,
 ) -> Result<ConversationMessage, String> {
     run("update_message", move || {
-        store::update_message(workspace_dir, &thread_id, &message_id, patch)
+        store::update_message(&ctx, workspace_dir, &thread_id, &message_id, patch)
     })
     .await
 }
 
 /// [`store::delete_messages_from`] on the blocking pool.
 pub async fn delete_messages_from(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     message_id: String,
 ) -> Result<Option<usize>, String> {
     run("delete_messages_from", move || {
-        store::delete_messages_from(workspace_dir, &thread_id, &message_id)
+        store::delete_messages_from(&ctx, workspace_dir, &thread_id, &message_id)
     })
     .await
 }
 
 /// [`store::update_thread_title`] on the blocking pool.
 pub async fn update_thread_title(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     title: String,
     updated_at: String,
 ) -> Result<ConversationThread, String> {
     run("update_thread_title", move || {
-        store::update_thread_title(workspace_dir, &thread_id, &title, &updated_at)
+        store::update_thread_title(&ctx, workspace_dir, &thread_id, &title, &updated_at)
     })
     .await
 }
 
 /// [`store::update_thread_working_dir`] on the blocking pool.
 pub async fn update_thread_working_dir(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     working_dir: Option<String>,
     updated_at: String,
 ) -> Result<ConversationThread, String> {
     run("update_thread_working_dir", move || {
-        store::update_thread_working_dir(workspace_dir, &thread_id, working_dir, &updated_at)
+        store::update_thread_working_dir(&ctx, workspace_dir, &thread_id, working_dir, &updated_at)
     })
     .await
 }
 
 /// [`store::update_thread_labels`] on the blocking pool.
 pub async fn update_thread_labels(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     labels: Vec<String>,
     updated_at: String,
 ) -> Result<ConversationThread, String> {
     run("update_thread_labels", move || {
-        store::update_thread_labels(workspace_dir, &thread_id, labels, &updated_at)
+        store::update_thread_labels(&ctx, workspace_dir, &thread_id, labels, &updated_at)
     })
     .await
 }
 
 /// [`store::delete_thread`] on the blocking pool.
 pub async fn delete_thread(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     deleted_at: String,
 ) -> Result<bool, String> {
     run("delete_thread", move || {
-        store::delete_thread(workspace_dir, &thread_id, &deleted_at)
+        store::delete_thread(&ctx, workspace_dir, &thread_id, &deleted_at)
+    })
+    .await
+}
+
+/// [`ConversationStore::transcript_key`] on the blocking pool: the session
+/// store key `thread_id`'s transcripts were first written under, if recorded.
+pub async fn transcript_key(
+    ctx: DispatchCtx,
+    workspace_dir: PathBuf,
+    thread_id: String,
+) -> Result<Option<String>, String> {
+    run("transcript_key", move || {
+        ConversationStore::new(ctx, workspace_dir).transcript_key(&thread_id)
+    })
+    .await
+}
+
+/// [`ConversationStore::record_transcript_key`] on the blocking pool: records
+/// `key` unless the thread already has one, and returns the key in effect.
+pub async fn record_transcript_key(
+    ctx: DispatchCtx,
+    workspace_dir: PathBuf,
+    thread_id: String,
+    key: String,
+) -> Result<String, String> {
+    run("record_transcript_key", move || {
+        ConversationStore::new(ctx, workspace_dir).record_transcript_key(&thread_id, &key)
     })
     .await
 }
 
 /// [`store::purge_threads`] on the blocking pool.
-pub async fn purge_threads(workspace_dir: PathBuf) -> Result<ConversationPurgeStats, String> {
-    run("purge_threads", move || store::purge_threads(workspace_dir)).await
+pub async fn purge_threads(
+    ctx: DispatchCtx,
+    workspace_dir: PathBuf,
+) -> Result<ConversationPurgeStats, String> {
+    run("purge_threads", move || {
+        store::purge_threads(&ctx, workspace_dir)
+    })
+    .await
 }
 
 /// [`ConversationStore::search_cross_thread_messages`] on the blocking pool.
@@ -209,13 +258,14 @@ pub async fn purge_threads(workspace_dir: PathBuf) -> Result<ConversationPurgeSt
 /// The heaviest operation in the family: a cold inverted index reads every
 /// thread's transcript before the search runs.
 pub async fn search_cross_thread_messages(
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     query: String,
     limit: usize,
     exclude_thread_id: Option<String>,
 ) -> Result<Vec<CrossThreadHit>, String> {
     run("search_cross_thread_messages", move || {
-        ConversationStore::new(workspace_dir).search_cross_thread_messages(
+        ConversationStore::new(ctx, workspace_dir).search_cross_thread_messages(
             &query,
             limit,
             exclude_thread_id.as_deref(),

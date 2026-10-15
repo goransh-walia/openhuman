@@ -154,7 +154,7 @@ fn handle_create_pairing(ctx: DispatchCtx, params: Map<String, Value>) -> Contro
     Box::pin(async move {
         let config = ctx.load_config().await?;
         let label = read_optional_string(&params, "label")?;
-        to_json(crate::security::devices::rpc::devices_create_pairing(&config, label).await?)
+        to_json(crate::security::devices::rpc::devices_create_pairing(&ctx, &config, label).await?)
     })
 }
 

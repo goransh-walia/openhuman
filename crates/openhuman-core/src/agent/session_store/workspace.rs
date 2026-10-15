@@ -38,7 +38,22 @@ pub fn release_workspace_defaults() {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clear();
+    super::release_workspace_stores();
     crate::storage::local::release_all();
+}
+
+/// Drops what this process holds open for `workspace_dir` alone (its fallback
+/// provider, its workspace transcript stores and its default backend), so that
+/// workspace's files can be deleted or reopened afresh while every other
+/// workspace keeps its live handles. A restart of one workspace, not of the
+/// process; [`release_workspace_defaults`] is the process-wide reset.
+pub fn release_workspace(workspace_dir: &Path) {
+    FALLBACKS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(workspace_dir);
+    super::release_workspace_stores_for(workspace_dir);
+    crate::storage::local::forget(workspace_dir);
 }
 
 /// The provider for `workspace_dir`: the installed one, else a
@@ -110,7 +125,7 @@ fn memory_fallback(workspace_dir: &Path) -> Arc<dyn SessionStoreProvider> {
 /// The key the calling tenant's stores are under, or `None` for a SaaS task
 /// with no scope (which must not act).
 fn tenant_agent_key() -> Option<String> {
-    match crate::core::runtime::current_tenant() {
+    match crate::core::runtime::DispatchCtx::ambient().tenant() {
         Ok(tenant) => Some(crate::core::runtime::session_key(&tenant)),
         Err(no_tenant) => {
             log::warn!("[session_store] {no_tenant}");

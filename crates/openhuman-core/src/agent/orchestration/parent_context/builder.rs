@@ -50,6 +50,7 @@ const LOG_TARGET: &str = "agent_orchestration::parent_context";
 /// Every other field is inherited verbatim from the config-built agent, so the
 /// spawned children behave exactly like a normal sub-agent dispatch.
 pub(crate) async fn build_root_parent(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     agent_definition_id: &str,
     channel: &str,
@@ -83,7 +84,7 @@ pub(crate) async fn build_root_parent(
         }
     }
 
-    let mut agent = OpenHumanSessionHost::from_config(config)
+    let mut agent = OpenHumanSessionHost::from_config(ctx, config)
         .context("build Agent from config for orchestration root parent")?;
 
     let integrations = crate::integrations::composio::fetch_connected_integrations(config).await;
@@ -142,6 +143,7 @@ pub(crate) async fn build_root_parent(
 /// when the root context can't be constructed — the caller decides how to
 /// degrade (fail the run, or fall back to an un-grounded path).
 pub(crate) async fn with_root_parent<F, Fut>(
+    ctx: &crate::core::runtime::DispatchCtx,
     parent_override: Option<ParentExecutionContext>,
     config: &Config,
     agent_definition_id: &str,
@@ -155,7 +157,9 @@ where
 {
     let parent = match parent_override {
         Some(parent) => parent,
-        None => build_root_parent(config, agent_definition_id, channel, session_prefix).await?,
+        None => {
+            build_root_parent(ctx, config, agent_definition_id, channel, session_prefix).await?
+        }
     };
     Ok(run(parent).await)
 }

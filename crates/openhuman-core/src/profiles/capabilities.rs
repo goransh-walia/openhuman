@@ -7,7 +7,7 @@
 use crate::agent::hooks::{ToolHook, ToolHookContext, ToolHookDecision};
 use crate::agent::{HostTools, HostTurnTools, TurnContext};
 use crate::config::Config;
-use crate::core::runtime::{ContextOverlay, CoreContext};
+use crate::core::runtime::{ContextOverlay, CoreContext, DispatchCtx};
 use crate::tools::toolpacks::{GroupMode, ToolGroups};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -66,11 +66,12 @@ impl ProfileCapabilities {
         }
     }
 
-    /// Capabilities of the ambient authenticated profile, never the operator.
-    pub fn current() -> Option<Arc<Self>> {
-        let ctx = CoreContext::scoped()?;
-        ctx.profile()?;
-        ctx.host_overrides()?.profile_capabilities()
+    /// Capabilities of the authenticated profile `ctx` runs for, never the
+    /// operator: `None` for a call that serves no profile.
+    pub fn in_ctx(ctx: &DispatchCtx) -> Option<Arc<Self>> {
+        let core = ctx.core()?;
+        core.profile()?;
+        core.host_overrides()?.profile_capabilities()
     }
 
     /// Permission ceiling explicitly granted to this hosted channel.
@@ -99,8 +100,8 @@ impl ProfileCapabilities {
     }
 
     /// Whether a selected name may reach the host permission decision.
-    pub fn admits(&self, name: &str) -> bool {
-        let binding = super::provider_settings::ProfileProviderSettings::current();
+    pub fn admits(&self, ctx: &DispatchCtx, name: &str) -> bool {
+        let binding = super::provider_settings::ProfileProviderSettings::in_ctx(ctx);
         let canonical = match &binding {
             Some(binding) => match binding.policy_name(name) {
                 Some(canonical) => canonical,
@@ -131,13 +132,13 @@ impl ProfileCapabilities {
     }
 
     /// An explicitly named operation can pass the supervised gate only with a host callback.
-    pub fn authorizes_approval(&self, name: &str) -> bool {
+    pub fn authorizes_approval(&self, ctx: &DispatchCtx, name: &str) -> bool {
         self.permission.is_some()
             && self
                 .names
                 .as_ref()
                 .is_some_and(|names| names.contains(name))
-            && self.admits(name)
+            && self.admits(ctx, name)
     }
 
     /// Build the exact selected belt for this profile and session.
@@ -147,11 +148,15 @@ impl ProfileCapabilities {
             .as_ref()
             .map(|host| host(turn))
             .unwrap_or_default();
-        supplied.tools.retain(|tool| self.admits(tool.name()));
+        // Transitional (#7801): the host-tools factory carries no context yet.
+        let dispatch = DispatchCtx::ambient();
+        supplied
+            .tools
+            .retain(|tool| self.admits(&dispatch, tool.name()));
         if let Some(names) = &self.names {
             let mut groups = ToolGroups::none();
-            for name in names.iter().filter(|name| self.admits(name)) {
-                let binding = super::provider_settings::ProfileProviderSettings::current();
+            for name in names.iter().filter(|name| self.admits(&dispatch, name)) {
+                let binding = super::provider_settings::ProfileProviderSettings::in_ctx(&dispatch);
                 let canonical = binding
                     .as_ref()
                     .and_then(|binding| binding.policy_name(name));
@@ -161,7 +166,7 @@ impl ProfileCapabilities {
                     groups = groups.with(pack.id, GroupMode::Advertised);
                 }
             }
-            if let Some(ctx) = CoreContext::scoped() {
+            if let Some(ctx) = dispatch.core().cloned() {
                 // Native construction stays inside the domains registered for this
                 // profile. The named packs narrow registration within those domains.
                 let assembly =
@@ -199,7 +204,8 @@ impl ProfileCapabilities {
                         .filter(|tool| tool.name() != "web_search_tool")
                         .chain(search)
                         .filter(|tool| {
-                            self.admits(tool.name()) && !supplied_names.contains(tool.name())
+                            self.admits(&dispatch, tool.name())
+                                && !supplied_names.contains(tool.name())
                         }),
                 );
             }
@@ -255,12 +261,12 @@ impl ToolHook for ProfilePermission {
         Ok(())
     }
     async fn before_tool_decision(&self, context: &ToolHookContext) -> ToolHookDecision {
-        let tenant = crate::core::runtime::current_tenant()
-            .ok()
-            .and_then(|tenant| tenant.profile);
+        // The hook runs inside the turn's own task, so its tenant is the ambient one.
+        let dispatch = DispatchCtx::ambient();
+        let tenant = dispatch.tenant().ok().and_then(|tenant| tenant.profile);
         if tenant.as_deref() != Some(self.profile.as_str())
             || self.fence.check_local(super::lease::now_ms()).is_err()
-            || !self.capabilities.admits(&context.tool_name)
+            || !self.capabilities.admits(&dispatch, &context.tool_name)
         {
             return ToolHookDecision::Deny(
                 "tool is outside the hosted profile capability boundary".into(),
@@ -268,7 +274,7 @@ impl ToolHook for ProfilePermission {
         }
         match &self.capabilities.permission {
             Some(permission) => {
-                let binding = super::provider_settings::ProfileProviderSettings::current();
+                let binding = super::provider_settings::ProfileProviderSettings::in_ctx(&dispatch);
                 let canonical = binding
                     .as_ref()
                     .and_then(|binding| binding.canonical_role_name(&context.tool_name));

@@ -166,7 +166,11 @@ pub async fn cron_remove(
     ))
 }
 
-pub async fn cron_run(config: &Config, job_id: &str) -> Result<Outcome<serde_json::Value>, String> {
+pub async fn cron_run(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    job_id: &str,
+) -> Result<Outcome<serde_json::Value>, String> {
     let job_id = job_id.trim();
     if job_id.is_empty() {
         return Err("Missing 'job_id' parameter".to_string());
@@ -197,6 +201,7 @@ pub async fn cron_run(config: &Config, job_id: &str) -> Result<Outcome<serde_jso
     let _ = cron::record_run(config, &job.id, queued_at, queued_at, "queued", None, 0);
 
     let config_owned = config.clone();
+    let ctx_owned = ctx.clone();
     let job_id_owned = job_id.to_string();
 
     tracing::debug!(job_id, "[cron_run] enqueuing background execution");
@@ -208,7 +213,7 @@ pub async fn cron_run(config: &Config, job_id: &str) -> Result<Outcome<serde_jso
         let _guard = run_guard;
 
         tracing::debug!(job_id = %job_id_owned, "[cron_run] background task started");
-        run_and_record(&config_owned, &job).await;
+        run_and_record(&ctx_owned, &config_owned, &job).await;
     });
 
     Ok(Outcome::new(
@@ -223,19 +228,27 @@ pub async fn cron_run(config: &Config, job_id: &str) -> Result<Outcome<serde_jso
 /// Run job `job_id` now and wait for it: the same execution, retry budget,
 /// delivery and run record as a scheduled run. Refused while a run of the job
 /// (scheduled or another Run Now) is already active.
-pub async fn run_job_now(config: &Config, job_id: &str) -> Result<(bool, String), String> {
+pub async fn run_job_now(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    job_id: &str,
+) -> Result<(bool, String), String> {
     let job = load_job_for_run(config, job_id.trim()).map_err(|e| e.to_string())?;
     cron::limits::check_run(config, &job).map_err(|e| e.to_string())?;
     let Some(_guard) = try_acquire_run(&job.id) else {
         tracing::debug!(job_id = %job.id, "[cron_run] job already running; refused");
         return Err(format!("cron job '{}' is already running", job.id));
     };
-    Ok(run_and_record(config, &job).await)
+    Ok(run_and_record(ctx, config, &job).await)
 }
 
 /// Execute `job` once (with its retry budget), deliver its output and persist
 /// the run and its last-run state. The caller holds the job's run claim.
-async fn run_and_record(config: &Config, job: &CronJob) -> (bool, String) {
+async fn run_and_record(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    job: &CronJob,
+) -> (bool, String) {
     let run_id = uuid::Uuid::new_v4().to_string();
     let started_at = chrono::Utc::now();
     let (success, output) = cron::scheduler::execute_job_now(config, job, &run_id).await;
@@ -249,7 +262,7 @@ async fn run_and_record(config: &Config, job: &CronJob) -> (bool, String) {
     // Deliver via the same path as the scheduler loop so proactive messages,
     // origin replies and alerts are sent on "Run Now" too, then record the run
     // with how the delivery went.
-    let delivery_status = cron::scheduler::deliver_job(config, job, &run_id, &output).await;
+    let delivery_status = cron::scheduler::deliver_job(ctx, config, job, &run_id, &output).await;
     let _ = cron::record_run_with_delivery(
         config,
         &job.id,

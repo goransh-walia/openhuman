@@ -131,6 +131,7 @@ pub(super) fn grant_turn_cwd(config: &mut Config, root: &std::path::Path) {
 /// reads `false` for it and the conversation autosave would silently drop a
 /// real user message.
 pub(super) fn effective_agent_chat_origin() -> crate::agent::turn_origin::AgentTurnOrigin {
-    crate::agent::turn_origin::current()
+    crate::core::runtime::DispatchCtx::ambient_turn()
+        .turn_origin()
         .unwrap_or(crate::agent::turn_origin::AgentTurnOrigin::DirectChat)
 }

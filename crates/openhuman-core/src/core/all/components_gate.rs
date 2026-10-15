@@ -7,9 +7,12 @@
 use super::{internal_registry, registry_view, visible};
 
 /// `Some(component)` when `method` is registered but hidden because its
-/// component is switched off in the ambient scope. Dispatch asks this before
+/// component is switched off for `dispatch`. Dispatch asks this before
 /// reporting an unknown method.
-pub fn disabled_component_for_method(method: &str) -> Option<&'static str> {
+pub fn disabled_component_for_method(
+    dispatch: &crate::core::runtime::DispatchCtx,
+    method: &str,
+) -> Option<&'static str> {
     let view = registry_view();
     let grouped = view
         .iter()
@@ -19,8 +22,7 @@ pub fn disabled_component_for_method(method: &str) -> Option<&'static str> {
         return None;
     }
     let name = crate::core::runtime::ComponentSet::component_for_group(grouped.group)?;
-    let ctx = crate::core::runtime::context::CoreContext::current()?;
-    if ctx.components().enabled(name) {
+    if dispatch.components().enabled(name) {
         return None;
     }
     log::debug!("[rpc][component-gate] method '{method}' refused, component '{name}' disabled");

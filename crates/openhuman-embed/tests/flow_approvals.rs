@@ -184,7 +184,12 @@ fn flow_surfaces_correlate_decisions_and_closed_instances_never_publish() {
                 assert_eq!(payload["summary"], "flow action");
                 assert_eq!(payload["decision"], action.action_id);
             }
-            let rows = gate.list_pending_for_agent(Some("flow-agent")).unwrap();
+            let rows = gate
+                .list_pending_for_agent(
+                    &openhuman_core::core::runtime::DispatchCtx::ambient(),
+                    Some("flow-agent"),
+                )
+                .unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].request_id, request_id);
             assert!(matches!(&rows[0].source_context,
@@ -291,7 +296,10 @@ fn flow_surfaces_correlate_decisions_and_closed_instances_never_publish() {
             );
             assert!(request.is_none());
             assert!(gate
-                .list_pending_for_agent(Some("flow-removed"))
+                .list_pending_for_agent(
+                    &openhuman_core::core::runtime::DispatchCtx::ambient(),
+                    Some("flow-removed")
+                )
                 .unwrap()
                 .is_empty());
             assert!(

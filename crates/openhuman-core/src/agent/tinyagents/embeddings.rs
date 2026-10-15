@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use crate::core::runtime::DispatchCtx;
 use async_trait::async_trait;
 use tinyinference_embeddings::{EmbeddingModel, Result as EmbedResult};
 
@@ -14,11 +15,12 @@ use tinyinference_embeddings::{EmbeddingModel, Result as EmbedResult};
 /// call. Everything else delegates to the model.
 pub(crate) struct ProviderEmbeddingModel {
     model: Arc<dyn EmbeddingModel>,
+    dispatch: DispatchCtx,
 }
 
 impl ProviderEmbeddingModel {
     /// Builds the cost-recording binding over `model`.
-    pub(crate) fn new(model: Arc<dyn EmbeddingModel>) -> Self {
+    pub(crate) fn new(model: Arc<dyn EmbeddingModel>, dispatch: DispatchCtx) -> Self {
         tracing::debug!(
             provider = model.name(),
             model_id = model.model_id(),
@@ -26,7 +28,7 @@ impl ProviderEmbeddingModel {
             signature = %model.signature(),
             "[embeddings] constructing cost-recording embedding binding"
         );
-        Self { model }
+        Self { model, dispatch }
     }
 }
 
@@ -60,6 +62,7 @@ impl EmbeddingModel for ProviderEmbeddingModel {
             let approx_input_tokens =
                 tinyinference_embeddings::estimate_embedding_input_tokens(texts);
             crate::platform::cost::record_embedding_usage(
+                &self.dispatch,
                 self.model.name(),
                 self.model.model_id(),
                 approx_input_tokens,

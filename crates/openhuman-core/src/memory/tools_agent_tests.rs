@@ -1,6 +1,8 @@
 use super::*;
 use crate::core::runtime::{context::CoreContext, ContextOverlay, DomainSet};
 use crate::tools::toolpacks::ToolGroups;
+use std::collections::HashSet;
+use tinymemory_api::ItemKind;
 
 fn agent(parent: &Arc<CoreContext>, id: &str) -> Arc<CoreContext> {
     parent.derive_with(
@@ -31,17 +33,27 @@ async fn turn_citations_stay_with_the_agent_that_recorded_them() {
     let beta = agent(&root, "beta");
     let thread = "shared-thread";
 
-    CoreContext::scope(Arc::clone(&alpha), async {
-        record_pack_citations(thread, vec![citation("alpha-cite")]);
-    })
-    .await;
-    CoreContext::scope(Arc::clone(&beta), async {
-        record_pack_citations(thread, vec![citation("beta-cite")]);
-    })
-    .await;
+    {
+        let scope_ctx = crate::core::runtime::DispatchCtx::new(Arc::clone(&alpha));
 
-    let from_beta = CoreContext::scope(beta, async { take_turn_citations(thread) }).await;
-    let from_alpha = CoreContext::scope(alpha, async { take_turn_citations(thread) }).await;
+        record_pack_citations(&scope_ctx, thread, vec![citation("alpha-cite")]);
+    };
+    {
+        let scope_ctx = crate::core::runtime::DispatchCtx::new(Arc::clone(&beta));
+
+        record_pack_citations(&scope_ctx, thread, vec![citation("beta-cite")]);
+    };
+
+    let from_beta = {
+        let scope_ctx = crate::core::runtime::DispatchCtx::new(beta);
+
+        take_turn_citations(&scope_ctx, thread)
+    };
+    let from_alpha = {
+        let scope_ctx = crate::core::runtime::DispatchCtx::new(alpha);
+
+        take_turn_citations(&scope_ctx, thread)
+    };
 
     assert_eq!(
         from_alpha.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(),
@@ -87,4 +99,34 @@ fn gather_acts_as_the_identity_the_run_carries() {
         Some(super::super::scope::DEFAULT_AGENT_ID)
     );
     assert!(bare.reach.at.is_root());
+}
+
+#[test]
+fn turn_citations_are_capped_and_deduplicated() {
+    let citation = |n: usize| tinymemory_api::Citation {
+        id: tinymemory_api::ItemId(format!("cite-{n}")),
+        kind: ItemKind::Learning,
+        snippet: "s".repeat(1000),
+        score: Some(0.5),
+        meta: MemoryMeta::default(),
+    };
+    let thread = "thread-cap";
+    let many: Vec<_> = (0..MAX_TURN_CITATIONS + 10).map(citation).collect();
+    record_turn_citations(&DispatchCtx::ambient(), thread, &many);
+    record_turn_citations(&DispatchCtx::ambient(), thread, &many[..2]);
+    record_turn_citations(&DispatchCtx::ambient(), thread, &[]);
+    let drained = take_turn_citations(&DispatchCtx::ambient(), thread);
+    assert_eq!(drained.len(), MAX_TURN_CITATIONS);
+    assert_eq!(
+        drained
+            .iter()
+            .map(|c| c.id.clone())
+            .collect::<HashSet<_>>()
+            .len(),
+        MAX_TURN_CITATIONS
+    );
+    assert!(
+        drained[0].snippet.chars().count() <= crate::memory::types::TURN_CITATION_SNIPPET_CHARS
+    );
+    assert_eq!(drained[0].key, "learning");
 }

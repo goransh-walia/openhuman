@@ -386,7 +386,10 @@ impl Runtime {
 
     /// The runtime's scheduled jobs. See [`crate::cron`].
     pub fn cron(&self) -> crate::cron::Cron<'_> {
-        crate::cron::Cron::new(&self.base_config)
+        crate::cron::Cron::new(
+            &self.base_config,
+            openhuman_core::core::runtime::DispatchCtx::new(self.core_runtime().context().clone()),
+        )
     }
 
     /// Run `handler` whenever system job `name` comes due (see

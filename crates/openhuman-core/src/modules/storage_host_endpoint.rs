@@ -102,7 +102,7 @@ impl StorageHost {
         let mut signals = binding.server.signals();
         let tx = relay.tx.clone();
         relay.fed_by = Some(Arc::downgrade(binding));
-        relay.bridge = Some(tokio::spawn(async move {
+        relay.bridge = Some(crate::core::runtime::spawn_scoped(async move {
             loop {
                 match signals.recv().await {
                     Ok(signal) => {

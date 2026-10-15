@@ -59,6 +59,7 @@ pub(super) async fn dispatch_bus_turn(
         // `config`) stay on an injected model source.
         turn_model_source: match &ctx.config {
             Some(cfg) => crate::agent::tinyagents::TurnModelSource::new_crate_native_from_string(
+                &crate::core::runtime::DispatchCtx::ambient(),
                 "chat",
                 route.provider.clone(),
                 cfg.clone(),

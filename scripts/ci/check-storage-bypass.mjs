@@ -67,6 +67,12 @@ const LEGACY_READER =
 export const ALLOW = new Map(
   [
     [
+      "util/classic_transcript_fixture.rs",
+      "json-write",
+      'std::fs::write(path, classic_jsonl(messages, meta)).expect("write the classic transcript");',
+      "test-only fixture (compiled under cfg(test)) that writes a retired-layout `session_raw/*.jsonl` file for the importer and rewrite tests; no store reads it back",
+    ],
+    [
       "security/approval/store_import.rs",
       "sqlite-open",
       "let conn = Connection::open(&db_path).with_context(|| {",

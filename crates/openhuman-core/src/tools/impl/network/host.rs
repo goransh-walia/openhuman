@@ -316,7 +316,7 @@ mod x402 {
                     client_id: context.client_id.clone(),
                 });
             let (service, payment) =
-                x402_service::prepare_payment(&config, url.to_owned(), challenge.to_owned(), owner)
+                x402_service::prepare_payment(&self.ctx, &config, url.to_owned(), challenge.to_owned(), owner)
                     .await
                     .map_err(|error| format!("x402 payment failed: {error}"))?;
 

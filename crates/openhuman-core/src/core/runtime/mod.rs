@@ -61,7 +61,7 @@ pub mod spawn;
 pub(crate) mod subscribers;
 pub mod tenant;
 
-pub use agent_scope::{agent_scope_dir, current_slot, AgentContextRegistry, AgentScopedState};
+pub use agent_scope::{agent_scope_dir, slot_for, AgentContextRegistry, AgentScopedState};
 pub use builder::{CoreBuilder, CoreRuntime, DomainSet, ServiceSet, TokenSource};
 pub use context::{ContextOverlay, CoreContext};
 pub use dispatch_ctx::DispatchCtx;

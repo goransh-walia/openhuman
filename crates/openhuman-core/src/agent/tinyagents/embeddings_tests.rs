@@ -32,7 +32,7 @@ impl EmbeddingModel for StubProvider {
 #[tokio::test]
 async fn embeddings_adapter_round_trips_and_reports_dimensions() {
     let provider: Arc<dyn EmbeddingModel> = Arc::new(StubProvider { dims: 4 });
-    let adapter = ProviderEmbeddingModel::new(provider);
+    let adapter = ProviderEmbeddingModel::new(provider, DispatchCtx::ambient());
 
     // dimensions() is forwarded from the underlying provider.
     assert_eq!(EmbeddingModel::name(&adapter), "stub");
@@ -54,7 +54,7 @@ async fn embeddings_adapter_round_trips_and_reports_dimensions() {
 async fn embeddings_adapter_preserves_signature() {
     let provider: Arc<dyn EmbeddingModel> = Arc::new(StubProvider { dims: 8 });
     let expected = provider.signature();
-    let adapter = ProviderEmbeddingModel::new(provider);
+    let adapter = ProviderEmbeddingModel::new(provider, DispatchCtx::ambient());
     assert_eq!(adapter.signature(), expected);
     assert_eq!(adapter.signature(), "provider=stub;model=stub-model;dims=8");
 }
@@ -62,7 +62,7 @@ async fn embeddings_adapter_preserves_signature() {
 #[tokio::test]
 async fn embeddings_adapter_empty_batch_is_empty() {
     let provider: Arc<dyn EmbeddingModel> = Arc::new(StubProvider { dims: 3 });
-    let adapter = ProviderEmbeddingModel::new(provider);
+    let adapter = ProviderEmbeddingModel::new(provider, DispatchCtx::ambient());
     let vectors = adapter.embed(&[]).await.expect("empty embed ok");
     assert!(vectors.is_empty());
 }

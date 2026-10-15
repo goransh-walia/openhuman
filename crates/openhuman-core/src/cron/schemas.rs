@@ -424,7 +424,7 @@ fn handle_run(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture 
     Box::pin(async move {
         let config = ctx.load_config().await?;
         let job_id = read_required::<String>(&params, "job_id")?;
-        to_json(crate::cron::rpc::cron_run(&config, job_id.trim()).await?)
+        to_json(crate::cron::rpc::cron_run(&ctx, &config, job_id.trim()).await?)
     })
 }
 

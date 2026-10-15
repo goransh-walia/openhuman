@@ -22,21 +22,22 @@ use super::wallet::{self, WalletCallError};
 /// secret material is sent only through the attested confidential call; the
 /// module parses the challenge and selects the matching chain.
 pub(crate) async fn prepare_payment(
+    ctx: &DispatchCtx,
     config: &Config,
     url: String,
     payment_required: String,
     owner: Option<tinywallet_bus::wire::QuoteOwner>,
 ) -> Result<(X402ServiceHandle, X402PreparePaymentResponse), WalletCallError> {
     let mut active = service().lock().await;
-    ensure_service(config, &mut active).await?;
+    ensure_service(ctx, config, &mut active).await?;
     let service_handle = active
         .as_ref()
         .ok_or_else(|| WalletCallError::Failed("x402 service is unavailable".into()))?
         .handle
         .clone();
 
-    let evm = signing_secret(config, crate::web3::wallet::WalletChain::Evm).await?;
-    let solana = signing_secret(config, crate::web3::wallet::WalletChain::Solana).await?;
+    let evm = signing_secret(ctx, config, crate::web3::wallet::WalletChain::Evm).await?;
+    let solana = signing_secret(ctx, config, crate::web3::wallet::WalletChain::Solana).await?;
     let mut request = X402PreparePaymentRequest {
         service: service_handle.clone(),
         url,
@@ -75,10 +76,11 @@ pub(crate) async fn record_payment(
 }
 
 async fn signing_secret(
+    ctx: &DispatchCtx,
     config: &Config,
     chain: crate::web3::wallet::WalletChain,
 ) -> Result<tinywallet_bus::wire::SecretMaterial, WalletCallError> {
-    let stored = crate::web3::wallet::secret_material(&DispatchCtx::ambient(), chain)
+    let stored = crate::web3::wallet::secret_material(ctx, chain)
         .await
         .map_err(WalletCallError::Failed)?;
     let phrase =
@@ -108,12 +110,13 @@ fn service() -> &'static tokio::sync::Mutex<Option<X402Service>> {
 }
 
 async fn ensure_service(
+    ctx: &DispatchCtx,
     config: &Config,
     active: &mut Option<X402Service>,
 ) -> Result<(), WalletCallError> {
     register_shutdown_hook();
     let workspace = config.workspace_dir.clone();
-    let accounts = super::wallet_host::wallet_accounts_snapshot()
+    let accounts = super::wallet_host::wallet_accounts_snapshot(ctx)
         .await
         .map_err(WalletCallError::Failed)?;
     let budget = budget_from(|name| std::env::var(name).ok());
@@ -204,7 +207,8 @@ fn register_shutdown_hook() {
         let Some(current) = active.as_ref() else {
             return;
         };
-        let Ok(config) = crate::config::rpc::load_config_with_timeout().await else {
+        // A shutdown hook carries no context of its own.
+        let Ok(config) = DispatchCtx::host_default().load_config().await else {
             tracing::warn!(
                 "[modules:x402] could not load configuration to close service at shutdown"
             );
@@ -227,13 +231,17 @@ fn register_shutdown_hook() {
     });
 }
 
-async fn with_service<R, F, Fut>(config: &Config, operation: F) -> Result<R, WalletCallError>
+async fn with_service<R, F, Fut>(
+    ctx: &DispatchCtx,
+    config: &Config,
+    operation: F,
+) -> Result<R, WalletCallError>
 where
     F: FnOnce(X402ServiceHandle) -> Fut,
     Fut: std::future::Future<Output = Result<R, WalletCallError>>,
 {
     let mut active = service().lock().await;
-    ensure_service(config, &mut active).await?;
+    ensure_service(ctx, config, &mut active).await?;
     let handle = active
         .as_ref()
         .ok_or_else(|| WalletCallError::Failed("x402 service is unavailable".into()))?
@@ -244,11 +252,12 @@ where
 
 /// Read the module-owned spending totals and budgets.
 pub(crate) async fn summary(
+    ctx: &DispatchCtx,
     config: &Config,
 ) -> Result<X402DetailedSpendingSummary, WalletCallError> {
     let config = config.clone();
     let operation_config = config.clone();
-    with_service(&config, move |service| async move {
+    with_service(ctx, &config, move |service| async move {
         wallet::call(
             &operation_config,
             methods::X402_SPENDING_SUMMARY_DETAILED,
@@ -261,12 +270,13 @@ pub(crate) async fn summary(
 
 /// Read recent module-owned payment records.
 pub(crate) async fn list_payments(
+    ctx: &DispatchCtx,
     config: &Config,
     limit: u64,
 ) -> Result<X402ListPaymentsResponse, WalletCallError> {
     let config = config.clone();
     let operation_config = config.clone();
-    with_service(&config, move |service| async move {
+    with_service(ctx, &config, move |service| async move {
         wallet::call(
             &operation_config,
             methods::X402_LIST_PAYMENTS,
@@ -279,13 +289,14 @@ pub(crate) async fn list_payments(
 
 /// Update live module-owned spending limits without replacing the ledger.
 pub(crate) async fn update_budget(
+    ctx: &DispatchCtx,
     config: &Config,
     per_request_max_atomic: Option<u64>,
     daily_max_atomic: Option<u64>,
     monthly_max_atomic: Option<u64>,
 ) -> Result<tinywallet_bus::wire::X402SpendingSummary, WalletCallError> {
     let mut active = service().lock().await;
-    ensure_service(config, &mut active).await?;
+    ensure_service(ctx, config, &mut active).await?;
     let current = active
         .as_mut()
         .ok_or_else(|| WalletCallError::Failed("x402 service is unavailable".into()))?;

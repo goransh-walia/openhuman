@@ -92,8 +92,8 @@ pub mod connections {
     ///
     /// Sorted by qualified name, so a prompt built from this does not reshuffle
     /// between turns and cost its cached prefix.
-    pub async fn connected_overview() -> Vec<ConnectedServerOverview> {
-        let Some(config) = host::ambient_config() else {
+    pub async fn connected_overview(ctx: &crate::core::runtime::DispatchCtx) -> Vec<ConnectedServerOverview> {
+        let Some(config) = host::ambient_config(ctx) else {
             return Vec::new();
         };
         connected_overview_for_config(&config).await
@@ -175,8 +175,10 @@ pub mod connections {
     }
 
     /// Every tool on every connected server, paired with its server.
-    pub async fn all_connected_tools() -> Vec<(String, String, tinymcp_bus::McpTool)> {
-        connected_overview()
+    pub async fn all_connected_tools(
+        ctx: &crate::core::runtime::DispatchCtx,
+    ) -> Vec<(String, String, tinymcp_bus::McpTool)> {
+        connected_overview(ctx)
             .await
             .into_iter()
             .flat_map(|server| {
@@ -192,8 +194,11 @@ pub mod connections {
 
     /// The tools one connected server advertises, or `None` when it is not
     /// connected.
-    pub async fn tools_for(server_id: &str) -> Option<Vec<tinymcp_bus::McpTool>> {
-        let config = host::ambient_config()?;
+    pub async fn tools_for(
+        ctx: &crate::core::runtime::DispatchCtx,
+        server_id: &str,
+    ) -> Option<Vec<tinymcp_bus::McpTool>> {
+        let config = host::ambient_config(ctx)?;
         server_tools_for_config(&config, server_id).await
     }
 
@@ -219,8 +224,8 @@ pub mod connections {
     }
 
     /// Whether a server has a live entry.
-    pub async fn is_connected(server_id: &str) -> bool {
-        let Some(config) = host::ambient_config() else {
+    pub async fn is_connected(ctx: &crate::core::runtime::DispatchCtx, server_id: &str) -> bool {
+        let Some(config) = host::ambient_config(ctx) else {
             return false;
         };
         is_connected_for_config(&config, server_id).await
@@ -275,8 +280,8 @@ pub mod connections {
     ///
     /// Answers `false` when the service is not up, which is the truth: nothing
     /// was holding a connection to drop.
-    pub async fn disconnect(server_id: &str) -> bool {
-        let Some(config) = host::ambient_config() else {
+    pub async fn disconnect(ctx: &crate::core::runtime::DispatchCtx, server_id: &str) -> bool {
+        let Some(config) = host::ambient_config(ctx) else {
             return false;
         };
         disconnect_for_config(&config, server_id).await

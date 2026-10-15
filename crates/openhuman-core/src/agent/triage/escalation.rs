@@ -230,10 +230,11 @@ pub async fn apply_decision(
 /// `allowed_subagent_ids`: the escalated agent may itself nested-spawn only the
 /// dispatched target (the builder defaults this to empty for background roots).
 async fn build_triage_parent(
+    ctx: &DispatchCtx,
     config: &Config,
     agent_id: &str,
 ) -> anyhow::Result<ParentExecutionContext> {
-    let mut parent_ctx = build_root_parent(config, "triage", "triage", "triage")
+    let mut parent_ctx = build_root_parent(ctx, config, "triage", "triage", "triage")
         .await
         .context("building root parent for sub-agent dispatch")?;
     parent_ctx.allowed_subagent_ids = [agent_id.to_string()].into_iter().collect();
@@ -256,7 +257,7 @@ async fn dispatch_target_agent(
         .await
         .context("loading config for sub-agent dispatch")?;
 
-    let parent_ctx = build_triage_parent(&config, agent_id).await?;
+    let parent_ctx = build_triage_parent(ctx, &config, agent_id).await?;
 
     // `build_root_parent` (inside `build_triage_parent`) guarantees the registry
     // is initialised, so this lookup for the target definition is safe here.

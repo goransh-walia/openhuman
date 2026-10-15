@@ -116,6 +116,8 @@ pub(crate) struct OpenhumanEventBridge {
     /// start/completed ordering (which would leave a tool row stuck `running`
     /// when a `ToolCallCompleted` overtakes its `ToolCallStarted`) (#4466).
     pub(super) sender: OrderedSender<AgentProgress>,
+    /// The context the run acts under; usage records take their tenant from it.
+    pub(super) dispatch: crate::core::runtime::DispatchCtx,
 }
 
 impl OpenhumanEventBridge {
@@ -136,6 +138,7 @@ impl OpenhumanEventBridge {
             Arc::default(),
             Arc::default(),
             Vec::new(),
+            crate::core::runtime::DispatchCtx::unbound(),
         )
     }
 
@@ -157,6 +160,7 @@ impl OpenhumanEventBridge {
         failure_map: ToolFailureMap,
         usage_carry: ProviderUsageCarry,
         tool_sets: Vec<Arc<Vec<Box<dyn tinytools::Tool>>>>,
+        dispatch: crate::core::runtime::DispatchCtx,
     ) -> Arc<Self> {
         Arc::new(Self {
             sender: OrderedSender::new(on_progress),
@@ -175,6 +179,7 @@ impl OpenhumanEventBridge {
             unknown_calls: Mutex::new(std::collections::HashMap::new()),
             tool_sets,
             state: Mutex::new(BridgeState::default()),
+            dispatch,
         })
     }
 
@@ -416,8 +421,12 @@ impl OpenhumanEventBridge {
         crate::platform::cost::record_provider_usage_scoped(
             &self.model,
             &usage_info,
-            crate::platform::cost::UsageScope::ambient(Some(&self.provider_id), subagent)
-                .with_definition(self.definition.get().map(String::as_str)),
+            crate::platform::cost::UsageScope::in_ctx(
+                &self.dispatch,
+                Some(&self.provider_id),
+                subagent,
+            )
+            .with_definition(self.definition.get().map(String::as_str)),
         );
 
         // The cost footer is a top-level surface; for a child run the global

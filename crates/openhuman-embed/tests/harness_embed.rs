@@ -209,13 +209,12 @@ fn a_harness_runs_a_turn_against_the_provider_it_was_given() {
             assert_eq!(requests.len(), 102, "two serial + 100 concurrent turns");
 
             // The first session's transcript landed in the harness agent's
-            // own transcript root under the workspace (the old
-            // `session_db/` files are gone). A harness session id is its
-            // thread id.
-            let transcripts = tinyagents_session::transcript::AgentTranscriptFiles::new(
-                &workspace_dir,
-                "harness",
-            );
+            // own store under the workspace (the path-based transcript files
+            // are gone). A harness session id is its thread id.
+            let transcripts =
+                tinyagents_session::port::WorkspaceStores::open(&workspace_dir, "harness")
+                    .expect("the harness agent's workspace store")
+                    .transcripts();
             assert!(
                 transcripts.root_for_thread(&first.session_id).is_some(),
                 "the first session's transcript was not persisted"
@@ -225,10 +224,6 @@ fn a_harness_runs_a_turn_against_the_provider_it_was_given() {
             assert_eq!(harness.agent().id(), "harness");
             assert_eq!(harness.runtime().workspace_dir(), harness.workspace_dir());
             assert_eq!(harness.runtime().agent_ids(), vec!["harness".to_string()]);
-            assert!(
-                harness.agent().transcripts_dir().is_dir(),
-                "the harness agent's transcripts were written"
-            );
 
             // A second harness — a second runtime — in this process must be
             // refused rather than silently sharing process-global core state.

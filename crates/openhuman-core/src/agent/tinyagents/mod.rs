@@ -58,6 +58,7 @@ mod steering_forwarder;
 pub(crate) mod stop_hooks;
 pub mod todos;
 pub(crate) mod tool_registration;
+mod turn_model_resolver;
 mod turn_models;
 mod turn_outcome;
 mod turn_policy;

@@ -246,7 +246,8 @@ impl Tool for TinySearchTool {
         args: Value,
         options: ToolCallOptions,
     ) -> anyhow::Result<ToolResult> {
-        let config = self.live_config(&DispatchCtx::ambient()).await?;
+        let ctx = DispatchCtx::ambient();
+        let config = self.live_config(&ctx).await?;
         // Re-read per call, so a key added or a provider switched mid-session
         // clears an earlier refusal instead of outliving it.
         let signature = self.provider_signature(&config);
@@ -278,7 +279,7 @@ impl Tool for TinySearchTool {
         if let Some(message) = local_only_search_block(&request.name) {
             return Ok(ToolResult::error(message));
         }
-        match crate::modules::search::execute_tool(&config, request).await {
+        match crate::modules::search::execute_tool(&ctx, &config, request).await {
             Ok(response) => {
                 tracing::debug!(
                     tool = %self.spec.name,

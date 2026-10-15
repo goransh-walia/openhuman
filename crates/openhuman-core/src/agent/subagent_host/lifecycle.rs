@@ -206,8 +206,8 @@ fn host_observer_outcome(mut outcome: SubagentRunOutcome) -> SubagentRunOutcome 
     outcome
 }
 
-pub(super) fn host_in_flight() -> Arc<AsyncMutex<HashMap<HostLifecycleKey, Arc<HostInFlight>>>> {
-    crate::core::runtime::current_slot()
+pub(super) fn host_in_flight(ctx: &crate::core::runtime::DispatchCtx) -> Arc<HostInFlightMap> {
+    crate::core::runtime::slot_for(ctx)
 }
 
 fn absolute_checkpoint_dir(path: PathBuf) -> PathBuf {
@@ -295,7 +295,7 @@ impl OpenHumanSubagentHost {
             task_key: task_key.clone(),
         };
         let (entry, is_leader) = {
-            let mut entries = host_in_flight().lock_owned().await;
+            let mut entries = host_in_flight(&parent.data.dispatch_ctx()).lock_owned().await;
             match entries.get(&lifecycle_key) {
                 Some(entry) => (entry.clone(), false),
                 None => {
@@ -333,7 +333,7 @@ impl OpenHumanSubagentHost {
         ))
         .await;
         entry.complete(result.as_ref().ok().cloned()).await;
-        let mut entries = host_in_flight().lock_owned().await;
+        let mut entries = host_in_flight(&parent.data.dispatch_ctx()).lock_owned().await;
         if entries
             .get(&lifecycle_key)
             .is_some_and(|current| Arc::ptr_eq(current, &entry))
@@ -1135,7 +1135,7 @@ impl tinyagents_orchestration::subagent::SubagentPersistence for OpenHumanPersis
 
 #[path = "lifecycle_outcome.rs"]
 mod outcome;
-use outcome::host_outcome_to_neutral;
+use outcome::{host_outcome_to_neutral, HostInFlightMap};
 
 fn outcome_to_host(
     result: SubagentRunResult,

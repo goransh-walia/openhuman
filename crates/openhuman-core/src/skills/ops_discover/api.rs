@@ -100,7 +100,7 @@ pub fn load_workflow_metadata(workspace_dir: &Path) -> Vec<Workflow> {
         workspace_dir.to_path_buf(),
         home.clone(),
         trusted,
-        crate::core::runtime::current_tenant().ok(),
+        crate::core::runtime::DispatchCtx::ambient().tenant().ok(),
     );
     if let Ok(cache) = METADATA_CACHE.read() {
         if let Some(workflows) = cache.get(&key) {

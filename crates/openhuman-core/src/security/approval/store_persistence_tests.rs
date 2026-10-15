@@ -473,11 +473,18 @@ fn agent_id_round_trips_and_older_rows_read_as_the_process() {
     )
     .unwrap();
 
-    let alpha = list_pending_for_agent(&config, Some("alpha")).unwrap();
+    let alpha = list_pending_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        Some("alpha"),
+    )
+    .unwrap();
     assert_eq!(alpha.len(), 1);
     assert_eq!(alpha[0].request_id, "owned");
     assert_eq!(alpha[0].agent_id.as_deref(), Some("alpha"));
-    let process = list_pending_for_agent(&config, None).unwrap();
+    let process =
+        list_pending_for_agent(&crate::core::runtime::DispatchCtx::ambient(), &config, None)
+            .unwrap();
     assert_eq!(process.len(), 1);
     assert_eq!(process[0].request_id, "process");
 

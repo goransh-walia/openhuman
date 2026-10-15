@@ -107,7 +107,10 @@ impl ToolExecScope for TurnOriginScope {
             .and_then(|extension| extension.downcast_ref::<ToolExecutionContext>())
             .and_then(|context| context.state::<HostOperationContext>())
             .and_then(|context| context.origin.clone());
-        match (origin, CoreContext::current()) {
+        match (
+            origin,
+            super::host::run_context::dispatch_ctx_for_tool(context).into_core(),
+        ) {
             (Some(origin), Some(core_context)) => Box::pin(CoreContext::scope_with_turn_origin(
                 core_context,
                 Some(origin),

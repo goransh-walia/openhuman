@@ -55,10 +55,8 @@ pub(crate) struct RunningSubagentMetadata {
 }
 
 /// Resolve the caller's profile without falling back to the operator in SaaS.
-fn caller_profile() -> Result<Option<String>, WaitError> {
-    let profile = crate::core::runtime::tenant::current_tenant()
-        .map_err(|_| WaitError::NotOwned)?
-        .profile;
+fn caller_profile(ctx: &crate::core::runtime::DispatchCtx) -> Result<Option<String>, WaitError> {
+    let profile = ctx.tenant().map_err(|_| WaitError::NotOwned)?.profile;
     if crate::core::runtime::is_saas() && profile.is_none() {
         return Err(WaitError::NotOwned);
     }
@@ -76,15 +74,19 @@ pub(crate) enum RegistrationError {
 
 /// Check the actual caller before any reusable-session or worker-thread write.
 pub(crate) fn admit_spawn(
+    ctx: &crate::core::runtime::DispatchCtx,
     workspace: &std::path::Path,
 ) -> Result<Option<String>, RegistrationError> {
-    admit_workspace(workspace).map_err(|_| RegistrationError::Scope)?;
-    caller_profile().map_err(|_| RegistrationError::Scope)
+    admit_workspace(ctx, workspace).map_err(|_| RegistrationError::Scope)?;
+    caller_profile(ctx).map_err(|_| RegistrationError::Scope)
 }
 
 /// Host ownership adapter over TinyAgents' opaque owner string.
-pub(super) fn owner_key(parent_session: &str) -> Result<String, WaitError> {
-    let profile = caller_profile()?;
+pub(super) fn owner_key(
+    ctx: &crate::core::runtime::DispatchCtx,
+    parent_session: &str,
+) -> Result<String, WaitError> {
+    let profile = caller_profile(ctx)?;
     Ok(crate::core::runtime::tenant::tenant_key(
         &crate::core::runtime::tenant::Tenant {
             profile,
@@ -96,18 +98,24 @@ pub(super) fn owner_key(parent_session: &str) -> Result<String, WaitError> {
 
 /// Public user controls may reach any of their profile's parents; desktop
 /// controls retain the process user's existing authority over all workers.
-pub(super) fn control_admits(metadata: &RunningSubagentMetadata) -> bool {
+pub(super) fn control_admits(
+    ctx: &crate::core::runtime::DispatchCtx,
+    metadata: &RunningSubagentMetadata,
+) -> bool {
     !crate::core::runtime::is_saas()
-        || caller_profile().is_ok_and(|profile| profile == metadata.profile)
+        || caller_profile(ctx).is_ok_and(|profile| profile == metadata.profile)
 }
 
 /// Durable fallback paths must stay in the caller's captured workspace.
-pub(super) fn admit_workspace(workspace: &std::path::Path) -> Result<(), WaitError> {
+pub(super) fn admit_workspace(
+    ctx: &crate::core::runtime::DispatchCtx,
+    workspace: &std::path::Path,
+) -> Result<(), WaitError> {
     if !crate::core::runtime::is_saas() {
         return Ok(());
     }
-    caller_profile()?;
-    let context = crate::core::runtime::CoreContext::scoped().ok_or(WaitError::NotOwned)?;
+    caller_profile(ctx)?;
+    let context = ctx.resolved().ok_or(WaitError::NotOwned)?;
     if context.workspace_dir().map_err(|_| WaitError::NotOwned)? != workspace {
         return Err(WaitError::NotOwned);
     }
@@ -162,6 +170,7 @@ pub(crate) fn status_channel() -> (
 /// entries so it stays bounded even if a parent never calls `wait_subagent`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn register(
+    ctx: &crate::core::runtime::DispatchCtx,
     task_id: String,
     agent_id: String,
     parent_session: String,
@@ -173,7 +182,7 @@ pub(crate) fn register(
     abort: AbortHandle,
     status: watch::Receiver<DetachedSubagentStatus>,
 ) -> Result<(), RegistrationError> {
-    let profile = match admit_spawn(&workspace_dir) {
+    let profile = match admit_spawn(ctx, &workspace_dir) {
         Ok(profile) => profile,
         Err(error) => {
             abort.abort();
@@ -190,6 +199,7 @@ pub(crate) fn register(
     );
     if let Some(thread_id) = parent_thread_id.as_deref() {
         if crate::agent::orchestration::background_completions::mark_stopped_task_if_thread_stopped(
+            ctx,
             &workspace_dir,
             thread_id,
             &task_id,
@@ -206,7 +216,7 @@ pub(crate) fn register(
         }
         // First spawn in a workspace this process has not scanned: redeliver any
         // completions a previous process finished there but never delivered.
-        crate::agent::orchestration::background_delivery::recover_on_boot(&workspace_dir);
+        crate::agent::orchestration::background_delivery::recover_on_boot(ctx, &workspace_dir);
     }
 
     let metadata = RunningSubagentMetadata {

@@ -75,6 +75,22 @@ pub(crate) fn dispatch_ctx_for_tool(
     crate::core::runtime::DispatchCtx::from_weak(weak.as_ref())
 }
 
+/// The origin of the turn a tool executes in, from the explicit tool carrier.
+/// Direct tool dispatch (CLI, JSON-RPC, tests) has no run, so it answers with
+/// the origin the calling task's turn scope carries, if any.
+pub(crate) fn turn_origin_for_tool(
+    context: Option<&dyn tinytools::ToolRunContext>,
+) -> Option<AgentTurnOrigin> {
+    context
+        .and_then(tinytools::ToolRunContext::host_extension)
+        .and_then(|extension| {
+            extension.downcast_ref::<tinyagents_harness::tool::ToolExecutionContext>()
+        })
+        .and_then(|context| context.state::<HostOperationContext>())
+        .and_then(|host| host.origin.clone())
+        .or_else(|| crate::core::runtime::DispatchCtx::ambient_turn().turn_origin())
+}
+
 /// Reads the spawning agent's definition id from the explicit tool carrier.
 /// Direct tool dispatch has no parent.
 pub(crate) fn parent_agent_id_for_tool(

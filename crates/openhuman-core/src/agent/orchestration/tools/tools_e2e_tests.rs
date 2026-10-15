@@ -465,16 +465,23 @@ async fn spawn_worker_thread_tool_persists_worker_thread_e2e() {
     assert!(result.output().contains("\"status\":\"completed\""));
     assert!(provider.saw(WORKER_THREAD_CANARY));
 
-    let threads =
-        conversations::list_threads(workspace.path().to_path_buf()).expect("worker threads");
+    let threads = conversations::list_threads(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        workspace.path().to_path_buf(),
+    )
+    .expect("worker threads");
     let worker = threads
         .iter()
         .find(|thread| thread.labels.contains(&"tasks".to_string()))
         .expect("worker thread was persisted");
     assert_eq!(worker.title, "Long delegated task");
 
-    let messages = conversations::get_messages(workspace.path().to_path_buf(), &worker.id)
-        .expect("worker messages");
+    let messages = conversations::get_messages(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        workspace.path().to_path_buf(),
+        &worker.id,
+    )
+    .expect("worker messages");
     assert_eq!(messages.len(), 2);
     assert_eq!(messages[0].sender, "user");
     assert!(messages[0].content.contains(WORKER_THREAD_CANARY));

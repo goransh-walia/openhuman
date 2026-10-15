@@ -53,7 +53,7 @@ pub(crate) fn cache_generation(key: &str) -> Arc<AtomicU64> {
 
 /// Resolve the catalog's profile/operator identity, refusing missing SaaS scope.
 fn current_cache_scope_prefix(operation: &'static str) -> Option<String> {
-    let tenant = match crate::core::runtime::current_tenant() {
+    let tenant = match crate::core::runtime::DispatchCtx::ambient().tenant() {
         Ok(tenant) => tenant,
         Err(error) => {
             // NoTenant is a fixed, content-free error; do not attach identities.

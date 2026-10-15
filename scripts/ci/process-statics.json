@@ -108,5 +108,25 @@
     "category": "A",
     "reason": "Test-only (cfg(test)): serializes each TinyConnectors call with the route it sets, because libtest runs a crate's tests in one process and the module's route is process-global; it guards no data and carries no tenant state.",
     "verification": "flows/tinyflows/caps/tools/composio_tests.rs: backend_dispatch_forwards_the_workflow_connection_id"
+  },
+  {
+    "file": "crates/openhuman-core/src/agent/session_store/mod.rs",
+    "scope": "",
+    "name": "OPEN_WORKSPACE_STORES",
+    "type": "LazyLock<Mutex<HashMap<(std::path::PathBuf,String),tinyagents_session::port::WorkspaceStores>>, >",
+    "count": 1,
+    "category": "D",
+    "reason": "Holds open the workspace transcript stores used when no host session store is installed. Each entry is a handle to the SQLite store under one workspace, keyed by that workspace and the session store key (agent_key_for: <profile>~<agent> for a SaaS profile), so two profiles or agents never share an entry; the store under the workspace is the authoritative data. release_workspace_defaults drops them all for a data reset, release_workspace those of one workspace.",
+    "verification": "threads/ops/edit_tests.rs: a_profile_prefixed_key_round_trips_through_edit_and_regenerate; agent/session_store/mod_tests.rs: without_a_store_transcripts_come_from_the_workspace_store_not_files"
+  },
+  {
+    "file": "crates/openhuman-core/src/agent/session_store/rebound.rs",
+    "scope": "",
+    "name": "PROCESS",
+    "type": "LazyLock<StoreRegistry>",
+    "count": 1,
+    "category": "A",
+    "reason": "The process's registry of weak handles to the rebindable session-store providers a host installed, so a workspace switch (storage::rebind) can point each at the new backend. It holds no records and no tenant state, only Weak references; the stores' data lives in the storage backend. A test builds its own StoreRegistry, so rebinding one never moves another's stores.",
+    "verification": "agent/session_store/rebound_tests.rs: a_registry_rebind_leaves_other_registries_alone"
   }
 ]

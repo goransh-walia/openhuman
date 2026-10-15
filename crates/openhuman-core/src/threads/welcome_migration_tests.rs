@@ -28,6 +28,7 @@ fn migration_updates_thread_labels_and_transcripts() {
     let workspace = tmp.path();
 
     ensure_thread(
+        &crate::core::runtime::DispatchCtx::ambient(),
         workspace.to_path_buf(),
         make_thread(
             "welcome-thread",
@@ -49,7 +50,11 @@ fn migration_updates_thread_labels_and_transcripts() {
     assert_eq!(result.transcript_files_renamed, 1);
     assert_eq!(result.markdown_files_renamed, 1);
 
-    let threads = list_threads(workspace.to_path_buf()).unwrap();
+    let threads = list_threads(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        workspace.to_path_buf(),
+    )
+    .unwrap();
     let thread = threads
         .iter()
         .find(|thread| thread.id == "welcome-thread")

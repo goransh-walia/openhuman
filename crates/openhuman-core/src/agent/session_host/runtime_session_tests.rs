@@ -114,9 +114,12 @@ fn clearing_progress_releases_warm_prelude_sender() {
         config_path: tmp.path().join("config.toml"),
         ..Default::default()
     };
-    let mut host =
-        crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator")
-            .expect("orchestrator");
+    let mut host = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "orchestrator",
+    )
+    .expect("orchestrator");
     host.ensure_runtime_session().expect("warm runtime");
 
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
@@ -202,9 +205,12 @@ fn connected_mcp_actions_enter_search_and_leave_on_disconnect() {
         config_path: tmp.path().join("config.toml"),
         ..Default::default()
     };
-    let mut host =
-        crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator")
-            .expect("orchestrator");
+    let mut host = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "orchestrator",
+    )
+    .expect("orchestrator");
     host.ensure_runtime_session().expect("runtime session");
     let prelude = host
         .runtime_state
@@ -268,9 +274,12 @@ async fn resumed_mcp_snapshot_survives_a_cold_catalog_and_keeps_its_frozen_spec(
         config_path: tmp.path().join("config.toml"),
         ..Default::default()
     };
-    let mut host =
-        crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator")
-            .expect("orchestrator");
+    let mut host = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "orchestrator",
+    )
+    .expect("orchestrator");
     host.ensure_runtime_session().expect("runtime session");
     let prelude = host
         .runtime_state
@@ -368,9 +377,12 @@ async fn desktop_browser_setting_keeps_deferred_tools_in_fresh_and_resumed_surfa
     };
     config.browser.enabled = true;
     config.http_request.allowed_domains = vec!["example.com".into()];
-    let mut host =
-        crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator")
-            .expect("desktop orchestrator");
+    let mut host = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "orchestrator",
+    )
+    .expect("desktop orchestrator");
     for name in ["browser", "browser_open"] {
         assert!(host.deferred_tool_names_for_test().contains(name), "{name}");
         assert!(!host
@@ -408,9 +420,12 @@ async fn desktop_browser_setting_keeps_deferred_tools_in_fresh_and_resumed_surfa
     }
 
     config.browser.enabled = false;
-    let disabled =
-        crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "orchestrator")
-            .expect("browser-disabled orchestrator");
+    let disabled = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "orchestrator",
+    )
+    .expect("browser-disabled orchestrator");
     for name in ["browser", "browser_open"] {
         assert!(
             !disabled.deferred_tool_names_for_test().contains(name),

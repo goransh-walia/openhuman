@@ -29,6 +29,7 @@
 mod channel_event;
 mod egress_surface;
 mod event_bus;
+mod event_bus_channel;
 mod journal_shadow;
 mod ops;
 // Response delivery/segmentation for the web surface (folded in from the former
@@ -63,9 +64,9 @@ pub use channel_event::{
 pub use egress_surface::register_egress_surface_subscriber;
 pub use event_bus::{
     approval_request_event, plan_review_request_event, publish_web_channel_event,
-    register_agent_surface_subscriber, register_approval_surface_subscriber,
-    register_artifact_surface_subscriber, register_memory_activity_surface_subscriber,
-    subscribe_web_channel_events,
+    publish_web_channel_event_in, register_agent_surface_subscriber,
+    register_approval_surface_subscriber, register_artifact_surface_subscriber,
+    register_memory_activity_surface_subscriber, subscribe_web_channel_events,
 };
 pub use progress_bridge::unix_epoch_ms;
 

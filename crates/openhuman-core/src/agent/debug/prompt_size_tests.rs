@@ -87,8 +87,12 @@ fn session_report_measures_the_visible_belt_not_the_registry() {
         ..crate::config::Config::default()
     };
     std::fs::create_dir_all(&config.workspace_dir).unwrap();
-    let agent = crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "critic")
-        .expect("critic session build");
+    let agent = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "critic",
+    )
+    .expect("critic session build");
 
     let dumped = crate::agent::debug::session_dump(&agent, "critic", String::new());
     let report = PromptSizeReport::from_dump(&dumped);

@@ -5,24 +5,64 @@ use std::{collections::HashMap, ffi::OsString, path::Path, time::Duration};
 #[cfg(feature = "modules")]
 use std::collections::BTreeMap;
 
-use super::types::{SandboxExecResult, SandboxPolicy, SandboxStatus};
+use super::types::{SandboxExecResult, SandboxIsolation, SandboxPolicy, SandboxStatus};
 use crate::config::Config;
 
 #[cfg(feature = "modules")]
 use crate::modules::tinybox::{self, contract};
 
-/// Report whether the selected module-owned jail can meet the host's security floor.
+/// TinyBox's macOS backend: `sandbox-exec` with a write-deny profile.
+#[cfg(any(feature = "modules", test))]
+const SEATBELT: &str = "seatbelt";
+
+/// The confinement a native jail gives a command, or `None` when the host must
+/// refuse to run it.
+///
+/// Untrusted code (an explicitly requested Landlock jail, a SaaS tenant) needs
+/// kernel process isolation. The local desktop sandbox only has to keep the
+/// agent inside the selected folder, which Seatbelt does by denying writes
+/// everywhere else, so it is accepted there as folder confinement.
+#[cfg(any(feature = "modules", test))]
+pub(crate) fn jail_isolation(
+    backend: &str,
+    available: bool,
+    suitable_for_untrusted_code: bool,
+    untrusted: bool,
+) -> Option<SandboxIsolation> {
+    if !available {
+        None
+    } else if suitable_for_untrusted_code {
+        Some(SandboxIsolation::Isolated)
+    } else if !untrusted && backend == SEATBELT {
+        Some(SandboxIsolation::FolderConfined)
+    } else {
+        None
+    }
+}
+
+/// Report what the selected module-owned jail provides for this host.
 #[cfg(feature = "modules")]
-pub(crate) async fn status(config: &Config) -> Result<(String, SandboxStatus), String> {
+pub(crate) async fn status(
+    config: &Config,
+) -> Result<(String, SandboxStatus, Option<SandboxIsolation>), String> {
     let status = tinybox::jail_status(config).await?;
+    let isolation = jail_isolation(
+        &status.backend,
+        status.available,
+        status.suitable_for_untrusted_code,
+        crate::core::runtime::is_saas(),
+    );
     Ok((
         status.backend,
-        super::ops::local_status_for_jail(status.available, status.suitable_for_untrusted_code),
+        super::ops::local_status_for_jail(isolation),
+        isolation,
     ))
 }
 
 #[cfg(not(feature = "modules"))]
-pub(crate) async fn status(_config: &Config) -> Result<(String, SandboxStatus), String> {
+pub(crate) async fn status(
+    _config: &Config,
+) -> Result<(String, SandboxStatus, Option<SandboxIsolation>), String> {
     Err("TinyBox module support is disabled; native jail status is unavailable".to_owned())
 }
 
@@ -32,7 +72,13 @@ pub(crate) async fn require_backend(config: &Config, expected: &str) -> anyhow::
     let status = tinybox::jail_status(config)
         .await
         .map_err(|_| anyhow::anyhow!("TinyBox native jail status is unavailable"))?;
-    if !status.available || !status.suitable_for_untrusted_code || status.backend != expected {
+    let isolation = jail_isolation(
+        &status.backend,
+        status.available,
+        status.suitable_for_untrusted_code,
+        true,
+    );
+    if isolation != Some(SandboxIsolation::Isolated) || status.backend != expected {
         anyhow::bail!("requested native jail backend is unavailable");
     }
     Ok(())
@@ -112,21 +158,36 @@ async fn execute_owned(
     let status = tinybox::jail_status(config)
         .await
         .map_err(|_| anyhow::anyhow!("TinyBox native jail status is unavailable"))?;
-    super::ops::require_untrusted_isolation(status.available, status.suitable_for_untrusted_code)?;
+    let untrusted = explicitly_requested || crate::core::runtime::is_saas();
+    let Some(isolation) = jail_isolation(
+        &status.backend,
+        status.available,
+        status.suitable_for_untrusted_code,
+        untrusted,
+    ) else {
+        anyhow::bail!("TinyBox native jail cannot meet the required isolation floor");
+    };
     if explicitly_requested && status.backend != "landlock" {
         anyhow::bail!("requested Landlock sandbox is unavailable");
     }
+    tracing::debug!(
+        backend = %status.backend,
+        ?isolation,
+        "[sandbox:local] running in the native jail"
+    );
 
     let mut run =
         super::shell_exec::NativeShellRun::new(command, working_dir, &policy.state_dir, timeout);
     run.workspace = policy.workspace_root.clone();
     run.env = approved_environment(extra_env)?;
-    run.isolate_network = true;
+    // The jail's `allow_net` is what confines the command; keep the resource's
+    // declared policy in step with it.
+    run.isolate_network = !policy.allow_network;
     run.preserve_pipeline_status = preserve_pipeline_status;
     run.meter = meter;
     // TinyBox adds its own per-call scratch directory to the writable grants and
     // points TMPDIR, TMP and TEMP at it unless the caller overrides them.
-    run.jail = Some(jail_request(policy)?);
+    run.jail = Some(jail_request(policy, isolation)?);
     super::shell_exec::run(config, run).await
 }
 
@@ -150,7 +211,11 @@ fn approved_environment(
 }
 
 #[cfg(feature = "modules")]
-fn jail_request(policy: &SandboxPolicy) -> anyhow::Result<contract::NativeJailConfig> {
+fn jail_request(
+    policy: &SandboxPolicy,
+    isolation: SandboxIsolation,
+) -> anyhow::Result<contract::NativeJailConfig> {
+    let isolated = isolation == SandboxIsolation::Isolated;
     Ok(contract::NativeJailConfig {
         read_only: policy
             .read_only_mounts
@@ -164,8 +229,14 @@ fn jail_request(policy: &SandboxPolicy) -> anyhow::Result<contract::NativeJailCo
             .collect::<anyhow::Result<Vec<_>>>()?,
         allow_net: policy.allow_network,
         allow_subprocess: true,
-        enforcement: contract::JailEnforcement::Enforced,
-        require_process_isolation: true,
+        // Seatbelt enforces its profile best-effort; TinyBox still refuses a
+        // constraint it cannot apply at all.
+        enforcement: if isolated {
+            contract::JailEnforcement::Enforced
+        } else {
+            contract::JailEnforcement::Declared
+        },
+        require_process_isolation: isolated,
     })
 }
 

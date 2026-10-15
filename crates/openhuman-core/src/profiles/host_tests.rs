@@ -317,7 +317,7 @@ async fn an_open_profile_is_gated_by_its_own_policy_not_the_operators() {
     assert!(own.enabled, "the forced autonomy policy is on");
     assert!(own.workspace_only);
     let effective = CoreContext::scope(Arc::clone(state.context()), async {
-        crate::security::live_policy::effective()
+        crate::security::live_policy::effective_in(&crate::core::runtime::DispatchCtx::ambient())
     })
     .await
     .expect("a policy is in effect");

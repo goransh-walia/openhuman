@@ -52,7 +52,7 @@ mod tests;
 /// anonymous pre-login conversation store is purged so a fresh account never
 /// inherits demo or scratch threads from the pre-login bucket (#1157).
 /// Returns human-readable log lines for the RPC outcome.
-pub(super) fn activate_user_scope(user_id: &str) -> Result<Vec<String>, String> {
+pub(super) fn activate_user_scope(ctx: &DispatchCtx, user_id: &str) -> Result<Vec<String>, String> {
     let mut logs = Vec::new();
     if !operator_user_activation_allowed() {
         log::debug!("{LOG_PREFIX} embedder host; skipping global user activation for {user_id}");
@@ -74,7 +74,7 @@ pub(super) fn activate_user_scope(user_id: &str) -> Result<Vec<String>, String> 
         // concurrent thread RPC in this process cannot interleave.
         let pre_ws = pre_login_user_dir(&root_dir).join("workspace");
         let pre_ws_log = pre_ws.display().to_string();
-        match conversations::purge_threads(pre_ws) {
+        match conversations::purge_threads(ctx, pre_ws) {
             Ok(stats) => {
                 tracing::info!(
                     pre_login_workspace = %pre_ws_log,

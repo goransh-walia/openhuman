@@ -5,6 +5,7 @@
 //! no-op and the UI can refresh the thread to show it. Partial transcripts and
 //! tool traffic are not stored.
 
+use crate::core::runtime::DispatchCtx;
 use std::path::PathBuf;
 
 use serde_json::json;
@@ -75,6 +76,7 @@ impl TranscriptPersister {
         };
         let id = message.id.clone();
         match crate::threads::store::blocking::append_message(
+            DispatchCtx::ambient(),
             self.workspace_dir.clone(),
             self.thread_id.clone(),
             message,

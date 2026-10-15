@@ -99,6 +99,7 @@ pub(crate) struct TinyagentsTurnOutcome {
 /// count. Recording is best-effort — a missing/uninitialised tracker is a
 /// silent no-op by contract.
 pub(crate) fn record_unobserved_turn_usage(
+    ctx: &crate::core::runtime::DispatchCtx,
     model: &str,
     input_tokens: u64,
     output_tokens: u64,
@@ -123,7 +124,7 @@ pub(crate) fn record_unobserved_turn_usage(
         Some(usd) => usage.with_estimated_usd(usd),
         None => usage,
     };
-    crate::platform::cost::record_provider_usage(model, &usage);
+    crate::platform::cost::record_provider_usage(ctx, model, &usage);
     true
 }
 

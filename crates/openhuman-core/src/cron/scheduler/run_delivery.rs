@@ -36,8 +36,9 @@ impl RunDelivery for HostDelivery {
         self.binding
             .within(async {
                 let config = self.binding.config();
+                let ctx = self.binding.dispatch_ctx();
                 let result =
-                    deliver_run(&config, job, run_id, &attempt.output, attempt.success).await;
+                    deliver_run(&ctx, &config, job, run_id, &attempt.output, attempt.success).await;
                 // A failed required delivery fails the run, as the runtime
                 // records it.
                 let delivered = match &result {
@@ -48,7 +49,7 @@ impl RunDelivery for HostDelivery {
                 // The job ran as its agent (when it had one); a one-shot job
                 // is deleted once the run completes, so subscribers learn the
                 // owner here, not from the store.
-                crate::cron::completion_owner::note(&job.id);
+                crate::cron::completion_owner::note(&ctx, &job.id);
                 BUS.publish(DomainEvent::CronJobCompleted {
                     job_id: job.id.clone(),
                     success,
@@ -105,7 +106,7 @@ impl TriggerSink for HostTriggers {
                 // `[components] flows = false`: schedule-triggered flows stop
                 // while agent, shell and system jobs keep running. The tick is
                 // answered, not retried, so the row's recurrence moves on.
-                if !flows_component_enabled() {
+                if !self.binding.dispatch_ctx().components().flows {
                     tracing::debug!(
                         target: "flows",
                         %flow_id,
@@ -143,12 +144,6 @@ impl TriggerSink for HostTriggers {
             })
             .await
     }
-}
-
-/// Whether `[components] flows` is on in the ambient context. No context
-/// means nothing narrowed it.
-fn flows_component_enabled() -> bool {
-    crate::core::runtime::CoreContext::current().is_none_or(|ctx| ctx.components().flows)
 }
 
 /// A host-owned system job (`system:<name>`): announced on the bus, then its

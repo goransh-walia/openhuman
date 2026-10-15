@@ -45,6 +45,7 @@ async fn rejects_if_already_worker_thread() {
     let temp = TempDir::new().unwrap();
     let thread_id = "worker-123";
     conversations::ensure_thread(
+        &crate::core::runtime::DispatchCtx::ambient(),
         temp.path().to_path_buf(),
         CreateConversationThread {
             id: thread_id.to_string(),
@@ -71,6 +72,7 @@ async fn rejects_if_has_parent_thread_id() {
     let temp = TempDir::new().unwrap();
     let thread_id = "sub-123";
     conversations::ensure_thread(
+        &crate::core::runtime::DispatchCtx::ambient(),
         temp.path().to_path_buf(),
         CreateConversationThread {
             id: thread_id.to_string(),

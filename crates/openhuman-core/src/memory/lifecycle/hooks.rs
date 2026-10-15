@@ -151,6 +151,18 @@ pub struct MemoryTurn {
     pub thread_id: String,
     /// The pack the turn was given, if any.
     pub pack: Option<TurnPack>,
+    /// The context the turn runs under, held weakly so a finished tenant's
+    /// lease is not kept alive by a lingering turn handle.
+    pub core: Option<std::sync::Weak<crate::core::runtime::CoreContext>>,
+}
+
+impl MemoryTurn {
+    /// The dispatch context the turn's memory work runs under: its own, else
+    /// the calling task's.
+    #[must_use]
+    pub fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
+        crate::core::runtime::DispatchCtx::from_weak(self.core.as_ref())
+    }
 }
 
 /// What the agent loop knows before the model runs.
@@ -188,6 +200,7 @@ pub struct PreTurnInput {
 /// The work is spawned, so a timed-out log still completes in the
 /// background; only its pack is dropped.
 pub async fn pre_turn(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     identity: &ResolvedIdentity,
     input: PreTurnInput,
@@ -213,7 +226,7 @@ pub async fn pre_turn(
         }
     };
     if let Some(pack) = &pack {
-        crate::memory::tools::record_pack_citations(&thread, pack.citations.clone());
+        crate::memory::tools::record_pack_citations(ctx, &thread, pack.citations.clone());
     }
     tracing::debug!(thread_id = %thread, %agent_id, injected = pack.is_some(), tokens = pack.as_ref().map_or(0, |pack| pack.tokens), refs = pack.as_ref().map_or(0, |pack| pack.refs.len()), elapsed_ms = started.elapsed().as_millis() as u64, "[memory:hooks] pre_turn");
     pack

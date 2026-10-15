@@ -548,22 +548,10 @@ impl Tool for BrowserTool {
         false
     }
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        if !self.security.can_act() {
-            return Ok(ToolResult::error(
-                "[policy-blocked] Action blocked: autonomy is read-only",
-            ));
-        }
-        // A task counts once here; its own steps are bounded by max_actions.
-        if !self.security.record_action() {
-            return Ok(ToolResult::error("Action blocked: rate limit exceeded"));
-        }
-        // The typed origin bound to this turn's immutable CoreContext by its
-        // entry point (cron, background job, workflow, chat).
-        let origin = crate::core::runtime::CoreContext::current_turn_origin();
-        match self.run(&args, origin.as_ref()).await {
-            Ok(v) => Ok(ToolResult::success(serde_json::to_string_pretty(&v)?)),
-            Err(e) => Ok(ToolResult::error(e.to_string())),
-        }
+        // Direct dispatch has no run: the turn's origin is whatever the calling
+        // task's scope carries.
+        let origin = crate::core::runtime::DispatchCtx::ambient_turn().turn_origin();
+        self.execute_with_origin(args, origin).await
     }
 
     async fn execute_with_context(
@@ -579,7 +567,32 @@ impl Tool for BrowserTool {
                 *held = Some(key);
             }
         }
-        self.execute(args).await
+        let origin = crate::agent::tinyagents::host::run_context::turn_origin_for_tool(context);
+        self.execute_with_origin(args, origin).await
+    }
+}
+
+impl BrowserTool {
+    /// Runs the tool for a turn running under `origin` (cron, background job,
+    /// workflow, chat), the typed authority its entry point supplied.
+    async fn execute_with_origin(
+        &self,
+        args: Value,
+        origin: Option<crate::agent::turn_origin::AgentTurnOrigin>,
+    ) -> anyhow::Result<ToolResult> {
+        if !self.security.can_act() {
+            return Ok(ToolResult::error(
+                "[policy-blocked] Action blocked: autonomy is read-only",
+            ));
+        }
+        // A task counts once here; its own steps are bounded by max_actions.
+        if !self.security.record_action() {
+            return Ok(ToolResult::error("Action blocked: rate limit exceeded"));
+        }
+        match self.run(&args, origin.as_ref()).await {
+            Ok(v) => Ok(ToolResult::success(serde_json::to_string_pretty(&v)?)),
+            Err(e) => Ok(ToolResult::error(e.to_string())),
+        }
     }
 }
 

@@ -27,7 +27,13 @@ async fn x402_pay_twit_sh_for_hal_finney_tweet() {
         ..SecurityPolicy::default()
     });
     let tool =
-        openhuman_core::tools::http_request_tool(security, vec!["x402.twit.sh".into()], 0, 0);
+        openhuman_core::tools::http_request_tool(
+        &openhuman_core::core::runtime::DispatchCtx::process_default(),
+        security,
+        vec!["x402.twit.sh".into()],
+        0,
+        0,
+    );
     let result = tool
         .execute(json!({
             "url": "https://x402.twit.sh/tweets/by/id?id=1110302988",

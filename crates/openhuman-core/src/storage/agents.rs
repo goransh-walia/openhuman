@@ -178,7 +178,8 @@ pub fn context_for(agent: &str) -> Option<Arc<CoreContext>> {
 /// A SaaS profile (or a SaaS task with no scope) never switches to the
 /// process default context, which is the operator's.
 async fn in_local<F: Future>(fut: F) -> F::Output {
-    let acting = crate::core::runtime::current_tenant()
+    let acting = crate::core::runtime::DispatchCtx::ambient()
+        .tenant()
         .is_ok_and(|tenant| tenant.profile.is_none() && tenant.agent.is_some());
     match CoreContext::default_context() {
         Some(default) if acting => CoreContext::scope(default, fut).await,

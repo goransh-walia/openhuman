@@ -37,3 +37,44 @@ async fn ambient_reads_the_scoped_context_and_explicit_ignores_it() {
     })
     .await;
 }
+
+fn web_origin(thread: &str) -> crate::agent::turn_origin::AgentTurnOrigin {
+    crate::agent::turn_origin::AgentTurnOrigin::WebChat {
+        thread_id: thread.into(),
+        client_id: "client".into(),
+        request_id: format!("req-{thread}").into(),
+    }
+}
+
+#[tokio::test]
+async fn explicit_turn_origin_wins_over_the_scoped_one_and_does_not_cross() {
+    let base = CoreContext::for_test(DomainSet::full(), None);
+    let a = Arc::new(base.derive_channel_turn(None, Some(web_origin("a"))));
+    let b = Arc::new(base.derive_channel_turn(None, Some(web_origin("b"))));
+    let thread_of = |ctx: &DispatchCtx| match ctx.turn_origin() {
+        Some(crate::agent::turn_origin::AgentTurnOrigin::WebChat { thread_id, .. }) => thread_id,
+        other => panic!("expected a web origin, got {other:?}"),
+    };
+    // Scoped to `a`, a context bound to `b` still answers `b`, across awaits
+    // and from a spawned task that carries no scope at all.
+    CoreContext::scope(Arc::clone(&a), async {
+        let explicit = DispatchCtx::new(Arc::clone(&b));
+        tokio::task::yield_now().await;
+        assert_eq!(thread_of(&explicit), "b");
+        assert_eq!(explicit.turn_origin_or_scoped().map(|_| ()), Some(()));
+        let moved = explicit.clone();
+        let from_task = tokio::spawn(async move { thread_of(&moved) }).await.unwrap();
+        assert_eq!(from_task, "b");
+        assert_eq!(thread_of(&DispatchCtx::new(Arc::clone(&a))), "a");
+    })
+    .await;
+}
+
+#[test]
+fn unbound_context_carries_no_turn_origin_or_agent_state() {
+    let ctx = DispatchCtx::unbound();
+    assert!(ctx.turn_origin().is_none());
+    assert!(ctx.host_overrides().is_none());
+    assert!(ctx.agent_policy().is_none());
+    assert!(!ctx.approvals_disabled());
+}

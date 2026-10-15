@@ -111,6 +111,7 @@ async fn model_completed_projects_generation_with_content_and_provider() {
         Arc::default(),
         Arc::default(),
         Vec::new(),
+        crate::core::runtime::DispatchCtx::ambient(),
     );
     let sink = EventSink::new();
     sink.subscribe(bridge.clone());
@@ -186,6 +187,7 @@ async fn subagent_model_completed_carries_task_attribution() {
         Arc::default(),
         Arc::default(),
         Vec::new(),
+        crate::core::runtime::DispatchCtx::ambient(),
     );
     let sink = EventSink::new();
     sink.subscribe(bridge.clone());
@@ -398,6 +400,7 @@ async fn unknown_tool_call_in_a_child_run_projects_one_subagent_row() {
         Arc::default(),
         Arc::default(),
         Vec::new(),
+        crate::core::runtime::DispatchCtx::ambient(),
     );
     let sink = EventSink::new();
     sink.subscribe(bridge.clone());
@@ -506,6 +509,7 @@ async fn tool_call_events_use_the_tool_s_own_display_label_and_detail() {
         Arc::default(),
         Arc::default(),
         fake_tool_sets(),
+        crate::core::runtime::DispatchCtx::ambient(),
     );
     let sink = EventSink::new();
     sink.subscribe(bridge.clone());

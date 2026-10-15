@@ -19,13 +19,11 @@ pub fn set_default_config(config: &Config) {
     let _ = DEFAULT_CONFIG.set(config.clone());
 }
 
-/// The config named by the current scoped dispatch, or the process default
+/// The config named by the dispatch context `ctx`, or the process default
 /// outside a tenant scope.
-pub fn ambient_config() -> Option<Config> {
-    match crate::core::runtime::current_tenant() {
-        Ok(tenant) if tenant.is_scoped() => {
-            crate::core::runtime::CoreContext::with_current_embedder_config(Clone::clone)
-        }
+pub fn ambient_config(ctx: &crate::core::runtime::DispatchCtx) -> Option<Config> {
+    match ctx.tenant() {
+        Ok(tenant) if tenant.is_scoped() => ctx.embedder_config(),
         _ => DEFAULT_CONFIG.get().cloned(),
     }
 }

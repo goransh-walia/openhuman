@@ -74,6 +74,7 @@ async fn the_preview_reads_without_logging_and_agents_are_listed() {
         .unwrap();
     let writer = scope::MemoryIdentity::agent("writer").resolve(&config);
     hooks::pre_turn(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &writer,
         PreTurnInput {

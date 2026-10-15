@@ -65,6 +65,19 @@ impl DispatchCtx {
         Self { core }
     }
 
+    /// The context for work that arrives with none of its own: a bus event, a
+    /// module host callback, a shutdown hook. Outside SaaS that is the process
+    /// default, the one context a single-user host has. In SaaS it is the
+    /// task's own tenant scope only, so work that lost its tenant fails closed
+    /// instead of acting as the operator.
+    pub fn host_default() -> Self {
+        if super::is_saas() {
+            Self::ambient()
+        } else {
+            Self::process_default()
+        }
+    }
+
     /// The context readers act under: the bound one, else (outside SaaS) the
     /// process default, else none.
     ///
@@ -78,6 +91,13 @@ impl DispatchCtx {
             None if super::is_saas() => None,
             None => CoreContext::default_context(),
         }
+    }
+
+    /// The tenant this call acts for: the resolved context's profile and
+    /// agent. Outside SaaS an unresolved context is the default tenant; in SaaS
+    /// it is [`NoTenant`](super::NoTenant), so the caller fails closed.
+    pub fn tenant(&self) -> Result<super::Tenant, super::NoTenant> {
+        super::tenant::tenant_in(super::is_saas(), self.resolved().as_deref())
     }
 
     /// The configuration an embedder supplied for the context this call runs
@@ -95,6 +115,67 @@ impl DispatchCtx {
         crate::config::ops::load_config_in(self).await
     }
 
+    /// The calling task's scoped context including a bare one, which carries a
+    /// turn origin and nothing else (a unit test or library caller that never
+    /// booted a core).
+    ///
+    /// Transitional (#7801), like [`ambient`](Self::ambient): for a reader of
+    /// the turn origin that has no carrier of its own yet. Unlike `ambient` it
+    /// never falls back to the process default, which supplies no authority.
+    pub fn ambient_turn() -> Self {
+        Self {
+            core: CoreContext::scoped_for_turn(),
+        }
+    }
+
+    /// The `[components]` switches of the context this call runs under. No
+    /// context at all (a bare library call, pre-boot) means nothing narrowed
+    /// them, so every component is on.
+    pub fn components(&self) -> super::ComponentSet {
+        self.resolved()
+            .map_or_else(super::ComponentSet::all, |core| core.components())
+    }
+
+    /// The domain families live for the context this call runs under, or
+    /// `None` when there is no context (callers read that as "unfiltered").
+    pub fn domains(&self) -> Option<super::DomainSet> {
+        self.resolved().map(|core| core.domains())
+    }
+
+    /// Host adapters of the agent this call runs for.
+    pub fn host_overrides(&self) -> Option<Arc<crate::agent::host_overrides::HostOverrides>> {
+        self.resolved().and_then(|core| core.host_overrides())
+    }
+
+    /// The security policy of the agent this call runs for, if it carries one.
+    pub fn agent_policy(&self) -> Option<Arc<crate::security::SecurityPolicy>> {
+        self.resolved().and_then(|core| core.agent_policy())
+    }
+
+    /// Whether the interactive approval gate is off for the agent this call
+    /// runs for.
+    pub fn approvals_disabled(&self) -> bool {
+        self.resolved()
+            .is_some_and(|core| core.approvals_disabled())
+    }
+
+    /// The origin of the turn this call belongs to. Only a bound context
+    /// supplies one: the process default never carries authority, so an
+    /// unbound call answers `None` and the gate reads it as `Unknown`.
+    pub fn turn_origin(&self) -> Option<crate::agent::turn_origin::AgentTurnOrigin> {
+        self.core
+            .as_ref()
+            .and_then(|core| core.turn_origin().cloned())
+    }
+
+    /// [`turn_origin`](Self::turn_origin) of this call, else the origin the
+    /// calling task's turn scope carries. For a handler whose context was
+    /// built by a transport that does not carry the turn's origin, while a
+    /// turn that called it into being still holds it (transitional, #7801).
+    pub fn turn_origin_or_scoped(&self) -> Option<crate::agent::turn_origin::AgentTurnOrigin> {
+        self.turn_origin()
+            .or_else(|| Self::ambient_turn().turn_origin())
+    }
     /// A non-owning handle on the bound context, for state that outlives the
     /// call (a session, a built turn). The tenant lease is the strong count of
     /// the context ([`CoreContext::tenant_in_use`]), so a long-lived holder

@@ -20,6 +20,7 @@ use tinysearch_bus::{names, ExecuteToolRequest, ExecuteToolResponse, ListToolsRe
 
 use super::{module_config, MODULE_ID};
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 
 /// Bus deadline for one `ExecuteTool` call.
 ///
@@ -171,9 +172,10 @@ where
 /// it is one agent's in-memory config, its keys exist nowhere else, and a
 /// reload of the shared `config_path` would drop them. Any other config is
 /// reloaded so a settings or login change is honoured on the next call.
-async fn current_config(config: &Config) -> Result<Config, String> {
+async fn current_config(ctx: &DispatchCtx, config: &Config) -> Result<Config, String> {
     if config.profile_providers.is_some() {
-        let context = crate::core::runtime::CoreContext::scoped()
+        let context = ctx
+            .core()
             .ok_or_else(|| "profile search requires its authenticated context".to_owned())?;
         let current = context
             .embedder_config()
@@ -193,12 +195,12 @@ async fn current_config(config: &Config) -> Result<Config, String> {
 
 /// Refresh a loaded module after a settings or credential change. An unloaded
 /// module gets the current configuration during its first initialization.
-pub async fn refresh_loaded(config: &Config) -> Result<(), String> {
+pub async fn refresh_loaded(ctx: &DispatchCtx, config: &Config) -> Result<(), String> {
     if matches!(
         crate::modules::ops::state_of(MODULE_ID),
         crate::modules::types::ModuleState::Ready
     ) {
-        let current = current_config(config).await?;
+        let current = current_config(ctx, config).await?;
         with_module_lock(|| async {
             let _ = proxy(&current).await?;
             Ok(())
@@ -208,8 +210,8 @@ pub async fn refresh_loaded(config: &Config) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn list_tools(config: &Config) -> Result<ListToolsResponse, String> {
-    let current = current_config(config).await?;
+pub async fn list_tools(ctx: &DispatchCtx, config: &Config) -> Result<ListToolsResponse, String> {
+    let current = current_config(ctx, config).await?;
     with_module_lock(|| async {
         let mut listed: ListToolsResponse = proxy(&current)
             .await?
@@ -218,11 +220,11 @@ pub async fn list_tools(config: &Config) -> Result<ListToolsResponse, String> {
             .map_err(|error| format!("search ListTools failed: {error}"))?;
         if let Some(binding) = &current.profile_providers {
             binding.present(&mut listed.tools);
-            let capabilities = crate::profiles::capabilities::ProfileCapabilities::current();
+            let capabilities = crate::profiles::capabilities::ProfileCapabilities::in_ctx(ctx);
             listed.tools.retain(|tool| {
                 capabilities
                     .as_ref()
-                    .is_some_and(|capabilities| capabilities.admits(&tool.name))
+                    .is_some_and(|capabilities| capabilities.admits(ctx, &tool.name))
             });
         }
         Ok(listed)
@@ -232,14 +234,15 @@ pub async fn list_tools(config: &Config) -> Result<ListToolsResponse, String> {
 
 /// The presentation and route boundary is checked before any module load or call.
 fn canonical_request(
+    ctx: &DispatchCtx,
     config: &Config,
     mut request: ExecuteToolRequest,
 ) -> Result<ExecuteToolRequest, String> {
     let Some(binding) = &config.profile_providers else {
         return Ok(request);
     };
-    if !crate::profiles::capabilities::ProfileCapabilities::current()
-        .is_some_and(|capabilities| capabilities.admits(&request.name))
+    if !crate::profiles::capabilities::ProfileCapabilities::in_ctx(ctx)
+        .is_some_and(|capabilities| capabilities.admits(ctx, &request.name))
     {
         return Err("search tool is outside the profile capability boundary".into());
     }
@@ -293,11 +296,12 @@ fn canonical_request(
 }
 
 pub async fn execute_tool(
+    ctx: &DispatchCtx,
     config: &Config,
     request: ExecuteToolRequest,
 ) -> Result<ExecuteToolResponse, String> {
-    let current = current_config(config).await?;
-    let request = canonical_request(&current, request)?;
+    let current = current_config(ctx, config).await?;
+    let request = canonical_request(ctx, &current, request)?;
     let tool = request.name.clone();
     with_module_lock(|| async {
         let proxy = proxy(&current).await?;

@@ -4,8 +4,7 @@ use crate::core::Outcome;
 
 use super::types::{Capability, CapabilityCategory, CapabilityStatus};
 use super::{all_capabilities, capabilities_by_category, lookup, search};
-use crate::core::runtime::context::CoreContext;
-use crate::core::runtime::ComponentSet;
+use crate::core::runtime::{ComponentSet, DispatchCtx};
 
 /// The `[components]` name backing a capability domain, if one does.
 pub fn component_for_domain(domain: &str) -> Option<&'static str> {
@@ -39,16 +38,15 @@ pub fn apply_components(capability: Capability, components: &ComponentSet) -> Ca
     }
 }
 
-fn current_components() -> ComponentSet {
-    CoreContext::current().map_or_else(ComponentSet::all, |ctx| ctx.components())
-}
-
-pub fn list_capabilities(category: Option<CapabilityCategory>) -> Outcome<Vec<Capability>> {
+pub fn list_capabilities(
+    ctx: &DispatchCtx,
+    category: Option<CapabilityCategory>,
+) -> Outcome<Vec<Capability>> {
     let capabilities = match category {
         Some(category) => capabilities_by_category(category),
         None => all_capabilities().to_vec(),
     };
-    let components = current_components();
+    let components = ctx.components();
     let capabilities: Vec<_> = capabilities
         .into_iter()
         .map(|c| apply_components(c, &components))
@@ -60,17 +58,17 @@ pub fn list_capabilities(category: Option<CapabilityCategory>) -> Outcome<Vec<Ca
     Outcome::single_log(capabilities, log)
 }
 
-pub fn lookup_capability(id: &str) -> Result<Outcome<Capability>, String> {
+pub fn lookup_capability(ctx: &DispatchCtx, id: &str) -> Result<Outcome<Capability>, String> {
     let capability = lookup(id).ok_or_else(|| format!("unknown capability id '{}'", id.trim()))?;
-    let capability = apply_components(capability, &current_components());
+    let capability = apply_components(capability, &ctx.components());
     Ok(Outcome::single_log(
         capability,
         format!("about_app.lookup returned {}", capability.id),
     ))
 }
 
-pub fn search_capabilities(query: &str) -> Outcome<Vec<Capability>> {
-    let components = current_components();
+pub fn search_capabilities(ctx: &DispatchCtx, query: &str) -> Outcome<Vec<Capability>> {
+    let components = ctx.components();
     let capabilities: Vec<_> = search(query)
         .into_iter()
         .map(|c| apply_components(c, &components))

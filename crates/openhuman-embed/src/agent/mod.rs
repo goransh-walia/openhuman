@@ -197,7 +197,11 @@ impl AgentInner {
         let Some(gate) = openhuman_core::security::approval::ApprovalGate::try_global() else {
             return;
         };
-        match gate.deny_all_for_agent(&self.id, resolution) {
+        match gate.deny_all_for_agent(
+            &openhuman_core::core::runtime::DispatchCtx::new(Arc::clone(&self.ctx)),
+            &self.id,
+            resolution,
+        ) {
             Ok(denied) => log::debug!(
                 "[embed][agent] id={} denied_approvals={denied} resolution={resolution}",
                 self.id
@@ -296,6 +300,7 @@ impl Agent {
             handler,
             self.inner.lifecycle.removed(),
             self.inner.lifecycle.approval_state(),
+            Some(Arc::downgrade(&self.inner.ctx)),
         )
     }
 
@@ -316,6 +321,7 @@ impl Agent {
             &self.inner.id,
             self.inner.lifecycle.removed(),
             self.inner.lifecycle.approval_state(),
+            Some(Arc::downgrade(&self.inner.ctx)),
         )
     }
 

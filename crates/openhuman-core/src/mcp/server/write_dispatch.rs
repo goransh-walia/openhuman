@@ -7,7 +7,6 @@
 use crate::core::runtime::DispatchCtx;
 use serde_json::{json, Map, Value};
 
-use crate::config::rpc as config_rpc;
 use crate::config::Config;
 use crate::core::all;
 use crate::mcp::audit::{self, NewMcpWriteRecord};
@@ -15,8 +14,11 @@ use crate::security::{SecurityPolicy, ToolOperation};
 
 use super::tools::{tool_error, tool_success, ToolCallError};
 
-pub(super) async fn load_write_config(tool_name: &str) -> Result<Config, ToolCallError> {
-    match config_rpc::load_config_with_timeout().await {
+pub(super) async fn load_write_config(
+    ctx: &DispatchCtx,
+    tool_name: &str,
+) -> Result<Config, ToolCallError> {
+    match ctx.load_config().await {
         Ok(config) => Ok(config),
         Err(err) => {
             log::warn!(
@@ -50,6 +52,7 @@ pub(super) fn enforce_write_policy_for_config(
 /// Dispatch a write tool to its underlying RPC method with provenance and
 /// audit logging.
 pub(super) async fn dispatch_write_tool(
+    ctx: &DispatchCtx,
     tool_name: &str,
     rpc_method: &str,
     params: &Map<String, Value>,
@@ -71,7 +74,7 @@ pub(super) async fn dispatch_write_tool(
         "[mcp_server] write dispatch invoking rpc"
     );
 
-    match all::try_invoke_registered_rpc(DispatchCtx::ambient(), rpc_method, params.clone()).await {
+    match all::try_invoke_registered_rpc(ctx.clone(), rpc_method, params.clone()).await {
         Some(Ok(value)) => {
             let item_id = extract_item_id(&value);
             audit_write(
@@ -190,6 +193,7 @@ pub(super) fn audit_write_rejection(
 }
 
 pub(super) fn audit_write_rejection_without_config(
+    ctx: &DispatchCtx,
     tool_name: &str,
     audit_arguments: &Value,
     client_info: &str,
@@ -206,10 +210,11 @@ pub(super) fn audit_write_rejection_without_config(
     let client_info = client_info.to_string();
     let error_message = error_message.to_string();
     let args_summary = summarize_write_args(&tool_name, audit_arguments);
+    let ctx = ctx.clone();
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => {
             std::mem::drop(handle.spawn(async move {
-                match config_rpc::load_config_with_timeout().await {
+                match ctx.load_config().await {
                     Ok(config) => audit_write(
                         &config,
                         NewMcpWriteRecord {

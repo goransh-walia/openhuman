@@ -355,8 +355,18 @@ pub(super) async fn policy_reads_refuse_execution_without_consuming_a_slot(case:
     let scheduled_calls = calls.load(Ordering::SeqCst);
     let (manual, queued, tool) = CoreContext::scope(Arc::clone(&alpha), async {
         assert!(policy::get_policy(&config, &job.id).is_err());
-        let manual = cron::ops::run_job_now(&config, &job.id).await;
-        let queued = cron::ops::cron_run(&config, &job.id).await;
+        let manual = cron::ops::run_job_now(
+            &openhuman_core::core::runtime::DispatchCtx::ambient(),
+            &config,
+            &job.id,
+        )
+        .await;
+        let queued = cron::ops::cron_run(
+            &openhuman_core::core::runtime::DispatchCtx::ambient(),
+            &config,
+            &job.id,
+        )
+        .await;
         let tool = cron::tools::CronRunTool::new(Arc::new(config.clone()))
             .execute(json!({"job_id": job.id}))
             .await
@@ -424,7 +434,16 @@ pub(super) async fn policy_reads_refuse_execution_without_consuming_a_slot(case:
             policy::get_policy(&config, &job.id).unwrap(),
             JobPolicy::default()
         );
-        assert!(cron::ops::run_job_now(&config, &job.id).await.unwrap().0);
+        assert!(
+            cron::ops::run_job_now(
+                &openhuman_core::core::runtime::DispatchCtx::ambient(),
+                &config,
+                &job.id
+            )
+            .await
+            .unwrap()
+            .0
+        );
     })
     .await;
     assert_eq!(
@@ -482,9 +501,13 @@ pub(super) async fn malformed_policy_rows_refuse_execution(case: Case) {
             policy::get_policy(&config, &job.id).is_err(),
             "a malformed existing row became a usable policy"
         );
-        let refused = cron::ops::run_job_now(&config, &job.id)
-            .await
-            .expect_err("a malformed policy must refuse Run now");
+        let refused = cron::ops::run_job_now(
+            &openhuman_core::core::runtime::DispatchCtx::ambient(),
+            &config,
+            &job.id,
+        )
+        .await
+        .expect_err("a malformed policy must refuse Run now");
         assert!(!refused.contains("private-payload"));
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }

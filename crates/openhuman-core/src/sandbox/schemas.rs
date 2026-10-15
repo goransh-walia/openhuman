@@ -9,9 +9,9 @@ use crate::core::Outcome;
 use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
 
 /// Refuse with the typed `COMPONENT_DISABLED:sandbox` error while `[components]
-/// sandbox` is off. Read from the ambient core context; with none, it is on.
-fn gate() -> Result<(), String> {
-    if super::ops::sandbox_component_off() {
+/// sandbox` is off for the context the call runs under; with none, it is on.
+fn gate(ctx: &DispatchCtx) -> Result<(), String> {
+    if super::ops::sandbox_component_off(ctx) {
         return Err(crate::core::runtime::components::component_disabled("sandbox").encode());
     }
     Ok(())
@@ -78,7 +78,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
             outputs: vec![FieldSchema {
                 name: "status",
                 ty: TypeSchema::Json,
-                comment: "Backend handle with kind, status, and backend_id.",
+                comment: "Backend handle with kind, status, backend_id, and (local) isolation.",
                 required: true,
             }],
         },
@@ -170,7 +170,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
 /// backend instead was the conflation fixed in #6081.
 fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        gate()?;
+        gate(&ctx)?;
         let backend_str = params
             .get("backend")
             .and_then(|v| v.as_str())
@@ -204,6 +204,7 @@ fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutu
         };
 
         let mut policy = super::ops::resolve_sandbox_policy(
+            &ctx,
             mode,
             &config.workspace_dir,
             &config.workspace_dir,
@@ -227,7 +228,7 @@ fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutu
 
 fn handle_resolve_policy(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        gate()?;
+        gate(&ctx)?;
         let mode_str = params
             .get("sandbox_mode")
             .and_then(|v| v.as_str())
@@ -264,6 +265,7 @@ fn handle_resolve_policy(ctx: DispatchCtx, params: Map<String, Value>) -> Contro
         // set directly. Re-deriving it here from `action_dir_override` alone
         // would silently ignore an embedder's programmatic `action_dir` (#6081).
         let mut policy = super::ops::resolve_sandbox_policy(
+            &ctx,
             mode,
             &config.action_dir,
             &config.workspace_dir,
@@ -286,7 +288,7 @@ fn handle_resolve_policy(ctx: DispatchCtx, params: Map<String, Value>) -> Contro
 
 fn handle_cleanup_orphans(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        gate()?;
+        gate(&ctx)?;
         let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => return Err(error),
@@ -303,7 +305,7 @@ fn handle_cleanup_orphans(ctx: DispatchCtx, _params: Map<String, Value>) -> Cont
 
 fn handle_validate_policy(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        gate()?;
+        gate(&ctx)?;
         let policy_val = params.get("policy").cloned().unwrap_or(Value::Null);
         let policy: super::types::SandboxPolicy = match serde_json::from_value(policy_val) {
             Ok(p) => p,

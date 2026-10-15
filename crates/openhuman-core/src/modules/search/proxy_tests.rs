@@ -168,7 +168,9 @@ async fn a_host_pinned_config_is_used_as_given_without_reading_config_path() {
         )
         .unwrap();
     // No config.toml exists; a reload would come back without the pin.
-    let current = current_config(&config).await.unwrap();
+    let current = current_config(&DispatchCtx::unbound(), &config)
+        .await
+        .unwrap();
     assert_eq!(current.search.direct_key("tavily"), Some("agent-key"));
     assert!(current.search.is_host_pinned());
     assert!(!config.config_path.exists(), "nothing was written");
@@ -183,7 +185,9 @@ async fn an_unpinned_config_is_reloaded_from_config_path() {
     std::fs::write(&on_disk.config_path, toml::to_string(&on_disk).unwrap()).unwrap();
     // The caller's snapshot is stale: the file has since gained a key.
     let stale = file_backed_config(dir.path());
-    let current = current_config(&stale).await.unwrap();
+    let current = current_config(&DispatchCtx::unbound(), &stale)
+        .await
+        .unwrap();
     assert_eq!(current.search.direct_key("tavily"), Some("file-key"));
 }
 

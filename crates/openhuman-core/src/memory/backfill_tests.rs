@@ -21,6 +21,7 @@ fn message(id: &str, sender: &str, content: &str, at: &str) -> ConversationMessa
 
 async fn seed_thread(workspace: &Path, thread_id: &str, messages: &[(&str, &str)]) {
     threads::ensure_thread(
+        crate::core::runtime::DispatchCtx::ambient(),
         workspace.to_path_buf(),
         CreateConversationThread {
             id: thread_id.to_string(),
@@ -36,6 +37,7 @@ async fn seed_thread(workspace: &Path, thread_id: &str, messages: &[(&str, &str)
     .unwrap();
     for (index, (sender, content)) in messages.iter().enumerate() {
         threads::append_message(
+            crate::core::runtime::DispatchCtx::ambient(),
             workspace.to_path_buf(),
             thread_id.to_string(),
             message(
@@ -107,6 +109,7 @@ async fn stores_past_chats_once_and_skips_what_live_logging_took() {
     // The lifecycle logged live-thread's second turn (user index 2).
     let identity = MemoryIdentity::agent(MAIN_AGENT).resolve(&config);
     crate::memory::lifecycle::hooks::pre_turn(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &identity,
         crate::memory::lifecycle::hooks::PreTurnInput {

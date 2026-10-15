@@ -243,7 +243,7 @@ where
     F: std::future::Future<Output = anyhow::Result<T>>,
     T: std::fmt::Debug + Settled,
 {
-    let scope = match storage_host::current_module_scope(module_id) {
+    let scope = match storage_host::current_module_scope(&crate::core::runtime::DispatchCtx::ambient(), module_id) {
         Ok(scope) => format!("{scope:?}"),
         Err(error) => {
             log::warn!("[{kind}] legacy storage import skipped: {:?}", error.kind());
@@ -333,7 +333,7 @@ pub(crate) fn expiring_blob_module_scopes() -> Vec<crate::storage::Scope> {
     {
         [storage_grant_tinyjuice::MODULE_ID]
             .into_iter()
-            .filter_map(|id| storage_host::current_module_scope(id).ok())
+            .filter_map(|id| storage_host::current_module_scope(&crate::core::runtime::DispatchCtx::ambient(), id).ok())
             .collect()
     }
     // Without the loader no module holds blobs.

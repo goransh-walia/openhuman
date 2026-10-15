@@ -212,7 +212,7 @@ pub fn clear() -> bool {
 /// In SaaS mode, when the current task serves no profile.
 pub fn current_scope() -> Result<Scope, StorageError> {
     let saas = crate::core::runtime::mode::is_saas();
-    match crate::core::runtime::current_tenant() {
+    match crate::core::runtime::DispatchCtx::ambient().tenant() {
         Ok(tenant) => scope_from(tenant.profile.as_deref(), tenant.agent.as_deref(), saas),
         Err(no_tenant) => Err(StorageError::invalid_input(no_tenant.to_string())),
     }

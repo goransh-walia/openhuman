@@ -212,6 +212,7 @@ fn docker_handle_for_status(available: bool) -> SandboxBackendHandle {
             SandboxStatus::Error
         },
         backend_id: None,
+        isolation: None,
     }
 }
 

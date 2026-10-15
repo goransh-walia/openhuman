@@ -100,13 +100,14 @@ fn describe_signature_divergence(live: &[String], projected: &[String]) -> Strin
 }
 
 pub(super) async fn shadow_compare_journal_projection(
+    ctx: &crate::core::runtime::DispatchCtx,
     request_id: &str,
     trace_ctx: tinyagents_harness::observability::trace_export::TraceContext,
     max_iterations: u32,
     live_spans: &[tinyagents_harness::observability::trace_export::TraceSpan],
 ) -> Option<Vec<tinyagents_harness::observability::AgentObservation>> {
     let Some(journal_run_id) =
-        crate::agent::tinyagents::journal::take_request_journal_run(request_id)
+        crate::agent::tinyagents::journal::take_request_journal_run(ctx, request_id)
     else {
         log::debug!(
             "[agent-tracing][journal-shadow] no journal run registered request_id={}",
@@ -116,7 +117,7 @@ pub(super) async fn shadow_compare_journal_projection(
     };
 
     let observations = match crate::agent::tinyagents::journal::read_run_events(
-        &crate::core::runtime::DispatchCtx::ambient(),
+        ctx,
         &journal_run_id,
         0,
     )

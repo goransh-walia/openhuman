@@ -18,11 +18,11 @@ use crate::threads::{
 
 use super::super::ops;
 
-pub(super) fn handle_list(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async move { to_json(ops::threads_list(EmptyRequest {}).await?) })
+pub(super) fn handle_list(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { to_json(ops::threads_list(&ctx, EmptyRequest {}).await?) })
 }
 
-pub(super) fn handle_upsert(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_upsert(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<UpsertConversationThreadRequest>(params)?;
         // A SaaS user picks thread ids for their own threads only; reserved
@@ -31,27 +31,27 @@ pub(super) fn handle_upsert(_ctx: DispatchCtx, params: Map<String, Value>) -> Co
         if let Some(parent) = p.parent_thread_id.as_deref() {
             crate::profiles::surface::check_thread_id(parent)?;
         }
-        to_json(ops::thread_upsert(p).await?)
+        to_json(ops::thread_upsert(&ctx, p).await?)
     })
 }
 
-pub(super) fn handle_create_new(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_create_new(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<CreateConversationThreadRequest>(params)?;
         // A SaaS user acts only in their own sandbox; a caller-chosen working
         // folder would point the thread at the host.
         crate::profiles::surface::check_working_dir(p.action_dir.as_deref())?;
-        to_json(ops::thread_create_new(p).await?)
+        to_json(ops::thread_create_new(&ctx, p).await?)
     })
 }
 
 pub(super) fn handle_messages_list(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ConversationMessagesRequest>(params)?;
-        to_json(ops::messages_list(p).await?)
+        to_json(ops::messages_list(&ctx, p).await?)
     })
 }
 
@@ -66,52 +66,52 @@ pub(super) fn handle_message_append(
 }
 
 pub(super) fn handle_generate_title(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<GenerateConversationThreadTitleRequest>(params)?;
-        to_json(ops::thread_generate_title(p).await?)
+        to_json(ops::thread_generate_title(&ctx, p).await?)
     })
 }
 
 pub(super) fn handle_update_labels(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<UpdateConversationThreadLabelsRequest>(params)?;
-        to_json(ops::thread_update_labels(p).await?)
+        to_json(ops::thread_update_labels(&ctx, p).await?)
     })
 }
 
 pub(super) fn handle_update_title(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<UpdateConversationThreadTitleRequest>(params)?;
-        to_json(ops::thread_update_title(p).await?)
+        to_json(ops::thread_update_title(&ctx, p).await?)
     })
 }
 
 pub(super) fn handle_update_working_dir(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<UpdateConversationThreadWorkingDirRequest>(params)?;
-        to_json(ops::thread_update_working_dir(p).await?)
+        to_json(ops::thread_update_working_dir(&ctx, p).await?)
     })
 }
 
 pub(super) fn handle_message_update(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<UpdateConversationMessageRequest>(params)?;
-        to_json(ops::message_update(p).await?)
+        to_json(ops::message_update(&ctx, p).await?)
     })
 }
 
@@ -122,8 +122,8 @@ pub(super) fn handle_delete(ctx: DispatchCtx, params: Map<String, Value>) -> Con
     })
 }
 
-pub(super) fn handle_purge(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async move { to_json(ops::threads_purge(EmptyRequest {}).await?) })
+pub(super) fn handle_purge(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { to_json(ops::threads_purge(&ctx, EmptyRequest {}).await?) })
 }
 
 pub(super) fn handle_turn_state_get(
@@ -173,23 +173,20 @@ pub(super) fn handle_turn_state_clear(
     })
 }
 
-pub(super) fn handle_token_usage(
-    _ctx: DispatchCtx,
-    params: Map<String, Value>,
-) -> ControllerFuture {
+pub(super) fn handle_token_usage(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ops::ThreadTokenUsageRequest>(params)?;
-        to_json(ops::token_usage(p).await?)
+        to_json(ops::token_usage(&ctx, p).await?)
     })
 }
 
 pub(super) fn handle_transcript_get(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ops::TranscriptGetRequest>(params)?;
-        to_json(ops::transcript_get(p).await?)
+        to_json(ops::transcript_get(&ctx, p).await?)
     })
 }
 
@@ -207,27 +204,31 @@ pub(super) fn handle_todos_get(_ctx: DispatchCtx, params: Map<String, Value>) ->
     })
 }
 
-pub(super) fn handle_search(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_search(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ops::ThreadSearchRequest>(params)?;
-        to_json(ops::thread_search(p).await?)
+        to_json(ops::thread_search(&ctx, p).await?)
     })
 }
 
 pub(super) fn handle_edit_message(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ops::EditMessageRequest>(params)?;
-        to_json(ops::edit_message(p).await.map_err(|e| e.to_string())?)
+        to_json(
+            ops::edit_message(&ctx, p)
+                .await
+                .map_err(|e| e.to_string())?,
+        )
     })
 }
 
-pub(super) fn handle_regenerate(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_regenerate(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ops::RegenerateRequest>(params)?;
-        to_json(ops::regenerate(p).await.map_err(|e| e.to_string())?)
+        to_json(ops::regenerate(&ctx, p).await.map_err(|e| e.to_string())?)
     })
 }
 

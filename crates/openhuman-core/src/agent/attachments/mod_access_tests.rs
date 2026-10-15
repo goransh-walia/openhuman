@@ -118,6 +118,7 @@ async fn delegation_rejects_malformed_explicit_paths_and_external_reads_before_c
 
 async fn thread_in(config: &Config, id: &str, working_dir: Option<&Path>) {
     crate::threads::store::blocking::ensure_thread(
+        crate::core::runtime::DispatchCtx::ambient(),
         config.workspace_dir.clone(),
         crate::threads::store::CreateConversationThread {
             id: id.into(),
@@ -154,25 +155,38 @@ async fn thread_folder_upload_is_staged_where_the_turn_reads_it() {
     thread_in(&config, "gone", Some(&gone)).await;
     std::fs::remove_dir(&gone).unwrap();
 
-    let root = thread_action_dir(&config, &config.workspace_dir, Some("bound"))
-        .await
-        .unwrap();
+    let root = thread_action_dir(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &config.workspace_dir,
+        Some("bound"),
+    )
+    .await
+    .unwrap();
     assert_eq!(root, folder);
     for unbound in [Some("unbound"), Some("missing"), Some(""), None] {
         assert_eq!(
-            thread_action_dir(&config, &config.workspace_dir, unbound)
-                .await
-                .unwrap(),
+            thread_action_dir(
+                &crate::core::runtime::DispatchCtx::ambient(),
+                &config,
+                &config.workspace_dir,
+                unbound
+            )
+            .await
+            .unwrap(),
             config.action_dir
         );
     }
     // A folder that disappeared is an error, as in `run_task`, not a silent
     // fallback to the global dir.
-    assert!(
-        thread_action_dir(&config, &config.workspace_dir, Some("gone"))
-            .await
-            .is_err()
-    );
+    assert!(thread_action_dir(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &config.workspace_dir,
+        Some("gone")
+    )
+    .await
+    .is_err());
 
     // Stage the way `start_chat` does, then read the way the turn does: its
     // request scope comes from a run context carrying the thread folder as its

@@ -1,9 +1,10 @@
 //! Aggregated token/cost usage for a thread, re-audited at current pricing.
 
-use super::support::{counts, envelope, workspace_dir};
+use super::support::{counts, envelope, transcript_store};
+use crate::core::runtime::DispatchCtx;
 use crate::core::Outcome;
 use crate::threads::ApiEnvelope;
-use tinyagents_session::transcript::spend::thread_spend;
+use tinyagents_session::transcript::spend::thread_spend_in;
 
 /// Request for [`token_usage`]: the thread whose persisted usage to total.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -61,12 +62,19 @@ pub struct SubagentUsageDto {
     pub runs: usize,
 }
 
-/// Total a thread's persisted token/cost usage across its root transcripts.
+/// Total a thread's persisted token/cost usage across its root transcripts
+/// and their sub-agents, read from the store the request's tenant wrote them
+/// to.
 pub async fn token_usage(
+    ctx: &DispatchCtx,
     request: ThreadTokenUsageRequest,
 ) -> Result<Outcome<ApiEnvelope<ThreadTokenUsageResponse>>, String> {
-    let dir = workspace_dir().await?;
-    let spend = thread_spend(&dir, &request.thread_id);
+    // Resolved here, in the request's scope; the read itself is blocking.
+    let locator = transcript_store(ctx, &request.thread_id).await?.locator();
+    let thread_id = request.thread_id.clone();
+    let spend = tokio::task::spawn_blocking(move || thread_spend_in(locator.as_ref(), &thread_id))
+        .await
+        .map_err(|e| format!("thread usage task: {e}"))?;
 
     if !spend.found_transcript {
         return Ok(envelope(

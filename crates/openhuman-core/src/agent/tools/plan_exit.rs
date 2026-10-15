@@ -116,6 +116,7 @@ impl PlanExitTool {
                     "[tool][plan_exit] flipping thread run mode to build"
                 );
                 crate::agent::tinyagents::run_mode::set_mode(
+                    &crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(context),
                     thread_id,
                     tinyagents_harness::middleware::RunMode::Build,
                 );

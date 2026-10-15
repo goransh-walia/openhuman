@@ -312,6 +312,9 @@ pub struct OpenHumanRunContext {
     /// The context the turn runs under, read by tools, middleware and the
     /// provider factory instead of the ambient scope. Children inherit it.
     pub core: Option<std::sync::Weak<crate::core::runtime::CoreContext>>,
+    /// The turn tree's transcript store (the root session's locator), where
+    /// sub-agent transcripts land under the parent's store key. Inherited.
+    pub transcripts: Option<Arc<dyn tinyagents_session::transcript::TranscriptLocator>>,
     /// File-state identity used to detect stale parent reads after child writes.
     pub file_state_agent_id: Option<String>,
     /// Host-owned artifact index for tool-result references.
@@ -417,7 +420,8 @@ pub(crate) use super::operation_context::tool_context_with_approval;
 pub use super::operation_context::OpenHumanRunExt;
 pub(crate) use super::operation_context::{
     approval_for_tool, dispatch_ctx_for_tool, memory_identity_for_tool, parent_agent_id_for_tool,
-    sandbox_mode_for_tool, task_recency_window_for_tool, HostOperationContext,
+    sandbox_mode_for_tool, task_recency_window_for_tool, turn_origin_for_tool,
+    HostOperationContext,
 };
 
 impl Default for OpenHumanRunContext {
@@ -446,6 +450,7 @@ impl OpenHumanRunContext {
             prepared_context_sources: Arc::new(Vec::new()),
             memory_identity: None,
             core: None,
+            transcripts: None,
             file_state_agent_id: None,
             tool_result_artifact_index: None,
             attachment_placeholders: Arc::new(Vec::new()),

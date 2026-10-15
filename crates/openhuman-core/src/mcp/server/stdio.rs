@@ -118,7 +118,8 @@ pub fn run_stdio_from_cli(args: &[String]) -> Result<()> {
 async fn run_stdio_module() -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
-    let config = crate::config::rpc::load_config_with_timeout()
+    let config = crate::core::runtime::DispatchCtx::process_default()
+        .load_config()
         .await
         .map_err(anyhow::Error::msg)?;
     let session = ServerSession::open(&config).await?;

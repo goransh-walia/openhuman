@@ -40,6 +40,7 @@ mod search;
 pub(crate) mod service;
 
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
 use tinymemes_bus::{RemixOptions, RemixRequest, RemixResponse, SkipReason};
@@ -190,9 +191,13 @@ async fn load(
     let config = config.clone();
     let thread_id = thread_id.to_owned();
     crate::core::runtime::spawn_blocking_scoped(move || {
-        crate::threads::store::get_messages(config.workspace_dir.clone(), &thread_id)
-            .map_err(|e| log::warn!("[tinymemes] thread history unavailable: {e}"))
-            .ok()
+        crate::threads::store::get_messages(
+            &DispatchCtx::ambient(),
+            config.workspace_dir.clone(),
+            &thread_id,
+        )
+        .map_err(|e| log::warn!("[tinymemes] thread history unavailable: {e}"))
+        .ok()
     })
     .await
     .ok()

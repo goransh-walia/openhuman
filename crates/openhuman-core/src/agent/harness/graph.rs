@@ -62,9 +62,10 @@ pub(crate) async fn run_channel_turn_via_graph(
     memory_identity: crate::memory::scope::MemoryIdentity,
 ) -> Result<crate::agent::tinyagents::TinyagentsTurnOutcome> {
     let extra_arc = Arc::new(extra_tools);
-    // A channel/CLI turn is entered without a run context: bind the calling
-    // task's context here, once, and carry it on the turn's run context.
-    let dispatch = crate::core::runtime::DispatchCtx::ambient();
+    // A channel/CLI turn is entered without a run context: the model source
+    // was built under the turn's context, so bind that one here, once, and
+    // carry it on the turn's run context.
+    let dispatch = source.dispatch_ctx();
 
     // The callable set is the visibility whitelist. The runner advertises each via
     // its own `spec()`, deduped by name (extras shadow the registry).
@@ -141,8 +142,8 @@ pub(crate) async fn run_channel_turn_via_graph(
         "[channel:graph] routing channel turn through tinyagents harness"
     );
     let turn_origin = origin.clone();
-    let mut run_context =
-        crate::agent::tinyagents::host::OpenHumanRunContext::new().with_core(dispatch.into_core());
+    let mut run_context = crate::agent::tinyagents::host::OpenHumanRunContext::new()
+        .with_core(dispatch.core().cloned());
     run_context.origin = origin;
     run_context.approval = approval;
     run_context.memory_identity = Some(memory_identity);
@@ -192,7 +193,7 @@ pub(crate) async fn run_channel_turn_via_graph(
         defer_turn_completed_to_caller: false,
     }
     .run();
-    let outcome = match (turn_origin, crate::core::runtime::CoreContext::current()) {
+    let outcome = match (turn_origin, dispatch.into_core()) {
         (Some(origin), Some(context)) => {
             crate::core::runtime::CoreContext::scope_with_turn_origin(
                 context,

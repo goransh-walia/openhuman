@@ -66,7 +66,10 @@ fn legacy_jsonl_conversations_are_imported_and_the_files_stay_byte_identical() {
     write_legacy(&root, &log_refs, &[("t1", &[m1.as_str(), m2.as_str()])]);
     let before = snapshot(&root);
 
-    let store = ConversationStore::new(dir.path().to_path_buf());
+    let store = ConversationStore::new(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.path().to_path_buf(),
+    );
     let threads = store.list_threads().unwrap();
     assert_eq!(threads.len(), 1, "the deleted thread is not imported");
     assert_eq!(threads[0].id, "t1");
@@ -86,7 +89,10 @@ fn legacy_import_runs_once_even_when_the_files_change_afterwards() {
     let m1 = message("m1", "hello", "2026-01-01T00:00:01Z");
     write_legacy(&root, &[&upsert("t1", "First")], &[("t1", &[m1.as_str()])]);
 
-    let store = ConversationStore::new(dir.path().to_path_buf());
+    let store = ConversationStore::new(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.path().to_path_buf(),
+    );
     assert_eq!(store.list_threads().unwrap().len(), 1);
 
     // A new process on the same workspace: the marker, not the process cache,
@@ -97,7 +103,10 @@ fn legacy_import_runs_once_even_when_the_files_change_afterwards() {
         &[&upsert("t1", "First"), &upsert("t9", "Late")],
         &[("t1", &[m1.as_str()])],
     );
-    let after = ConversationStore::new(dir.path().to_path_buf());
+    let after = ConversationStore::new(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.path().to_path_buf(),
+    );
     let threads = after.list_threads().unwrap();
     assert_eq!(threads.len(), 1);
     assert_eq!(after.get_messages("t1").unwrap().len(), 1);
@@ -106,7 +115,10 @@ fn legacy_import_runs_once_even_when_the_files_change_afterwards() {
 #[test]
 fn a_workspace_without_legacy_files_starts_empty() {
     let dir = tempfile::tempdir().unwrap();
-    let store = ConversationStore::new(dir.path().to_path_buf());
+    let store = ConversationStore::new(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.path().to_path_buf(),
+    );
     assert!(store.list_threads().unwrap().is_empty());
     assert!(store.get_messages("nope").unwrap().is_empty());
     assert!(!backend::legacy_root(dir.path()).exists());
@@ -115,7 +127,10 @@ fn a_workspace_without_legacy_files_starts_empty() {
 #[test]
 fn threads_round_trip_through_the_backend_store() {
     let dir = tempfile::tempdir().unwrap();
-    let store = ConversationStore::new(dir.path().to_path_buf());
+    let store = ConversationStore::new(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.path().to_path_buf(),
+    );
     store
         .ensure_thread(CreateConversationThread {
             id: "t".into(),
@@ -169,7 +184,11 @@ fn an_unreadable_legacy_log_is_an_error_not_an_empty_store() {
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o000)).unwrap();
     // Root bypasses permission bits; only assert when the stat truly fails.
     let blocked = std::fs::metadata(root.join("threads.jsonl")).is_err();
-    let result = ConversationStore::new(dir.path().to_path_buf()).list_threads();
+    let result = ConversationStore::new(
+        crate::core::runtime::DispatchCtx::ambient(),
+        dir.path().to_path_buf(),
+    )
+    .list_threads();
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
     if blocked {
         assert!(

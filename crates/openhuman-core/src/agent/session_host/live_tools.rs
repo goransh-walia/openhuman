@@ -34,6 +34,7 @@ impl OpenHumanSessionHost {
                 channel: self.event_channel.clone(),
             }),
             has_thread: self.thread_id.is_some(),
+            dispatch: crate::core::runtime::DispatchCtx::from_weak(self.host_env.core.as_ref()),
         }
     }
 
