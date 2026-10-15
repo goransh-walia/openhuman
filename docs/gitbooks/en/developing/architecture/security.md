@@ -25,9 +25,9 @@ It does not own the cross-domain `EncryptionEngine` (in `security/encryption/`) 
 
 | Item                                                                                                                          | File         | Purpose                                                                 |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------- |
-| `SecurityPolicy`                                                                                                              | `policy/types.rs` (path checks in `policy/path_checks.rs`, command classification in `policy/command_checks.rs`, gating in `policy/enforcement.rs`) | Assembles runtime policy from `AutonomyConfig` + workspace dir.         |
+| `SecurityPolicy`                                                                                                              | `policy/types.rs` (path checks in `policy/path_checks.rs`, the command gate's host client in `policy/native_commands.rs`, gating in `policy/enforcement.rs`) | Assembles runtime policy from `AutonomyConfig` + workspace dir.         |
 | `AutonomyLevel` (`ReadOnly` / `Supervised` / `Full`)                                                                          | `policy/types.rs` | Three-step autonomy ladder.                                             |
-| `CommandRiskLevel`, `ToolOperation`, `ActionTracker`                                                                          | `policy/types.rs` | Risk classification and per-session counting.                             |
+| `ToolOperation`, `ActionTracker`                                                                                              | `policy/types.rs` | Operation kinds and per-session counting.                                 |
 | `SecretStore`                                                                                                                 | `secret_storage/encrypted_store.rs` (`secrets.rs` re-exports it) | OS-keychain / encrypted-file secret persistence with round-trip helpers. |
 | `AuditLogger`, `AuditEventType`, `AuditEvent`, `Actor`, `Action`, `ExecutionResult`, `SecurityContext`, `CommandExecutionLog` | `audit.rs`   | Append-only audit trail.                                                |
 | `PairingGuard`, `constant_time_eq`, `is_public_bind`                                                                          | `pairing.rs` (`PairingGuard` and `constant_time_eq` are re-exported from `tinychannels_bus::security`) | Pairing-token check before binding the RPC server publicly.             |
@@ -36,7 +36,7 @@ It does not own the cross-domain `EncryptionEngine` (in `security/encryption/`) 
 
 ## Sandboxing
 
-This module carries no sandbox backends. Per-session sandbox selection lives in `crates/openhuman-core/src/sandbox/`. It delegates local OS confinement to `tinybox-jail` (vendored tinybox) and keeps its own `docker run` executor. Command classification scans shell strings with `tinybox_core::shell::scan`, and the classification rules stay in this module.
+This module carries no sandbox backends. Per-session sandbox selection lives in `crates/openhuman-core/src/sandbox/`. It delegates local OS confinement to `tinybox-jail` (vendored tinybox) and keeps its own `docker run` executor. Shell command classification, the allowlist, the hidden-execution defence, the protected-path floor, the risk score and the hourly command budget belong to the TinySecurity module. `policy/native_commands.rs` translates the host settings into the module's immutable `CommandPolicy` and projects its answer back; nothing is classified in the host.
 
 ## Autonomy ladder
 
@@ -48,7 +48,7 @@ This module carries no sandbox backends. Per-session sandbox selection lives in 
 
 The wire spellings are lowercase (`readonly`, `supervised`, `full`). The user-facing table is in [Approval gate](../../features/approval-gate.md).
 
-`CommandRiskLevel` and `ToolOperation` classify a tool call. `ActionTracker` keeps the per-session counts that the policy compares against its caps. The agent harness asks `SecurityPolicy` for a decision before every executable tool dispatch.
+`ToolOperation` names the kind of a tool call. `ActionTracker` keeps the per-session counts that the policy compares against its caps. The agent harness asks `SecurityPolicy` for a decision before every executable tool dispatch.
 
 All of this applies only when the autonomy policy is on. `[autonomy] enabled = false` is the default, and `SecurityPolicy::from_config` carries that flag through every enforcement entry point. With the policy off, command classification, the approval gate, the command allowlist and the hourly action budget do nothing. `workspace_only`, `forbidden_paths` and the workspace-internal boundary are not enforced either.
 
