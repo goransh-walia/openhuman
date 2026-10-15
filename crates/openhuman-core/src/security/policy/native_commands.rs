@@ -90,15 +90,13 @@ impl SecurityPolicy {
     /// The tier's gate for an acting call of `class`: the module's answer to a
     /// command of that class. `Err` is a refusal.
     pub async fn command_class_gate(&self, class: CommandClass) -> Result<GateDecision, String> {
-        let verdict = self
-            .check_command(CommandQuery {
-                command: "",
-                declared: Some(class),
-                flow: CommandFlow::Harness,
-                stage: CommandStage::Authorize,
-            })
-            .await?;
-        Ok(verdict.gate)
+        match &self.command_gateway {
+            Some(gateway) => gateway
+                .decide(self, &class_query(class))
+                .await
+                .map(|verdict| verdict.gate),
+            None => self.native_class_gate(class).await,
+        }
     }
 
     /// [`Self::command_class_gate`] for the synchronous tool traits
@@ -107,23 +105,25 @@ impl SecurityPolicy {
     pub fn command_class_gate_blocking(&self, class: CommandClass) -> Result<GateDecision, String> {
         if let Some(gateway) = self.command_gateway.clone() {
             let policy = self.clone();
-            let query_class = class;
             return block_on_gateway(async move {
                 gateway
-                    .decide(
-                        &policy,
-                        &CommandQuery {
-                            command: "",
-                            declared: Some(query_class),
-                            flow: CommandFlow::Harness,
-                            stage: CommandStage::Authorize,
-                        },
-                    )
+                    .decide(&policy, &class_query(class))
                     .await
                     .map(|verdict| verdict.gate)
             });
         }
         self.native_class_gate_blocking(class)
+    }
+}
+
+/// A class-only question: the gate for a command of `class`, with no command
+/// text to classify.
+fn class_query(class: CommandClass) -> CommandQuery<'static> {
+    CommandQuery {
+        command: "",
+        declared: Some(class),
+        flow: CommandFlow::Harness,
+        stage: CommandStage::Authorize,
     }
 }
 
@@ -241,34 +241,40 @@ impl SecurityPolicy {
         use crate::modules::security::command::{command_decision, CommandOp};
 
         let policy = self.native_command_policy(query.flow, query.stage)?;
-        // A class-only question has no command text: it asks the gate, which
-        // needs neither an admission nor a budget.
-        let op = if query.command.is_empty() {
-            CommandOp::Classify
-        } else {
-            CommandOp::Check
-        };
         let decision = command_decision(
             &self.workspace_dir,
             policy,
             query.command,
             query.declared.map(to_bus_class),
-            op,
+            CommandOp::Check,
         )
         .await;
-        project(query, decision)
+        project(query, false, decision)
+    }
+
+    /// A class-only question needs neither an admission nor a budget.
+    #[cfg(feature = "security-module")]
+    async fn native_class_gate(&self, class: CommandClass) -> Result<GateDecision, String> {
+        use crate::modules::security::command::{command_decision, CommandOp};
+
+        let query = class_query(class);
+        let policy = self.native_command_policy(query.flow, query.stage)?;
+        let decision = command_decision(
+            &self.workspace_dir,
+            policy,
+            "",
+            Some(to_bus_class(class)),
+            CommandOp::Classify,
+        )
+        .await;
+        project(&query, true, decision).map(|verdict| verdict.gate)
     }
 
     #[cfg(feature = "security-module")]
     fn native_class_gate_blocking(&self, class: CommandClass) -> Result<GateDecision, String> {
         use crate::modules::security::command::{command_decision_blocking, CommandOp};
 
-        let query = CommandQuery {
-            command: "",
-            declared: Some(class),
-            flow: CommandFlow::Harness,
-            stage: CommandStage::Authorize,
-        };
+        let query = class_query(class);
         let policy = self.native_command_policy(query.flow, query.stage)?;
         let decision = command_decision_blocking(
             &self.workspace_dir,
@@ -277,7 +283,12 @@ impl SecurityPolicy {
             Some(to_bus_class(class)),
             CommandOp::Classify,
         );
-        project(&query, decision).map(|verdict| verdict.gate)
+        project(&query, true, decision).map(|verdict| verdict.gate)
+    }
+
+    #[cfg(not(feature = "security-module"))]
+    async fn native_class_gate(&self, _class: CommandClass) -> Result<GateDecision, String> {
+        Err(refusal_message(Refusal::Unavailable))
     }
 
     #[cfg(not(feature = "security-module"))]
@@ -329,9 +340,13 @@ fn from_bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
 }
 
 /// Project the module's content-free decision into the host contract.
+///
+/// `class_only` marks a question about a tier's gate for a class of command
+/// rather than about one command.
 #[cfg(feature = "security-module")]
 pub(crate) fn project(
     query: &CommandQuery<'_>,
+    class_only: bool,
     decision: Result<tinysecurity_bus::CommandDecision, String>,
 ) -> Result<CommandVerdict, String> {
     use tinysecurity_bus::{CommandDenial, CommandGate};
@@ -363,9 +378,10 @@ pub(crate) fn project(
     let gate = match decision.gate {
         CommandGate::Allow => GateDecision::Allow,
         CommandGate::Prompt => GateDecision::Prompt,
-        CommandGate::Block => {
-            return Err(refusal_message(Refusal::Category));
-        }
+        // A class question reports a blocked tier as such; for a real command
+        // a block always carries a denial, so one without is refused outright.
+        CommandGate::Block if class_only => GateDecision::Block,
+        CommandGate::Block => return Err(refusal_message(Refusal::Category)),
     };
     Ok(CommandVerdict {
         class: from_bus_class(decision.class),
