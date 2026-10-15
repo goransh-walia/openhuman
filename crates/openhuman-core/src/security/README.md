@@ -29,7 +29,7 @@ recipient, a timeout, or a malformed response denies access without a local
 fallback. Synchronous lexical checks remain host preflights during this phase;
 they do not substitute for the asynchronous I/O authorization.
 
-Production admission pins TinySecurity v0.7.0 and its published archive checksums
+Production admission pins TinySecurity v0.8.0 and its published archive checksums
 in the module registry. `scripts/ci/security-native-fixture.sh` loads those
 released archives and invokes their admission, path, and latency tests. Explicit
 local fixtures remain available for development; their digests never become
@@ -39,7 +39,7 @@ until their own migration phases are implemented and verified.
 
 Host latency budget (committed). The host path-policy gate runs
 `OPENHUMAN_SECURITY_PERF_BUDGET=1 scripts/ci/security-native-fixture.sh` (a
-`--release` build against the released v0.7.0 archive, warmed scope
+`--release` build against the released v0.8.0 archive, warmed scope
 registration, 200 turns of 5 checks: 3 reads, 1 parent-create, 1 denied probe).
 Measured on Linux 7.0 x86_64, Rust 1.99.0, 2026-10-15, three release runs:
 per call p50 81-90 us, p99 116-185 us; per turn (5 calls) p50 376-423 us, p99
