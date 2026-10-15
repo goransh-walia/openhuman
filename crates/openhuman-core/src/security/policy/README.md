@@ -29,8 +29,8 @@ impl in [`types.rs`](./types.rs).
 - Build a `SecurityPolicy` from `AutonomyConfig` (`SecurityPolicy::from_config`).
 - Ask the security module about a shell command (`check_command`) and project
   its answer into a `GateDecision`, a `CommandClass` and the host's
-  policy-blocked messages (`Refusal`). Own the tier table that the flow nodes
-  still read (`gate_decision`).
+  policy-blocked messages (`Refusal`). The autonomy tier table is the module's;
+  every caller asks it (`command_class_gate`).
 - Decide whether a filesystem path is reachable at all
   (`is_always_forbidden`), workspace-internal state
   (`is_workspace_internal_path`), or covered by a `TrustedRoot`.
@@ -45,7 +45,7 @@ impl in [`types.rs`](./types.rs).
 | --- | --- |
 | [`types.rs`](./types.rs) | `SecurityPolicy` fields, `AutonomyLevel`, `GateDecision`, `ToolOperation`, `ActionTracker`, `TrustedRoot`/`TrustedAccess`, `WORKSPACE_INTERNAL_DIRS`/`WORKSPACE_INTERNAL_FILES`, the two policy markers |
 | [`path_checks.rs`](./path_checks.rs) | `is_workspace_internal_path`, `is_always_forbidden`, `check_cross_profile`, `is_within_trusted_root`, `is_resolved_path_allowed[_for]`, `check_resolved_against_forbidden` |
-| [`command_checks.rs`](./command_checks.rs) | `gate_decision` (the tier table, mirrored by the module), `parse_declared_class` |
+| [`command_checks.rs`](./command_checks.rs) | `parse_declared_class` |
 | [`native_commands.rs`](./native_commands.rs) | `SecurityPolicy::check_command` / `command_class_gate[_blocking]`, `CommandQuery`, `CommandFlow`, `CommandStage`, `CommandVerdict`, `Refusal`, the `CommandGateway` seam, and the translation to the module's `CommandPolicy` |
 | [`enforcement.rs`](./enforcement.rs) | `can_act`, `enforce_write_tier`, `enforce_tool_operation`, `record_action`/`is_rate_limited`, `from_config`, `with_privacy_mode`, `openhuman_scratch_dir`/`ensure_openhuman_scratch_dir`, `validate_path_within_root` |
 | TinySecurity module `CheckCommand` / `ClassifyCommand` (`tinysecurity-bus`) | Command class, gate, risk and refusal category for one command under the host-registered `CommandPolicy` |

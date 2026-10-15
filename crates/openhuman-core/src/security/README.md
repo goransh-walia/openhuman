@@ -94,7 +94,6 @@ answer when it is off:
 
 | Function | File | Disabled result |
 | --- | --- | --- |
-| `gate_decision` | [`policy/command_checks.rs`](./policy/command_checks.rs) | `GateDecision::Allow` |
 | `check_command` | [`policy/native_commands.rs`](./policy/native_commands.rs) | the module answers with the policy disabled: `Allow`, no structural guard, no allowlist; the protected-path floor still refuses |
 | `can_act` | `policy/enforcement.rs` | `true` |
 | `record_action`, `is_rate_limited` | `policy/enforcement.rs` | never limited |
@@ -164,11 +163,17 @@ scheduler asks under the legacy rule (`CommandFlow::Scheduled`: the curated
 allowlist plus the configured risk restrictions) when a job is created or
 edited, and again when it runs. A module that is missing, untrusted, faulted
 or slow refuses the command (`Refusal::Unavailable`); there is no host
-classifier to fall back on. Embedders that cannot load the native module install
-their own fail-closed `CommandGateway` on the policy.
+classifier to fall back on. The `CommandGateway` seam on the policy is sealed to
+this crate and exists for unit tests of what a caller does with an answer.
 
-The tier matrix (the module's, which `gate_decision` still mirrors for the flow
-nodes until they move; a module-backed test pins the two together): `ReadOnly` allows only `Read` and blocks
+Two budgets apply to a shell run: the module's hourly command budget (keyed by
+the policy value, so sessions with identical settings share it), spent by the
+`Execute`-stage check, and the host `ActionTracker` (this policy instance's
+count across all acting tools).
+
+The tier matrix (the module's; flow nodes, the approval manifest and the
+network and filesystem gates all ask it through `command_class_gate`, and a
+module-backed test pins it to an inlined table): `ReadOnly` allows only `Read` and blocks
 everything else; `Supervised` allows `Read` and prompts on every acting class;
 `Full` runs `Read` and `Write` silently and prompts on `Network`, `Install` and
 `Destructive`.
