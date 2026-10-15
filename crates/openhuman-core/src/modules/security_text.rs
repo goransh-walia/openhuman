@@ -244,6 +244,7 @@ pub(crate) fn redact_blocking(
 /// (Sentry `before_send`, error logs). Called once the module answered; a no-op
 /// outside a tokio runtime or when already armed.
 pub(crate) fn arm_log_scrubber(config: &Config) {
+    eprintln!("TMPDBG-ARM {:?}", std::thread::current().name());
     if !super::sync_seam::arm_current() {
         return;
     }
