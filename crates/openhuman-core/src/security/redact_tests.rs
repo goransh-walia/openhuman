@@ -2,18 +2,28 @@ use super::*;
 
 /// A config whose module is the published archive, downloaded into a scratch
 /// install under `target/tmp` (a `TMPDIR` under `/tmp` breaks the policy tests).
-pub(crate) fn released_config() -> (tempfile::TempDir, crate::config::Config) {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
-    std::fs::create_dir_all(&root).unwrap();
-    let dir = tempfile::tempdir_in(&root).unwrap();
-    let base = dir.path().canonicalize().unwrap();
-    let mut config = crate::config::Config::default();
-    config.modules.enabled = true;
-    config.modules.allow_download = true;
-    config.modules.install_dir = Some(base.join("modules").to_string_lossy().into_owned());
-    config.action_dir = base.join("action");
-    config.workspace_dir = base.join("state");
-    (dir, config)
+///
+/// One install serves the whole test process: the log bridge is process-global
+/// and keeps the config it was first armed with, so a per-test install that is
+/// deleted when its test ends would pull the module out from under every later
+/// test. The directory lives until the process exits.
+pub(crate) fn released_config() -> ((), crate::config::Config) {
+    static INSTALL: std::sync::OnceLock<(tempfile::TempDir, crate::config::Config)> =
+        std::sync::OnceLock::new();
+    let (_dir, config) = INSTALL.get_or_init(|| {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
+        std::fs::create_dir_all(&root).unwrap();
+        let dir = tempfile::tempdir_in(&root).unwrap();
+        let base = dir.path().canonicalize().unwrap();
+        let mut config = crate::config::Config::default();
+        config.modules.enabled = true;
+        config.modules.allow_download = true;
+        config.modules.install_dir = Some(base.join("modules").to_string_lossy().into_owned());
+        config.action_dir = base.join("action");
+        config.workspace_dir = base.join("state");
+        (dir, config)
+    });
+    ((), config.clone())
 }
 
 /// Load the module and arm the log bridge through an ordinary async call.
