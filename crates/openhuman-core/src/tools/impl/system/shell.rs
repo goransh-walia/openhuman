@@ -343,6 +343,11 @@ impl ShellTool {
 
         let _cwd = self.effective_action_dir_for_context(context);
 
+        // Two budgets apply to a run, by design. The module's hourly command
+        // budget was spent by the Execute-stage check above; it is keyed by the
+        // policy value, so every session with identical settings shares it. The
+        // host `ActionTracker` below is this policy instance's count across all
+        // acting tools (shell, writes, network) and is not replaced by it.
         if self.security.is_rate_limited() {
             return (
                 false,
