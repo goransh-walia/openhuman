@@ -232,10 +232,15 @@ async fn composio_key_never_reaches_tool_output_or_errors() {
 
     assert_eq!(*seen.lock().unwrap(), vec![LEAKY_KEY.to_string()]);
     assert!(!rendered.contains(LEAKY_KEY), "{rendered}");
-    // No module serves in a unit test, so the result cannot be checked and is
-    // withheld whole; what a serving module removes is pinned natively in
+    // Either the module served and removed the key, or none serves in this
+    // process and the result was withheld whole. Which one depends on whether
+    // an earlier test armed the process-wide module, so both are accepted; what
+    // a serving module removes is pinned natively in
     // `modules/security_text_tests.rs`.
-    assert!(rendered.contains("withheld"), "{rendered}");
+    assert!(
+        rendered.contains("withheld") || rendered.contains("[REDACTED]"),
+        "{rendered}"
+    );
 }
 
 #[tokio::test]

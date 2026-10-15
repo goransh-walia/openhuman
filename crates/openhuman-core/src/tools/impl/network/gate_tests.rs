@@ -404,17 +404,25 @@ fn destination_of<'a>(url: &'a str) -> Destination<'a> {
 }
 
 /// With the module built in, every destination is the module's to judge: a
-/// process where it cannot answer (modules disabled here) refuses with the
-/// tool-facing policy message instead of letting the tool resolve and connect.
+/// destination it refuses (the metadata address, which the address floor denies
+/// whether or not a module is serving) comes back as the tool-facing policy
+/// message, never as addresses for the tool to connect to.
 #[cfg(feature = "security-module")]
 #[tokio::test]
-async fn a_destination_the_module_cannot_judge_is_refused_not_passed_to_the_tool() {
+async fn a_destination_the_module_refuses_is_a_policy_message_not_addresses() {
     let dir = tempfile::tempdir().unwrap();
     let security = Arc::new(SecurityPolicy {
         workspace_dir: dir.path().to_path_buf(),
         ..SecurityPolicy::default()
     });
-    let destination = destination_of("https://example.com/");
+    let destination = Destination {
+        url: "http://169.254.169.254/latest/meta-data",
+        host: "169.254.169.254",
+        port: 80,
+        method: "GET",
+        headers: &[],
+        body: None,
+    };
     for answer in [
         NetGate::authorize_destination(&*security, &destination).await,
         RoutedGate::new(security.clone(), None, &json!({}))
@@ -423,7 +431,7 @@ async fn a_destination_the_module_cannot_judge_is_refused_not_passed_to_the_tool
     ] {
         let refusal = answer
             .expect("the module owns the decision")
-            .expect_err("no module answers in a unit test");
+            .expect_err("a refused destination yields no addresses");
         assert!(
             refusal.starts_with(tinytools::status::POLICY_BLOCKED_MARKER),
             "{refusal}"

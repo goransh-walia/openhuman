@@ -207,12 +207,14 @@ async fn an_error_text_is_redacted_or_withheld_never_passed_on() {
     assert_eq!(short.to_string(), "nope");
 }
 
-/// With no module serving (a unit-test process), the production entry points
-/// refuse to pass a result that mentions a configured key on, and let one that
-/// does not through.
+/// With the module switched off in the configuration, the production entry
+/// points refuse to pass a result that mentions a configured key on, and let one
+/// that does not through. The switch (not whatever an earlier test armed in this
+/// process) makes the module unavailable, so the test is order-independent.
 #[tokio::test]
-async fn without_a_serving_module_the_production_entry_points_withhold() {
-    let config = config_with_overlapping_secrets();
+async fn with_the_module_disabled_the_production_entry_points_withhold() {
+    let mut config = config_with_overlapping_secrets();
+    config.modules.enabled = false;
     let outcome = redact_composio_outcome(
         &config,
         Ok(tinytools::ToolResult::success(format!("key {LONG_KEY}"))),
