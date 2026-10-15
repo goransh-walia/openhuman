@@ -268,3 +268,62 @@ async fn credentials_only_scrub_matches_the_corpus_and_keeps_source_code() {
         }
     }
 }
+
+/// Composio's exact keys through the real module's `RedactWith`: the longest key
+/// goes first, a call's keys never leak into the next call, a large body is
+/// answered in chunks, and the shared corpus keeps the behaviour the deleted
+/// host redactor pinned.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn call_secrets_redact_through_the_module_per_call_and_in_chunks() {
+    let fx = super::super::native_tests::native_fixture().await;
+    let short = "abcdefgh".to_string();
+    let long = "abcdefghi".to_string();
+
+    // Overlapping keys: the longer one is replaced whole, not left with a tail.
+    let out = credentials_with_on(
+        &fx.proxy,
+        &format!("token {long} in transit"),
+        &[short.clone(), long.clone()],
+    )
+    .await
+    .unwrap();
+    assert_eq!(out, "token [REDACTED] in transit");
+
+    // Per call: without the keys the same text is untouched.
+    let again = credentials_with_on(&fx.proxy, &format!("token {long} in transit"), &[])
+        .await
+        .unwrap();
+    assert_eq!(again, format!("token {long} in transit"));
+
+    // A body larger than the module's request bound: the key in a late chunk
+    // still goes, and nothing else changes.
+    let filler = "plain line of ordinary text\n".repeat(4_000);
+    let body = format!("{filler}key={long}\n{filler}");
+    assert!(body.len() > 2 * crate::security::redact::CREDENTIAL_CHUNK_BYTES);
+    let out = credentials_with_on(&fx.proxy, &body, &[long.clone()])
+        .await
+        .unwrap();
+    assert!(!out.contains(&long));
+    assert_eq!(out.len(), body.len() - long.len() + "[REDACTED]".len());
+
+    // The shared corpus, with each case's own configured secret.
+    let corpus: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/security-redaction-corpus.json"
+    )))
+    .unwrap();
+    for case in corpus["text"].as_array().unwrap() {
+        let input = case["input"].as_str().unwrap();
+        let secret = case["composio_secret"].as_str().unwrap().to_owned();
+        let output = credentials_with_on(&fx.proxy, input, &[secret])
+            .await
+            .unwrap();
+        let expected = if case["case"] == "anthropic_key" {
+            "[REDACTED]"
+        } else {
+            input
+        };
+        assert_eq!(output, expected, "{}", case["case"]);
+    }
+}
