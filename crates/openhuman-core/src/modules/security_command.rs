@@ -58,8 +58,7 @@ pub(crate) async fn command_decision(
     let mut state = state().lock().await;
     let result = async {
         let proxy = super::proxy(&config, &mut state).await?;
-        let policy_id = register_cached_command_scope(&mut state, &proxy, policy).await?;
-        call_command(&proxy, policy_id, command, declared_class, op).await
+        command_on(&mut state, &proxy, policy, command, declared_class, op).await
     }
     .await;
     if let Err(error) = &result {
@@ -67,6 +66,20 @@ pub(crate) async fn command_decision(
         state.faulted = true;
     }
     result
+}
+
+/// The registration cache plus one confidential call, shared by the production
+/// path and the native-module tests.
+pub(super) async fn command_on(
+    state: &mut ClientState,
+    proxy: &tinybus::Proxy,
+    policy: CommandPolicy,
+    command: &str,
+    declared_class: Option<CommandClass>,
+    op: CommandOp,
+) -> Result<CommandDecision, String> {
+    let policy_id = register_cached_command_scope(state, proxy, policy).await?;
+    call_command(proxy, policy_id, command, declared_class, op).await
 }
 
 async fn register_cached_command_scope(
