@@ -19,9 +19,9 @@ use tinytools::status::POLICY_BLOCKED_MARKER;
 /// [`SecurityPolicy`] the agent tool-loop honors (`SecurityPolicy::from_config`
 /// off the `[autonomy]` block). Before an `http_request` (Network-class) or
 /// `code` (Write-class) node dispatches, we consult
-/// [`SecurityPolicy::gate_decision`] for that node's [`CommandClass`] and refuse
+/// [`SecurityPolicy::command_class_gate`] for that node's [`CommandClass`] and refuse
 /// outright when the tier `Block`s it — mirroring how `curl`/`shell` acting
-/// tools gate (`policy.gate_decision(CommandClass::Network)`), so a read-only
+/// tools gate (`policy.command_class_gate_blocking(CommandClass::Network)`), so a read-only
 /// run can never reach the network or run arbitrary code.
 ///
 /// `Allow`/`Prompt` return `Ok(decision)`: this function only enforces the
@@ -38,12 +38,26 @@ use tinytools::status::POLICY_BLOCKED_MARKER;
 /// reuses this exact function — `CommandClass::Read` for
 /// recall/search/flavour/people, `CommandClass::Write` for remember/forget —
 /// rather than growing a second permission path for the new node kind.
-pub(crate) fn enforce_node_tier_gate(
+pub(crate) async fn enforce_node_tier_gate(
     security: &SecurityPolicy,
     class: CommandClass,
     node: &str,
 ) -> Result<GateDecision> {
-    let decision = security.gate_decision(class);
+    // The tier table is the TinySecurity module's; a module that cannot answer
+    // refuses the node, as it does for every other acting surface.
+    let decision = match security.command_class_gate(class).await {
+        Ok(decision) => decision,
+        Err(refusal) => {
+            tracing::warn!(
+                target: "flows",
+                node,
+                ?class,
+                ?refusal,
+                "[flows] node tier gate: refused — module gate did not allow the class"
+            );
+            return Err(EngineError::Capability(refusal.to_string()));
+        }
+    };
     tracing::debug!(
         target: "flows",
         node,

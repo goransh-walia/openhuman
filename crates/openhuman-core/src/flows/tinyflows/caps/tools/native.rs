@@ -45,7 +45,7 @@ impl ToolBackend for NativeToolBackend {
 
         let class = crate::tools::native_ops::classify_tool_call(ctx.config, tool_name, &args)
             .map_err(EngineError::Capability)?;
-        let tier_decision = super::super::enforce_node_tier_gate(ctx.security, class, "tool_call")?;
+        let tier_decision = super::super::enforce_node_tier_gate(ctx.security, class, "tool_call").await?;
         let summary = crate::security::approval::summarize_action(tool_name, &args);
         let redacted = crate::security::approval::redact_args(&args);
         let (outcome, audit_id) =

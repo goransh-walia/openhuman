@@ -115,7 +115,7 @@ impl ToolBackend for ComposioToolBackend {
         // can never even probe which slugs are curated.
         let composio_class = super::super::classify_composio_action_for_tier(slug).await;
         let tier_decision =
-            super::super::enforce_node_tier_gate(ctx.security, composio_class, "tool_call")?;
+            super::super::enforce_node_tier_gate(ctx.security, composio_class, "tool_call").await?;
         tracing::debug!(
             target: "flows",
             %slug,

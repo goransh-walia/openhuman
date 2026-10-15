@@ -176,7 +176,7 @@ impl HttpClient for OpenHumanHttp {
         // — it escalates a Supervised `Prompt` decision into a forced approval
         // regardless of the flow's own `require_approval` toggle (Codex P1).
         let tier_decision =
-            enforce_node_tier_gate(&self.security, CommandClass::Network, "http_request")?;
+            enforce_node_tier_gate(&self.security, CommandClass::Network, "http_request").await?;
 
         // The approval gate summarizes/redacts the request BEFORE any credential
         // is injected, so a stored secret never lands in the approval UI or

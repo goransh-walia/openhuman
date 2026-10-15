@@ -108,7 +108,7 @@ impl OpenHumanMemory {
     }
 
     /// Read-side tier gate: `CommandClass::Read` is `Allow` at every autonomy
-    /// tier (`SecurityPolicy::gate_decision`), so this can only ever succeed
+    /// tier (`SecurityPolicy::command_class_gate`), so this can only ever succeed
     /// or `Block` outright (`ReadOnly`/`Supervised`/`Full` all `Allow` Read).
     /// Still routed through [`enforce_node_tier_gate`] — rather than skipped
     /// — so the tier-gate debug log line and the `Block` floor stay uniform
@@ -119,8 +119,8 @@ impl OpenHumanMemory {
     /// a guaranteed-`Allow` decision through `intercept_audited` anyway would
     /// only reintroduce the "reads wait for approval" bug that short-circuit
     /// was added to close.
-    fn tier_gate_read(&self, op: &str) -> Result<()> {
-        enforce_node_tier_gate(&self.security, CommandClass::Read, op)?;
+    async fn tier_gate_read(&self, op: &str) -> Result<()> {
+        enforce_node_tier_gate(&self.security, CommandClass::Read, op).await?;
         Ok(())
     }
 
@@ -141,7 +141,7 @@ impl OpenHumanMemory {
     /// see that function's doc for why (E-m1).
     async fn tier_gate_write(&self, op: &str, action: &Value) -> Result<Option<String>> {
         let tool_name = format!("flows_memory_{op}");
-        let tier_decision = enforce_node_tier_gate(&self.security, CommandClass::Write, op)?;
+        let tier_decision = enforce_node_tier_gate(&self.security, CommandClass::Write, op).await?;
         let summary = summarize_action(&tool_name, action);
         let redacted = redact_args(action);
         let (outcome, audit_id) =
