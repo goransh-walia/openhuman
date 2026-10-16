@@ -37,6 +37,7 @@ pub fn module_config(config: &Config) -> ModuleConfig {
         crypto: Some(production_crypto_config(config)),
         approvals: Some(approval_init_config()),
         audit: Some(audit_init_config()),
+        sandbox: Some(sandbox_init_config()),
         ..ModuleConfig::default()
     }
 }
@@ -93,6 +94,15 @@ pub(crate) fn audit_init_config() -> tinysecurity_bus::AuditConfig2 {
         journal_max_bytes: 1_000_000,
         journal_max_events: 10_000,
     }
+}
+
+/// Init-only sandbox configuration: no scope at all. The module holds at most 128
+/// init scopes, each bound to the audit subject, while the host plans sandboxes for
+/// an unbounded set of subjects, so every scope is registered at runtime
+/// (`RegisterSandboxScope2`, `sandbox::spawn_plan`) under the subject's own audit
+/// stream. Identical on every load and refresh: the module refuses a changed one.
+pub(crate) fn sandbox_init_config() -> tinysecurity_bus::SandboxConfig2 {
+    tinysecurity_bus::SandboxConfig2 { scopes: Vec::new() }
 }
 
 /// Production confidential crypto surface. Password crypt is on. The keyring and
