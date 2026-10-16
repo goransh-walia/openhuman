@@ -88,6 +88,18 @@ pub(crate) struct SpawnRequest<'a> {
     pub(crate) host_off: bool,
 }
 
+impl<'a> SpawnRequest<'a> {
+    fn clone_ref(&self) -> SpawnRequest<'a> {
+        SpawnRequest {
+            config: self.config,
+            policy: self.policy,
+            source: self.source,
+            operation: self.operation,
+            host_off: self.host_off,
+        }
+    }
+}
+
 /// The requested resource bounds, from the policy's Docker overrides.
 fn limits(policy: &SandboxPolicy) -> ResourceLimits2 {
     let Some(overrides) = &policy.docker_overrides else {
@@ -317,6 +329,17 @@ impl PlannedSpawn {
         }
         applied
     }
+}
+
+/// Plan `request`, reserve the plan and return the policy the spawn must run under.
+///
+/// This is the one call a spawn site makes. The plan is reserved here, immediately
+/// before the caller launches it, so it cannot be admitted twice and the audit trail
+/// shows plan and admission for the same operation.
+pub(crate) async fn admit(request: SpawnRequest<'_>) -> Result<SandboxPolicy, PlanError> {
+    let planned = plan(request.clone_ref()).await?;
+    consume(request.config, &planned).await?;
+    Ok(planned.apply(request.policy))
 }
 
 /// Reserve `planned` once, immediately before launching it.
