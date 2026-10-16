@@ -115,8 +115,8 @@ pub(crate) struct CheckInput {
 /// What the engine answered for a gated call.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Checked {
-    /// An audited automatic approval (a grant or the auto-approve posture), and
-    /// the reservation to execute it was taken.
+    /// An audited automatic approval (a grant or the auto-approve posture). The
+    /// caller still reserves it before executing.
     Approved { request_id: String },
     /// A human must decide. The prompt was delivered to the [`PromptSurface`].
     Pending {
@@ -138,7 +138,7 @@ pub(crate) enum Choice {
 /// What a decision left the request as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Decided {
-    /// Approved; the call may now be reserved.
+    /// Approved; the caller reserves the call before it runs.
     Approved,
     /// Denied.
     Denied,
@@ -160,12 +160,11 @@ pub(crate) enum EngineError {
 #[async_trait]
 pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync {
     /// Evaluate a gated call: register or refresh its subject, then ask the
-    /// engine. An automatic approval is reserved before it is returned.
+    /// engine.
     async fn check(&self, input: CheckInput) -> Result<Checked, EngineError>;
 
-    /// Apply a human's decision to a pending request and, on approval, reserve
-    /// the call for execution. `Err(NotPending)` when the request is not
-    /// pending in this process.
+    /// Apply a human's decision to a pending request. `Err(NotPending)` when the
+    /// request is not pending in this process.
     async fn decide(&self, request_id: &str, choice: Choice) -> Result<Decided, EngineError>;
 
     /// Reserve an approved request for execution, exactly once.
