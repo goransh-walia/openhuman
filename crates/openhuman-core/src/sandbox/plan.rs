@@ -52,7 +52,7 @@ pub enum PlanMappingError {
     /// The plan selected the no-op backend, which confines nothing.
     NoopBackend,
     /// The plan selected an executor the host does not drive yet.
-    ExecutorNotWired(SandboxBackend),
+    ExecutorNotWired,
     /// Mediated egress needs an exclusive validated proxy the host does not run.
     EgressProxyUnavailable,
     /// A CPU-time bound; TinyBox enforces CPU throughput only.
@@ -67,7 +67,7 @@ impl std::fmt::Display for PlanMappingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::NoopBackend => "the sandbox plan selected the no-op backend",
-            Self::ExecutorNotWired(_) => {
+            Self::ExecutorNotWired => {
                 "the sandbox plan selected an executor the host does not drive"
             }
             Self::EgressProxyUnavailable => "the sandbox plan needs a mediated egress proxy",
@@ -89,11 +89,13 @@ impl BoxPlan {
         artifact: &SandboxArtifact2,
         home: Option<&Path>,
     ) -> Result<Self, PlanMappingError> {
-        let executor = match artifact.backend {
+        let executor = match &artifact.backend {
             SandboxBackend::Jail => PlannedExecutor::NativeJail,
             SandboxBackend::Docker => PlannedExecutor::Docker,
             SandboxBackend::Noop => return Err(PlanMappingError::NoopBackend),
-            other => return Err(PlanMappingError::ExecutorNotWired(other)),
+            SandboxBackend::Namespace | SandboxBackend::MicroVm => {
+                return Err(PlanMappingError::ExecutorNotWired)
+            }
         };
         let network = match artifact.network {
             PlannedNetwork::None => NetworkPolicy::Denied,

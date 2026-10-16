@@ -109,7 +109,7 @@ fn plans_tinybox_cannot_enforce_exactly_are_refused() {
     for backend in [SandboxBackend::Namespace, SandboxBackend::MicroVm] {
         assert_eq!(
             BoxPlan::from_artifact(&artifact(backend), None),
-            Err(PlanMappingError::ExecutorNotWired(backend))
+            Err(PlanMappingError::ExecutorNotWired)
         );
     }
 
