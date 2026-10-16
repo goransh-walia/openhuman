@@ -17,7 +17,7 @@
 //! | Module | Owns |
 //! | ------ | ---- |
 //! | `tinyagents_runtime::command_hooks` | the engine and the whole `hooks.json` contract: types, config, matcher, exec, engine, context, follow-ups |
-//! | [`host`] | the process-global engine and its OpenHuman seams (product name, home, shell, prompt model) |
+//! | [`host`] | the process-global engine and its OpenHuman seams (product name, home, sandboxed command spawner, prompt model) |
 //! | [`bridge`] | mounting the engine on the harness's existing tool/turn seams |
 //! | [`ops`] | the lifecycle moments that have no existing seam |
 //!
@@ -30,7 +30,7 @@ pub mod host;
 pub mod ops;
 pub mod prompt_eval;
 pub mod schemas;
-mod shell;
+mod spawner;
 
 pub use ops::{init, PromptVerdict};
 pub use schemas::{

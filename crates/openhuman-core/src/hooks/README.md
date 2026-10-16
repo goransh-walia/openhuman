@@ -12,7 +12,7 @@ This folder is the OpenHuman host side only. The engine, the `hooks.json`
 contract, config loading, matching and the process runner live upstream in
 `tinyagents_runtime::command_hooks` ([`vendor/tinyagents`](../../../../vendor/tinyagents/), crate
 `tinyagents-runtime`). What stays here is the glue: one process-global engine
-built with OpenHuman's product name, shell and model, a bridge that mounts it
+built with OpenHuman's product name, sandboxed command spawner and model, a bridge that mounts it
 on the harness's tool and turn seams, direct entry points for the moments that
 have no seam, and the `hooks` RPC namespace.
 
@@ -174,7 +174,7 @@ hook costs a model call per event, so they belong on rare, high-stakes moments.
 | Path | What it does |
 | --- | --- |
 | [`mod.rs`](./mod.rs) | Module declarations; re-exports `init`, `PromptVerdict` and the controller aggregators. |
-| `host.rs` | The process-global `HookEngine` (`engine()`), the `HookEnvironment` built from `PRODUCT_NAME`, the home dir, the shell factory from [`shell.rs`](./shell.rs) (TinyBox's `SelectShell`, resolved once in `reload`) and the prompt evaluator, and `reload`. |
+| `host.rs` | The process-global `HookEngine` (`engine()`), the `HookEnvironment` built from `PRODUCT_NAME`, the home dir, the command spawner from [`spawner.rs`](./spawner.rs) (every `command` hook runs through `sandbox::untrusted::run`, refused below the isolation floor) and the prompt evaluator, and `reload`. |
 | [`bridge.rs`](./bridge.rs) | `ConfiguredHookBridge`: the `ToolHook` and `PostTurnHook` impls, derived-event mapping and payload shaping, and the translation from `HookOutput` to `ToolHookDecision`. |
 | `ops.rs` | `init` and the direct entry points for non-tool lifecycle moments. |
 | [`prompt_eval.rs`](./prompt_eval.rs) | Model evaluation for `prompt`-kind hooks. |
