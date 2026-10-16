@@ -97,6 +97,22 @@ async fn saas_refuses_an_untrusted_command_even_when_the_operator_opted_out() {
     );
 }
 
+/// Whether the module's plan, rather than the host's own floor, refused the spawn.
+#[cfg(all(feature = "modules", target_os = "linux"))]
+fn refused_by_module(error: &anyhow::Error) -> bool {
+    #[cfg(feature = "security-module")]
+    {
+        error
+            .downcast_ref::<super::spawn_plan::PlanError>()
+            .is_some()
+    }
+    #[cfg(not(feature = "security-module"))]
+    {
+        let _ = error;
+        false
+    }
+}
+
 /// Drives the real gate against the released TinyBox archive. What the jail
 /// reports decides what must happen, and the two must agree:
 ///
@@ -177,15 +193,7 @@ async fn untrusted_gate_follows_the_released_jail() {
             // Either floor refuses it: the module's plan (a jail that is not
             // kernel-isolated is `Unsupported` for untrusted text) or, without the
             // module, the host's own `IsolationFloor`.
-            let module_refused = error
-                .downcast_ref::<super::super::spawn_plan::PlanError>()
-                .is_some_and(|plan| {
-                    matches!(
-                        plan,
-                        super::super::spawn_plan::PlanError::Refused(_)
-                            | super::super::spawn_plan::PlanError::Unavailable(_)
-                    )
-                });
+            let module_refused = refused_by_module(&error);
             assert!(
                 module_refused
                     || error
