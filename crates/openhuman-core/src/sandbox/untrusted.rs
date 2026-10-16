@@ -93,11 +93,18 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         crate::config::ensure_usable_cwd(cwd)?;
         std::fs::create_dir_all(state_dir)
             .map_err(|error| anyhow::anyhow!("Cannot prepare sandbox state directory: {error}"))?;
-        let mut shell = super::shell_exec::NativeShellRun::new(command, cwd, state_dir, timeout);
-        shell.env = env.clone();
-        shell.preserve_pipeline_status = preserve_pipeline_status;
-        shell.stdin = stdin.map(<[u8]>::to_vec);
-        return super::shell_exec::run(config, shell).await;
+        return super::shell_exec::run_host_with_stdin(
+            config,
+            command,
+            cwd,
+            state_dir,
+            env.clone(),
+            timeout,
+            preserve_pipeline_status,
+            None,
+            stdin.map(<[u8]>::to_vec),
+        )
+        .await;
     }
 
     let mut policy = super::ops::resolve_command_policy_with_config(&ctx, config, cwd, state_dir)

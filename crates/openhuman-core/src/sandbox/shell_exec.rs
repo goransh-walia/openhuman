@@ -333,10 +333,37 @@ pub(crate) async fn run_host(
     preserve_pipeline_status: bool,
     meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
+    run_host_with_stdin(
+        config,
+        command,
+        cwd,
+        state_dir,
+        env,
+        timeout,
+        preserve_pipeline_status,
+        meter,
+        None,
+    )
+    .await
+}
+
+/// [`run_host`] with bytes written to the command's stdin (then closed).
+pub(crate) async fn run_host_with_stdin(
+    config: &Config,
+    command: &str,
+    cwd: &std::path::Path,
+    state_dir: &std::path::Path,
+    env: BTreeMap<String, String>,
+    timeout: Duration,
+    preserve_pipeline_status: bool,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
+    stdin: Option<Vec<u8>>,
+) -> anyhow::Result<SandboxExecResult> {
     let mut shell = NativeShellRun::new(command, cwd, state_dir, timeout);
     shell.meter = meter;
     shell.env = env;
     shell.preserve_pipeline_status = preserve_pipeline_status;
+    shell.stdin = stdin;
     run(config, shell).await
 }
 

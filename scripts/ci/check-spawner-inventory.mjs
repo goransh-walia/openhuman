@@ -40,7 +40,7 @@ const write = process.argv.includes("--write");
 const SPAWN = /\b[A-Za-z]*Command::new\s*\(/g;
 // The host shell helper starts a process on the caller's behalf, so its call
 // sites are spawn sites of the caller.
-const HELPER = /\bshell_exec::run_host\s*\(/g;
+const HELPER = /\bshell_exec::run_host(?:_with_stdin)?\s*\(/g;
 const PROCESS_CMD = /process::(?:Command\b|\{[^}]*\bCommand\b)/;
 const TRUSTS = new Set(["operator", "untrusted", "host-probe", "unclassified"]);
 
