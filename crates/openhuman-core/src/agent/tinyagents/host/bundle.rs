@@ -33,9 +33,7 @@ use super::{
 pub struct OpenHumanHostBundleInputs {
     pub config: Arc<Config>,
     pub definitions: Arc<AgentDefinitionRegistry>,
-    pub security_policy: Arc<SecurityPolicy>,
     pub tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
-    pub tool_policy: Option<Arc<ToolPolicySession>>,
     pub post_turn_hooks: Vec<Arc<dyn PostTurnHook>>,
     /// See [`OpenHumanHostBase::session_definition`].
     pub session_definition: Option<Arc<crate::agent::harness::host_definition::AgentDefinition>>,
@@ -50,7 +48,6 @@ pub struct OpenHumanHostBundleInputs {
 pub struct OpenHumanHostBase {
     pub config: Arc<Config>,
     pub definitions: Arc<AgentDefinitionRegistry>,
-    pub security_policy: Arc<SecurityPolicy>,
     pub post_turn_hooks: Vec<Arc<dyn PostTurnHook>>,
     /// The session's own caller-supplied definition, when it was built from one
     /// rather than from a registry id — see
@@ -65,7 +62,6 @@ pub struct OpenHumanHostBase {
 pub struct OpenHumanHostInvocationInputs {
     pub base: Arc<OpenHumanHostBase>,
     pub tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
-    pub tool_policy: Option<Arc<ToolPolicySession>>,
     /// The current turn's already-selected model route set.
     pub model_resolver: Option<Arc<dyn ModelResolver<()>>>,
 }
@@ -103,9 +99,7 @@ impl OpenHumanHostBundleFactory {
             OpenHumanHostBundleInputs {
                 config: inputs.base.config.clone(),
                 definitions: inputs.base.definitions.clone(),
-                security_policy: inputs.base.security_policy.clone(),
                 tool_sets: inputs.tool_sets,
-                tool_policy: inputs.tool_policy,
                 post_turn_hooks: inputs.base.post_turn_hooks.clone(),
                 session_definition: inputs.base.session_definition.clone(),
             },

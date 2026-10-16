@@ -791,7 +791,6 @@ impl OpenHumanSessionHost {
             Arc::new(crate::agent::tinyagents::host::OpenHumanHostBase {
                 config: Arc::clone(&base_config),
                 definitions,
-                security_policy: security,
                 post_turn_hooks: agent.post_turn_hooks.clone(),
                 session_definition: session_definition.clone().map(|definition| {
                     Arc::new(super::host_tools::add_permanent_tools(

@@ -588,9 +588,6 @@ async fn drive_turn(
                 crate::agent::tinyagents::host::OpenHumanHostInvocationInputs {
                     base,
                     tool_sets,
-                    tool_policy: tool_policy
-                        .as_ref()
-                        .map(|policy| Arc::new(policy.session.clone())),
                     model_resolver: hosted_model_resolver,
                 },
                 &run_context,
