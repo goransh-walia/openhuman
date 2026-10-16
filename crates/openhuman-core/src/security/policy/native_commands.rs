@@ -347,7 +347,7 @@ fn absolute(path: &std::path::Path) -> Result<PathBuf, Refusal> {
 }
 
 #[cfg(feature = "security-module")]
-fn to_bus_class(class: CommandClass) -> tinysecurity_bus::CommandClass {
+pub(crate) fn to_bus_class(class: CommandClass) -> tinysecurity_bus::CommandClass {
     use tinysecurity_bus::CommandClass as Bus;
     match class {
         CommandClass::Read => Bus::Read,

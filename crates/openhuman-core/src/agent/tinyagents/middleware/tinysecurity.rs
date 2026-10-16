@@ -27,24 +27,64 @@ pub(crate) trait VerdictSource: Send + Sync {
         ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> Result<Verdict, String>;
-}
 
-/// Stable, payload-free text for a denial category.
-fn reason_text(reason: &DenialReason) -> &'static str {
-    match reason {
-        DenialReason::Floor => "blocked by the security floor",
-        DenialReason::UnsupportedEffect => "unsupported effect or unknown tool",
-        DenialReason::ApprovalUnavailable => "human approval is required",
-        DenialReason::Access => "insufficient access",
-        DenialReason::PathScope => "path is outside the allowed scope",
-        DenialReason::PathResolution => "path could not be securely resolved",
-        DenialReason::Command => "command is not safely supported",
-        DenialReason::InvalidContext => "missing verified caller identity",
-        DenialReason::Content => "content blocked by the security scanner",
+    /// Model-facing text for a `Deny` this source issued, when the generic text of
+    /// the category would misdescribe it. `None` uses the category text.
+    fn denial_text(&self, _call: &TaToolCall, _verdict: &Verdict) -> Option<String> {
+        None
     }
 }
 
-/// Map a module verdict to the harness decision. `RequireApproval` carries the
+/// The tool whose arguments carry a shell command string. The module gates it
+/// by command class, so its refusals read as the command refusals the shell
+/// tool itself produces.
+pub(crate) const SHELL_TOOL: &str = "shell";
+
+/// Stable, payload-free text for a denial category. `tool` names the refused
+/// call; the module's answer carries no more than the category and, for the
+/// hourly budget, the configured limit.
+///
+/// Model-facing refusals that predate the module keep their wording: a shell
+/// refusal reads as the command refusal the shell tool gives, the read-only
+/// tier and the protected-path floor carry the `[policy-blocked]` marker, a
+/// scheduled turn carries `[policy-denied]`, and the budget text names its limit.
+fn reason_text(tool: &str, reason: &DenialReason) -> String {
+    use crate::security::policy::native_commands::refusal_message;
+    use crate::security::policy::Refusal;
+    use tinytools::status::{POLICY_BLOCKED_MARKER, POLICY_DENIED_MARKER};
+
+    let shell = tool == SHELL_TOOL;
+    match reason {
+        DenialReason::Floor if shell => refusal_message(Refusal::Protected),
+        DenialReason::Floor => "blocked by the security floor".into(),
+        DenialReason::UnsupportedEffect => "unsupported effect or unknown tool".into(),
+        DenialReason::ApprovalUnavailable => "human approval is required".into(),
+        DenialReason::Access if shell => refusal_message(Refusal::Category),
+        DenialReason::Access => "insufficient access".into(),
+        DenialReason::PathScope => "path is outside the allowed scope".into(),
+        DenialReason::PathResolution => "path could not be securely resolved".into(),
+        DenialReason::Command if shell => refusal_message(Refusal::Hidden),
+        DenialReason::Command => "command is not safely supported".into(),
+        DenialReason::InvalidContext => "missing verified caller identity".into(),
+        DenialReason::Content => "content blocked by the security scanner".into(),
+        DenialReason::ReadOnlyMode if shell => refusal_message(Refusal::ReadOnly),
+        DenialReason::ReadOnlyMode => format!(
+            "{POLICY_BLOCKED_MARKER} Security policy: read-only mode, cannot perform '{tool}'."
+        ),
+        DenialReason::RateLimited { max_per_hour } => format!(
+            "Rate limit exceeded: action budget exhausted ({max_per_hour} actions/hour). Wait \
+             for the rolling one-hour window to refill, or raise the limit in Settings -> \
+             Advanced -> Agent autonomy."
+        ),
+        DenialReason::ScheduledReadOnly => format!(
+            "{POLICY_DENIED_MARKER} Scheduled agent turns may use read-only tools only; \
+             '{tool}' needs a live user action."
+        ),
+        DenialReason::HighRisk => refusal_message(Refusal::HighRisk),
+    }
+}
+
+/// Map a module verdict for the call to `tool` to the harness decision. `RequireApproval` carries the
 /// persisted request id in its reason so the approval resolver can bind to it.
 ///
 /// `Deny { ApprovalUnavailable }` is the module's plain `Evaluate` answer for a
@@ -53,16 +93,16 @@ fn reason_text(reason: &DenialReason) -> &'static str {
 /// the gate fails closed when no approval resolver is attached, and the
 /// resolver itself denies when no human can be asked. Every other denial stays
 /// a denial.
-pub(crate) fn verdict_to_policy_decision(verdict: &Verdict) -> PolicyDecision {
+pub(crate) fn verdict_to_policy_decision(tool: &str, verdict: &Verdict) -> PolicyDecision {
     match verdict {
         Verdict::Allow => PolicyDecision::Allow,
         Verdict::Deny {
             reason: DenialReason::ApprovalUnavailable,
         } => PolicyDecision::RequireApproval {
-            reason: reason_text(&DenialReason::ApprovalUnavailable).to_string(),
+            reason: reason_text(tool, &DenialReason::ApprovalUnavailable),
         },
         Verdict::Deny { reason } => PolicyDecision::Deny {
-            reason: reason_text(reason).to_string(),
+            reason: reason_text(tool, reason),
         },
         Verdict::RequireApproval { request_id } => PolicyDecision::RequireApproval {
             reason: format!("approval required (request {request_id})"),
@@ -118,7 +158,11 @@ impl ToolCallPolicy<OpenHumanRunContext> for TinySecurityPolicy {
             match source.verdict(ctx, call).await {
                 Ok(verdict) => {
                     tracing::debug!(tool = %call.name, "[tinyagents::mw] tinysecurity verdict mapped");
-                    decisions.push(verdict_to_policy_decision(&verdict));
+                    let decision = match (source.denial_text(call, &verdict), &verdict) {
+                        (Some(reason), Verdict::Deny { .. }) => PolicyDecision::Deny { reason },
+                        _ => verdict_to_policy_decision(&call.name, &verdict),
+                    };
+                    decisions.push(decision);
                 }
                 // A fault never allows and is never retried: the call is denied
                 // here, without asking the remaining sources.
