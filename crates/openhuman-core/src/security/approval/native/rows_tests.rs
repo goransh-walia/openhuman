@@ -172,13 +172,12 @@ async fn load_answers_one_subject_newest_first_and_never_more_than_the_limit() {
     let store = rows();
     let mine = handle("a");
     let theirs = handle("b");
+    let mut written = Vec::new();
     for (index, id) in ["1", "2", "3"].iter().enumerate() {
         let mut stored = row(id, 1, ApprovalLifecycle2::Pending, &mine);
         stored.created_at_ms += index as u64;
-        store
-            .cas(&cas(&stored, None, id))
-            .await
-            .unwrap();
+        store.cas(&cas(&stored, None, id)).await.unwrap();
+        written.push(record(&stored));
         tokio::time::sleep(std::time::Duration::from_millis(3)).await;
     }
     let other = row("4", 1, ApprovalLifecycle2::Pending, &theirs);
@@ -187,6 +186,9 @@ async fn load_answers_one_subject_newest_first_and_never_more_than_the_limit() {
     let loaded = store.load(&mine).await.unwrap();
     let ids: Vec<&str> = loaded.iter().map(|r| &r.record_id[..1]).collect();
     assert_eq!(ids, ["3", "2", "1"]);
+    // The module gets back exactly the envelope it wrote.
+    written.reverse();
+    assert_eq!(loaded, written);
     assert_eq!(store.load(&theirs).await.unwrap().len(), 1);
     assert!(LOAD_LIMIT <= 1024, "the module refuses a larger answer");
 }
