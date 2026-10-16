@@ -67,8 +67,10 @@ pub(super) struct TurnMiddlewareInputs {
     pub(super) has_route_fallback: bool,
     /// The turn's dispatch context (its embedder tool hooks come from it).
     pub(super) dispatch: crate::core::runtime::DispatchCtx,
-    /// Hosted roots authorize tools through `OpenHumanSecurityGate`; installing
-    /// the legacy approval middleware as well would issue a second approval.
+    /// A hosted root: its session's channel tool policy also feeds the security
+    /// gate with the channel's "ask a human first" tools, which a hosted root's
+    /// gate used to park itself. Tool authorization is the one shared gate for
+    /// every path.
     pub(super) hosted_security_gate: bool,
     /// Whether this run pauses gracefully at its model-call cap (issue #6014).
     /// Only such a run gets the in-loop conclusion: a run that errors at its cap
@@ -480,10 +482,15 @@ pub(super) fn install_turn_middleware(
     // for an effect-bearing tool, mapped onto the harness decision, with a
     // required approval settled through the global `ApprovalGate`. It is the
     // first tool middleware on every path so a refused call reaches nothing
-    // else. A hosted root's own security adapter answers for its tool calls.
-    if !hosted_security_gate {
-        middleware::security_gate::install(harness, tool_sets.clone());
-    }
+    // else. A hosted root installs it too; its host `SecurityGate` only refuses a
+    // nested call and screens input.
+    middleware::security_gate::install(
+        harness,
+        tool_sets.clone(),
+        hosted_security_gate
+            .then(|| tool_policy.as_ref().map(|enforcement| enforcement.session.clone()))
+            .flatten(),
+    );
 
     // CLI/RPC-only scope gate — a tool restricted to explicit CLI/RPC invocation
     // must not run from the model loop. Intrinsic to the tool, so installed on
