@@ -144,6 +144,7 @@ fn paths(config: &Config, policy: &SandboxPolicy) -> PathPolicy {
             policy
                 .read_only_mounts
                 .iter()
+                .filter(|path| !under_baseline(path))
                 .map(|path| (path, PathAccess::ReadOnly)),
         )
         .chain(
