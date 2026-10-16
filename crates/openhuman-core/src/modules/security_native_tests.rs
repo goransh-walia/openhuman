@@ -22,6 +22,8 @@ pub(crate) struct NativeFixture {
     pub(crate) proxy: tinybus::Proxy,
     pub(crate) client: Connection,
     pub(crate) record: super::super::ModuleRecord,
+    /// The in-memory bus both peers sit on, for a test that needs another peer.
+    pub(crate) transport: MemoryBus,
 }
 
 pub(super) async fn native_fixture() -> NativeFixture {
@@ -166,6 +168,7 @@ pub(crate) async fn native_fixture_configured(
         proxy,
         client,
         record,
+        transport,
     }
 }
 
