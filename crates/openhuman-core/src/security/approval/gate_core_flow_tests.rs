@@ -1,4 +1,6 @@
 use super::*;
+use crate::security::approval::engine::{ApprovalEngine, Choice};
+use crate::security::approval::engine_stub::State;
 
 #[test]
 fn guard_cleanup_only_clears_routing_it_still_owns() {
@@ -13,14 +15,14 @@ fn guard_cleanup_only_clears_routing_it_still_owns() {
         .insert("thread-1".into(), "req-new".into());
 
     // Stale guard for the superseded request is a no-op.
-    gate.clear_thread_route_if_owned("thread-1", "req-old");
+    gate.parked.clear_thread_route_if_owned("thread-1", "req-old");
     assert_eq!(
         gate.pending_for_thread("thread-1").as_deref(),
         Some("req-new")
     );
 
     // The owning request's guard clears its own routing.
-    gate.clear_thread_route_if_owned("thread-1", "req-new");
+    gate.parked.clear_thread_route_if_owned("thread-1", "req-new");
     assert!(gate.pending_for_thread("thread-1").is_none());
 }
 
@@ -162,10 +164,16 @@ async fn aborting_older_chat_waiter_preserves_newer_thread_route() {
     );
     assert!(!gate.parked.waiters.lock().contains_key(&old_request_id));
     assert!(gate.parked.waiters.lock().contains_key(&new_request_id));
-    assert_eq!(
-        store::get_decision(&gate.config, &old_request_id).unwrap(),
-        Some(ApprovalDecision::Deny)
-    );
+    // The torn-down turn's request is cancelled in the engine (off the dropped
+    // future, so give it a moment).
+    let stub = stub_of(&gate);
+    let mut tries = 0;
+    while stub.state(&old_request_id) != Some(State::Cancelled) {
+        tries += 1;
+        assert!(tries < 500, "the abandoned request was never cancelled");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_ne!(stub.state(&new_request_id), Some(State::Cancelled));
 
     gate.decide(&new_request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
@@ -196,11 +204,10 @@ async fn auto_approve_tool_skips_prompt() {
         dir.path().to_path_buf(),
     );
 
-    // An allow-listed tool short-circuits the gate to `Allow` immediately —
-    // before any parking — even with a live chat context present, and
-    // without persisting a pending row. The shortcut runs regardless of
-    // origin (it's the user's persisted "Always allow" allowlist), so we
-    // do not need to scope an origin for this case.
+    // An allow-listed tool is approved without parking — even with a live chat
+    // context present — as an audited automatic approval, not a pending request.
+    // The grant holds regardless of origin (it's the user's persisted "Always
+    // allow" allowlist), so we do not need to scope an origin for this case.
     let outcome = gate
         .intercept(
             &ApprovalTurnContext::chat(chat_ctx()),
@@ -213,6 +220,15 @@ async fn auto_approve_tool_skips_prompt() {
     assert!(
         gate.list_pending().unwrap().is_empty(),
         "an auto-approved call must not create a pending approval row"
+    );
+    let stub = stub_of(&gate);
+    let ids = stub.request_ids();
+    assert_eq!(ids.len(), 1, "the grant is a recorded approval");
+    assert_eq!(stub.attribution(&ids[0]), Some("auto:tool-grant"));
+    assert_eq!(
+        stub.seen()[0].posture.tool_grants,
+        [tool],
+        "the engine was told the user's grant"
     );
 }
 
@@ -254,10 +270,11 @@ async fn auto_approve_all_resolves_allow() {
     );
 }
 
-/// An `auto_approve_all` bypass must leave a row in the security audit log:
-/// skipping the prompt is exactly the decision an auditor needs to see.
+/// An `auto_approve_all` approval is recorded: skipping the prompt is exactly
+/// the decision an auditor needs to see, so the engine holds an approved,
+/// attributed request for it rather than nothing.
 #[tokio::test]
-async fn auto_approve_all_writes_audit_row() {
+async fn auto_approve_all_is_a_recorded_automatic_approval() {
     let _env = crate::config::TEST_ENV_LOCK.lock().await;
     let (gate, dir) = test_gate();
     let policy = crate::security::SecurityPolicy {
@@ -270,9 +287,9 @@ async fn auto_approve_all_writes_audit_row() {
         dir.path().to_path_buf(),
     );
 
-    let outcome = turn_origin::with_origin(
+    let (outcome, request_id) = turn_origin::with_origin(
         web_origin(),
-        gate.intercept(
+        gate.intercept_audited(
             &ApprovalTurnContext::default(),
             "openhuman_test_aaa_audit",
             "noop",
@@ -282,14 +299,19 @@ async fn auto_approve_all_writes_audit_row() {
     .await;
     assert!(matches!(outcome, GateOutcome::Allow));
 
-    let log = std::fs::read_to_string(dir.path().join("audit.log"))
-        .expect("auto_approve_all must append an audit row");
-    let row: serde_json::Value =
-        serde_json::from_str(log.lines().last().expect("one row")).expect("json row");
-    assert_eq!(row["event_type"], "policy_decision");
-    assert_eq!(row["action"]["command"], "openhuman_test_aaa_audit");
-    assert_eq!(row["action"]["policy_decision"], "auto_approve_all");
-    assert_eq!(row["action"]["allowed"], true);
+    let stub = stub_of(&gate);
+    let request_id = request_id.expect("an engine-approved call hands back its request id");
+    assert_eq!(stub.attribution(&request_id), Some("auto:host-policy"));
+    assert_eq!(stub.state(&request_id), Some(State::Reserved));
+    let seen = &stub.seen()[0];
+    assert!(seen.posture.auto_approve_all);
+    assert_eq!(seen.tool, "openhuman_test_aaa_audit");
+    gate.record_execution(&request_id, ExecutionOutcome::Success, None)
+        .await;
+    assert_eq!(
+        stub.state(&request_id),
+        Some(State::Executed(ExecutionOutcome::Success))
+    );
 }
 
 /// Control test: with `auto_approve_all: false` (the default), a
@@ -433,22 +455,22 @@ async fn auto_approve_all_overrides_require_approval_workflow() {
 ///
 /// Since openhuman#5634 a Composio/webhook payload reaching
 /// `triage.escalate` carries `Workflow { require_approval: true }`, so
-/// normally it parks and writes a `pending_approvals` row — that is
+/// normally it parks for a person — that is
 /// `a_remote_triage_escalation_parks_with_an_audit_row_rather_than_an_unknown_denial`
-/// above. With `auto_approve_all` on it is allowed immediately and writes
-/// no row, which means for those users #5634 moved this path from
-/// `Unknown` → hard Deny to Allow-with-no-audit-trail.
+/// above. With `auto_approve_all` on it is allowed without parking: the user's
+/// blanket setting reaches the engine as the posture of the call, as for every
+/// other origin but an unlabelled one. (The engine now also records that
+/// approval, where the host's old gate left no trail at all.)
 ///
 /// The gate owner accepted that rather than carving out an exception:
 /// https://github.com/tinyhumansai/openhuman/issues/5634#issuecomment-5396604125
 ///
-/// So this test exists to be *broken on purpose*. If a future change adds
-/// this origin to the bypass exclusion list, this fails, and whoever is
-/// making that change has to reopen the decision instead of discovering the
-/// behaviour by accident. Deleting it to make a change pass is the one
-/// wrong response.
+/// So this test exists to be *broken on purpose*. If a future change makes
+/// this origin ignore the posture, this fails, and whoever is making that
+/// change has to reopen the decision instead of discovering the behaviour by
+/// accident. Deleting it to make a change pass is the one wrong response.
 #[tokio::test]
-async fn auto_approve_all_allows_a_remote_triage_dispatch_without_an_audit_row() {
+async fn auto_approve_all_allows_a_remote_triage_dispatch_without_parking() {
     use crate::agent::triage::{remote_trigger_origin, TriggerEnvelope};
 
     let _env = crate::config::TEST_ENV_LOCK.lock().await;
@@ -484,11 +506,16 @@ async fn auto_approve_all_allows_a_remote_triage_dispatch_without_an_audit_row()
 
     assert!(
         matches!(outcome, GateOutcome::Allow),
-        "auto_approve_all opts into the bypass globally, including remote triage;              got {outcome:?}"
+        "auto_approve_all opts into the bypass globally, including remote triage; got {outcome:?}"
     );
     assert!(
         gate.list_pending().unwrap().is_empty(),
-        "the bypass short-circuits before the park, so no pending_approvals row is              written — this is the documented cost of the flag, not a defect"
+        "the posture approves the call before any park, so nothing waits for a person"
+    );
+    assert_eq!(
+        stub_of(&gate).seen()[0].variant,
+        Variant::FlowStrict,
+        "a workflow that requires approval is its own posture variant"
     );
 }
 
@@ -583,29 +610,23 @@ async fn decide_unknown_id_is_noop() {
 #[tokio::test]
 async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
     let (gate, _dir) = test_gate();
+    let stub = stub_of(&gate);
 
-    // Never persisted → genuine loss, keep visible.
+    // Never stored → genuine loss, keep visible.
     assert_eq!(
         gate.classify_decide_miss("never-existed").await,
         DecideMiss::NeverRegistered
     );
 
-    // Persist + decide a row, then a second decide misses → already-decided.
-    let pending = PendingApproval::new(
-        "req-decided",
-        "composio",
-        "send email",
-        serde_json::json!({}),
-        Some(chrono::Utc::now() + chrono::Duration::minutes(10)),
-    );
-    store::insert_pending(&gate.config, &pending, &gate.session_id).unwrap();
+    // Stored and decided, but never parked here: a decision finds nothing to
+    // resolve, and the miss is the benign already-decided race.
+    stub.leave_pending("req-decided", "composio", Duration::from_secs(600));
+    stub.decide("req-decided", Choice::Once, "approve_once")
+        .await
+        .unwrap();
     assert!(gate
-        .decide("req-decided", ApprovalDecision::ApproveOnce).await
-        .unwrap()
-        .is_some());
-    // The conditional UPDATE now matches 0 rows (decided_at set).
-    assert!(gate
-        .decide("req-decided", ApprovalDecision::Deny).await
+        .decide("req-decided", ApprovalDecision::Deny)
+        .await
         .unwrap()
         .is_none());
     assert_eq!(
@@ -613,22 +634,25 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
         DecideMiss::AlreadyResolved
     );
 
-    // A row past its expiry is lazily denied by `decide`'s expire pass, so
-    // its decide miss is also benign (the persisted decision exists).
-    let expired = PendingApproval::new(
-        "req-expired",
-        "composio",
-        "send email",
-        serde_json::json!({}),
-        Some(chrono::Utc::now() - chrono::Duration::minutes(1)),
-    );
-    store::insert_pending(&gate.config, &expired, &gate.session_id).unwrap();
+    // A request that expired is resolved too.
+    stub.leave_pending("req-expired", "composio", Duration::from_millis(1));
+    tokio::time::sleep(Duration::from_millis(5)).await;
+    assert!(stub.expire("req-expired").await.unwrap());
     assert!(gate
-        .decide("req-expired", ApprovalDecision::ApproveOnce).await
+        .decide("req-expired", ApprovalDecision::ApproveOnce)
+        .await
         .unwrap()
         .is_none());
     assert_eq!(
         gate.classify_decide_miss("req-expired").await,
         DecideMiss::AlreadyResolved
+    );
+
+    // Stored and still pending, but not parked by this process: the registration
+    // was lost, which stays a signal.
+    stub.leave_pending("req-orphan", "composio", Duration::from_secs(600));
+    assert_eq!(
+        gate.classify_decide_miss("req-orphan").await,
+        DecideMiss::NeverRegistered
     );
 }
