@@ -3,11 +3,9 @@ impl ApprovalGate {
     /// one was already installed (re-install is a no-op so repeated
     /// `bootstrap_core_runtime` calls in tests don't panic).
     ///
-    /// Rows from prior launches are intentionally NOT purged on
-    /// install — the issue #1339 acceptance criterion requires they
-    /// survive restart so the UI can show / dismiss them. Orphan
-    /// rows have no live parked future, so a `decide` is a DB-only
-    /// audit update; no side effect can fire across processes.
+    /// Requests left by a previous launch are not touched on install. They
+    /// have no live parked future and the engine cannot resume another
+    /// instance's request, so they expire on their own and stay in the history.
     pub fn init_global(config: Config, session_id: impl Into<String>) -> Arc<ApprovalGate> {
         let session_id = session_id.into();
         if let Some(existing) = GLOBAL_GATE.get() {
@@ -32,7 +30,33 @@ impl ApprovalGate {
         GLOBAL_GATE.get().cloned()
     }
 
+    /// The engine this build asks: the TinySecurity module, or, in a build
+    /// without it, one that refuses every gated call.
+    fn engine_for(config: &Config) -> SharedEngine {
+        #[cfg(feature = "security-module")]
+        {
+            Arc::new(super::native::NativeEngine::production(config.clone()))
+        }
+        #[cfg(not(feature = "security-module"))]
+        {
+            let _ = config;
+            Arc::new(super::engine::UnavailableEngine)
+        }
+    }
+
     fn new(config: Config, session_id: String, ttl: Duration) -> Self {
+        let engine = Self::engine_for(&config);
+        Self::with_engine(config, session_id, ttl, engine)
+    }
+
+    /// A gate over `engine`: how the tests drive the gate's own behaviour
+    /// (parking, routing, events) without loading the module.
+    pub(crate) fn with_engine(
+        config: Config,
+        session_id: String,
+        ttl: Duration,
+        engine: SharedEngine,
+    ) -> Self {
         // Regression guard: the gate's session_id must be the per-launch
         // UUID minted by `bootstrap_core_runtime` (shape:
         // `session-<uuid>`). Any other shape risks re-introducing the
@@ -48,9 +72,8 @@ impl ApprovalGate {
             config,
             session_id,
             ttl,
-            waiters: Mutex::new(HashMap::new()),
-            thread_to_request: Mutex::new(HashMap::new()),
-            request_routes: Mutex::new(HashMap::new()),
+            engine,
+            parked: Arc::new(Parked::default()),
         }
     }
 
@@ -97,29 +120,25 @@ impl ApprovalGate {
         ttl
     }
 
-    /// Whether `tool_name` is on the user's "Always allow" list. Prefers the agent or
-    /// process-global live policy (so a grant made this session is seen
-    /// immediately) and falls back to the gate's boot-time config snapshot.
-    fn tool_is_auto_approved(&self, ctx: &crate::core::runtime::DispatchCtx, tool_name: &str) -> bool {
+    /// The user's "Always allow" tool list. Prefers the agent or process-global
+    /// live policy (so a grant made this session is seen immediately) and falls
+    /// back to the gate's boot-time config snapshot.
+    fn live_auto_approve(&self, ctx: &crate::core::runtime::DispatchCtx) -> Vec<String> {
         if let Some(policy) = crate::security::live_policy::effective_in(ctx) {
-            return policy.auto_approve.iter().any(|t| t == tool_name);
+            return policy.auto_approve.clone();
         }
-        self.config
-            .autonomy
-            .auto_approve
-            .iter()
-            .any(|t| t == tool_name)
+        self.config.autonomy.auto_approve.clone()
     }
 
     /// Whether the user has opted into "auto-approve everything" — a
     /// blanket bypass of the human approval prompt. Mirrors
-    /// [`Self::tool_is_auto_approved`]'s live-policy-first, boot-config-
+    /// [`Self::live_auto_approve`]'s live-policy-first, boot-config-
     /// fallback pattern so a toggle made this session (config save + live
     /// policy reload) takes effect on the very next tool call.
     ///
     /// Callers MUST still exclude `AgentTurnOrigin::Unknown` before trusting
-    /// this flag — see the `matches!` guard at the call site below. This method only reports the
-    /// user's setting; it does not know about origin.
+    /// this flag — an unlabelled call never reaches the engine. This method only
+    /// reports the user's setting; it does not know about origin.
     fn is_auto_approve_all_enabled(&self, ctx: &crate::core::runtime::DispatchCtx) -> bool {
         if let Some(policy) = crate::security::live_policy::effective_in(ctx) {
             return policy.auto_approve_all;
@@ -127,37 +146,39 @@ impl ApprovalGate {
         self.config.autonomy.auto_approve_all
     }
 
-    /// Append an audit row for a call the gate let through without a prompt.
-    /// Best effort: an audit failure is logged, never turned into a denial of
-    /// a call the policy already allowed.
-    pub(super) fn audit_unprompted_allow(
-        &self,
-        tool_name: &str,
-        policy_decision: &str,
-        origin_class: &str,
-    ) {
-        let audit = match crate::security::get_or_create_workspace_audit_logger(
-            self.config.security.audit.clone(),
-            self.config.workspace_dir.clone(),
-        ) {
-            Ok(audit) => audit,
+    /// What the user configured for a call under `variant`, read live: the
+    /// engine converts a required approval into an audited automatic one only
+    /// as far as this allows. A forced call has no shortcut at all.
+    fn posture(&self, ctx: &crate::core::runtime::DispatchCtx, variant: Variant) -> Posture {
+        if variant == Variant::Forced {
+            return Posture {
+                require_approval: true,
+                ..Posture::default()
+            };
+        }
+        let flow_grants = match store::list_all_flow_trust(&self.config) {
+            Ok(grants) => grants,
             Err(error) => {
-                tracing::warn!(%error, "[approval::gate] audit logger unavailable");
-                return;
+                // Fail-safe: without the grants the call is still gated, never
+                // silently allowed.
+                tracing::warn!(
+                    error = %error,
+                    "[approval::gate] flow trust lookup failed — falling through to normal gating"
+                );
+                Vec::new()
             }
         };
-        let event =
-            crate::security::AuditEvent::new(crate::security::AuditEventType::PolicyDecision)
-                .with_actor(origin_class.to_string(), None, None)
-                .with_action(
-                    tool_name.to_string(),
-                    "external_effect".to_string(),
-                    true,
-                    true,
-                )
-                .with_policy_decision(policy_decision);
-        if let Err(error) = audit.log(&event) {
-            tracing::warn!(%error, policy_decision, "[approval::gate] audit write failed");
+        Posture {
+            require_approval: !ctx.approvals_disabled(),
+            auto_approve_all: self.is_auto_approve_all_enabled(ctx),
+            // A workflow whose flow requires approval is never auto-allowed by
+            // the global tool list; the per-flow trust still applies.
+            tool_grants: if variant == Variant::Standard {
+                self.live_auto_approve(ctx)
+            } else {
+                Vec::new()
+            },
+            flow_grants,
         }
     }
 
@@ -166,8 +187,8 @@ impl ApprovalGate {
     ///
     /// Use [`Self::intercept_audited`] instead when the caller can
     /// also record the *terminal* status of the tool — the audit
-    /// trail in `pending_approvals` only carries before-and-after
-    /// rows when both sides report in. See #2135.
+    /// trail only carries before-and-after rows when both sides report
+    /// in. See #2135.
     pub async fn intercept(
         &self,
         turn: &ApprovalTurnContext,
@@ -191,6 +212,20 @@ impl ApprovalGate {
         action_summary: &str,
         args_redacted: serde_json::Value,
     ) -> GateOutcome {
+        self.intercept_forced_audited(tool_name, action_summary, args_redacted)
+            .await
+            .0
+    }
+
+    /// [`Self::intercept_forced`] that also hands back the request id of an
+    /// allowed call, so the caller can [`record_execution`](Self::record_execution)
+    /// how the approved action ended.
+    pub async fn intercept_forced_audited(
+        &self,
+        tool_name: &str,
+        action_summary: &str,
+        args_redacted: serde_json::Value,
+    ) -> (GateOutcome, Option<String>) {
         let mut _park_bound_elapsed = false;
         // A forced approval routes from the validated WebChat origin alone and
         // never reads a chat context, a copilot flag or a flow run, so it takes
@@ -206,22 +241,20 @@ impl ApprovalGate {
             true,
         )
         .await
-        .0
     }
 
     /// Audited variant of [`Self::intercept`].
     ///
     /// Returns `(outcome, Some(request_id))` when the call was
-    /// allowed AND a `pending_approvals` row was persisted — pass
-    /// the id back to [`Self::record_execution`] once the tool
-    /// finishes so the audit row carries both the approval and the
-    /// terminal status (issue #2135).
+    /// allowed through the engine — pass the id back to
+    /// [`Self::record_execution`] once the tool finishes so the audit row
+    /// carries both the approval and the terminal status (issue #2135).
     ///
-    /// Returns `(outcome, None)` when no DB row was created (session
-    /// allowlist shortcut) OR when the call was denied. In either
-    /// case there is nothing to record afterward, so the caller can
-    /// pattern-match `(GateOutcome::Allow, Some(id))` to decide
-    /// whether to invoke `record_execution`.
+    /// Returns `(outcome, None)` when the call was allowed by the origin's own
+    /// trust (no approval was asked) OR when it was denied. In either case there
+    /// is nothing to record afterward, so the caller can pattern-match
+    /// `(GateOutcome::Allow, Some(id))` to decide whether to invoke
+    /// `record_execution`.
     pub async fn intercept_audited(
         &self,
         turn: &ApprovalTurnContext,
@@ -235,8 +268,8 @@ impl ApprovalGate {
 
     /// Like [`Self::intercept_audited`], but threads the gated tool call's
     /// provider-assigned call id through so `ApprovalRequested`/`ApprovalDecided`
-    /// and the persisted `pending_approvals` row can correlate back to the
-    /// exact `tool_call` timeline row instead of matching on tool name alone.
+    /// and the persisted request can correlate back to the exact `tool_call`
+    /// timeline row instead of matching on tool name alone.
     /// `None` for callers with no tracked call id (a legacy path, or a call
     /// not driven through the tinyagents harness).
     pub async fn intercept_audited_for_call(
@@ -269,11 +302,11 @@ impl ApprovalGate {
     ///
     /// When `park_bound` is `Some` and shorter than the gate's own effective
     /// TTL and it elapses before a decision arrives, the gate abandons the park
-    /// in a **cancellation-safe** way — it evicts the in-memory waiter and
-    /// clears the thread routing mapping (so a later chat reply
+    /// in a **cancellation-safe** way — it evicts the in-memory
+    /// waiter and clears the thread routing mapping (so a later chat reply
     /// is not mis-routed to this now-abandoned request) but deliberately LEAVES
-    /// the `pending_approvals` row open, so a later human card-click can still
-    /// resolve it in the DB — and returns `None`. This is why callers must bound
+    /// the request open, so a later human card-click can still resolve it in the
+    /// store — and returns `None`. This is why callers must bound
     /// the park through the gate rather than racing an outer
     /// `tokio::time::timeout` against [`Self::intercept_audited`]: dropping the
     /// parked future would skip that cleanup and orphan the waiter + routing
