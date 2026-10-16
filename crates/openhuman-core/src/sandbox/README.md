@@ -239,9 +239,8 @@ Known gaps the module's rules expose (not host policy):
 
 Spawn sites that do not reach the gate today, and why:
 
-- tinymcp stdio servers start inside the loaded tinymcp module; a jail needs an
-  interactive (piped stdio) execution member in the TinyBox contract and a
-  tinymcp launcher seam over it (`StdioSpawner` exists, the TinyBox side does not).
+- tinymcp stdio servers start inside the loaded tinymcp module, so they do not go
+  through this gate; they have their own route, below.
 - tinyflows' `ProcessCodeRunner`/`ProcessShellRunner` are behind its `host-caps`
   feature, which the host does not enable; the `code` node runs through
   `execute_in_sandbox`.
@@ -249,6 +248,38 @@ Spawn sites that do not reach the gate today, and why:
   the prefix it exists to write.
 - Browser and tinycomputer helper processes live in the tinycomputer module
   (their own process and OS permission model); the host spawns none of them.
+
+## Stdio MCP servers
+
+A stdio MCP server is third-party code that the loaded tinymcp module starts. The
+host does not spawn it, so it never reaches `execute_in_sandbox`; the jail is
+applied through the TinyBox contract instead (`StartStdio`, `WriteStdio`,
+`ReadStdio`, `CloseStdin`, `KillStdio` and `StdioStatus`, tinybox-bus 1.21),
+which tinymcp's `JailedSpawner` drives over the bus (`StdioSpawner` seam).
+
+[`mcp/host.rs`](../mcp/host.rs) decides, per server, which way it starts:
+
+| Server | Started |
+| --- | --- |
+| Declared in the operator's own `[mcp_client.servers]` | As an ordinary child process: `client_config` sets `operator_trusted`. |
+| Installed from the registry (catalog installs, setup test connections) | In the TinyBox native jail. |
+| Any server under SaaS (`is_saas()`), including `[mcp_client.servers]` | In the TinyBox native jail; no tenant server is operator-trusted. |
+
+The jail is [`mcp/stdio_sandbox.rs`](../mcp/stdio_sandbox.rs): a workspace of its
+own (`<workspace_dir>/mcp/stdio`), read grants from the system baseline plus
+`[runtime.local_jail]` (`extra_read_only`, `extra_read_write`, and the toolchain
+homes TinyBox resolves at boot with `ResolveLocalGrants`, filtered through the
+same host floor as the shell jail), the credential stores in `deny_read`, network
+and child processes allowed, and `require_process_isolation` on. The launcher
+always asks for `Enforced`, so a backend that cannot enforce the grants, or does
+not meet the untrusted-code floor (macOS Seatbelt, no kernel support), refuses and
+the server does not start. tinymcp has no unconfined fallback either: a server
+that is neither `operator_trusted` nor given a sandbox is refused. With the
+`mcp` feature off there is no sandbox, so only the operator's servers could start,
+and there is no MCP client to start them.
+
+`scripts/ci/spawner-inventory.json` records both routes under `modules`, since
+the spawn sites live in the module rather than in this repository's sources.
 
 ## Layout
 
