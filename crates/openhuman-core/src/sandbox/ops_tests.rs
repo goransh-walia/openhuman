@@ -493,6 +493,48 @@ async fn saas_refuses_an_unsandboxed_spawn() {
     );
 }
 
+const SAAS_OFF_CHILD: &str = "OPENHUMAN_SANDBOX_SAAS_OFF_CHILD";
+
+/// The host off switch (and `[components] sandbox = false`) never applies under
+/// SaaS: the check that answers "did the host disable the sandbox" is false
+/// before it reads the environment, so a sandboxed mode resolves to a jail.
+#[tokio::test]
+async fn saas_ignores_the_host_off_switch_when_resolving_a_policy() {
+    let module = module_path!().split_once("::").expect("crate module").1;
+    let test = format!("{module}::saas_ignores_the_host_off_switch_when_resolving_a_policy");
+    if std::env::var(SAAS_OFF_CHILD).as_deref() == Ok(test.as_str()) {
+        crate::core::runtime::mode::lock_mode(crate::core::runtime::Mode::Saas).unwrap();
+        assert!(sandbox_off_value(
+            std::env::var(SANDBOX_OFF_ENV).ok().as_deref()
+        ));
+        let ctx = DispatchCtx::process_default();
+        assert!(!sandbox_disabled_by_host(&ctx));
+        let dir = tempfile::tempdir().unwrap();
+        let policy = resolve_sandbox_policy(
+            &ctx,
+            SandboxMode::Sandboxed,
+            dir.path(),
+            dir.path(),
+            &crate::config::RuntimeConfig::default(),
+            false,
+        );
+        assert_ne!(policy.backend, SandboxBackendKind::None);
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", &test, "--nocapture", "--test-threads=1"])
+        .env(SAAS_OFF_CHILD, &test)
+        .env(SANDBOX_OFF_ENV, "off")
+        .output()
+        .expect("run isolated SaaS test");
+    assert!(
+        output.status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+        "isolated test {test} failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn untrusted_isolation_denies_noop_and_unsuitable_jails() {
     assert!(require_untrusted_isolation(true, true).is_ok());
