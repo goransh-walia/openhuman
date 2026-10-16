@@ -53,26 +53,19 @@ pub(crate) async fn run(run: NativeShellRun) -> anyhow::Result<SandboxExecResult
         }
     }
     command.envs(&run.env);
-    // The fixture feeds stdin from a file; the module writes it to a pipe.
-    let _stdin_file = match &run.stdin {
-        Some(bytes) => {
-            let mut file = tempfile::NamedTempFile::new()?;
-            std::io::Write::write_all(&mut file, bytes)?;
-            command.stdin(std::fs::File::open(file.path())?);
-            Some(file)
-        }
-        None => {
-            command.stdin(Stdio::null());
-            None
-        }
-    };
     command
         .current_dir(&run.cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     tinytools_std::timeout::own_process_group(command.as_std_mut());
-    match tinytools_std::timeout::output_or_kill(&mut command, run.timeout).await {
+    let input = run.stdin.clone();
+    match tokio::time::timeout(
+        run.timeout,
+        tinytools_std::timeout::output_with_input(&mut command, input),
+    )
+    .await
+    {
         Ok(Ok(output)) => {
             // The module streams output into the caller's meter as it reads it;
             // the fixture folds the finished output in the same way.
