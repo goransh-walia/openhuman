@@ -28,7 +28,7 @@ mod registry;
 use std::path::Path;
 
 use tinysecurity_bus::{
-    ConsumeSandboxPlanRequest2, NetworkPolicy, PathGrant, ResourceLimits2, SandboxArtifact2,
+    ConsumeSandboxPlanRequest2, PathGrant, ResourceLimits2, SandboxArtifact2,
     SandboxDenial2, SandboxPlanRequest2, SubjectScope, Verdict,
 };
 
@@ -200,10 +200,7 @@ pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, Plan
         .canonical()
         .ok_or_else(|| unavailable("the working directory is not valid text"))?;
     let grants = grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
-    let network = match facts::network_ceiling(policy) {
-        NetworkPolicy::Host => NetworkPolicy::Host,
-        _ => NetworkPolicy::None,
-    };
+    let network = facts::network_ceiling(policy);
     let _ordered = stream.lock().await;
     let generation = client::generation(config).await.map_err(unavailable)?;
     let audit = stream.correlation(generation).await.map_err(unavailable)?;
