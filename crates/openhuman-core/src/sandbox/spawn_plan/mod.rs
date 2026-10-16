@@ -396,3 +396,7 @@ pub(crate) async fn consume(planned: &PlannedSpawn) -> Result<(), PlanError> {
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "integration_tests.rs"]
+mod integration_tests;
