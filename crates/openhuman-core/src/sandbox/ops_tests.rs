@@ -542,3 +542,70 @@ fn untrusted_isolation_denies_noop_and_unsuitable_jails() {
     assert!(require_untrusted_isolation(false, true).is_err());
     assert!(require_untrusted_isolation(false, false).is_err());
 }
+
+#[cfg(feature = "security-module")]
+fn local_policy(workspace: &Path) -> SandboxPolicy {
+    SandboxPolicy {
+        backend: SandboxBackendKind::Local,
+        workspace_root: workspace.to_path_buf(),
+        state_dir: workspace.join("state"),
+        read_only_mounts: Vec::new(),
+        read_write_mounts: Vec::new(),
+        allow_network: false,
+        env_passthrough: Vec::new(),
+        docker_overrides: None,
+    }
+}
+
+/// A sandboxed spawn the module cannot plan is refused with a typed plan error,
+/// never run on a host-side decision.
+#[cfg(feature = "security-module")]
+#[tokio::test]
+async fn a_sandboxed_spawn_the_module_cannot_plan_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = crate::config::Config::default();
+    config.modules.enabled = false;
+    let error = admit_spawn(
+        &config,
+        &local_policy(dir.path()),
+        "echo hi",
+        dir.path(),
+        &HashMap::new(),
+        false,
+    )
+    .await
+    .expect_err("no module, no plan");
+    assert!(
+        matches!(
+            error.downcast_ref::<super::spawn_plan::PlanError>(),
+            Some(super::spawn_plan::PlanError::Unavailable(_))
+        ),
+        "{error:#}"
+    );
+}
+
+/// The operation a plan binds must cross the bus as text, so an environment that
+/// is not UTF-8 is refused before the module is asked.
+#[cfg(all(feature = "security-module", unix))]
+#[tokio::test]
+async fn a_sandboxed_spawn_with_a_non_text_environment_is_refused_before_planning() {
+    use std::os::unix::ffi::OsStrExt;
+    let dir = tempfile::tempdir().unwrap();
+    let config = crate::config::Config::default();
+    let mut env = HashMap::new();
+    env.insert(
+        OsString::from("NAME"),
+        OsString::from(std::ffi::OsStr::from_bytes(b"\xff")),
+    );
+    let error = admit_spawn(
+        &config,
+        &local_policy(dir.path()),
+        "echo hi",
+        dir.path(),
+        &env,
+        false,
+    )
+    .await
+    .expect_err("a non-text environment cannot be planned");
+    assert!(error.to_string().contains("UTF-8"), "{error:#}");
+}
