@@ -69,6 +69,7 @@ pub(crate) struct StubEngine {
     seen: Mutex<Vec<Seen>>,
     refuse: AtomicBool,
     fail_reserve: AtomicBool,
+    always_pending: AtomicBool,
 }
 
 impl std::fmt::Debug for StubEngine {
@@ -128,6 +129,11 @@ impl StubEngine {
     /// Make every later `check` fail, as a module that cannot answer does.
     pub(crate) fn refuse_checks(&self, refuse: bool) {
         self.refuse.store(refuse, Ordering::SeqCst);
+    }
+
+    /// Make every later `check` ask for a person, whatever the posture says.
+    pub(crate) fn always_pending(&self, pending: bool) {
+        self.always_pending.store(pending, Ordering::SeqCst);
     }
 
     /// Make every later `reserve` fail.
@@ -213,7 +219,12 @@ impl ApprovalEngine for StubEngine {
             return Err(EngineError::Unavailable("the stub engine refuses".into()));
         }
         let now = now_ms();
-        if let Some(attribution) = automatic(&input) {
+        let automatic = if self.always_pending.load(Ordering::SeqCst) {
+            None
+        } else {
+            automatic(&input)
+        };
+        if let Some(attribution) = automatic {
             let request_id = self.insert(Row {
                 tool: input.tool,
                 state: State::Approved,

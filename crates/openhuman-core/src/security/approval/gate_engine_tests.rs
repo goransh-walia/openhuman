@@ -510,3 +510,51 @@ async fn pending_requests_are_listed_from_this_process_only_and_by_tenant() {
     assert_eq!(history[0].request_id, request_id);
     assert_eq!(history[0].decision, ApprovalDecision::Deny);
 }
+
+#[tokio::test]
+async fn a_saas_call_the_deployment_allows_is_recorded_as_an_automatic_approval() {
+    let (gate, _dir) = test_gate();
+    let stub = stub_of(&gate);
+    let (outcome, id) = gate
+        .saas_approved("shell", "run ls", serde_json::json!({"cmd": "ls"}), true)
+        .await;
+    assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
+    let id = id.expect("a tracked SaaS call hands back its request id");
+    assert_eq!(stub.state(&id), Some(State::Reserved));
+    assert_eq!(stub.attribution(&id), Some("auto:host-policy"));
+    let seen = stub.seen().remove(0);
+    assert!(!seen.posture.require_approval, "the deployment is the pre-authorization");
+    assert!(seen.thread.is_none() && seen.flow.is_none());
+    assert_eq!(seen.origin, CallOrigin::Operator);
+
+    // An untracked caller gets the same approval without a reservation.
+    let (outcome, id) = gate
+        .saas_approved("shell", "run ls", serde_json::json!({}), false)
+        .await;
+    assert!(matches!(outcome, GateOutcome::Allow));
+    assert!(id.is_none());
+}
+
+#[tokio::test]
+async fn a_saas_call_that_would_need_a_person_is_refused_not_parked() {
+    let (gate, _dir) = test_gate();
+    let stub = stub_of(&gate);
+    // An engine that insists on a person gets a surface that refuses to ask one.
+    stub.always_pending(true);
+    let (outcome, id) = gate
+        .saas_approved("shell", "run ls", serde_json::json!({}), true)
+        .await;
+    assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
+    assert!(id.is_none());
+    assert!(gate.parked.waiters.lock().is_empty());
+
+    stub.always_pending(false);
+    stub.refuse_checks(true);
+    let (outcome, _) = gate
+        .saas_approved("shell", "run ls", serde_json::json!({}), true)
+        .await;
+    assert!(
+        matches!(&outcome, GateOutcome::Deny { reason } if reason.contains("could not record")),
+        "{outcome:?}"
+    );
+}

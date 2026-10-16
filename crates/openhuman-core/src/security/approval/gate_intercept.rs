@@ -84,13 +84,26 @@ impl ApprovalGate {
             );
         }
         // SaaS has no per-user approval surface: never park, allow only what
-        // the deployment's sandboxed tool groups open.
-        if let Some(outcome) = saas_outcome_with(
+        // the deployment's sandboxed tool groups open. What they open is the
+        // pre-authorization, and the engine records it as an audited automatic
+        // approval under the tenant's own subject and audit stream.
+        match saas_outcome_with(
             &crate::core::runtime::DispatchCtx::ambient(),
             crate::core::runtime::is_saas(),
             tool_name,
         ) {
-            return (outcome, None);
+            Some(GateOutcome::Allow) => {
+                return self
+                    .saas_approved(
+                        tool_name,
+                        action_summary,
+                        args_redacted,
+                        mode.track,
+                    )
+                    .await;
+            }
+            Some(denied) => return (denied, None),
+            None => {}
         }
         if forced
             && !matches!(
@@ -532,6 +545,67 @@ impl ApprovalGate {
                 // every exit (decision, channel drop, or timeout).
                 self.parked.clear_thread(&thread_key, &request_id);
                 outcome
+            }
+        }
+    }
+
+    /// A call the SaaS deployment's tool groups allow: no person is asked (there
+    /// is no per-user prompt channel), so the engine records an automatic
+    /// approval for the tenant's subject, and a request that would need a person
+    /// is refused rather than parked.
+    async fn saas_approved(
+        &self,
+        tool_name: &str,
+        action_summary: &str,
+        args_redacted: serde_json::Value,
+        track: bool,
+    ) -> (GateOutcome, Option<String>) {
+        let input = CheckInput {
+            tenant: super::gate::current_route_tenant(),
+            variant: Variant::Standard,
+            posture: Posture {
+                require_approval: false,
+                ..Posture::default()
+            },
+            call_id: fresh_call_id(),
+            tool: tool_name.to_string(),
+            args: object_arguments(args_redacted),
+            summary: action_summary.to_string(),
+            thread: None,
+            flow: None,
+            origin: CallOrigin::Operator,
+            ttl: self.effective_ttl(),
+            prompt: Arc::new(NoApprovalSurface),
+        };
+        match self.engine.check(input).await {
+            Ok(Checked::Approved { request_id }) => {
+                self.reserved(request_id, tool_name, None, track).await
+            }
+            Ok(Checked::Pending { request_id, .. }) => {
+                let _ = self.engine.cancel(&request_id).await;
+                (
+                    GateOutcome::Deny {
+                        reason: format!(
+                            "{POLICY_DENIED_MARKER} '{tool_name}' needs a person's approval and a SaaS tenant has no approval surface."
+                        ),
+                    },
+                    None,
+                )
+            }
+            Err(error) => {
+                tracing::error!(
+                    tool = tool_name,
+                    error = %error,
+                    "[approval::gate] the approval engine could not record the SaaS call — failing closed"
+                );
+                (
+                    GateOutcome::Deny {
+                        reason: format!(
+                            "{POLICY_DENIED_MARKER} The approval engine could not record '{tool_name}' — denying for safety: {error}"
+                        ),
+                    },
+                    None,
+                )
             }
         }
     }

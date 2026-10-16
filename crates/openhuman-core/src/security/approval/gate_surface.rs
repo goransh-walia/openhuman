@@ -230,3 +230,14 @@ impl PromptSurface for Surface {
     }
 }
 
+
+/// The prompt surface of a tenant that has none: any request that reaches it is
+/// refused, so the engine can never park a call nobody can answer.
+struct NoApprovalSurface;
+
+#[async_trait::async_trait]
+impl PromptSurface for NoApprovalSurface {
+    async fn deliver(&self, _delivery: Delivery) -> Result<(), String> {
+        Err("a SaaS tenant has no approval surface".into())
+    }
+}
