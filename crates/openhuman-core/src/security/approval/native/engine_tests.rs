@@ -11,6 +11,7 @@ use crate::modules::security::native_tests::{native_approval_fixture, NativeFixt
 use crate::security::approval::engine::{Delivery, Posture, PromptSurface};
 use crate::security::approval::types::ApprovalDecision;
 use std::sync::{Arc, Mutex};
+use tinysecurity_bus::{names, ApprovalLifecycle2, ApprovalRow2, DecideRequest2};
 
 /// A prompt surface that records what the engine asked it to show.
 #[derive(Default)]
@@ -389,4 +390,78 @@ async fn two_workspaces_are_two_subjects_with_their_own_rows() {
         .unwrap();
     assert_eq!(world.engine.history(10).await.unwrap().len(), 1);
     assert!(other.history(10).await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_ticket_the_host_never_issued_decides_nothing() {
+    let world = world().await;
+    let shown = Arc::new(Shown::default());
+    let (request_id, _) = pending(world.engine.check(input("gmail_send", &shown)).await.unwrap());
+    let entry = super::super::state::host()
+        .request(&request_id)
+        .expect("the delivered request is remembered");
+
+    // What a model could try: the module's own `Decide2` with a ticket it made up.
+    let forged = {
+        let _guard = entry.scope.stream.lock().await;
+        let generation = NativeEngine::generation(&world.fixture.proxy).await.unwrap();
+        let audit = NativeEngine::correlation(&entry.scope, generation)
+            .await
+            .unwrap();
+        world
+            .fixture
+            .proxy
+            .call_confidential::<ApprovalRow2>(
+                names::methods::DECIDE2,
+                (DecideRequest2 {
+                    scope_id: entry.scope.scope_id.clone(),
+                    request_id: request_id.clone(),
+                    decision_ticket: "model-claimed-human".into(),
+                    audit,
+                },),
+            )
+            .await
+    };
+    assert!(forged.is_err(), "the host refused to verify a forged ticket");
+    let stored = entry.scope.rows.row(&request_id).await.unwrap().unwrap();
+    assert_eq!(stored.row.state, ApprovalLifecycle2::Pending);
+    assert!(world.engine.reserve(&request_id).await.is_err());
+
+    // The real decision still works afterwards.
+    assert_eq!(
+        world
+            .engine
+            .decide(&request_id, Choice::Once, "approve_once")
+            .await
+            .unwrap(),
+        Decided::Approved
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn only_the_module_may_call_the_hosts_approval_callbacks() {
+    let world = world().await;
+    let stranger = tinybus::Connection::connect(world.fixture.transport.connect().await.unwrap())
+        .await
+        .unwrap();
+    let host_peer = world.fixture.client.unique_name().expect("host peer");
+    for (interface, member) in [
+        ("ai.tinyhumans.tinysecurity.ApprovalStore2", "Load"),
+        ("ai.tinyhumans.tinysecurity.AuditSink2", "Append"),
+        ("ai.tinyhumans.tinysecurity.ApprovalPrompt2", "VerifyHuman"),
+    ] {
+        let proxy = stranger
+            .proxy(
+                host_peer.as_str(),
+                tinysecurity_bus::callback_names2::OBJECT_PATH,
+                interface,
+            )
+            .unwrap();
+        let answered = proxy
+            .call::<serde_json::Value>(member, (serde_json::json!({}),))
+            .await;
+        assert!(answered.is_err(), "{interface}.{member} answered a stranger");
+    }
 }
