@@ -114,12 +114,13 @@ async fn through_the_gate(
         .await
         .unwrap()
         .into_result();
+    let recorded = human.recorded.lock().unwrap().clone();
     Outcome {
         result,
         runs: runs.load(Ordering::SeqCst),
         module_asks: module.asked.load(Ordering::SeqCst),
         human_asks: human.asked.load(Ordering::SeqCst),
-        recorded: human.recorded.lock().unwrap().clone(),
+        recorded,
     }
 }
 
