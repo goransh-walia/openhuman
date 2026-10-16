@@ -181,6 +181,32 @@ execution path ever existed for them, so selecting one made every command fail.
 The config load migrates them to `auto` (the TinyBox-selected jail) with a
 warning, and deletes `firejail_args` (`config/migrations/security_policy.rs`).
 
+Plan adapter and read floor. [`plan.rs`](./plan.rs) (`BoxPlan::from_artifact`)
+translates a TinySecurity `SandboxArtifact2` onto TinyBox's vocabulary (grants,
+network, resource bounds, isolation requirement) and refuses what TinyBox cannot
+enforce exactly: the Noop backend, mediated egress without a host proxy, CPU-time
+bounds, zero bounds, and namespace or microVM executors the host does not drive.
+Nothing calls the module's `Plan2` yet, because sandbox scopes are init-only and
+bound to the audit subject (see issue #7328). A folder-confined (Seatbelt) jail,
+whose reads are allow-by-default, gets the credential-store floor as `deny_read`
+(TinyBox contract 1.20, `local_grants::credential_store_paths`); allow-list jails
+already deny those paths.
+
+Spawn sites that do not reach the gate today, and why:
+
+- tinymcp stdio servers start inside the loaded tinymcp module; a jail needs an
+  interactive (piped stdio) execution member in the TinyBox contract and a
+  tinymcp launcher seam over it (`StdioSpawner` exists, the TinyBox side does not).
+- Command hooks: the tinyagents hook engine spawns through a synchronous shell
+  factory, so jailing needs an async spawner seam upstream.
+- tinyflows' `ProcessCodeRunner`/`ProcessShellRunner` are behind its `host-caps`
+  feature, which the host does not enable; the `code` node runs through
+  `execute_in_sandbox`.
+- `install_tool` is operator-approved host mutation by design; a jail would block
+  the prefix it exists to write.
+- Browser and tinycomputer helper processes live in the tinycomputer module
+  (their own process and OS permission model); the host spawns none of them.
+
 ## Layout
 
 | Path | What it does |
@@ -218,6 +244,9 @@ warning, and deletes `firejail_args` (`config/migrations/security_policy.rs`).
 Registered through `all_sandbox_registered_controllers()` in `core/all.rs`:
 
 - `sandbox.status`: backend status and availability for a backend or session.
+  The payload also carries `suitable_for_untrusted_code` (true only for a
+  ready container or a ready kernel-isolated jail), so a client can tell
+  "ready" from "ready for untrusted code".
 - `sandbox.resolve_policy`: resolve a policy for a sandbox mode and
   `is_remote` flag.
 - `sandbox.cleanup_orphans`: kill labelled orphan containers, returns the
