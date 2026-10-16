@@ -1,13 +1,15 @@
-//! Phase-0 approval characterization (issue #7328, plan Task 1) through the
-//! public approval gate: park and decide, the 600s default and 180s copilot and
-//! sub-agent park windows (read from the persisted `expires_at`), fail-closed
-//! expiry, restart survival through the storage backend, cron-origin denial of
-//! external effects, the `auto_approve_all` bypass (which writes no audit row
-//! today) and per-flow trust.
+//! Approval characterization (issue #7328, plan Task 1) through the public
+//! approval gate, now on the TinySecurity module that owns the approval engine:
+//! park and decide, the 600s default and 180s copilot and sub-agent park windows
+//! (read from the request's expiry), fail-closed expiry, the history surviving
+//! through the storage backend, cron-origin denial of external effects, the
+//! `auto_approve_all` bypass (which now records an audited automatic approval)
+//! and per-flow trust.
 //!
-//! These pin current behaviour. Desired behaviour that does not exist yet is
-//! written as a `desired_*` test that must panic with `DESIRED-RED` until the
-//! tinysecurity module owns the gate; it is never deleted or blessed.
+//! The suite needs the module: the lane that runs it stages the released archive
+//! (`OPENHUMAN_MODULE_PATH`), exactly like the shell and path suites.
+//! `desired_auto_approve_all_records_an_audit_row` was the red test for the
+//! module-owned gate; it is green now and stays as the pin.
 
 #[path = "support/env_guard.rs"]
 mod env_guard;
@@ -162,7 +164,7 @@ async fn main_chat_park_uses_the_600s_window_and_approve_once_allows() {
         .unwrap()
         .iter()
         .all(|p| p.request_id != pending.request_id));
-    let audit = store::list_recent_decisions(&fixture().config, 100).unwrap();
+    let audit = fixture().gate.list_recent_decisions(100).unwrap();
     let row = audit
         .iter()
         .find(|e| e.request_id == pending.request_id)
@@ -239,48 +241,56 @@ async fn unanswered_park_expires_fail_closed_with_the_unanswered_reason() {
 }
 
 #[tokio::test]
-async fn pending_rows_survive_restart_and_expired_rows_fail_closed() {
+async fn decided_history_survives_a_restart_and_an_unanswered_park_is_recorded_denied() {
     let _lock = env_guard::env_lock_async().await;
     let fx = fixture();
-    let live = PendingApproval::new(
-        "char-restart-live",
-        "char_restart",
-        "survives",
-        json!({}),
-        Some(Utc::now() + chrono::Duration::minutes(10)),
-    );
-    let stale = PendingApproval::new(
-        "char-restart-stale",
-        "char_restart",
-        "expired while down",
-        json!({}),
-        Some(Utc::now() - chrono::Duration::seconds(5)),
-    );
-    store::insert_pending(&fx.config, &live, "session-previous-boot").unwrap();
-    store::insert_pending(&fx.config, &stale, "session-previous-boot").unwrap();
+    let approved = park_and_approve("char_restart", web_origin(), false, true).await;
+    std::env::set_var("OPENHUMAN_APPROVAL_TTL_SECS", "1");
+    let outcome = turn_origin::with_origin(
+        web_origin(),
+        fx.gate.intercept(
+            &ApprovalTurnContext::chat(chat_ctx()),
+            "char_restart_stale",
+            "expired while nobody answered",
+            json!({}),
+        ),
+    )
+    .await;
+    std::env::remove_var("OPENHUMAN_APPROVAL_TTL_SECS");
+    assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
 
-    // A restart sees only durable state: re-read through a fresh Config handle.
-    let restarted = fx.config.clone();
-    let listed = store::list_pending(&restarted).unwrap();
-    assert!(listed.iter().any(|p| p.request_id == "char-restart-live"));
-    assert!(
-        listed.iter().all(|p| p.request_id != "char-restart-stale"),
-        "rows past their expiry never reappear as actionable"
+    // A restart sees only durable state: it reads the same storage backend through
+    // a fresh gate-independent path, the engine's stored rows.
+    let history = fx.gate.list_recent_decisions(100).unwrap();
+    let kept = history
+        .iter()
+        .find(|e| e.request_id == approved.request_id)
+        .expect("a decided approval is durable history");
+    assert_eq!(kept.decision, ApprovalDecision::ApproveOnce);
+    let stale = history
+        .iter()
+        .find(|e| e.tool_name == "char_restart_stale")
+        .expect("an unanswered park is recorded");
+    assert_eq!(
+        stale.decision,
+        ApprovalDecision::Deny,
+        "an expired request fails closed"
     );
     assert!(
-        store::decide(
-            &restarted,
-            "char-restart-stale",
-            ApprovalDecision::ApproveOnce
-        )
-        .unwrap()
-        .is_none(),
-        "deciding an expired row must not approve it"
+        fx.gate
+            .list_pending()
+            .unwrap()
+            .iter()
+            .all(|p| p.tool_name != "char_restart_stale"),
+        "an expired request is never actionable again"
     );
-    let decided = store::decide(&restarted, "char-restart-live", ApprovalDecision::Deny)
-        .unwrap()
-        .expect("live orphan row can still be decided (DB-only audit update)");
-    assert_eq!(decided.request_id, "char-restart-live");
+    assert!(
+        fx.gate
+            .decide(&stale.request_id, ApprovalDecision::ApproveOnce)
+            .unwrap()
+            .is_none(),
+        "deciding an expired request must not approve it"
+    );
 }
 
 #[tokio::test]
@@ -371,7 +381,7 @@ async fn bypass_outcome_with_auto_approve_all(tool: &str) -> GateOutcome {
 }
 
 #[tokio::test]
-async fn auto_approve_all_allows_without_parking_and_writes_no_audit_row_today() {
+async fn auto_approve_all_allows_without_parking_and_records_an_audited_approval() {
     let _lock = env_guard::env_lock_async().await;
     let fx = fixture();
     let outcome = bypass_outcome_with_auto_approve_all("char_auto_all").await;
@@ -382,11 +392,12 @@ async fn auto_approve_all_allows_without_parking_and_writes_no_audit_row_today()
         .unwrap()
         .iter()
         .all(|p| p.tool_name != "char_auto_all"));
-    let audit = store::list_recent_decisions(&fx.config, 500).unwrap();
-    assert!(
-        audit.iter().all(|e| e.tool_name != "char_auto_all"),
-        "the blanket bypass leaves no approval trail today (accepted in #5634)"
-    );
+    let audit = fx.gate.list_recent_decisions(500).unwrap();
+    let recorded = audit
+        .iter()
+        .find(|e| e.tool_name == "char_auto_all")
+        .expect("the blanket bypass is recorded as an approval (accepted in #5634, audited since #7328)");
+    assert_eq!(recorded.decided_by.as_deref(), Some("auto:host-policy"));
     // The unknown-origin exclusion still holds with the bypass on.
     let ws = fx.config.workspace_dir.clone();
     live_policy::install(
@@ -411,19 +422,19 @@ async fn auto_approve_all_allows_without_parking_and_writes_no_audit_row_today()
     assert!(matches!(unknown, GateOutcome::Deny { .. }), "{unknown:?}");
 }
 
-/// DESIRED: a bypassed call is still auditable. Red until the module-owned gate
-/// records an auto-approval row; delete the `should_panic` only when it does.
+/// A bypassed call is still auditable: the module-owned gate records an
+/// auto-approval row. This was the red `desired_*` pin until the module owned
+/// the gate.
 #[tokio::test]
-#[should_panic(expected = "DESIRED-RED")]
 async fn desired_auto_approve_all_records_an_audit_row() {
     let _lock = env_guard::env_lock_async().await;
     let fx = fixture();
     let outcome = bypass_outcome_with_auto_approve_all("char_auto_all_audit").await;
     assert!(matches!(outcome, GateOutcome::Allow));
-    let audit = store::list_recent_decisions(&fx.config, 500).unwrap();
+    let audit = fx.gate.list_recent_decisions(500).unwrap();
     assert!(
         audit.iter().any(|e| e.tool_name == "char_auto_all_audit"),
-        "DESIRED-RED: auto_approve_all leaves no audit row"
+        "auto_approve_all must leave an audit row"
     );
 }
 
@@ -521,7 +532,7 @@ async fn flow_preauthorization_lands_in_the_audit_list_not_pending() {
         .unwrap()
         .iter()
         .all(|p| p.tool_name != "char_pre_tool"));
-    let audit = store::list_recent_decisions(&fx.config, 500).unwrap();
+    let audit = fx.gate.list_recent_decisions(500).unwrap();
     let row = audit
         .iter()
         .find(|e| e.tool_name == "char_pre_tool")
