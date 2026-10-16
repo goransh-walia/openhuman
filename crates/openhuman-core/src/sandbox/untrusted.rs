@@ -121,11 +121,23 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         SandboxBackendKind::Local => {
             crate::config::ensure_usable_cwd(cwd)?;
             policy = super::local_grants::with_resolved_grants(config, &policy).await?;
-            tracing::debug!("[sandbox:untrusted] running under the native jail");
             let extra_env: HashMap<OsString, OsString> = env
                 .iter()
                 .map(|(name, value)| (name.into(), value.into()))
                 .collect();
+            policy = admit(
+                config,
+                &policy,
+                &SpawnText {
+                    command,
+                    cwd,
+                    env,
+                    stdin,
+                    preserve_pipeline_status,
+                },
+            )
+            .await?;
+            tracing::debug!("[sandbox:untrusted] running under the native jail");
             super::native_jail::execute_with_stdin(
                 config,
                 &policy,
@@ -147,6 +159,18 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
                 Some(stdin) => with_inline_stdin(command, stdin)?,
                 None => command.to_owned(),
             };
+            let policy = admit(
+                config,
+                &policy,
+                &SpawnText {
+                    command: &command,
+                    cwd,
+                    env,
+                    stdin: None,
+                    preserve_pipeline_status,
+                },
+            )
+            .await?;
             let request = SandboxExecRequest {
                 command,
                 working_dir: cwd.to_path_buf(),
@@ -162,6 +186,55 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
             anyhow::bail!("an untrusted spawn resolved to no sandbox backend")
         }
     }
+}
+
+/// The concrete text of one untrusted spawn, as the module binds it.
+struct SpawnText<'a> {
+    command: &'a str,
+    cwd: &'a Path,
+    env: &'a BTreeMap<String, String>,
+    stdin: Option<&'a [u8]>,
+    preserve_pipeline_status: bool,
+}
+
+/// Have the module plan and admit an untrusted spawn. Text the host did not author
+/// carries the module's mandatory-isolation floor, whatever the operator's switches say.
+#[cfg(feature = "security-module")]
+async fn admit(
+    config: &Config,
+    policy: &super::types::SandboxPolicy,
+    spawn: &SpawnText<'_>,
+) -> anyhow::Result<super::types::SandboxPolicy> {
+    let operation = super::spawn_plan::SpawnOperation {
+        command: spawn.command,
+        cwd: spawn.cwd,
+        env: spawn
+            .env
+            .iter()
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+        stdin: spawn.stdin,
+        preserve_pipeline_status: spawn.preserve_pipeline_status,
+    };
+    super::spawn_plan::admit(super::spawn_plan::SpawnRequest {
+        config,
+        policy,
+        source: super::spawn_plan::SpawnSource::Untrusted,
+        operation: &operation,
+        host_off: false,
+    })
+    .await
+    .map_err(anyhow::Error::new)
+}
+
+/// Without the module there is no plan to ask for, so the resolved policy stands.
+#[cfg(not(feature = "security-module"))]
+async fn admit(
+    _config: &Config,
+    policy: &super::types::SandboxPolicy,
+    _spawn: &SpawnText<'_>,
+) -> anyhow::Result<super::types::SandboxPolicy> {
+    Ok(policy.clone())
 }
 
 #[cfg(test)]
