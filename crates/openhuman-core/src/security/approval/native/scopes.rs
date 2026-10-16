@@ -85,7 +85,7 @@ impl ScopeEntry {
 
     /// Make the module hold `posture` for this subject.
     async fn register(
-        &self,
+        self: &Arc<Self>,
         proxy: &tinybus::Proxy,
         posture: &Posture,
         generation: u64,
@@ -148,7 +148,7 @@ impl ScopeEntry {
                 .lock()
                 .await
                 .by_handle
-                .insert(handle_key(&handle), Arc::new_cyclic_free(self));
+                .insert(handle_key(&handle), Arc::clone(self));
             let _ = self.handle.set(handle);
         }
         tracing::debug!(
