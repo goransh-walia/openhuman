@@ -174,7 +174,7 @@ pub(super) async fn run_job_command_with_timeout(
         state_dir: &config.workspace_dir,
         timeout,
         preserve_pipeline_status: true,
-        env: &std::collections::BTreeMap::new(),
+        env: &crate::sandbox::untrusted::NO_ENV,
         stdin: None,
     })
     .await

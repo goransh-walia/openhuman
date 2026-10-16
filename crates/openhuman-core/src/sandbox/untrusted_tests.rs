@@ -1,5 +1,4 @@
 use super::*;
-use std::collections::BTreeMap;
 use crate::sandbox::types::SandboxStatus;
 
 fn config_in(root: &Path) -> Config {
@@ -23,7 +22,7 @@ fn shell<'a>(config: &'a Config, command: &'a str) -> UntrustedShell<'a> {
         state_dir: &config.workspace_dir,
         timeout: Duration::from_secs(10),
         preserve_pipeline_status: false,
-        env: &BTreeMap::new(),
+        env: &NO_ENV,
         stdin: None,
     }
 }
@@ -144,7 +143,7 @@ async fn untrusted_gate_follows_the_released_jail() {
         state_dir: &state,
         timeout: Duration::from_secs(30),
         preserve_pipeline_status: false,
-        env: &BTreeMap::new(),
+        env: &NO_ENV,
         stdin: None,
     })
     .await;
@@ -157,7 +156,7 @@ async fn untrusted_gate_follows_the_released_jail() {
         state_dir: &state,
         timeout: Duration::from_secs(30),
         preserve_pipeline_status: false,
-        env: &BTreeMap::new(),
+        env: &NO_ENV,
         stdin: None,
     })
     .await;

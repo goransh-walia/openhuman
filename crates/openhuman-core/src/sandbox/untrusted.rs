@@ -40,6 +40,9 @@ pub(crate) struct UntrustedShell<'a> {
     pub(crate) stdin: Option<&'a [u8]>,
 }
 
+/// No extra environment, for callers that add none.
+pub(crate) static NO_ENV: BTreeMap<String, String> = BTreeMap::new();
+
 /// Largest stdin the Docker path can carry. The container runs `sh -c <text>`
 /// with no stdin channel, so input rides inside the command as base64 and must
 /// fit one argument (Linux caps a single argument at 128 KiB).
