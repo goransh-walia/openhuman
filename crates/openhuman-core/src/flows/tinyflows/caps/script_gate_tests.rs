@@ -1,11 +1,16 @@
-use super::*;
 use std::collections::BTreeMap;
 use std::time::Duration;
-use tinyflows::caps::host::{run_script, ScriptLanguage, ScriptRequest};
+use tinyflows::caps::host::{require_script_spawner, run_script, ScriptLanguage, ScriptRequest};
 
+/// Building flow capabilities leaves tinyflows' script runner unable to spawn
+/// an unjailed interpreter: with no spawner installed the run is refused, not
+/// started directly.
 #[tokio::test]
-async fn an_unjailed_script_run_is_refused_once_the_gate_is_set() {
-    require_jailed_scripts();
+async fn building_capabilities_refuses_an_unjailed_script_run() {
+    require_script_spawner(false);
+    let config = std::sync::Arc::new(crate::config::Config::default());
+    let _ = super::super::build_capabilities(config, "flow:test", None);
+
     let env = BTreeMap::new();
     let input = serde_json::json!({});
     let error = run_script(ScriptRequest::plain(
@@ -18,12 +23,4 @@ async fn an_unjailed_script_run_is_refused_once_the_gate_is_set() {
     .await
     .expect_err("no spawner is installed, so the run must be refused");
     assert!(error.to_string().contains("fail closed"), "{error}");
-}
-
-#[test]
-fn building_capabilities_sets_the_gate() {
-    let config = std::sync::Arc::new(crate::config::Config::default());
-    let _ = super::super::build_capabilities(config, "flow:test", None);
-    let state = tinyflows::caps::host::script_spawner_required();
-    assert!(state);
 }
