@@ -114,6 +114,48 @@ impl ApprovalSecurityMiddleware {
     }
 }
 
+impl ApprovalSecurityMiddleware {
+    /// [`ApprovalResolver::resolve`] against an explicit gate, with the approval
+    /// context the turn's run context carries (chat routing, copilot flag, flow
+    /// run). A park is routed to the turn that raised it, never to an ambient one.
+    pub(crate) async fn resolve_on(
+        &self,
+        gate: &ApprovalGate,
+        ctx: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
+        call: &TaToolCall,
+    ) -> ApprovalResolution {
+        let approval_name = approval_tool_name(&call.name, &call.arguments);
+        tracing::debug!(
+            tool = %call.name,
+            approval_name = %approval_name,
+            "[tinyagents::mw] routing external-effect tool through approval gate"
+        );
+        let summary = summarize_action(&call.name, &call.arguments);
+        let redacted = crate::security::redact::arguments(&call.arguments);
+        let (outcome, request_id) = gate
+            .intercept_audited(
+                &ctx.data.approval,
+                approval_name.as_ref(),
+                &summary,
+                redacted,
+            )
+            .await;
+        match outcome {
+            GateOutcome::Deny { reason } => {
+                tracing::warn!(
+                    tool = %call.name,
+                    reason = %reason,
+                    "[tinyagents::mw] approval gate denied tool call"
+                );
+                ApprovalResolution::Deny {
+                    reason: refused_approval_text(&call.name, &reason),
+                }
+            }
+            GateOutcome::Allow => ApprovalResolution::Allow { ticket: request_id },
+        }
+    }
+}
+
 /// What the model is told when the approval prompt for `tool_name` expired
 /// unanswered. Like the refusal text it carries no `[policy-denied]` marker
 /// (see [`refused_approval_text`]), so the model keeps the turn to tell the user.
@@ -195,36 +237,6 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
             return ApprovalResolution::Allow { ticket: None };
         };
         self.resolve_on(&gate, ctx, call).await
-    }
- = approval_tool_name(&call.name, &call.arguments);
-        tracing::debug!(
-            tool = %call.name,
-            approval_name = %approval_name,
-            "[tinyagents::mw] routing external-effect tool through approval gate"
-        );
-        let summary = summarize_action(&call.name, &call.arguments);
-        let redacted = crate::security::redact::arguments(&call.arguments);
-        let (outcome, request_id) = gate
-            .intercept_audited(
-                &ctx.data.approval,
-                approval_name.as_ref(),
-                &summary,
-                redacted,
-            )
-            .await;
-        match outcome {
-            GateOutcome::Deny { reason } => {
-                tracing::warn!(
-                    tool = %call.name,
-                    reason = %reason,
-                    "[tinyagents::mw] approval gate denied tool call"
-                );
-                ApprovalResolution::Deny {
-                    reason: refused_approval_text(&call.name, &reason),
-                }
-            }
-            GateOutcome::Allow => ApprovalResolution::Allow { ticket: request_id },
-        }
     }
 
     /// Record the terminal audit row for an approved external-effect call

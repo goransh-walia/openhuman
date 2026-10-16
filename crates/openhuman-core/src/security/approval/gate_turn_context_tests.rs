@@ -1,13 +1,15 @@
-//! The turn's approval context reaches the gate through the harness security
-//! gate (`OpenHumanSecurityGate`), carried by the run context rather than any
-//! ambient scope; a detached turn starts without it; concurrent turns keep
+//! The turn's approval context reaches the gate through the harness approval
+//! resolver (`ApprovalSecurityMiddleware`), carried by the run context rather than
+//! any ambient scope; a detached turn starts without it; concurrent turns keep
 //! their own.
 
 use super::*;
-use crate::agent::tinyagents::host::{OpenHumanRunContext, OpenHumanSecurityGate};
-use crate::security::policy::SecurityPolicy;
+use crate::agent::tinyagents::host::OpenHumanRunContext;
+use crate::agent::tinyagents::middleware::approval::ApprovalSecurityMiddleware;
 use async_trait::async_trait;
-use tinyagents_harness::host::security_gate::{GateDecision, ToolCallRequest};
+use tinyagents_harness::context::{RunConfig, RunContext};
+use tinyagents_harness::middleware::ApprovalResolution;
+use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
 struct Effectful;
@@ -34,14 +36,25 @@ impl Tool for Effectful {
     }
 }
 
-fn security_gate_for(run: &OpenHumanRunContext) -> OpenHumanSecurityGate {
-    OpenHumanSecurityGate::new(
-        std::sync::Arc::new(SecurityPolicy::default()),
-        vec![std::sync::Arc::new(vec![
+/// One turn's resolver and the run context it parks under.
+struct TurnResolver {
+    resolver: ApprovalSecurityMiddleware,
+    ctx: RunContext<OpenHumanRunContext>,
+}
+
+impl TurnResolver {
+    async fn park_for_approval_on(&self, gate: &ApprovalGate, call: &TaToolCall) -> ApprovalResolution {
+        self.resolver.resolve_on(gate, &self.ctx, call).await
+    }
+}
+
+fn security_gate_for(run: &OpenHumanRunContext) -> TurnResolver {
+    TurnResolver {
+        resolver: ApprovalSecurityMiddleware::new(vec![std::sync::Arc::new(vec![
             Box::new(Effectful) as Box<dyn Tool>
-        ])],
-    )
-    .with_approval(run.approval.clone())
+        ])]),
+        ctx: RunContext::new(RunConfig::new("gate-turn-context"), run.clone()),
+    }
 }
 
 fn chat(thread: &str) -> ApprovalChatContext {
@@ -60,8 +73,13 @@ fn web_origin_for(thread: &str) -> AgentTurnOrigin {
     }
 }
 
-fn call() -> ToolCallRequest {
-    ToolCallRequest::new("slack_post", serde_json::json!({"text": "hi"}), "lead")
+fn call() -> TaToolCall {
+    TaToolCall {
+        id: "c1".into(),
+        name: "slack_post".into(),
+        arguments: serde_json::json!({"text": "hi"}),
+        invalid: None,
+    }
 }
 
 /// Waits for the thread's park to register, returning its request id.
@@ -100,7 +118,7 @@ async fn a_turn_parks_its_approval_on_the_chat_its_run_context_carries() {
         .unwrap();
     assert!(matches!(
         task.await.unwrap(),
-        GateDecision::Prompted { approved: true }
+        ApprovalResolution::Allow { .. }
     ));
 }
 
@@ -157,7 +175,7 @@ async fn concurrent_turns_park_on_their_own_chats() {
     for task in tasks {
         assert!(matches!(
             task.await.unwrap(),
-            GateDecision::Prompted { approved: true }
+            ApprovalResolution::Allow { .. }
         ));
     }
 }
