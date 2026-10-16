@@ -20,6 +20,7 @@ impl ApprovalGate {
         park_bound_elapsed: &mut bool,
         effective_ttl: Duration,
         scope: Option<&super::ApprovalScope>,
+        track: bool,
     ) -> (GateOutcome, Option<String>) {
         match tokio::time::timeout(wait, rx).await {
             Ok(Ok(decision)) => {
@@ -30,7 +31,7 @@ impl ApprovalGate {
                     "[approval::gate] decision received"
                 );
                 if decision.is_approve() {
-                    self.reserved(request_id.to_string(), tool_name, scope).await
+                    self.reserved(request_id.to_string(), tool_name, scope, track).await
                 } else {
                     (
                         GateOutcome::Deny {
@@ -146,7 +147,18 @@ impl ApprovalGate {
                         // caller runs on this path too — otherwise the stale
                         // thread→request mapping survives and the next yes/no on
                         // the thread could be routed to this already-finished
-                        // request. Reserving succeeds only for an approval.
+                        // request. Reserving succeeds only for an approval; a caller
+                        // that cannot report the outcome gets the safe answer.
+                        if !track {
+                            return (
+                                GateOutcome::Deny {
+                                    reason: format!(
+                                        "{POLICY_DENIED_MARKER} Approval for '{tool_name}' was not granted in time."
+                                    ),
+                                },
+                                None,
+                            );
+                        }
                         match self.engine.reserve(request_id).await {
                             Ok(()) => (GateOutcome::Allow, Some(request_id.to_string())),
                             Err(_) => (

@@ -196,11 +196,22 @@ impl ApprovalGate {
         action_summary: &str,
         args_redacted: serde_json::Value,
     ) -> GateOutcome {
-        // Drop the request_id; callers using the legacy entry point
-        // don't record execution.
-        self.intercept_audited(turn, tool_name, action_summary, args_redacted)
-            .await
-            .0
+        // Callers using this entry point never learn the request id, so they
+        // cannot report how the call ended: the approval is not reserved for
+        // execution, which would leave the reservation open forever.
+        let mut _park_bound_elapsed = false;
+        self.intercept_audited_inner(
+            turn,
+            tool_name,
+            action_summary,
+            args_redacted,
+            None,
+            &mut _park_bound_elapsed,
+            None,
+            Mode::forced(false).untracked(),
+        )
+        .await
+        .0
     }
 
     /// Require an explicit, one-time decision for this exact action. This
@@ -212,9 +223,21 @@ impl ApprovalGate {
         action_summary: &str,
         args_redacted: serde_json::Value,
     ) -> GateOutcome {
-        self.intercept_forced_audited(tool_name, action_summary, args_redacted)
-            .await
-            .0
+        let mut _park_bound_elapsed = false;
+        // As [`Self::intercept`]: no request id comes back, so nothing is
+        // reserved for execution.
+        self.intercept_audited_inner(
+            &ApprovalTurnContext::default(),
+            tool_name,
+            action_summary,
+            args_redacted,
+            None,
+            &mut _park_bound_elapsed,
+            None,
+            Mode::forced(true).untracked(),
+        )
+        .await
+        .0
     }
 
     /// [`Self::intercept_forced`] that also hands back the request id of an
@@ -238,7 +261,7 @@ impl ApprovalGate {
             None,
             &mut _park_bound_elapsed,
             None,
-            true,
+            Mode::forced(true),
         )
         .await
     }
@@ -292,7 +315,7 @@ impl ApprovalGate {
             None,
             &mut _park_bound_elapsed,
             tool_call_id,
-            false,
+            Mode::forced(false),
         )
         .await
     }
@@ -332,7 +355,7 @@ impl ApprovalGate {
                 park_bound,
                 &mut park_bound_elapsed,
                 None,
-                false,
+                Mode::forced(false),
             )
             .await;
         if park_bound_elapsed {

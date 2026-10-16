@@ -56,6 +56,30 @@ fn instant(ms: u64) -> chrono::DateTime<chrono::Utc> {
         .unwrap_or_default()
 }
 
+/// How a gated call is asked, beyond what its turn says.
+#[derive(Clone, Copy, Debug)]
+struct Mode {
+    /// An explicit one-time decision for this exact action; no shortcut applies.
+    forced: bool,
+    /// The caller learns the request id and reports how the call ended, so the
+    /// approval is reserved for execution and its outcome recorded.
+    track: bool,
+}
+
+impl Mode {
+    fn forced(forced: bool) -> Self {
+        Self {
+            forced,
+            track: true,
+        }
+    }
+
+    fn untracked(mut self) -> Self {
+        self.track = false;
+        self
+    }
+}
+
 /// An eight-hex-character correlation for one gated call. The engine hashes
 /// identifiers with a function that leaves a value of exactly this shape
 /// unchanged, so the prompt callback finds the call by what the row carries.
@@ -230,7 +254,7 @@ impl ApprovalGate {
         park_bound: Option<Duration>,
         park_bound_elapsed: &'a mut bool,
         tool_call_id: Option<&'a str>,
-        forced: bool,
+        mode: Mode,
     ) -> futures::future::BoxFuture<'a, (GateOutcome, Option<String>)> {
         Box::pin(self.intercept_audited_inner_body(
             turn,
@@ -240,7 +264,7 @@ impl ApprovalGate {
             park_bound,
             park_bound_elapsed,
             tool_call_id,
-            forced,
+            mode,
         ))
     }
 
@@ -254,8 +278,9 @@ impl ApprovalGate {
         park_bound: Option<Duration>,
         park_bound_elapsed: &mut bool,
         tool_call_id: Option<&str>,
-        forced: bool,
+        mode: Mode,
     ) -> (GateOutcome, Option<String>) {
+        let Mode { forced, track } = mode;
         // Origin tells us who scheduled this turn. Entry points (web channel,
         // channel runtime, cron, background jobs, CLI) scope a typed
         // `AgentTurnOrigin` around `run_turn`. Unlabelled callers map to
@@ -636,7 +661,7 @@ impl ApprovalGate {
                     tool = tool_name,
                     "[approval::gate] approved by the user's configuration, skipping prompt"
                 );
-                self.reserved(request_id, tool_name, scope.as_deref()).await
+                self.reserved(request_id, tool_name, scope.as_deref(), track).await
             }
             Checked::Pending {
                 request_id,
@@ -690,6 +715,7 @@ impl ApprovalGate {
                         park_bound_elapsed,
                         window,
                         scope.as_deref(),
+                        track,
                     )
                     .await;
                 // Reached only on a normal park resolution: `resolve_park` already
@@ -713,6 +739,7 @@ impl ApprovalGate {
         request_id: String,
         tool_name: &str,
         scope: Option<&super::ApprovalScope>,
+        track: bool,
     ) -> (GateOutcome, Option<String>) {
         if scope.is_some_and(super::ApprovalScope::is_closed) {
             tracing::warn!(
@@ -729,6 +756,11 @@ impl ApprovalGate {
                 },
                 None,
             );
+        }
+        if !track {
+            // The caller cannot report how the call ends, so no reservation is
+            // taken that would never be closed; the approval stays as granted.
+            return (GateOutcome::Allow, None);
         }
         match self.engine.reserve(&request_id).await {
             Ok(()) => (GateOutcome::Allow, Some(request_id)),
