@@ -166,7 +166,7 @@ impl OpenHumanMemory {
     /// prompted). Takes `success`/`error` rather than a `Result` so callers
     /// don't need `EngineError: Clone` to both record the outcome and
     /// propagate the original error.
-    fn record_write_execution(
+    async fn record_write_execution(
         op: &str,
         audit_id: Option<&str>,
         success: bool,
@@ -391,7 +391,7 @@ impl MemoryProvider for OpenHumanMemory {
                 .err()
                 .map(ToString::to_string)
                 .as_deref(),
-        );
+        ).await;
         store_result?;
 
         tracing::debug!(
@@ -446,7 +446,7 @@ impl MemoryProvider for OpenHumanMemory {
                 .err()
                 .map(ToString::to_string)
                 .as_deref(),
-        );
+        ).await;
         let removed = forget_result?;
 
         tracing::debug!(
