@@ -9457,18 +9457,18 @@ dependencies = [
 
 [[package]]
 name = "tinymcp"
-version = "0.18.5"
+version = "0.18.7"
 dependencies = [
  "base64 0.23.1",
  "dirs 7.0.0",
  "futures-util",
  "parking_lot",
- "regex",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.20",
+ "tinybox-bus",
  "tinybus",
  "tinybus-module",
  "tinymcp-bus",
@@ -9487,8 +9487,9 @@ dependencies = [
 
 [[package]]
 name = "tinymcp-bus"
-version = "0.18.5"
+version = "0.18.7"
 dependencies = [
+ "base64 0.23.1",
  "schemars",
  "serde",
  "serde_json",

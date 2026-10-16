@@ -294,6 +294,11 @@ tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools"
 tinytools-agent = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
 tinytools-std = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 
+[patch."https://github.com/tinyhumansai/tinybox"]
+# tinymcp names the TinyBox contract crate by git tag for its jailed stdio
+# launcher; resolve it to the in-tree copy. Mirrors the root Cargo.toml.
+tinybox-bus = { path = "../../vendor/tinybox/crates/tinybox-bus" }
+
 [patch."https://github.com/tinyhumansai/tinyinference"]
 # Crates in this world name tinyinference by git rev; without this the shell
 # world resolves TWO copies of the same types. Mirrors the root Cargo.toml.
