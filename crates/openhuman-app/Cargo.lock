@@ -6748,7 +6748,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-bus"
-version = "0.1.34"
+version = "0.1.35"
 dependencies = [
  "serde",
 ]
@@ -7264,7 +7264,7 @@ dependencies = [
 
 [[package]]
 name = "tinysecurity-bus"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "serde",
  "thiserror 2.0.20",
