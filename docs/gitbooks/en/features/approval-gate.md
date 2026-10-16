@@ -112,11 +112,13 @@ The card names the action, the page origin and a SHA-256 digest that ties the ac
 
 Every path that is not an approval ends in a denial:
 
-- A parked request lives for 10 minutes. If you have not decided by then, it is denied.
-- If saving the request fails or the channel drops, the call is denied.
-- On timeout the gate re-reads the stored decision first, so an approval that landed at the last moment still wins.
+- A parked request lives for 10 minutes (3 for a copilot or sub-agent). If you have not decided by then, it is denied. The window is the security module's: it only ever shortens a request's window, so a longer configured value does not lengthen it.
+- If the security module cannot answer, if saving the request fails, or if the channel drops, the call is denied.
+- On timeout the gate asks the module to expire the request first, so an approval that landed at the last moment still wins.
 
-Pending requests are stored in SQLite (`{workspace_dir}/approval/approval.db`) and survive a core restart. After an approved tool finishes, the gate records the outcome (success or error) as an audit trail. Error text is sanitized and capped. Everything stored or broadcast is redacted first: personal data and chat content are scrubbed and home paths are stripped.
+The approval itself is the security module's. It stores each request exactly as it was shown to you, tied to the exact action, so a decision cannot be replayed on a different one. Your tool and workflow grants, and the auto-approve setting, reach it as the posture of each call: a call they cover is approved without a prompt and is still recorded and audited, with who approved it (`auto:tool-grant`, `auto:flow-grant` or `auto:host-policy`). A decision counts only if the module verifies that it came from you through the approval surface.
+
+Requests are stored in your workspace's storage and the history survives a core restart. A request left pending by an earlier launch has no waiting call and cannot be resumed, so it is not listed or decided again: it expires on its own and stays in the history as denied. After an approved tool finishes, the gate records the outcome (success or error) as an audit trail, and each approval is reserved for execution exactly once. Everything stored or broadcast is redacted first: personal data and chat content are scrubbed and home paths are stripped.
 
 ## What the turn's origin decides
 
