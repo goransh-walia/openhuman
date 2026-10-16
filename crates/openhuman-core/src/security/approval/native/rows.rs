@@ -172,17 +172,7 @@ impl Rows {
             .sort(Sort::desc("updated_ts"))
             .limit(LOAD_LIMIT);
         let page = self.docs.query(ROWS, &query).await.map_err(storage)?;
-        page.items
-            .iter()
-            .map(|stored| {
-                text(&stored.doc, "record")
-                    .ok_or_else(|| format!("{DOMAIN}: a stored row has no record"))
-                    .and_then(|raw| {
-                        serde_json::from_str::<ApprovalRecord2>(raw)
-                            .map_err(|_| format!("{DOMAIN}: a stored record does not decode"))
-                    })
-            })
-            .collect()
+        page.items.iter().map(envelope).collect()
     }
 
     /// The module's `Cas`: compare-and-swap the row, returning the original
@@ -320,6 +310,9 @@ impl Rows {
             "created_ts": i64::try_from(row.created_at_ms).unwrap_or(i64::MAX),
             "expires_ts": i64::try_from(row.expires_at_ms).unwrap_or(i64::MAX),
             "updated_ts": now,
+            "policy_id": request.next_record.policy_id,
+            "generation": i64::try_from(request.next_record.generation).unwrap_or(i64::MAX),
+            "fingerprint": request.next_record.fingerprint,
             "record": request.next_record.record_json,
         });
         if let Some(decided) = decided_ts {
@@ -499,6 +492,27 @@ impl Rows {
             .map_err(storage)?
             .and_then(|found| text(&found.doc, "label").map(str::to_owned)))
     }
+}
+
+/// The module's record envelope of a stored row, exactly as it was written.
+fn envelope(stored: &Versioned<Value>) -> Result<ApprovalRecord2, String> {
+    let field = |name: &str| {
+        text(&stored.doc, name).map(str::to_owned).ok_or_else(|| {
+            format!("{DOMAIN}: a stored row has no {name}")
+        })
+    };
+    Ok(ApprovalRecord2 {
+        record_id: stored.id.clone(),
+        version: number(&stored.doc, "version")
+            .and_then(|v| u64::try_from(v).ok())
+            .ok_or_else(|| format!("{DOMAIN}: a stored row has no version"))?,
+        policy_id: field("policy_id")?,
+        generation: number(&stored.doc, "generation")
+            .and_then(|v| u64::try_from(v).ok())
+            .ok_or_else(|| format!("{DOMAIN}: a stored row has no generation"))?,
+        fingerprint: field("fingerprint")?,
+        record_json: field("record")?,
+    })
 }
 
 fn decode_row(stored: &Versioned<Value>) -> Result<StoredRow, String> {
