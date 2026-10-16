@@ -91,7 +91,7 @@ pub(crate) fn assemble_live_tool_harness(
     harness.push_middleware(Arc::new(
         TaToolPolicyMiddleware::new(harness.tools().policies()).require_sandbox(true),
     ));
-    middleware::security_gate::install(&mut harness, tool_sets.clone());
+    middleware::security_gate::install(&mut harness, tool_sets.clone(), None);
     harness.push_tool_middleware(Arc::new(
         tinyagents_harness::middleware::CliRpcOnlyMiddleware::new(tool_sets.clone()),
     ));
