@@ -222,7 +222,10 @@ fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutu
             .map_err(|e| e.to_string())?;
         }
         let handle = super::ops::create_sandbox_backend_with_config(&policy, &config).await?;
-        to_json(Outcome::new(super::types::SandboxStatusReport::new(handle), vec![]))
+        to_json(Outcome::new(
+            super::types::SandboxStatusReport::new(handle),
+            vec![],
+        ))
     })
 }
 

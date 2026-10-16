@@ -18,11 +18,7 @@ fn names(idx: &[usize], tools: &[Box<dyn tinytools::Tool>]) -> Vec<String> {
 fn named_scope_still_includes_recovery_tool() {
     let t = tools();
     // Named scope allow-lists only current_time — recovery tool not listed.
-    let idx = filter_tool_indices(
-        &t,
-        &ToolScope::Named(vec!["current_time".into()]),
-        None,
-    );
+    let idx = filter_tool_indices(&t, &ToolScope::Named(vec!["current_time".into()]), None);
     let got = names(&idx, &t);
     assert!(got.contains(&"current_time".to_string()));
     assert!(

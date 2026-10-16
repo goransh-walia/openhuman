@@ -54,7 +54,11 @@ impl ApprovalResolver<OpenHumanRunContext> for Human {
         _call: &TaToolCall,
     ) -> ApprovalResolution {
         self.asked.fetch_add(1, Ordering::SeqCst);
-        self.answer.lock().unwrap().clone().expect("scripted answer")
+        self.answer
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("scripted answer")
     }
 
     fn record(&self, ticket: &str, _result: &ToolResult) {
