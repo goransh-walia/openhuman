@@ -36,6 +36,8 @@ pub(crate) mod security_gate;
 #[cfg(feature = "security-module")]
 pub(crate) mod tinysecurity;
 #[cfg(feature = "security-module")]
+pub(crate) mod tinysecurity_channel;
+#[cfg(feature = "security-module")]
 pub(crate) mod tinysecurity_module;
 pub(crate) mod tool_outcome_capture;
 pub(crate) mod tool_output;
