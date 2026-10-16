@@ -35,7 +35,63 @@ pub fn module_config(config: &Config) -> ModuleConfig {
             .map(|name| name.to_string()),
         judge: policy_translation::judge_config(config),
         crypto: Some(production_crypto_config(config)),
+        approvals: Some(approval_init_config()),
+        audit: Some(audit_init_config()),
         ..ModuleConfig::default()
+    }
+}
+
+/// Deadline of every approval callback the module makes into the host (store,
+/// audit, prompt, human verification), in milliseconds.
+const APPROVAL_CALLBACK_TIMEOUT_MS: u32 = 20_000;
+
+/// The subject the module's init-time approval and audit configuration names.
+///
+/// The module requires at least one subject at initialization and freezes that
+/// configuration for the life of the process, while the host serves an
+/// unbounded set of subjects (profiles, agents, posture variants) that it
+/// registers after init (`security::approval::native::scopes`). This subject
+/// stands for none of them: nothing is ever evaluated under it.
+fn bootstrap_subject() -> tinysecurity_bus::SubjectScope {
+    tinysecurity_bus::SubjectScope {
+        user: "openhuman".into(),
+        workspace: "bootstrap".into(),
+        agent: "bootstrap".into(),
+    }
+}
+
+/// Init-only approval configuration. Identical on every load and refresh: the
+/// module refuses a changed one.
+pub(crate) fn approval_init_config() -> tinysecurity_bus::ApprovalConfig2 {
+    tinysecurity_bus::ApprovalConfig2 {
+        timeout_ms: APPROVAL_CALLBACK_TIMEOUT_MS,
+        scopes: vec![tinysecurity_bus::ApprovalScope2 {
+            scope_id: "0".repeat(32),
+            subject: bootstrap_subject(),
+            policy_ref: "openhuman/approval/bootstrap".into(),
+            generation: 1,
+            ceiling: tinysecurity_bus::AccessTier::Read,
+            require_approval: true,
+            auto_approve_all: false,
+        }],
+    }
+}
+
+/// Init-only audit configuration of the approval engine. Audit is forwarded to
+/// the host's `AuditSink2` and is not marked required: a required audit would
+/// refuse the path, command and egress permissions, which carry no audit
+/// correlation. Approvals still fail closed when an event cannot be committed.
+pub(crate) fn audit_init_config() -> tinysecurity_bus::AuditConfig2 {
+    tinysecurity_bus::AuditConfig2 {
+        scope: bootstrap_subject(),
+        stream_id: "b".repeat(32),
+        timeout_ms: APPROVAL_CALLBACK_TIMEOUT_MS,
+        required: false,
+        native_path: None,
+        max_bytes: 1_000_000,
+        max_archives: 1,
+        journal_max_bytes: 1_000_000,
+        journal_max_events: 10_000,
     }
 }
 

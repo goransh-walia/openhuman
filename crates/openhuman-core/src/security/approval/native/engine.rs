@@ -28,6 +28,11 @@ const LOG: &str = "[approval::native]";
 /// own authenticated approval surface.
 const ACTOR: &str = "operator";
 
+/// How long one module call may take: past the longest callback deadline the
+/// module itself enforces (store, audit, prompt, judge), so a slow callback
+/// surfaces as the module's own refusal rather than a host timeout.
+const CALL_DEADLINE: Duration = Duration::from_secs(25);
+
 /// How often a subject's stale pending requests are expired.
 const SWEEP_EVERY: Duration = Duration::from_secs(30);
 
@@ -119,6 +124,7 @@ impl NativeEngine {
             Source::Fixed(proxy) => Ok(proxy.clone()),
             Source::Production => crate::modules::security::approval_proxy(&self.config)
                 .await
+                .map(|proxy| proxy.with_timeout(CALL_DEADLINE))
                 .map_err(EngineError::Unavailable),
         }
     }
