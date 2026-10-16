@@ -48,7 +48,7 @@ async fn bound(name: &str) -> Arc<ScopeEntry> {
     let scoped = storage.for_scope(&Scope::new("local").unwrap()).unwrap();
     let entry = Arc::new(ScopeEntry::new(
         subject(name),
-        format!("{:0>32}", name.len()),
+        uuid::Uuid::new_v4().simple().to_string(),
         Rows::over(Arc::clone(scoped.documents())),
     ));
     entry.bind(handle(name)).await;
@@ -116,14 +116,50 @@ fn delivery_for(row: ApprovalRow2) -> ApprovalDeliveryRequest2 {
     ApprovalDeliveryRequest2 { row }
 }
 
+fn audit_event(sequence: u64) -> tinysecurity_bus::AuditEvent2 {
+    tinysecurity_bus::AuditEvent2 {
+        sequence,
+        event_id: format!("{sequence:032x}"),
+        generation: 1,
+        kind: tinysecurity_bus::AuditKind2::Approval,
+        attribution: "pending".into(),
+        arguments_json: "{}".into(),
+        rule_ids: vec![],
+    }
+}
+
+/// The subject as the module's audit batches spell it: an identifier hash per part.
+fn audit_scope(name: &str) -> SubjectScope {
+    SubjectScope {
+        user: format!("{:08x}", name.len()),
+        workspace: "11111111".into(),
+        agent: "22222222".into(),
+    }
+}
+
 #[tokio::test]
-async fn the_store_and_the_sink_answer_only_for_a_handle_the_module_registered() {
+async fn the_store_answers_only_for_a_handle_the_module_registered() {
     let load = ApprovalLoadRequest2 {
         scope: handle("unregistered-store"),
     };
     assert!(super::load(load).await.is_err());
+    let cas = ApprovalCasRequest2 {
+        scope: handle("unregistered-store"),
+        record_id: "1".repeat(32),
+        expected_version: None,
+        next_record: tinysecurity_bus::ApprovalRecord2 {
+            record_id: "1".repeat(32),
+            version: 1,
+            policy_id: "p".into(),
+            generation: 1,
+            fingerprint: "2".repeat(32),
+            record_json: "{}".into(),
+        },
+        mutation_id: "3".repeat(32),
+    };
+    assert!(super::cas(cas).await.is_err());
 
-    let entry = bound("store-known").await;
+    let _entry = bound("store-known").await;
     let loaded = super::load(ApprovalLoadRequest2 {
         scope: handle("store-known"),
     })
@@ -131,16 +167,41 @@ async fn the_store_and_the_sink_answer_only_for_a_handle_the_module_registered()
     .unwrap();
     assert!(loaded.records.is_empty());
     assert_eq!(loaded.scope, handle("store-known"));
+}
 
-    // A stream the subject does not own is refused, even for a known subject.
-    let foreign = AuditSinkRequest2 {
-        scope: handle("store-known"),
+#[tokio::test]
+async fn the_sink_names_its_subject_by_the_stream_the_host_assigned() {
+    let entry = bound("sink-known").await;
+    // A stream nobody registered (another subject, or nothing) is refused.
+    let unknown = AuditSinkRequest2 {
+        scope: audit_scope("sink-known"),
         stream_id: "9".repeat(32),
         expected_tail: 0,
-        events: vec![],
+        events: vec![audit_event(1)],
     };
-    assert_ne!(entry.stream_id, foreign.stream_id);
+    assert!(super::append(unknown).await.is_err());
+
+    // The registered stream commits, and returns the exact receipt.
+    let batch = AuditSinkRequest2 {
+        scope: audit_scope("sink-known"),
+        stream_id: entry.stream_id.clone(),
+        expected_tail: 0,
+        events: vec![audit_event(1)],
+    };
+    let receipt = super::append(batch.clone()).await.unwrap();
+    batch.verify_receipt(&receipt).unwrap();
+    assert_eq!(entry.rows.tail(&entry.stream_id).await.unwrap(), 1);
+
+    // The first batch fixed how the stream's subject is spelled: another subject
+    // cannot write into it.
+    let foreign = AuditSinkRequest2 {
+        scope: audit_scope("someone-else-entirely"),
+        expected_tail: 1,
+        events: vec![audit_event(2)],
+        ..batch
+    };
     assert!(super::append(foreign).await.is_err());
+    assert_eq!(entry.rows.tail(&entry.stream_id).await.unwrap(), 1);
 }
 
 #[tokio::test]
