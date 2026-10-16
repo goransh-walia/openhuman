@@ -245,13 +245,13 @@ fn tinybox_registry_matches_the_published_v0136_release_manifest() {
     assert_eq!(actual, published);
 }
 #[test]
-fn tinymcp_registry_matches_the_published_v0185_release_manifest() {
+fn tinymcp_registry_matches_the_published_v0187_release_manifest() {
     let record = find("tinymcp").expect("compiled TinyMCP module");
-    assert_eq!(record.version, "0.18.5");
+    assert_eq!(record.version, "0.18.7");
     assert_eq!(tinymcp_bus::CONTRACT_VERSION, (1, 24));
     assert_eq!(
         record.release_url,
-        "https://github.com/tinyhumansai/tinymcp/releases/tag/v0.18.5"
+        "https://github.com/tinyhumansai/tinymcp/releases/tag/v0.18.7"
     );
     let actual = record
         .assets
@@ -261,88 +261,88 @@ fn tinymcp_registry_matches_the_published_v0185_release_manifest() {
     let published = [
         (
             "archlinux-rolling-arm64",
-            "tinymcp-0.18.5-archlinux-arm64.tar.gz",
-            "0a3760807e225282677caba6a157e5c6cc16cfe509d22a8acc372a9a4c77f9d1",
+            "tinymcp-0.18.7-archlinux-arm64.tar.gz",
+            "3998a2a151419a277c2806918c46d06b74408cbfa17bbbd84559a7abdf45eb85",
         ),
         (
             "archlinux-rolling-x86_64",
-            "tinymcp-0.18.5-archlinux-x86_64.tar.gz",
-            "84f3bb050943bc040204b316c3540e31b25457b4f36112f0248f3a2bbd3f85c5",
+            "tinymcp-0.18.7-archlinux-x86_64.tar.gz",
+            "892c4a3bb6082413725ef7807097d97f2e4ed32bdf2d7bca26c9effdbb8daead",
         ),
         (
             "fedora-43-arm64",
-            "tinymcp-0.18.5-fedora-43-arm64.tar.gz",
-            "fae7790e4df4418eb8fff18818f5df04d69e2c307d3613b0fc177ad0d1810804",
+            "tinymcp-0.18.7-fedora-43-arm64.tar.gz",
+            "e80ab9613921ab6d2534c9f4701452b4ea60fd8842538eab7e15cb7a13be6fea",
         ),
         (
             "fedora-43-x86_64",
-            "tinymcp-0.18.5-fedora-43-x86_64.tar.gz",
-            "b8fe422717db38f63619bd108b2b63e9a3f3d40e8cb2ab653076d76d55f8bcf8",
+            "tinymcp-0.18.7-fedora-43-x86_64.tar.gz",
+            "9edbbb273c6601c8ada3229c08863397582400243ed9086d4fa57467729b1d2f",
         ),
         (
             "fedora-44-arm64",
-            "tinymcp-0.18.5-fedora-44-arm64.tar.gz",
-            "cc3f6cf33631e28921dd4483dd390988ab9a86806b0ce26274fc92fe0c56c53c",
+            "tinymcp-0.18.7-fedora-44-arm64.tar.gz",
+            "591f09b0b22d4d83347571d8e81fccacf009b4ad3c65d41cc074f7352990a3b5",
         ),
         (
             "fedora-44-x86_64",
-            "tinymcp-0.18.5-fedora-44-x86_64.tar.gz",
-            "f92f83766f9f277ad8a8c4c9844cda5b1bcabc6404d8a133153cfeb941454f87",
+            "tinymcp-0.18.7-fedora-44-x86_64.tar.gz",
+            "60ba90075e280147c58f40963df8aa02388f08cc515da5277362ec1eca6e17b2",
         ),
         (
             "macos-15-arm64",
-            "tinymcp-0.18.5-macos-15-arm64.tar.gz",
-            "c706d86b21edcd0bfd6a9b01ac055f475904ba82a003be4dbdd8c715237901b9",
+            "tinymcp-0.18.7-macos-15-arm64.tar.gz",
+            "d96b83a21373d7494a586d4919df9ba0e62a07a00858495b802876cc55bc6dde",
         ),
         (
             "macos-15-x86_64",
-            "tinymcp-0.18.5-macos-15-x86_64.tar.gz",
-            "b675c9777403c7215ce850ec79cdf3607d244631a0dd20eca7be4967455e548e",
+            "tinymcp-0.18.7-macos-15-x86_64.tar.gz",
+            "6b623bbafcc5cf87fa37333e060a511feef3d2e2912207ccc648a7c9b36a85cb",
         ),
         (
             "macos-26-arm64",
-            "tinymcp-0.18.5-macos-26-arm64.tar.gz",
-            "1296c0c405553eb30e4682dc304e657ebab2b7856a49f684e5a7aac6a287658b",
+            "tinymcp-0.18.7-macos-26-arm64.tar.gz",
+            "26f26aaf8ae7ec1d493dfae7d5ad976ef3cc21774e92a8ae0266611eb0ac7549",
         ),
         (
             "macos-26-x86_64",
-            "tinymcp-0.18.5-macos-26-x86_64.tar.gz",
-            "4c34fb291190b4317ecf895869c38baa14689693e89d9af344642a222d683157",
+            "tinymcp-0.18.7-macos-26-x86_64.tar.gz",
+            "47b4ee4f424f17d336a8ea6669fb15be747895b71afe94e3de06ec104e782ee0",
         ),
         (
             "ubuntu-22.04-arm64",
-            "tinymcp-0.18.5-ubuntu-22.04-arm64.tar.gz",
-            "404ec212c3b3143308ac7f892f558fbd1440e863e1f5a7cfeeb19d54c2bfcfad",
+            "tinymcp-0.18.7-ubuntu-22.04-arm64.tar.gz",
+            "ff09f728ccbd0a7b4a47ea65b2ce6b0328fc4d3f77a37cd397af5847f8fabc4c",
         ),
         (
             "ubuntu-22.04-x86_64",
-            "tinymcp-0.18.5-ubuntu-22.04-x86_64.tar.gz",
-            "bf569fb43def4f743c420701a4e9e39fc64679e1dceadac9e87894135d1b5013",
+            "tinymcp-0.18.7-ubuntu-22.04-x86_64.tar.gz",
+            "1111e4f5e8bb952756364315c759dadf07fd4a84aa9f7fc44866c1f15b39c5d8",
         ),
         (
             "ubuntu-24.04-arm64",
-            "tinymcp-0.18.5-ubuntu-24.04-arm64.tar.gz",
-            "b1525e225a1481600624bd317c01cb2c13ccc4034860103fe775ff6ecda40803",
+            "tinymcp-0.18.7-ubuntu-24.04-arm64.tar.gz",
+            "55a8e893f28a817e80d00c4583bc13d7167529595a497c5179278badff5a1e33",
         ),
         (
             "ubuntu-24.04-x86_64",
-            "tinymcp-0.18.5-ubuntu-24.04-x86_64.tar.gz",
-            "f8c0b9dfc9a3a4b98314f5acf298c61b5ef96b3ce8605bad923a6bd642aefde6",
+            "tinymcp-0.18.7-ubuntu-24.04-x86_64.tar.gz",
+            "89841ecda7285bab1607a884202b0ac803f9ce1faf009168d9cd851e7e390b25",
         ),
         (
             "windows-11-arm64",
-            "tinymcp-0.18.5-windows-11-arm64.zip",
-            "305bb0401e92752672c4db1eecedadf2c6bb720a868ab2316f97287048081b49",
+            "tinymcp-0.18.7-windows-11-arm64.zip",
+            "2730c2aa874877fec56c72be96aa796f4d7da2d5b3b41a5f4cb1610fbf7a5fbb",
         ),
         (
             "windows-2022-x86_64",
-            "tinymcp-0.18.5-windows-2022-x86_64.zip",
-            "6457801f2919cfe5e47dfe3577f3f163ad3f7567a814f99e51a37dee254f9c86",
+            "tinymcp-0.18.7-windows-2022-x86_64.zip",
+            "87630195eb20fdb8b337128c4552cc53a555168409e1dc3eb3865c9e04df8b9f",
         ),
         (
             "windows-2025-x86_64",
-            "tinymcp-0.18.5-windows-2025-x86_64.zip",
-            "2c2e2487c6b3fff2975df7b5928e688c46e42b9260afef02f72a0a77e1bc118a",
+            "tinymcp-0.18.7-windows-2025-x86_64.zip",
+            "f051c294f9c366905e1852e20b2e10d6fcf0b21839e815e31d8368fd9e1ffdcb",
         ),
     ];
     assert_eq!(actual, published);
