@@ -14,14 +14,14 @@ const TURN_SAMPLES: usize = 200;
 
 /// A released (or explicitly selected local) module loaded behind an in-memory
 /// broker, with the host connection already named as its trusted peer.
-pub(super) struct NativeFixture {
-    pub(super) _fixtures: tempfile::TempDir,
-    pub(super) acting: tempfile::TempDir,
-    pub(super) host: ModuleHost,
-    pub(super) _broker_task: tokio::task::JoinHandle<tinybus::Result<()>>,
-    pub(super) proxy: tinybus::Proxy,
-    pub(super) client: Connection,
-    pub(super) record: super::super::ModuleRecord,
+pub(crate) struct NativeFixture {
+    pub(crate) _fixtures: tempfile::TempDir,
+    pub(crate) acting: tempfile::TempDir,
+    pub(crate) host: ModuleHost,
+    pub(crate) _broker_task: tokio::task::JoinHandle<tinybus::Result<()>>,
+    pub(crate) proxy: tinybus::Proxy,
+    pub(crate) client: Connection,
+    pub(crate) record: super::super::ModuleRecord,
 }
 
 pub(super) async fn native_fixture() -> NativeFixture {
@@ -31,6 +31,23 @@ pub(super) async fn native_fixture() -> NativeFixture {
 /// As [`native_fixture`], with the init-only confidential crypto surface.
 pub(super) async fn native_fixture_with(
     crypto: Option<tinysecurity_bus::CryptoConfig2>,
+) -> NativeFixture {
+    native_fixture_configured(false, |configuration| configuration.crypto = crypto).await
+}
+
+/// The module configured the way the host configures it for the approval engine
+/// (frozen approval and audit initialization), with the host's own callbacks
+/// served on the fixture's connection before the module loads.
+pub(crate) async fn native_approval_fixture() -> NativeFixture {
+    native_fixture_configured(true, |_| {}).await
+}
+
+/// A fixture whose `ModuleConfig` is `ModuleConfig::default()` with the trusted
+/// host named, adjusted by `adjust`. With `approvals`, the production approval and
+/// audit initialization is added and the host callbacks are served.
+pub(crate) async fn native_fixture_configured(
+    approvals: bool,
+    adjust: impl FnOnce(&mut ModuleConfig),
 ) -> NativeFixture {
     let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
     std::fs::create_dir_all(&target).unwrap();
@@ -54,12 +71,19 @@ pub(super) async fn native_fixture_with(
     let client = Connection::connect(transport.connect().await.unwrap())
         .await
         .unwrap();
-    let configuration = serde_json::to_value(ModuleConfig {
+    let mut module_config = ModuleConfig {
         trusted_host: client.unique_name().map(|name| name.to_string()),
-        crypto,
         ..ModuleConfig::default()
-    })
-    .unwrap();
+    };
+    if approvals {
+        module_config.approvals = Some(super::approval_init_config());
+        module_config.audit = Some(super::audit_init_config());
+        super::super::security_host::install(&client, None)
+            .await
+            .unwrap();
+    }
+    adjust(&mut module_config);
+    let configuration = serde_json::to_value(module_config).unwrap();
     let record = if let Ok(host_key) = std::env::var("OPENHUMAN_TEST_SECURITY_RELEASE_HOST") {
         let record = *super::super::registry::find(MODULE_ID).unwrap();
         let asset = record
