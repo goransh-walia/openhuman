@@ -155,10 +155,12 @@ classified, then gated by tier:
 ```
 
 The host asks twice and the module counts once. The harness gate asks before
-the approval prompt (`CommandStage::Authorize`, an unbudgeted scope), and the
-tool asks again immediately before it spawns (`CommandStage::Execute`, the
-scope that carries `max_actions_per_hour`), so an allowed run spends one action
-of the module's hourly budget and a prompt that is declined spends none. The
+the approval prompt as a `Check::HostShell` admission under the scope that carries
+`max_actions_per_hour` (it reads the budget and never spends it), and the tool
+asks again immediately before it spawns (`CommandStage::Execute`, the same
+scope), so an allowed run spends one action of the module's hourly budget and a
+prompt that is declined spends none. Acting tools spend through the same ledger
+(`Check::HostAction`), so shell runs and acting tools share one budget. The
 scheduler asks under the legacy rule (`CommandFlow::Scheduled`: the curated
 allowlist plus the configured risk restrictions) when a job is created or
 edited, and again when it runs. A module that is missing, untrusted, faulted
@@ -235,8 +237,9 @@ can show a card, parks the tool future on a oneshot, and wakes on the
 `core/runtime/bootstrap.rs`) always installs the gate for
 `HostKind::TauriShell` and ignores `OPENHUMAN_APPROVAL_GATE=0` there; CLI,
 Docker and library hosts may opt out. When no gate is installed, the harness
-bridge (`agent/tinyagents/host/security_gate.rs`) warns and allows a `Prompt`
-decision. See [approval/README.md](approval/README.md).
+approval resolver (`agent/tinyagents/middleware/approval.rs`) warns and allows a
+tool the module says needs a human; a channel policy that demands approval is
+denied instead (`middleware/tinysecurity_channel.rs`). See [approval/README.md](approval/README.md).
 
 ## Layout
 
@@ -410,8 +413,10 @@ The subfolders register their own namespaces: `approval.*` ([`approval/`](./appr
   Login-token exchange and `/auth/me` belong to the host's session owner
   (`openhuman_tinyhumans::session`). [`credentials/`](./credentials/) only accepts one through
   `auth.set_credential`.
-- The tinyagents runtime holds no authority. The bridge that answers its
-  "may this tool run?" question is `agent/tinyagents/host/security_gate.rs`.
+- The tinyagents runtime holds no authority. Its "may this tool run?" question is
+  answered by the security middleware (`agent/tinyagents/middleware/security_gate.rs`),
+  which asks the module; `agent/tinyagents/host/security_gate.rs` only refuses a
+  nested call and screens untrusted input.
 
 ## Gotchas
 

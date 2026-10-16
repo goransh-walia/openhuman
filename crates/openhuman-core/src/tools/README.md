@@ -107,8 +107,10 @@ Several layers narrow the registry before a schema is sent:
 
 The `Tool` trait and its vocabulary come from `tinytools`. The tinyagents
 harness runs the loop; OpenHuman's host adapters decide policy. Before a tool
-runs, the security gate (`agent/tinyagents/host/security_gate.rs`) checks the
-tier, the command class and the approval gate; the tool itself then checks
+runs, the security gate (`agent/tinyagents/middleware/security_gate.rs`, the
+one gate every path installs) asks the TinySecurity module about the tier, the
+origin, the hourly budget and the shell command class, and settles a required
+approval through the approval gate; the tool itself then checks
 `SecurityPolicy` for paths, commands and the action budget. The autonomy
 policy is off by default (see [`../security/README.md`](../security/README.md)),
 so on a default install the path floor and the sandbox do the bounding.
