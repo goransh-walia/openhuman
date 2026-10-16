@@ -1,0 +1,514 @@
+//! What the gate hands the engine, and what it does with the engine's answers.
+
+use super::*;
+use crate::security::approval::engine::{ApprovalEngine, Choice};
+use crate::security::approval::engine_stub::State;
+
+/// Park one call on `gate` under `origin` and return the request id once the
+/// engine delivered its prompt.
+async fn park(
+    gate: &Arc<ApprovalGate>,
+    origin: AgentTurnOrigin,
+    turn: ApprovalTurnContext,
+    tool: &'static str,
+) -> (tokio::task::JoinHandle<GateOutcome>, String) {
+    let worker = gate.clone();
+    let handle = tokio::spawn(async move {
+        turn_origin::with_origin(
+            origin,
+            worker.intercept(&turn, tool, "do the thing", serde_json::json!({"k": "v"})),
+        )
+        .await
+    });
+    let mut tries = 0;
+    let request_id = loop {
+        if let Some(id) = parked_request_id(gate) {
+            break id;
+        }
+        tries += 1;
+        assert!(tries < 500, "the call never parked");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    };
+    (handle, request_id)
+}
+
+#[tokio::test]
+async fn an_engine_that_cannot_answer_denies_and_leaves_nothing_parked() {
+    let (gate, _dir) = test_gate();
+    let gate = Arc::new(gate);
+    let stub = stub_of(&gate);
+    stub.refuse_checks(true);
+    let outcome = turn_origin::with_origin(
+        web_origin(),
+        gate.intercept(
+            &ApprovalTurnContext::chat(chat_ctx()),
+            "composio",
+            "send",
+            serde_json::json!({}),
+        ),
+    )
+    .await;
+    match outcome {
+        GateOutcome::Deny { reason } => {
+            assert!(reason.contains("could not evaluate"), "{reason}");
+            assert!(reason.contains("composio"), "{reason}");
+        }
+        other => panic!("an engine that cannot answer must deny, got {other:?}"),
+    }
+    assert!(gate.parked.waiters.lock().is_empty());
+    assert!(gate.pending_for_thread("t-test").is_none());
+    assert!(gate.list_pending().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_users_configuration_reaches_the_engine_as_the_calls_posture() {
+    let _env = crate::config::TEST_ENV_LOCK.lock().await;
+    let (gate, dir) = test_gate();
+    let gate = Arc::new(gate);
+    let tool = "openhuman_test_posture_tool";
+    let _policy = crate::security::live_policy::install_scoped(
+        Arc::new(crate::security::SecurityPolicy {
+            auto_approve: vec![tool.into(), "another_granted_tool".into()],
+            ..crate::security::SecurityPolicy::default()
+        }),
+        dir.path().to_path_buf(),
+        dir.path().to_path_buf(),
+    );
+    let (handle, request_id) = park(
+        &gate,
+        web_origin(),
+        ApprovalTurnContext::chat(chat_ctx()),
+        "not_on_the_list",
+    )
+    .await;
+    let seen = stub_of(&gate).seen().remove(0);
+    assert_eq!(seen.variant, Variant::Standard);
+    assert!(seen.posture.require_approval);
+    assert!(!seen.posture.auto_approve_all);
+    assert!(seen.posture.tool_grants.iter().any(|t| t == tool));
+    assert_eq!(seen.tool, "not_on_the_list");
+    assert_eq!(seen.origin, CallOrigin::Operator);
+    assert_eq!(seen.thread.as_deref(), Some("t-test"));
+    assert!(seen.flow.is_none());
+    assert_eq!(seen.call_id.len(), 8, "{}", seen.call_id);
+    assert!(seen.call_id.bytes().all(|b| b.is_ascii_hexdigit()));
+    assert_eq!(seen.ttl, DEFAULT_APPROVAL_TTL);
+    assert_eq!(seen.args["k"], "v");
+    decide_parked(&gate, &request_id, ApprovalDecision::Deny);
+    assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
+}
+
+#[tokio::test]
+async fn an_agent_whose_approvals_are_off_reaches_the_engine_as_no_requirement() {
+    let (gate, _dir) = test_gate();
+    let gate = Arc::new(gate);
+    // The agent's own context says approvals are off; see gate_agent_tests for how
+    // such a context is built. The posture it yields is what the engine is told.
+    let ctx = crate::core::runtime::DispatchCtx::ambient();
+    let posture = gate.posture(&ctx, Variant::Standard);
+    assert!(posture.require_approval, "the default agent requires approval");
+    let forced = gate.posture(&ctx, Variant::Forced);
+    assert!(forced.require_approval);
+    assert!(!forced.auto_approve_all);
+    assert!(forced.tool_grants.is_empty() && forced.flow_grants.is_empty());
+}
+
+#[tokio::test]
+async fn a_forced_call_is_its_own_posture_and_ignores_every_shortcut() {
+    let _env = crate::config::TEST_ENV_LOCK.lock().await;
+    let (gate, dir) = test_gate();
+    let gate = Arc::new(gate);
+    let tool = "openhuman_test_forced_posture";
+    let _policy = crate::security::live_policy::install_scoped(
+        Arc::new(crate::security::SecurityPolicy {
+            auto_approve: vec![tool.into()],
+            auto_approve_all: true,
+            ..crate::security::SecurityPolicy::default()
+        }),
+        dir.path().to_path_buf(),
+        dir.path().to_path_buf(),
+    );
+    let worker = gate.clone();
+    let handle = tokio::spawn(async move {
+        turn_origin::with_origin(
+            web_origin(),
+            worker.intercept_forced(tool, "one time only", serde_json::json!({})),
+        )
+        .await
+    });
+    let mut tries = 0;
+    let request_id = loop {
+        if let Some(id) = parked_request_id(&gate) {
+            break id;
+        }
+        tries += 1;
+        assert!(tries < 500, "the forced call never parked");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    };
+    let seen = stub_of(&gate).seen().remove(0);
+    assert_eq!(seen.variant, Variant::Forced);
+    assert!(seen.posture.require_approval);
+    assert!(!seen.posture.auto_approve_all, "auto-approve is ignored");
+    assert!(seen.posture.tool_grants.is_empty(), "the always list is ignored");
+    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
+    assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
+}
+
+#[tokio::test]
+async fn a_workflow_that_requires_approval_is_never_approved_by_the_global_tool_list() {
+    let _env = crate::config::TEST_ENV_LOCK.lock().await;
+    let (gate, dir) = test_gate();
+    let gate = Arc::new(gate);
+    let tool = "openhuman_test_flow_strict";
+    let _policy = crate::security::live_policy::install_scoped(
+        Arc::new(crate::security::SecurityPolicy {
+            auto_approve: vec![tool.into()],
+            ..crate::security::SecurityPolicy::default()
+        }),
+        dir.path().to_path_buf(),
+        dir.path().to_path_buf(),
+    );
+    gate.insert_flow_trust("flow-strict", "other_trusted_tool").unwrap();
+
+    let (handle, request_id) = park(
+        &gate,
+        flow_origin("flow-strict", true),
+        ApprovalTurnContext::default().with_flow_run(FlowRunContext {
+            flow_id: "flow-strict".into(),
+            run_id: "run-1".into(),
+        }),
+        tool,
+    )
+    .await;
+    let seen = stub_of(&gate).seen().remove(0);
+    assert_eq!(seen.variant, Variant::FlowStrict);
+    assert!(seen.posture.tool_grants.is_empty(), "the global list is withheld");
+    assert_eq!(seen.flow.as_deref(), Some("flow-strict"));
+    assert_eq!(
+        seen.posture.flow_grants,
+        [("flow-strict".to_string(), "other_trusted_tool".to_string())],
+        "the flow's own trust is handed over"
+    );
+    decide_parked(&gate, &request_id, ApprovalDecision::Deny);
+    assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
+}
+
+#[tokio::test]
+async fn copilot_and_sub_agent_parks_name_their_origin_class_and_window() {
+    let (gate, _dir) = test_gate();
+    let gate = Arc::new(gate);
+    let (handle, request_id) = park(
+        &gate,
+        web_origin(),
+        ApprovalTurnContext::chat(chat_ctx()).with_copilot_stream(),
+        "composio",
+    )
+    .await;
+    let seen = stub_of(&gate).seen().remove(0);
+    assert_eq!(seen.origin, CallOrigin::Copilot);
+    assert_eq!(seen.ttl, COPILOT_APPROVAL_TTL);
+    decide_parked(&gate, &request_id, ApprovalDecision::Deny);
+    handle.await.unwrap();
+
+    // A WebChat turn with no chat context is the detached sub-agent path.
+    let (handle, request_id) = park(
+        &gate,
+        web_origin(),
+        ApprovalTurnContext::default(),
+        "composio",
+    )
+    .await;
+    let seen = stub_of(&gate).seen().pop().unwrap();
+    assert_eq!(seen.origin, CallOrigin::SubAgent);
+    assert_eq!(seen.ttl, SUBAGENT_APPROVAL_TTL);
+    decide_parked(&gate, &request_id, ApprovalDecision::Deny);
+    handle.await.unwrap();
+}
+
+#[tokio::test]
+async fn an_unlabelled_call_is_approved_only_by_the_users_grant_of_that_exact_tool() {
+    let _env = crate::config::TEST_ENV_LOCK.lock().await;
+    let (gate, dir) = test_gate();
+    let tool = "openhuman_test_unlabelled_grant";
+    let _policy = crate::security::live_policy::install_scoped(
+        Arc::new(crate::security::SecurityPolicy {
+            auto_approve: vec![tool.into()],
+            auto_approve_all: true,
+            ..crate::security::SecurityPolicy::default()
+        }),
+        dir.path().to_path_buf(),
+        dir.path().to_path_buf(),
+    );
+    let (outcome, request_id) = gate
+        .intercept_audited(
+            &ApprovalTurnContext::default(),
+            tool,
+            "no origin",
+            serde_json::json!({}),
+        )
+        .await;
+    assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
+    let stub = stub_of(&gate);
+    assert_eq!(
+        stub.attribution(&request_id.unwrap()),
+        Some("auto:tool-grant"),
+        "the grant approved it, not auto-approve-everything"
+    );
+    let seen = stub.seen().remove(0);
+    assert!(!seen.posture.auto_approve_all);
+    assert_eq!(seen.posture.tool_grants, [tool]);
+
+    // Auto-approve-everything does not approve an unlabelled call to any other tool.
+    let (outcome, id) = gate
+        .intercept_audited(
+            &ApprovalTurnContext::default(),
+            "some_other_tool",
+            "no origin",
+            serde_json::json!({}),
+        )
+        .await;
+    assert!(matches!(outcome, GateOutcome::Deny { .. }));
+    assert!(id.is_none());
+    assert_eq!(stub.seen().len(), 1, "the engine was not asked");
+}
+
+#[tokio::test]
+async fn an_audited_call_is_reserved_and_an_unaudited_one_is_not() {
+    let _env = crate::config::TEST_ENV_LOCK.lock().await;
+    let (gate, dir) = test_gate();
+    let tool = "openhuman_test_reserve_tool";
+    let _policy = crate::security::live_policy::install_scoped(
+        Arc::new(crate::security::SecurityPolicy {
+            auto_approve_all: true,
+            ..crate::security::SecurityPolicy::default()
+        }),
+        dir.path().to_path_buf(),
+        dir.path().to_path_buf(),
+    );
+    let stub = stub_of(&gate);
+
+    let (outcome, id) = turn_origin::with_origin(
+        web_origin(),
+        gate.intercept_audited(
+            &ApprovalTurnContext::default(),
+            tool,
+            "audited",
+            serde_json::json!({}),
+        ),
+    )
+    .await;
+    assert!(matches!(outcome, GateOutcome::Allow));
+    let id = id.expect("an audited call hands back its request id");
+    assert_eq!(stub.state(&id), Some(State::Reserved));
+    gate.record_execution(&id, ExecutionOutcome::Failure, Some("boom"));
+    assert_eq!(
+        stub.state(&id),
+        Some(State::Executed(ExecutionOutcome::Failure))
+    );
+
+    // The unaudited entry points never learn the id, so nothing is reserved that
+    // could never be closed.
+    let outcome = turn_origin::with_origin(
+        web_origin(),
+        gate.intercept(
+            &ApprovalTurnContext::default(),
+            tool,
+            "unaudited",
+            serde_json::json!({}),
+        ),
+    )
+    .await;
+    assert!(matches!(outcome, GateOutcome::Allow));
+    let granted: Vec<String> = stub
+        .request_ids()
+        .into_iter()
+        .filter(|request| request != &id)
+        .collect();
+    assert_eq!(granted.len(), 1);
+    assert_eq!(stub.state(&granted[0]), Some(State::Approved));
+}
+
+#[tokio::test]
+async fn a_call_that_cannot_be_reserved_is_denied() {
+    let _env = crate::config::TEST_ENV_LOCK.lock().await;
+    let (gate, dir) = test_gate();
+    let _policy = crate::security::live_policy::install_scoped(
+        Arc::new(crate::security::SecurityPolicy {
+            auto_approve_all: true,
+            ..crate::security::SecurityPolicy::default()
+        }),
+        dir.path().to_path_buf(),
+        dir.path().to_path_buf(),
+    );
+    stub_of(&gate).fail_reserve(true);
+    let (outcome, id) = turn_origin::with_origin(
+        web_origin(),
+        gate.intercept_audited(
+            &ApprovalTurnContext::default(),
+            "openhuman_test_unreservable",
+            "approved but not reservable",
+            serde_json::json!({}),
+        ),
+    )
+    .await;
+    match outcome {
+        GateOutcome::Deny { reason } => assert!(reason.contains("could not be reserved"), "{reason}"),
+        other => panic!("an approval that cannot be reserved must deny, got {other:?}"),
+    }
+    assert!(id.is_none());
+}
+
+#[tokio::test]
+async fn an_agent_removed_before_the_approved_call_runs_cancels_it() {
+    let (gate, _dir) = test_gate();
+    let stub = stub_of(&gate);
+    stub.leave_pending("approved-then-removed", "composio", Duration::from_secs(600));
+    stub.decide("approved-then-removed", Choice::Once, "approve_once")
+        .await
+        .unwrap();
+    let scope = super::ApprovalScope::default();
+    scope.close("agent_removed");
+    let (outcome, id) = gate
+        .reserved("approved-then-removed".into(), "composio", Some(&scope), true)
+        .await;
+    assert!(matches!(outcome, GateOutcome::Deny { .. }));
+    assert!(id.is_none());
+    assert_eq!(stub.state("approved-then-removed"), Some(State::Cancelled));
+}
+
+#[tokio::test]
+async fn a_request_that_expires_while_its_decision_races_it_honors_the_decision() {
+    let (gate, _dir) = test_gate();
+    let stub = stub_of(&gate);
+    stub.leave_pending("raced", "composio", Duration::from_secs(600));
+    stub.decide("raced", Choice::Once, "approve_once").await.unwrap();
+    // The window ended just as the decision committed: expiry finds it decided.
+    assert!(!gate.expire_with_retry("raced").await.unwrap());
+    let (outcome, id) = {
+        let (_tx, rx) = oneshot::channel::<ApprovalDecision>();
+        let mut elapsed = false;
+        gate.resolve_park(
+            "raced",
+            "composio",
+            Duration::from_millis(5),
+            rx,
+            false,
+            &mut elapsed,
+            Duration::from_secs(600),
+            None,
+            true,
+        )
+        .await
+    };
+    assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
+    assert_eq!(id.as_deref(), Some("raced"));
+
+    // An untracked caller cannot report how it ended, so the race is denied.
+    stub.leave_pending("raced-untracked", "composio", Duration::from_secs(600));
+    stub.decide("raced-untracked", Choice::Once, "approve_once")
+        .await
+        .unwrap();
+    let (_tx, rx) = oneshot::channel::<ApprovalDecision>();
+    let mut elapsed = false;
+    let (outcome, _) = gate
+        .resolve_park(
+            "raced-untracked",
+            "composio",
+            Duration::from_millis(5),
+            rx,
+            false,
+            &mut elapsed,
+            Duration::from_secs(600),
+            None,
+            false,
+        )
+        .await;
+    assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
+}
+
+#[tokio::test]
+async fn a_request_the_engine_cannot_expire_still_denies_with_the_unanswered_reason() {
+    let (gate, _dir) = test_gate();
+    // The engine does not know this request, so expiry fails; the gate still fails closed.
+    let (_tx, rx) = oneshot::channel::<ApprovalDecision>();
+    let mut elapsed = false;
+    let (outcome, id) = gate
+        .resolve_park(
+            "unknown-to-the-engine",
+            "composio",
+            Duration::from_millis(5),
+            rx,
+            false,
+            &mut elapsed,
+            Duration::from_secs(600),
+            None,
+            true,
+        )
+        .await;
+    match outcome {
+        GateOutcome::Deny { reason } => assert!(is_unanswered_approval_reason(&reason), "{reason}"),
+        other => panic!("expected deny, got {other:?}"),
+    }
+    assert!(id.is_none());
+}
+
+#[test]
+fn arguments_are_always_a_bounded_object() {
+    assert_eq!(object_arguments(serde_json::json!({"a": 1})), serde_json::json!({"a": 1}));
+    assert_eq!(object_arguments(serde_json::Value::Null), serde_json::json!({}));
+    assert_eq!(
+        object_arguments(serde_json::json!(["x"])),
+        serde_json::json!({ "value": ["x"] })
+    );
+    let huge = serde_json::json!({ "blob": "x".repeat(MAX_ARGUMENT_BYTES + 1) });
+    let stood_in = object_arguments(huge);
+    assert_eq!(stood_in["truncated"], true);
+    assert!(stood_in["bytes"].as_u64().unwrap() > MAX_ARGUMENT_BYTES as u64);
+}
+
+#[test]
+fn a_call_correlation_is_eight_hex_characters_and_not_repeated() {
+    let ids: std::collections::HashSet<String> = (0..64).map(|_| fresh_call_id()).collect();
+    assert!(ids.len() > 60, "random correlations should not collide");
+    assert!(ids
+        .iter()
+        .all(|id| id.len() == 8 && id.bytes().all(|b| b.is_ascii_hexdigit())));
+}
+
+#[tokio::test]
+async fn pending_requests_are_listed_from_this_process_only_and_by_tenant() {
+    let (gate, _dir) = test_gate();
+    let gate = Arc::new(gate);
+    let stub = stub_of(&gate);
+    // A request an earlier launch left pending was never parked here.
+    stub.leave_pending("orphan", "composio", Duration::from_secs(600));
+    let (handle, request_id) = park(
+        &gate,
+        web_origin(),
+        ApprovalTurnContext::chat(chat_ctx()),
+        "composio",
+    )
+    .await;
+    let listed = gate.list_pending().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].request_id, request_id);
+    assert_eq!(listed[0].tool_name, "composio");
+    assert_eq!(listed[0].args_redacted["k"], "v");
+    assert!(listed[0].expires_at.is_some());
+    assert_eq!(
+        gate.parked_request_for_thread("t-test").map(|row| row.request_id),
+        Some(request_id.clone())
+    );
+    // Deciding the orphan finds nothing to resolve: it was never parked here.
+    assert!(gate
+        .decide("orphan", ApprovalDecision::ApproveOnce)
+        .unwrap()
+        .is_none());
+    decide_parked(&gate, &request_id, ApprovalDecision::Deny);
+    handle.await.unwrap();
+    assert!(gate.list_pending().unwrap().is_empty());
+    // The decision is history, newest first, with what the user chose.
+    let history = gate.list_recent_decisions(10).unwrap();
+    assert_eq!(history[0].request_id, request_id);
+    assert_eq!(history[0].decision, ApprovalDecision::Deny);
+}
