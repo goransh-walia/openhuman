@@ -1,6 +1,21 @@
 use crate::core::runtime::DispatchCtx;
 
 impl ApprovalGate {
+    /// Run an engine call from synchronous code. The decision side of the gate is
+    /// synchronous by contract (the embedding API, an agent's teardown, the
+    /// harness's record hook), so the engine's async call runs on the shared
+    /// blocking bridge instead of the caller's runtime, which cannot be blocked
+    /// on a current-thread runtime.
+    fn run_engine<T, F, Fut>(&self, op: F) -> anyhow::Result<T>
+    where
+        F: FnOnce(SharedEngine) -> Fut,
+        Fut: std::future::Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let future = op(Arc::clone(&self.engine));
+        crate::storage::block_on_anyhow(async move { Ok(future.await) })
+    }
+
     /// Write the *terminal* status of a tool call onto its approval
     /// audit row: how the call the gate reserved ended.
     ///
@@ -13,13 +28,17 @@ impl ApprovalGate {
     /// `error` is the (already sanitized) failure text of the call. The
     /// engine records the outcome class only; the text is never stored, which
     /// keeps whatever it quotes out of the durable log.
-    pub async fn record_execution(
+    pub fn record_execution(
         &self,
         request_id: &str,
         outcome: ExecutionOutcome,
         error: Option<&str>,
     ) {
-        match self.engine.record_execution(request_id, outcome).await {
+        let id = request_id.to_owned();
+        let recorded = self
+            .run_engine(|engine| async move { engine.record_execution(&id, outcome).await })
+            .unwrap_or_else(|bridge| Err(EngineError::Unavailable(bridge.to_string())));
+        match recorded {
             Ok(()) => tracing::debug!(
                 request_id = %request_id,
                 outcome = outcome.as_str(),
@@ -46,7 +65,7 @@ impl ApprovalGate {
     /// `Ok(None)` means there is nothing to decide: the request was already
     /// decided, expired or cancelled, or was never parked here (an earlier launch
     /// left it; the engine cannot resume another instance's request).
-    pub async fn decide(
+    pub fn decide(
         &self,
         request_id: &str,
         decision: ApprovalDecision,
@@ -75,11 +94,9 @@ impl ApprovalGate {
         } else {
             Choice::Deny
         };
-        match self
-            .engine
-            .decide(request_id, choice, decision.as_str())
-            .await
-        {
+        let id = request_id.to_owned();
+        let label = decision.as_str();
+        match self.run_engine(|engine| async move { engine.decide(&id, choice, label).await })? {
             Ok(_) => {}
             Err(EngineError::NotPending) => return Ok(None),
             Err(EngineError::Unavailable(message)) => {
@@ -117,7 +134,7 @@ impl ApprovalGate {
     /// [`ApprovalError::WrongAgent`] when the request was parked by any other
     /// agent (or by the process itself), so one agent cannot answer another's
     /// approval.
-    pub async fn decide_for_agent(
+    pub fn decide_for_agent(
         &self,
         agent: &str,
         request_id: &str,
@@ -143,12 +160,12 @@ impl ApprovalGate {
                 .into());
             }
         }
-        self.decide(request_id, decision).await
+        self.decide(request_id, decision)
     }
 
     /// Deny every undecided request `agent` parked, resolving its waiters.
     /// Returns how many requests were denied.
-    pub async fn deny_all_for_agent(
+    pub fn deny_all_for_agent(
         &self,
         _ctx: &DispatchCtx,
         agent: &str,
@@ -167,12 +184,19 @@ impl ApprovalGate {
             let Some(route) = self.parked.take_request_route(&request_id) else {
                 continue;
             };
-            if let Err(error) = self.engine.cancel(&request_id).await {
-                tracing::debug!(
+            let id = request_id.clone();
+            match self.run_engine(|engine| async move { engine.cancel(&id).await }) {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => tracing::debug!(
                     request_id = %request_id,
                     error = %error,
                     "[approval::gate] the engine did not cancel a removed agent's request"
-                );
+                ),
+                Err(error) => tracing::debug!(
+                    request_id = %request_id,
+                    error = %error,
+                    "[approval::gate] cancelling a removed agent's request could not run"
+                ),
             }
             denied += 1;
             if let Some(tx) = self.parked.take_waiter(&request_id) {
@@ -218,14 +242,19 @@ impl ApprovalGate {
     /// We disambiguate by asking the engine whether it stored the request and
     /// whether it left `Pending`. If the lookup itself errors we conservatively
     /// keep the event visible (`NeverRegistered`) rather than silently demoting.
-    pub async fn classify_decide_miss(&self, request_id: &str) -> DecideMiss {
+    pub fn classify_decide_miss(&self, request_id: &str) -> DecideMiss {
         if self
             .request_scope(request_id)
             .is_some_and(|scope| scope.is_closed())
         {
             return DecideMiss::AlreadyResolved;
         }
-        match self.engine.is_decided(request_id).await {
+        let id = request_id.to_owned();
+        let known = self
+            .run_engine(|engine| async move { engine.is_decided(&id).await })
+            .map_err(|bridge| EngineError::Unavailable(bridge.to_string()))
+            .and_then(|answer| answer);
+        match known {
             Ok(Some(true)) => DecideMiss::AlreadyResolved,
             Ok(Some(false)) => DecideMiss::NeverRegistered,
             Ok(None) => DecideMiss::NeverRegistered,
@@ -278,15 +307,13 @@ impl ApprovalGate {
     }
 
     /// List recently decided requests for durable audit views.
-    pub async fn list_recent_decisions(
+    pub fn list_recent_decisions(
         &self,
         limit: usize,
     ) -> anyhow::Result<Vec<super::types::ApprovalAuditEntry>> {
         let limit = limit.clamp(1, 500);
         let mut entries = self
-            .engine
-            .history(limit)
-            .await
+            .run_engine(|engine| async move { engine.history(limit).await })?
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         entries.extend(store::list_recorded_decisions(&self.config, limit)?);
         entries.sort_by(|a, b| b.decided_at.cmp(&a.decided_at));

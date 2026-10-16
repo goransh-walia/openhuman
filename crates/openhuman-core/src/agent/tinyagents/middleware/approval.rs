@@ -166,32 +166,15 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
 
     /// Record the terminal audit row for an approved external-effect call
     /// (idempotent; a no-op when the id is unknown).
-    ///
-    /// The harness hook is synchronous and the engine's write is not, so the
-    /// write is handed to the runtime instead of holding the turn: the tool has
-    /// already run, and losing this record leaves the request reserved, never
-    /// approved again.
     fn record(&self, ticket: &str, result: &TaToolResult) {
-        let Some(gate) = ApprovalGate::try_global() else {
-            return;
-        };
-        let exec = if result.is_error {
-            ExecutionOutcome::Failure
-        } else {
-            ExecutionOutcome::Success
-        };
-        let error = result.is_error.then(|| result.output());
-        let ticket = ticket.to_owned();
-        match tokio::runtime::Handle::try_current() {
-            Ok(runtime) => {
-                runtime.spawn(async move {
-                    gate.record_execution(&ticket, exec, error.as_deref()).await;
-                });
-            }
-            Err(_) => tracing::warn!(
-                request_id = %ticket,
-                "[tinyagents::mw] no runtime to record the approved call's outcome"
-            ),
+        if let Some(gate) = ApprovalGate::try_global() {
+            let exec = if result.is_error {
+                ExecutionOutcome::Failure
+            } else {
+                ExecutionOutcome::Success
+            };
+            let error = result.is_error.then(|| result.output());
+            gate.record_execution(ticket, exec, error.as_deref());
         }
     }
 }
