@@ -73,7 +73,7 @@ fn equal_facts_share_an_identity_and_any_difference_gets_its_own() {
         ..base.clone()
     };
     let mounted = SandboxPolicy {
-        read_only_mounts: vec![PathBuf::from("/usr/local")],
+        read_only_mounts: vec![PathBuf::from("/srv/tools")],
         ..base.clone()
     };
     let variants = [
@@ -155,7 +155,7 @@ fn sources_carry_the_trust_that_sets_the_floor() {
 #[test]
 fn the_ceiling_is_the_workspace_and_the_mounts_the_host_resolved() {
     let mut base = policy("/work/action");
-    base.read_only_mounts = vec![PathBuf::from("/opt"), PathBuf::from("/usr/local")];
+    base.read_only_mounts = vec![PathBuf::from("/opt"), PathBuf::from("/srv/tools")];
     base.read_write_mounts = vec![PathBuf::from("/home/u/.cargo/registry")];
     let ceiling = grant_ceiling(&base).expect("ceiling");
     let described: Vec<_> = ceiling.iter().map(|g| (g.path.as_str(), g.write)).collect();
@@ -164,7 +164,7 @@ fn the_ceiling_is_the_workspace_and_the_mounts_the_host_resolved() {
         [
             ("/home/u/.cargo/registry", true),
             ("/opt", false),
-            ("/usr/local", false),
+            ("/srv/tools", false),
             ("/work/action", true),
         ]
     );
