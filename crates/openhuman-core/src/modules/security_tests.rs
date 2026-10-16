@@ -18,9 +18,28 @@ fn initialization_does_not_treat_bootstrap_policy_as_an_agents_enabled_policy() 
         trusted_host: None,
         // The production password-only crypto surface is asserted separately.
         crypto: None,
+        // The init-only approval, audit and sandbox surfaces carry no agent policy;
+        // they are asserted separately below.
+        approvals: None,
+        audit: None,
+        sandbox: None,
         ..module_config(&config)
     };
     assert_eq!(actual, ModuleConfig::default());
+}
+
+#[test]
+fn sandbox_scopes_are_registered_at_runtime_never_at_init() {
+    let configured = module_config(&config());
+    let sandbox = configured.sandbox.as_ref().expect("sandbox init config");
+    // The module caps init scopes at 128 and binds each to the one audit subject, while
+    // the host serves an unbounded set of subjects, so none is declared at init.
+    assert_eq!(*sandbox, sandbox_init_config());
+    assert!(sandbox_init_config().scopes.is_empty());
+    // The same value on every load and refresh: the module refuses a changed one.
+    assert_eq!(module_config(&config()).sandbox, configured.sandbox);
+    // The audit the runtime scopes forward on is configured beside it.
+    assert!(configured.audit.is_some() && configured.approvals.is_some());
 }
 
 #[test]
