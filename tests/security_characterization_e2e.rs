@@ -4,9 +4,11 @@
 //! restart durability and sandbox precedence; these tests pin their RPC boundary.
 //! Coverage retained beside the owning domains:
 //! - approval/gate_tests.rs (+ gate_core_flow/gate_origin_intercept/gate_ttl_and_triage/
-//!   gate_subagent/gate_forced tests): allowlist, park/decide, origin and TTL rules.
-//! - approval/store_persistence_tests.rs and store_flow_trust_tests.rs: restart
-//!   durability and flow trust; gate_triage_tests.rs pins blanket bypass/no audit.
+//!   gate_subagent/gate_forced/gate_engine tests): allowlist, park/decide, origin and
+//!   TTL rules over the scripted engine; approval/native/engine_tests.rs: the same
+//!   lifecycle on the real module.
+//! - approval/store_flow_trust_tests.rs: flow trust; approval/native/rows_tests.rs:
+//!   the module's store and audit sink durability.
 //! - policy/policy_disabled_tests.rs, policy_paths_and_risk_tests.rs,
 //!   policy_trusted_roots_tests.rs: disabled floor, command/path and rate rules.
 //! - sandbox/ops_tests.rs: SaaS/env/agent precedence and Noop status.
@@ -22,8 +24,11 @@ use axum::{
     Router,
 };
 use openhuman_core::{
+    agent::turn_origin::{self, AgentTurnOrigin},
     config::Config,
-    security::approval::{gate::ApprovalGate, store, types::PendingApproval},
+    security::approval::{
+        gate::ApprovalGate, ApprovalChatContext, ApprovalTurnContext, GateOutcome,
+    },
 };
 use serde_json::{json, Value};
 use tower::ServiceExt;
@@ -117,28 +122,61 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
         .unwrap()
         .contains("gate is not installed"));
 
-    ApprovalGate::init_global(config.clone(), "session-security-characterization");
-    let pending = PendingApproval::new(
-        "orphan-from-previous-boot",
-        "shell",
-        "execute command",
-        json!({"command":"echo hello"}),
-        Some(chrono::Utc::now() + chrono::Duration::minutes(10)),
-    );
-    store::insert_pending(&config, &pending, "session-previous-boot").unwrap();
-    let listed = rpc(&router, "openhuman.approval_list_pending", json!({})).await;
-    assert_eq!(
-        result(&listed),
-        &serde_json::to_value(vec![pending.clone()]).unwrap()
-    );
-    assert!(result(&listed)[0].get("session_id").is_none());
+    let gate = ApprovalGate::init_global(config.clone(), "session-security-characterization");
+    // A real request: the approval engine is the security module, so a pending
+    // request exists only while a call is parked on it.
+    let parked = {
+        let gate = gate.clone();
+        tokio::spawn(async move {
+            turn_origin::with_origin(
+                AgentTurnOrigin::WebChat {
+                    thread_id: "t-wire".into(),
+                    client_id: "c-wire".into(),
+                    request_id: None,
+                },
+                gate.intercept(
+                    &ApprovalTurnContext::chat(ApprovalChatContext {
+                        thread_id: "t-wire".into(),
+                        client_id: "c-wire".into(),
+                        request_id: None,
+                    }),
+                    "shell",
+                    "execute command",
+                    json!({"command":"echo hello"}),
+                ),
+            )
+            .await
+        })
+    };
+    let mut listed = Value::Null;
+    for _ in 0..500 {
+        listed = rpc(&router, "openhuman.approval_list_pending", json!({})).await;
+        if !result(&listed).as_array().unwrap().is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    let rows = result(&listed).as_array().unwrap();
+    assert_eq!(rows.len(), 1, "the parked call is the one pending request");
+    let pending = rows[0].clone();
+    assert_eq!(pending["tool_name"], "shell");
+    assert_eq!(pending["action_summary"], "execute command");
+    assert_eq!(pending["args_redacted"]["command"], "echo hello");
+    assert!(pending["request_id"].as_str().is_some_and(|id| !id.is_empty()));
+    assert!(pending["expires_at"].is_string());
+    assert!(pending.get("session_id").is_none());
+    let request_id = pending["request_id"].as_str().unwrap().to_owned();
     let decided = rpc(
         &router,
         "openhuman.approval_decide",
-        json!({"request_id":pending.request_id,"decision":"deny"}),
+        json!({"request_id":request_id,"decision":"deny"}),
     )
     .await;
-    assert_eq!(result(&decided), &serde_json::to_value(&pending).unwrap());
+    assert_eq!(result(&decided), &pending);
+    assert!(matches!(
+        parked.await.unwrap(),
+        GateOutcome::Deny { .. }
+    ));
     assert_eq!(
         result(&rpc(&router, "openhuman.approval_list_pending", json!({})).await),
         &json!([])
@@ -146,7 +184,7 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
     let repeated = rpc(
         &router,
         "openhuman.approval_decide",
-        json!({"request_id":pending.request_id,"decision":"deny"}),
+        json!({"request_id":request_id,"decision":"deny"}),
     )
     .await;
     assert!(repeated["error"]["message"]
