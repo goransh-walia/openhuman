@@ -72,18 +72,45 @@ fn test_call() -> TaToolCall {
     }
 }
 
+/// A scripted module: answers each call from a fixed script and counts asks.
+struct Scripted {
+    answer: Result<Verdict, String>,
+    asked: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl Scripted {
+    fn new(answer: Result<Verdict, String>) -> (Arc<Self>, Arc<std::sync::atomic::AtomicUsize>) {
+        let asked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        (
+            Arc::new(Self {
+                answer,
+                asked: asked.clone(),
+            }),
+            asked,
+        )
+    }
+}
+
+#[async_trait]
+impl VerdictSource for Scripted {
+    async fn verdict(
+        &self,
+        _ctx: &RunContext<OpenHumanRunContext>,
+        _call: &TaToolCall,
+    ) -> Result<Verdict, String> {
+        self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.answer.clone()
+    }
+}
+
 #[tokio::test]
 async fn module_fault_denies_without_retry() {
-    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let counter = calls.clone();
-    let policy = TinySecurityPolicy::new(Arc::new(move |_| {
-        counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Box::pin(async { Err("module crashed".to_string()) })
-    }));
+    let (source, asked) = Scripted::new(Err("module crashed".to_string()));
+    let policy = TinySecurityPolicy::new(source);
     let decision = policy.check(&test_ctx(), &test_call()).await;
     assert!(is_deny(&decision), "a module fault must never allow");
     assert_eq!(
-        calls.load(std::sync::atomic::Ordering::SeqCst),
+        asked.load(std::sync::atomic::Ordering::SeqCst),
         1,
         "no retry"
     );
@@ -91,15 +118,67 @@ async fn module_fault_denies_without_retry() {
 
 #[tokio::test]
 async fn policy_maps_require_approval_verdict() {
-    let policy = TinySecurityPolicy::new(Arc::new(|_| {
-        Box::pin(async {
-            Ok(Verdict::RequireApproval {
-                request_id: "req-9".into(),
-            })
-        })
+    let (source, _) = Scripted::new(Ok(Verdict::RequireApproval {
+        request_id: "req-9".into(),
     }));
+    let policy = TinySecurityPolicy::new(source);
     match policy.check(&test_ctx(), &test_call()).await {
         PolicyDecision::RequireApproval { reason } => assert!(reason.contains("req-9")),
         other => panic!("expected RequireApproval, got {other:?}"),
     }
+}
+
+#[test]
+fn the_modules_human_needed_answer_requires_approval_and_never_allows() {
+    let decision = verdict_to_policy_decision(&Verdict::Deny {
+        reason: DenialReason::ApprovalUnavailable,
+    });
+    assert!(matches!(decision, PolicyDecision::RequireApproval { .. }));
+}
+
+#[test]
+fn every_other_denial_stays_a_denial() {
+    for reason in [
+        DenialReason::Floor,
+        DenialReason::UnsupportedEffect,
+        DenialReason::Access,
+        DenialReason::PathScope,
+        DenialReason::PathResolution,
+        DenialReason::Command,
+        DenialReason::InvalidContext,
+        DenialReason::Content,
+    ] {
+        let decision = verdict_to_policy_decision(&Verdict::Deny { reason });
+        assert!(is_deny(&decision), "{decision:?}");
+    }
+}
+
+#[tokio::test]
+async fn several_sources_fold_with_deny_over_approval_over_allow() {
+    let allow = Scripted::new(Ok(Verdict::Allow)).0;
+    let approve = Scripted::new(Ok(Verdict::RequireApproval {
+        request_id: "r".into(),
+    }))
+    .0;
+    let deny = Scripted::new(Ok(Verdict::Deny {
+        reason: DenialReason::Floor,
+    }))
+    .0;
+
+    let both = TinySecurityPolicy::with_sources(vec![allow.clone(), approve.clone()]);
+    assert!(matches!(
+        both.check(&test_ctx(), &test_call()).await,
+        PolicyDecision::RequireApproval { .. }
+    ));
+    let all = TinySecurityPolicy::with_sources(vec![allow, approve, deny]);
+    assert!(is_deny(&all.check(&test_ctx(), &test_call()).await));
+}
+
+#[tokio::test]
+async fn a_fault_in_one_source_denies_and_skips_the_rest() {
+    let (fault, _) = Scripted::new(Err("down".to_string()));
+    let (later, later_asked) = Scripted::new(Ok(Verdict::Allow));
+    let policy = TinySecurityPolicy::with_sources(vec![fault, later]);
+    assert!(is_deny(&policy.check(&test_ctx(), &test_call()).await));
+    assert_eq!(later_asked.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
