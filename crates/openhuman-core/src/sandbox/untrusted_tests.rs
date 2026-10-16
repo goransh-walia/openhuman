@@ -130,10 +130,9 @@ async fn untrusted_gate_follows_the_released_jail() {
     config.modules.install_dir = Some(base.join("modules").display().to_string());
     let state = base.join("state");
 
-    let (backend, status, _isolation) = super::super::native_jail::status(&config)
+    let (_backend, status, _isolation) = super::super::native_jail::status(&config)
         .await
         .expect("the released module reports its jail");
-    let _ = (&backend, &status);
 
     let inside = run(UntrustedShell {
         config: &config,
