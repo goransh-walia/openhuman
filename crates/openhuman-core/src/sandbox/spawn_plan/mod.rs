@@ -77,6 +77,24 @@ pub(crate) struct PlannedSpawn {
     stream: AuditStream,
 }
 
+/// Where the module's bus proxy comes from.
+#[derive(Clone, Copy)]
+pub(crate) enum ModuleSource<'a> {
+    /// The attested, pinned production module, loaded on demand.
+    Production,
+    /// A proxy a test supplies for a module it loaded itself.
+    Fixed(&'a tinybus::Proxy),
+}
+
+impl ModuleSource<'_> {
+    async fn proxy(self, config: &Config) -> Result<tinybus::Proxy, PlanError> {
+        match self {
+            Self::Production => client::production_proxy(config).await.map_err(unavailable),
+            Self::Fixed(proxy) => Ok(proxy.clone()),
+        }
+    }
+}
+
 /// What a spawn is planned from.
 #[derive(Clone, Copy)]
 pub(crate) struct SpawnRequest<'a> {
@@ -87,6 +105,7 @@ pub(crate) struct SpawnRequest<'a> {
     pub(crate) operation: &'a SpawnOperation<'a>,
     /// The operator turned the sandbox off for this process (never under SaaS).
     pub(crate) host_off: bool,
+    pub(crate) module: ModuleSource<'a>,
 }
 
 /// The requested resource bounds, from the policy's Docker overrides.

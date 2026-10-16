@@ -16,9 +16,13 @@ use tinysecurity_bus::{
 
 use crate::config::Config;
 
+/// The attested module's proxy for sandbox planning, loading the module first.
+pub(crate) async fn production_proxy(config: &Config) -> Result<tinybus::Proxy, String> {
+    super::approval_proxy(config).await
+}
+
 /// The module's current policy generation, which every plan and its audit carry.
-pub(crate) async fn generation(config: &Config) -> Result<u64, String> {
-    let proxy = super::approval_proxy(config).await?;
+pub(crate) async fn generation(proxy: &tinybus::Proxy) -> Result<u64, String> {
     let info: PolicyInfo = proxy
         .call(names::methods::POLICY_INFO, ())
         .await
@@ -31,10 +35,9 @@ pub(crate) async fn generation(config: &Config) -> Result<u64, String> {
 
 /// Register one subject's sandbox scope.
 pub(crate) async fn register_scope(
-    config: &Config,
+    proxy: &tinybus::Proxy,
     request: RegisterSandboxScopeRequest2,
 ) -> Result<SandboxScopeReceipt2, String> {
-    let proxy = super::approval_proxy(config).await?;
     let scope_id = request.scope.scope_id.clone();
     let receipt: SandboxScopeReceipt2 = proxy
         .call_confidential(names::methods::REGISTER_SANDBOX_SCOPE2, (request,))
@@ -50,8 +53,7 @@ pub(crate) async fn register_scope(
 }
 
 /// Retire one runtime sandbox scope and everything it issued.
-pub(crate) async fn retire_scope(config: &Config, scope_id: &str) -> Result<(), String> {
-    let proxy = super::approval_proxy(config).await?;
+pub(crate) async fn retire_scope(proxy: &tinybus::Proxy, scope_id: &str) -> Result<(), String> {
     let receipt: SandboxScopeReceipt2 = proxy
         .call_confidential(
             names::methods::RETIRE_SANDBOX_SCOPE2,
@@ -69,10 +71,9 @@ pub(crate) async fn retire_scope(config: &Config, scope_id: &str) -> Result<(), 
 
 /// Ask the module to plan one concrete spawn.
 pub(crate) async fn plan(
-    config: &Config,
+    proxy: &tinybus::Proxy,
     request: SandboxPlanRequest2,
 ) -> Result<SandboxPlanResponse2, String> {
-    let proxy = super::approval_proxy(config).await?;
     proxy
         .call_confidential(names::methods::PLAN2, (request,))
         .await
@@ -81,10 +82,9 @@ pub(crate) async fn plan(
 
 /// Reserve an issued plan once, immediately before launching it.
 pub(crate) async fn consume(
-    config: &Config,
+    proxy: &tinybus::Proxy,
     request: ConsumeSandboxPlanRequest2,
 ) -> Result<ConsumeSandboxPlanResponse2, String> {
-    let proxy = super::approval_proxy(config).await?;
     proxy
         .call_confidential(names::methods::CONSUME_SANDBOX_PLAN2, (request,))
         .await

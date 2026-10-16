@@ -12,7 +12,6 @@ use std::sync::OnceLock;
 use tinysecurity_bus::{RegisterSandboxScopeRequest2, SandboxScope2};
 
 use super::{unavailable, PlanError};
-use crate::config::Config;
 use crate::modules::security::sandbox as client;
 
 /// Scopes the host keeps registered at once. Each distinct set of facts (another
@@ -28,7 +27,7 @@ fn live() -> &'static tokio::sync::Mutex<VecDeque<String>> {
 
 /// Make the module hold `scope` on `audit_stream_id`, registering it on first use.
 pub(super) async fn ensure(
-    config: &Config,
+    proxy: &tinybus::Proxy,
     scope: &SandboxScope2,
     audit_stream_id: &str,
 ) -> Result<(), PlanError> {
@@ -43,7 +42,7 @@ pub(super) async fn ensure(
             break;
         };
         tracing::debug!("[sandbox:plan] retiring the least recently used sandbox scope");
-        if let Err(error) = client::retire_scope(config, &oldest).await {
+        if let Err(error) = client::retire_scope(proxy, &oldest).await {
             // Still registered in the module, so keep tracking it and refuse this
             // registration rather than growing past what the host can account for.
             live.push_front(oldest);
@@ -51,7 +50,7 @@ pub(super) async fn ensure(
         }
     }
     let receipt = client::register_scope(
-        config,
+        proxy,
         RegisterSandboxScopeRequest2 {
             scope: scope.clone(),
             audit_stream_id: audit_stream_id.to_owned(),
