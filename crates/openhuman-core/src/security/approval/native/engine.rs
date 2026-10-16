@@ -36,6 +36,10 @@ const CALL_DEADLINE: Duration = Duration::from_secs(25);
 /// How often a subject's stale pending requests are expired.
 const SWEEP_EVERY: Duration = Duration::from_secs(30);
 
+/// How long past its window a request still held in memory is left to its own
+/// timer before the sweep expires it.
+const SWEEP_GRACE_MS: u64 = 30_000;
+
 /// Stale requests expired per sweep.
 const SWEEP_BATCH: usize = 25;
 
@@ -207,8 +211,12 @@ impl NativeEngine {
         for stored in stale {
             let request_id = stored.row.request_id;
             // A request still parked in this process expires through its own
-            // timer, which also settles the call waiting on it.
-            if host().request(&request_id).is_some() {
+            // timer, which also settles the call waiting on it. One that outlived
+            // its window by the grace had its park abandoned (a caller bound),
+            // so nothing else will ever close it.
+            if host().request(&request_id).is_some()
+                && now_ms() < stored.row.expires_at_ms.saturating_add(SWEEP_GRACE_MS)
+            {
                 continue;
             }
             let _guard = scope.stream.lock().await;
