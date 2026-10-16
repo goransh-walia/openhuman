@@ -124,7 +124,7 @@ const COPILOT_APPROVAL_TTL: Duration = Duration::from_secs(180);
 const SUBAGENT_APPROVAL_TTL: Duration = Duration::from_secs(180);
 
 /// Phrase every TTL-expiry denial carries, so a caller that renders its own
-/// refusal (the hosted `OpenHumanSecurityGate`) can tell "nobody answered" from
+/// refusal (the approval resolver, `middleware::approval`) can tell "nobody answered" from
 /// "the user said no" without parsing the rest of the reason. See
 /// [`is_unanswered_approval_reason`].
 pub const APPROVAL_UNANSWERED_PHRASE: &str = "nobody answered the approval prompt";
