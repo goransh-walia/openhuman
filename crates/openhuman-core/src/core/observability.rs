@@ -300,9 +300,9 @@ pub enum ExpectedErrorKind {
     /// <!doctype html>…<title>403</title>…`).
     UpstreamEdgeBlock,
     /// `approval_decide` (`crates/openhuman-core/src/security/approval/rpc.rs`) resolved a request_id
-    /// whose pending row was **already decided, lazily expired, or superseded**
-    /// — `store::decide` updated 0 rows because `decided_at` was already set,
-    /// and `store::get_decision` confirms a persisted decision exists. The
+    /// whose request was **already decided, expired, or cancelled** — the gate's
+    /// decide found nothing pending, and `ApprovalGate::classify_decide_miss`
+    /// confirms the engine holds a decided request under that id. The
     /// inline-approvals design spec
     /// classifies "no pending approval found" as a **benign** outcome: the
     /// frontend `ApprovalRequestCard.decide` and the Telegram callback both call
@@ -403,8 +403,8 @@ pub fn expected_error_kind(message: &str) -> Option<ExpectedErrorKind> {
     // TAURI-RUST-5EH — `approval_decide` resolved a request_id whose row was
     // already decided / lazily expired / superseded (benign race per the
     // inline-approvals design spec). `rpc::approval_decide` emits this exact
-    // `"no pending approval found"` wording ONLY after `store::get_decision`
-    // confirms a persisted decision exists; the genuine never-registered case
+    // `"no pending approval found"` wording ONLY after `classify_decide_miss`
+    // confirms the engine holds a decided request; the genuine never-registered case
     // raises `"no pending approval ever registered"` (matched by neither this
     // arm nor any below), so a real lost-registration defect still reaches
     // Sentry. See `ExpectedErrorKind::ApprovalNoPendingRace`.
@@ -2326,8 +2326,8 @@ fn report_expected_message(kind: ExpectedErrorKind, message: &str, domain: &str,
         }
         ExpectedErrorKind::ApprovalNoPendingRace => {
             // Benign approval race (TAURI-RUST-5EH): the request_id was already
-            // decided / lazily expired / superseded — `store::get_decision`
-            // confirmed a persisted decision exists, so this is a double-tap,
+            // decided / expired / cancelled — `classify_decide_miss`
+            // confirmed the engine holds a decided request, so this is a double-tap,
             // two-operator, or expiry-while-live race classified benign by the
             // inline-approvals design spec, not a lost registration. Demote at
             // `warn!` so a sustained spike still shows in operator dashboards

@@ -183,9 +183,8 @@ pub async fn flows_get_run(config: &Config, run_id: &str) -> Result<Outcome<Flow
 /// Lazy TTL sweep (issue G4): expires every parked `pending_approval` run older
 /// than [`FLOW_PARKED_TTL_SECS`] to a terminal `"cancelled"`, updates the flow
 /// summary, and drops each expired run's durable checkpoint so it can't be
-/// resumed. Mirrors the `approval` domain's expire-on-read idiom
-/// (`approval::store::expire_stale`): called at the top of the run-read paths
-/// rather than from a dedicated background timer, so it needs no scheduler.
+/// resumed. Called at the top of the run-read paths rather than from a
+/// dedicated background timer, so it needs no scheduler.
 ///
 /// Best-effort by construction — a sweep failure is logged and swallowed, never
 /// failing the read that triggered it. The `flows_resume` status guard already
