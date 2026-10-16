@@ -98,6 +98,43 @@ pub struct SandboxBackendHandle {
     pub isolation: Option<SandboxIsolation>,
 }
 
+impl SandboxBackendHandle {
+    /// Whether this backend meets the isolation floor for untrusted code: a
+    /// ready container, or a ready local jail with kernel-level isolation.
+    /// The unsandboxed backend, a folder-confined (Seatbelt) jail and anything
+    /// not ready never do, so callers refuse instead of running unconfined.
+    pub fn suitable_for_untrusted_code(&self) -> bool {
+        if self.status != SandboxStatus::Ready {
+            return false;
+        }
+        match self.kind {
+            SandboxBackendKind::Docker => true,
+            SandboxBackendKind::Local => self.isolation == Some(SandboxIsolation::Isolated),
+            SandboxBackendKind::None => false,
+        }
+    }
+}
+
+/// `sandbox.status` payload: the backend handle plus the untrusted-code floor,
+/// so a UI can tell "ready" from "ready for untrusted code".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxStatusReport {
+    #[serde(flatten)]
+    pub handle: SandboxBackendHandle,
+    /// See [`SandboxBackendHandle::suitable_for_untrusted_code`].
+    pub suitable_for_untrusted_code: bool,
+}
+
+impl SandboxStatusReport {
+    pub fn new(handle: SandboxBackendHandle) -> Self {
+        let suitable_for_untrusted_code = handle.suitable_for_untrusted_code();
+        Self {
+            handle,
+            suitable_for_untrusted_code,
+        }
+    }
+}
+
 /// The confinement a local native jail actually provides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

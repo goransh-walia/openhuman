@@ -78,7 +78,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
             outputs: vec![FieldSchema {
                 name: "status",
                 ty: TypeSchema::Json,
-                comment: "Backend handle with kind, status, backend_id, and (local) isolation.",
+                comment: "Backend handle with kind, status, backend_id, (local) isolation, and suitable_for_untrusted_code (true only for a ready container or kernel-isolated jail).",
                 required: true,
             }],
         },
@@ -222,7 +222,7 @@ fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutu
             .map_err(|e| e.to_string())?;
         }
         let handle = super::ops::create_sandbox_backend_with_config(&policy, &config).await?;
-        to_json(Outcome::new(handle, vec![]))
+        to_json(Outcome::new(super::types::SandboxStatusReport::new(handle), vec![]))
     })
 }
 
