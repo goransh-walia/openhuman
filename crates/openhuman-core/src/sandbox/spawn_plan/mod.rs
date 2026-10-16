@@ -306,6 +306,11 @@ impl PlannedSpawn {
         applied.read_write_mounts = paths(&self.plan.jail.read_write);
         applied.allow_network = self.plan.jail.allow_net;
         if let Some(overrides) = applied.docker_overrides.as_mut() {
+            if !applied.allow_network {
+                // The container's own network setting must follow the plan too, or a
+                // narrowed plan would still start the container on a network.
+                overrides.network = Some("none".to_owned());
+            }
             let limits = &self.artifact.limits;
             overrides.memory_limit_mb = limits.memory_bytes.map(|bytes| bytes.div_ceil(1024 * 1024));
             overrides.cpu_limit = limits.cpu_millicores.map(|millis| f64::from(millis) / 1000.0);
