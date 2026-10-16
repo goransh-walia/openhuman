@@ -95,3 +95,30 @@ test("the committed inventory matches the repository", () => {
   const r = spawnSync(process.execPath, [script], { encoding: "utf8", cwd: repoRoot });
   assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
 });
+
+test("module routes: untrusted must be jailed and the test must exist", async () => {
+  const { diffModules } = await import("../ci/check-spawner-inventory.mjs");
+  const ok = { module: "m", route: "r", trust: "untrusted", executor: "jailed", test: "t.rs" };
+  assert.deepEqual(diffModules([ok], () => true), []);
+  assert.match(diffModules([{ ...ok, executor: "direct" }], () => true).join(), /must be jailed/);
+  assert.match(diffModules([ok], () => false).join(), /does not exist/);
+  assert.match(diffModules([{ ...ok, trust: "x" }], () => true).join(), /trust must be/);
+  assert.deepEqual(
+    diffModules([{ ...ok, trust: "operator", executor: "direct" }], () => true),
+    [],
+  );
+});
+
+test("--write keeps module routes", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "openhuman-spawner-"));
+  const inv = path.join(root, "scripts", "ci", "spawner-inventory.json");
+  fs.mkdirSync(path.dirname(inv), { recursive: true });
+  fs.mkdirSync(path.join(root, "crates"), { recursive: true });
+  const modules = [{ module: "m", route: "r", trust: "operator", executor: "direct", test: "t" }];
+  fs.writeFileSync(inv, JSON.stringify({ rows: [], modules }));
+  const r = spawnSync(process.execPath, [script, "--root", root, "--write"], { encoding: "utf8" });
+  const written = JSON.parse(fs.readFileSync(inv, "utf8"));
+  fs.rmSync(root, { recursive: true, force: true });
+  assert.equal(r.status, 0);
+  assert.deepEqual(written.modules, modules);
+});

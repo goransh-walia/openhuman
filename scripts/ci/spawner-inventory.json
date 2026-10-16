@@ -204,5 +204,22 @@
       "executor": "n/a",
       "test": "n/a"
     }
+  ],
+  "modules": [
+    {
+      "module": "tinymcp",
+      "route": "MCP servers installed from the registry, and every stdio server under SaaS: StdioSpawner -> JailedSpawner -> tinybox StartStdio (tinybox-bus 1.21), enforcement Enforced with the untrusted-code isolation floor and the credential-store deny_read; refused when no backend meets it",
+      "trust": "untrusted",
+      "executor": "jailed",
+      "test": "crates/openhuman-core/src/mcp/stdio_sandbox_tests.rs",
+      "note": "the module refuses a stdio server that is neither operator_trusted nor given a stdio_sandbox, so there is no unconfined fallback (tinymcp transport/stdio/jailed_tests.rs)"
+    },
+    {
+      "module": "tinymcp",
+      "route": "stdio servers declared in the operator's own [mcp_client.servers]: direct child process, operator_trusted set by mcp::host::client_config, never under SaaS",
+      "trust": "operator",
+      "executor": "direct",
+      "test": "crates/openhuman-core/src/mcp/host_tests.rs"
+    }
   ]
 }

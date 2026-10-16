@@ -17,6 +17,15 @@
 //            tinybox), or "n/a" for operator and host-probe rows
 //   test     test that pins the row, or "pending" while the row is "direct"
 //
+// Spawn sites that live in a loadable module (not in this repository's
+// `crates/*/src`, so the scan cannot see them) are recorded under `modules`:
+//   module   the module that starts the process
+//   route    how the host reaches it and which contract member runs it
+//   trust    "operator" or "untrusted"
+//   executor "jailed" (through tinybox, refused when no jail meets the floor)
+//            or "direct" (an ordinary child process the operator vouched for)
+//   test     repo-relative test that pins the route; must exist
+//
 // Untrusted rows with executor "direct" are the migration backlog; they are
 // allowed only while they carry `test: "pending"` and are counted in the
 // summary. A new unclassified row (trust "unclassified") always fails.
@@ -25,6 +34,7 @@
 //   node scripts/ci/check-spawner-inventory.mjs --write   (add/refresh rows)
 //   node scripts/ci/check-spawner-inventory.mjs --root <dir>   (tests)
 
+import { existsSync } from "node:fs";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -90,6 +100,23 @@ export async function scan(root) {
   return found;
 }
 
+/** Problems in the module-owned spawn routes. `exists` answers whether a repo path exists. */
+export function diffModules(modules, exists) {
+  const problems = [];
+  for (const row of modules) {
+    const id = `${row.module ?? "?"}: ${row.route ?? "?"}`;
+    if (!row.module || !row.route) problems.push(`${id}: module row needs module and route`);
+    if (!["operator", "untrusted"].includes(row.trust))
+      problems.push(`${id}: module row trust must be operator|untrusted`);
+    if (!["jailed", "direct"].includes(row.executor))
+      problems.push(`${id}: module row executor must be jailed|direct`);
+    if (row.trust === "untrusted" && row.executor !== "jailed")
+      problems.push(`${id}: an untrusted module route must be jailed`);
+    if (!row.test || !exists(row.test)) problems.push(`${id}: test ${row.test} does not exist`);
+  }
+  return problems;
+}
+
 /** Problems between the scanned sites and the committed rows. */
 export function diff(found, rows) {
   const problems = [];
@@ -124,8 +151,11 @@ export function diff(found, rows) {
 async function main() {
   const found = await scan(repoRoot);
   let rows = [];
+  let modules = [];
   try {
-    rows = JSON.parse(await readFile(inventoryPath, "utf8")).rows;
+    const committed = JSON.parse(await readFile(inventoryPath, "utf8"));
+    rows = committed.rows;
+    modules = committed.modules ?? [];
   } catch {
     /* first write */
   }
@@ -143,11 +173,17 @@ async function main() {
     }));
     // Keep `file` first for readable diffs.
     rows = rows.map(({ file, spawns, ...rest }) => ({ file, spawns, ...rest }));
-    await writeFile(inventoryPath, JSON.stringify({ rows }, null, 2) + "\n");
+    await writeFile(
+      inventoryPath,
+      JSON.stringify(modules.length ? { rows, modules } : { rows }, null, 2) + "\n",
+    );
     console.log(`spawner inventory: wrote ${rows.length} rows`);
     return;
   }
-  const problems = diff(found, rows);
+  const problems = [
+    ...diff(found, rows),
+    ...diffModules(modules, (rel) => existsSync(resolve(repoRoot, rel))),
+  ];
   const backlog = rows.filter((r) => r.trust === "untrusted" && r.executor === "direct");
   if (problems.length) {
     console.error("spawner inventory out of date:");
@@ -156,7 +192,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `spawner inventory: ${rows.length} rows ok; ${backlog.length} untrusted spawner(s) still direct`,
+    `spawner inventory: ${rows.length} rows, ${modules.length} module route(s) ok; ${backlog.length} untrusted spawner(s) still direct`,
   );
 }
 
