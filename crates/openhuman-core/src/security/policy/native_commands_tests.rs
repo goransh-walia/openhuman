@@ -182,6 +182,40 @@ mod projection {
         assert_eq!(host_gate(CommandGate::Block), GateDecision::Block);
     }
 
+    /// The security gate asks the module about acting tools under this scope, so the
+    /// scope must carry what makes the budget and the tier inert while the autonomy
+    /// policy is disabled, and the real limit and tier while it is enabled. The execute
+    /// stage is the one the shell tool spends its budget through, which acting tools
+    /// share.
+    #[test]
+    fn the_execute_scope_carries_the_autonomy_switch_tier_and_budget() {
+        let scope = |enabled, autonomy, budget| {
+            SecurityPolicy {
+                enabled,
+                autonomy,
+                max_actions_per_hour: budget,
+                ..SecurityPolicy::default()
+            }
+            .native_command_policy(CommandFlow::Harness, CommandStage::Execute)
+            .unwrap()
+        };
+        let disabled = scope(false, crate::security::AutonomyLevel::ReadOnly, 1);
+        assert!(!disabled.enabled);
+        assert_eq!(disabled.max_actions_per_hour, 1);
+        let enabled = scope(true, crate::security::AutonomyLevel::ReadOnly, 7);
+        assert!(enabled.enabled);
+        assert_eq!(enabled.autonomy, tinysecurity_bus::CommandAutonomy::ReadOnly);
+        assert_eq!(enabled.max_actions_per_hour, 7);
+        // The authorize stage never spends the budget the run reserves.
+        let authorize = SecurityPolicy {
+            max_actions_per_hour: 7,
+            ..SecurityPolicy::default()
+        }
+        .native_command_policy(CommandFlow::Harness, CommandStage::Authorize)
+        .unwrap();
+        assert_eq!(authorize.max_actions_per_hour, u32::MAX);
+    }
+
     #[test]
     fn a_relative_action_dir_becomes_absolute_and_a_missing_home_stays_none_or_absolute() {
         let policy = SecurityPolicy {
