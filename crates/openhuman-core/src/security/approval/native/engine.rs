@@ -34,6 +34,15 @@ const SWEEP_EVERY: Duration = Duration::from_secs(30);
 /// Stale requests expired per sweep.
 const SWEEP_BATCH: usize = 25;
 
+/// Ends a call's wait for its prompt however the check returns.
+struct CallGuard(String);
+
+impl Drop for CallGuard {
+    fn drop(&mut self) {
+        host().end_call(&self.0);
+    }
+}
+
 /// Where the engine gets its bus proxy.
 enum Source {
     /// The attested, digest-pinned module the registry loads.
@@ -263,6 +272,7 @@ impl ApprovalEngine for NativeEngine {
         ) {
             return Err(unavailable("the approval correlation is already in use"));
         }
+        let _call = CallGuard(input.call_id.clone());
         let response = {
             let _guard = scope.stream.lock().await;
             let generation = Self::generation(&proxy).await?;
@@ -280,7 +290,6 @@ impl ApprovalEngine for NativeEngine {
                     },),
                 )
                 .await;
-            host().end_call(&input.call_id);
             evaluated.map_err(|error| {
                 tracing::warn!(error = %error, "{LOG} the module refused to evaluate the call");
                 unavailable("TinySecurity EvaluateApproval2 failed")
