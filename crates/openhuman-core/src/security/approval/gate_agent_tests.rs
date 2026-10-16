@@ -248,7 +248,7 @@ async fn agents_parked_on_one_thread_id_are_routed_and_decided_apart() {
         .is_empty());
 
     let refused = gate
-        .decide_for_agent("route-alpha", &beta_request, ApprovalDecision::ApproveOnce)
+        .decide_for_agent("route-alpha", &beta_request, ApprovalDecision::ApproveOnce).await
         .expect_err("alpha must not decide beta's request");
     assert_eq!(
         refused.downcast_ref::<ApprovalError>(),
@@ -263,7 +263,7 @@ async fn agents_parked_on_one_thread_id_are_routed_and_decided_apart() {
     );
 
     let decided = gate
-        .decide_for_agent("route-alpha", &alpha_request, ApprovalDecision::ApproveOnce)
+        .decide_for_agent("route-alpha", &alpha_request, ApprovalDecision::ApproveOnce).await
         .unwrap()
         .expect("alpha's row decided");
     assert_eq!(decided.agent_id.as_deref(), Some("route-alpha"));
@@ -279,7 +279,7 @@ async fn agents_parked_on_one_thread_id_are_routed_and_decided_apart() {
             &crate::core::runtime::DispatchCtx::ambient(),
             "route-beta",
             "agent_removed",
-        )
+        ).await
         .unwrap();
     assert_eq!(denied, 1);
     let (outcome, _) = beta.await.unwrap();
@@ -332,13 +332,13 @@ async fn an_agent_cannot_decide_a_request_the_process_parked() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
-    let refused = gate.decide_for_agent("intruder", &request_id, ApprovalDecision::Deny);
+    let refused = gate.decide_for_agent("intruder", &request_id, ApprovalDecision::Deny).await;
     assert!(
         refused.is_err(),
         "an agent must not decide a process request"
     );
 
-    gate.decide(&request_id, ApprovalDecision::Deny).unwrap();
+    gate.decide(&request_id, ApprovalDecision::Deny).await.unwrap();
     let (outcome, _) = process.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Deny { .. }));
 }

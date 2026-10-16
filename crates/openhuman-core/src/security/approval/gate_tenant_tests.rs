@@ -104,8 +104,8 @@ async fn two_profiles_default_agents_park_on_one_thread_id_apart() {
     // The process's own (unprofiled) route for the thread stays empty.
     assert!(gate.pending_for_agent_thread(None, "t-test").is_none());
 
-    gate.decide(&alice_request, ApprovalDecision::Deny).unwrap();
-    gate.decide(&bob_request, ApprovalDecision::Deny).unwrap();
+    gate.decide(&alice_request, ApprovalDecision::Deny).await.unwrap();
+    gate.decide(&bob_request, ApprovalDecision::Deny).await.unwrap();
     let (alice_outcome, _) = alice_turn.await.unwrap();
     let (bob_outcome, _) = bob_turn.await.unwrap();
     assert!(

@@ -217,7 +217,7 @@ async fn intercept_audited_returns_request_id_only_when_allowed_and_persisted() 
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     let (outcome, id) = handle.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Allow));
@@ -229,7 +229,7 @@ async fn intercept_audited_returns_request_id_only_when_allowed_and_persisted() 
 
     // Now record execution against that id. Round-trip via a
     // fresh gate to prove the row landed in durable storage.
-    gate.record_execution(&pending.request_id, ExecutionOutcome::Success, None);
+    gate.record_execution(&pending.request_id, ExecutionOutcome::Success, None).await;
 }
 
 #[tokio::test]
@@ -257,7 +257,7 @@ async fn intercept_audited_id_is_none_for_denied_some_for_approved() {
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
-    gate.decide(&pending.request_id, ApprovalDecision::Deny)
+    gate.decide(&pending.request_id, ApprovalDecision::Deny).await
         .unwrap();
     let (outcome, id) = denied.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Deny { .. }));
@@ -293,7 +293,7 @@ async fn intercept_audited_id_is_none_for_denied_some_for_approved() {
     // the `auto_approve` allowlist for *future* calls is the RPC handler's
     // job — see `approval::rpc::approval_decide` — and the gate's allowlist
     // short-circuit is covered by `auto_approve_tool_skips_prompt`.)
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveAlwaysForTool)
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveAlwaysForTool).await
         .unwrap();
     let (first_outcome, first_id) = first.await.unwrap();
     assert!(matches!(first_outcome, GateOutcome::Allow));
@@ -352,7 +352,7 @@ async fn flow_origin_park_populates_source_context_with_flow_and_run_id() {
         other => panic!("expected Flow source_context, got {other:?}"),
     }
 
-    gate.decide(&pending.request_id, ApprovalDecision::Deny)
+    gate.decide(&pending.request_id, ApprovalDecision::Deny).await
         .unwrap();
     let _ = handle.await.unwrap();
 }
@@ -390,7 +390,7 @@ async fn chat_origin_park_has_no_source_context() {
         "chat-origin parks must not carry a source_context"
     );
 
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     let (outcome, _id) = handle.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Allow));
@@ -504,7 +504,7 @@ async fn decide_approve_always_for_flow_then_insert_flow_trust_composes_to_auto_
     };
 
     let decided = gate
-        .decide(&request_id, ApprovalDecision::ApproveAlwaysForFlow)
+        .decide(&request_id, ApprovalDecision::ApproveAlwaysForFlow).await
         .unwrap()
         .expect("decided row");
 
@@ -597,6 +597,6 @@ async fn flow_origin_park_publishes_flow_approval_request_and_notification() {
         vec!["approve_once", "approve_always_for_flow", "deny"]
     );
 
-    gate.decide(&request_id, ApprovalDecision::Deny).unwrap();
+    gate.decide(&request_id, ApprovalDecision::Deny).await.unwrap();
     let _ = handle.await.unwrap();
 }

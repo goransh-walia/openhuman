@@ -46,7 +46,7 @@ async fn pending_for_thread_tracks_request_under_chat_context_and_clears() {
     };
 
     // Decide via the mapped request_id (as the chat ingress router will).
-    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
+    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce).await;
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
 
     // Mapping is cleared once intercept returns.
@@ -110,7 +110,7 @@ async fn webchat_origin_routes_park_when_approval_chat_context_absent() {
 
     // A decision on that mapped request resolves the park (the card can
     // surface and be approved), instead of silently TTL-denying.
-    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
+    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce).await;
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
     assert!(gate.pending_for_thread("thread-async").is_none());
 }
@@ -154,7 +154,7 @@ async fn waiter_future_dropped_mid_park_evicts_waiter_clears_routing_and_denies_
         .pending_for_thread("t-test")
         .expect("thread→request mapping must exist while parked");
     assert!(
-        gate.waiters.lock().contains_key(&request_id),
+        gate.parked.waiters.lock().contains_key(&request_id),
         "waiter must be registered while parked"
     );
     assert!(
@@ -168,7 +168,7 @@ async fn waiter_future_dropped_mid_park_evicts_waiter_clears_routing_and_denies_
 
     // The RAII guard must have run the cleanup on drop.
     assert!(
-        !gate.waiters.lock().contains_key(&request_id),
+        !gate.parked.waiters.lock().contains_key(&request_id),
         "waiter must be evicted when the parked future is dropped"
     );
     assert!(
@@ -252,7 +252,7 @@ async fn intercept_audited_bounded_abandons_park_and_leaves_row_pending() {
 
     // The row is LEFT open — a later human card-click still resolves it.
     let decided = gate
-        .decide(&request_id, ApprovalDecision::ApproveOnce)
+        .decide(&request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     assert!(
         decided.is_some(),
@@ -414,7 +414,7 @@ async fn copilot_streaming_park_persists_the_clamped_expiry() {
         "sanity: the persisted expiry must be shorter than the unclamped default TTL"
     );
 
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     let outcome = handle.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Allow));

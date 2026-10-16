@@ -121,7 +121,7 @@ async fn an_async_subagent_park_reaches_the_parent_thread_detached_with_a_short_
         window(&row, before)
     );
 
-    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
+    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce).await;
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
 }
 
@@ -168,7 +168,7 @@ async fn an_inline_chat_park_is_not_detached_and_keeps_the_full_window() {
         window(&row, before)
     );
 
-    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
+    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce).await;
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
 }
 
@@ -210,7 +210,7 @@ async fn an_inline_subagent_park_uses_the_short_window_without_being_detached() 
         "got {}",
         window(&row, before)
     );
-    decide_parked(&gate, &row.request_id, ApprovalDecision::ApproveOnce);
+    decide_parked(&gate, &row.request_id, ApprovalDecision::ApproveOnce).await;
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
 }
 
@@ -303,12 +303,12 @@ async fn every_detached_park_on_a_thread_stays_recoverable() {
         .is_empty());
 
     // Answer the newer one; the older one is still parked and still listed.
-    decide_parked(&gate, &parked[1].request_id, ApprovalDecision::Deny);
+    decide_parked(&gate, &parked[1].request_id, ApprovalDecision::Deny).await;
     let remaining = gate.parked_requests_for_thread("thread-multi");
     assert_eq!(remaining.len(), 1);
     assert_eq!(remaining[0].request_id, parked[0].request_id);
 
-    decide_parked(&gate, &parked[0].request_id, ApprovalDecision::ApproveOnce);
+    decide_parked(&gate, &parked[0].request_id, ApprovalDecision::ApproveOnce).await;
     let first = handles.remove(0).await.unwrap();
     assert!(matches!(first, GateOutcome::Allow));
     assert!(matches!(

@@ -8,7 +8,7 @@ fn guard_cleanup_only_clears_routing_it_still_owns() {
     // must not clobber the *new* request's mapping.
     let (gate, _dir) = test_gate();
 
-    gate.thread_to_request
+    gate.parked.thread_to_request
         .lock()
         .insert("thread-1".into(), "req-new".into());
 
@@ -55,7 +55,7 @@ async fn approve_once_returns_allow() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
 
     let outcome = handle.await.unwrap();
@@ -88,7 +88,7 @@ async fn deny_returns_deny_with_reason() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
-    gate.decide(&pending.request_id, ApprovalDecision::Deny)
+    gate.decide(&pending.request_id, ApprovalDecision::Deny).await
         .unwrap();
 
     let outcome = handle.await.unwrap();
@@ -160,14 +160,14 @@ async fn aborting_older_chat_waiter_preserves_newer_thread_route() {
         gate.pending_for_thread("t-test").as_deref(),
         Some(new_request_id.as_str())
     );
-    assert!(!gate.waiters.lock().contains_key(&old_request_id));
-    assert!(gate.waiters.lock().contains_key(&new_request_id));
+    assert!(!gate.parked.waiters.lock().contains_key(&old_request_id));
+    assert!(gate.parked.waiters.lock().contains_key(&new_request_id));
     assert_eq!(
         store::get_decision(&gate.config, &old_request_id).unwrap(),
         Some(ApprovalDecision::Deny)
     );
 
-    gate.decide(&new_request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&new_request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     assert!(matches!(new_handle.await.unwrap(), GateOutcome::Allow));
     assert!(gate.pending_for_thread("t-test").is_none());
@@ -340,7 +340,7 @@ async fn auto_approve_all_off_still_parks() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     let outcome = handle.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Allow));
@@ -571,7 +571,7 @@ async fn cancel_flow_run_parks_for_approval_when_a_gate_is_present() {
 async fn decide_unknown_id_is_noop() {
     let (gate, _dir) = test_gate();
     let decided = gate
-        .decide("does-not-exist", ApprovalDecision::ApproveOnce)
+        .decide("does-not-exist", ApprovalDecision::ApproveOnce).await
         .unwrap();
     assert!(decided.is_none());
 }
@@ -586,7 +586,7 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
 
     // Never persisted → genuine loss, keep visible.
     assert_eq!(
-        gate.classify_decide_miss("never-existed"),
+        gate.classify_decide_miss("never-existed").await,
         DecideMiss::NeverRegistered
     );
 
@@ -600,16 +600,16 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
     );
     store::insert_pending(&gate.config, &pending, &gate.session_id).unwrap();
     assert!(gate
-        .decide("req-decided", ApprovalDecision::ApproveOnce)
+        .decide("req-decided", ApprovalDecision::ApproveOnce).await
         .unwrap()
         .is_some());
     // The conditional UPDATE now matches 0 rows (decided_at set).
     assert!(gate
-        .decide("req-decided", ApprovalDecision::Deny)
+        .decide("req-decided", ApprovalDecision::Deny).await
         .unwrap()
         .is_none());
     assert_eq!(
-        gate.classify_decide_miss("req-decided"),
+        gate.classify_decide_miss("req-decided").await,
         DecideMiss::AlreadyResolved
     );
 
@@ -624,11 +624,11 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
     );
     store::insert_pending(&gate.config, &expired, &gate.session_id).unwrap();
     assert!(gate
-        .decide("req-expired", ApprovalDecision::ApproveOnce)
+        .decide("req-expired", ApprovalDecision::ApproveOnce).await
         .unwrap()
         .is_none());
     assert_eq!(
-        gate.classify_decide_miss("req-expired"),
+        gate.classify_decide_miss("req-expired").await,
         DecideMiss::AlreadyResolved
     );
 }

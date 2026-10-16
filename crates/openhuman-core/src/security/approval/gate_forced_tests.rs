@@ -32,7 +32,7 @@ async fn forced_approval_parks_with_autonomy_disabled_and_releases_exact_request
     assert_eq!(pending.action_summary, "Click Submit on checkout");
     assert_eq!(pending.args_redacted["target"], "Submit");
     assert!(!handle.is_finished());
-    decide_parked(&gate, &pending.request_id, ApprovalDecision::ApproveOnce);
+    decide_parked(&gate, &pending.request_id, ApprovalDecision::ApproveOnce).await;
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
     assert!(gate.list_pending().unwrap().is_empty());
 }
@@ -84,10 +84,10 @@ async fn forced_approval_ignores_auto_approval_and_rejects_persistent_grants() {
     .expect("forced approval with auto flags never parked");
     assert!(!handle.is_finished());
     assert!(gate
-        .decide(&request_id, ApprovalDecision::ApproveAlwaysForTool)
+        .decide(&request_id, ApprovalDecision::ApproveAlwaysForTool).await
         .is_err());
     assert!(!handle.is_finished());
-    decide_parked(&gate, &request_id, ApprovalDecision::Deny);
+    decide_parked(&gate, &request_id, ApprovalDecision::Deny).await;
     assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
 }
 

@@ -96,7 +96,7 @@ async fn a_turn_parks_its_approval_on_the_chat_its_run_context_carries() {
     let request_id = parked(&gate, "t-turn").await;
     // A park with a chat context is attached to the turn, not a detached card.
     assert!(!gate.request_is_detached(&request_id));
-    gate.decide(&request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     assert!(matches!(
         task.await.unwrap(),
@@ -127,7 +127,7 @@ async fn a_detached_turn_has_no_chat_and_routes_through_its_origin_marked_detach
         gate.request_is_detached(&request_id),
         "a detached sub-agent's park must not inherit the parent's chat context"
     );
-    gate.decide(&request_id, ApprovalDecision::ApproveOnce)
+    gate.decide(&request_id, ApprovalDecision::ApproveOnce).await
         .unwrap();
     task.await.unwrap();
 }
@@ -151,7 +151,7 @@ async fn concurrent_turns_park_on_their_own_chats() {
     }
     for thread in ["t-one", "t-two"] {
         let request_id = parked(&gate, thread).await;
-        gate.decide(&request_id, ApprovalDecision::ApproveOnce)
+        gate.decide(&request_id, ApprovalDecision::ApproveOnce).await
             .unwrap();
     }
     for task in tasks {
