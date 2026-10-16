@@ -19,7 +19,7 @@ use tinyagents_harness::middleware::{
     ShellTurnBudget, TurnClockMiddleware, DIRECT_WEB_READ_LIMIT,
 };
 use tinyagents_harness::middleware::{
-    plan_mode_middleware, ApprovalGateMiddleware, ArgRecoveryMiddleware, BudgetLimits,
+    plan_mode_middleware, ArgRecoveryMiddleware, BudgetLimits,
     BudgetMiddleware, BudgetParityObserver, ContextCompressionMiddleware,
     PromptCacheGuardMiddleware, RepeatProgressMiddleware, RunModeHandle,
     ToolPolicyMiddleware as TaToolPolicyMiddleware,
@@ -477,18 +477,13 @@ pub(super) fn install_turn_middleware(
         TaToolPolicyMiddleware::new(harness.tools().policies()).require_sandbox(true),
     ));
 
-    // Human-in-the-loop approval as a named tool middleware (issue #4249,
-    // Phase 1): an external-effect tool intercepts through the global
-    // `ApprovalGate`, a denial short-circuits with a model-consumable result, and
-    // an approved call records a terminal audit row. Replaces the inline approval
-    // block that used to live in the legacy tool adapter.
+    // The security gate (issue #7328, phase 6): the TinySecurity module's decision
+    // for an effect-bearing tool, mapped onto the harness decision, with a
+    // required approval settled through the global `ApprovalGate`. It is the
+    // first tool middleware on every path so a refused call reaches nothing
+    // else. A hosted root's own security adapter answers for its tool calls.
     if !hosted_security_gate {
-        harness.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new(
-            "approval_security",
-            Arc::new(middleware::approval::ApprovalSecurityMiddleware::new(
-                tool_sets.clone(),
-            )),
-        )));
+        middleware::security_gate::install(harness, tool_sets.clone());
     }
 
     // CLI/RPC-only scope gate — a tool restricted to explicit CLI/RPC invocation

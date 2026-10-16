@@ -24,7 +24,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use tinyagents_harness::middleware::{
-    ApprovalGateMiddleware, ArgRecoveryMiddleware, ToolPolicyMiddleware as TaToolPolicyMiddleware,
+    ArgRecoveryMiddleware, ToolPolicyMiddleware as TaToolPolicyMiddleware,
 };
 use tinyagents_harness::runtime::AgentHarness;
 
@@ -91,12 +91,7 @@ pub(crate) fn assemble_live_tool_harness(
     harness.push_middleware(Arc::new(
         TaToolPolicyMiddleware::new(harness.tools().policies()).require_sandbox(true),
     ));
-    harness.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new(
-        "approval_security",
-        Arc::new(middleware::approval::ApprovalSecurityMiddleware::new(
-            tool_sets.clone(),
-        )),
-    )));
+    middleware::security_gate::install(&mut harness, tool_sets.clone());
     harness.push_tool_middleware(Arc::new(
         tinyagents_harness::middleware::CliRpcOnlyMiddleware::new(tool_sets.clone()),
     ));
