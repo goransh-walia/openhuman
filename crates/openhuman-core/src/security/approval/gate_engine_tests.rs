@@ -366,7 +366,7 @@ async fn an_agent_removed_before_the_approved_call_runs_cancels_it() {
     stub.decide("approved-then-removed", Choice::Once, "approve_once")
         .await
         .unwrap();
-    let scope = super::ApprovalScope::default();
+    let scope = crate::security::approval::ApprovalScope::default();
     scope.close("agent_removed");
     let (outcome, id) = gate
         .reserved("approved-then-removed".into(), "composio", Some(&scope), true)
