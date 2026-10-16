@@ -218,20 +218,25 @@ impl Rows {
             {
                 return Err("a mutation identity was reused with other content".into());
             }
+            // Already applied: the original receipt, however far the row has moved.
+            if prior.doc.get("applied") == Some(&Value::Bool(true)) {
+                return Ok(receipt());
+            }
+            // Recorded but not marked: finish what the interrupted write left.
             let current = self
                 .docs
                 .get(ROWS, &request.record_id)
                 .await
                 .map_err(storage)?;
-            return match current {
-                Some(found) if number(&found.doc, "version") == i64::try_from(next_version).ok() => {
-                    Ok(receipt())
-                }
-                _ => {
-                    self.apply(request, next_version, current).await?;
-                    Ok(receipt())
-                }
-            };
+            let landed = current.as_ref().is_some_and(|found| {
+                number(&found.doc, "version") == i64::try_from(next_version).ok()
+                    && text(&found.doc, "record") == Some(record.record_json.as_str())
+            });
+            if !landed {
+                self.apply(request, next_version, current).await?;
+            }
+            self.mark_applied(&ledger_id, request, next_version).await;
+            return Ok(receipt());
         }
         let current = self
             .docs
@@ -243,6 +248,7 @@ impl Rows {
             "record_id": request.record_id,
             "record_json": record.record_json,
             "version": next_version,
+            "applied": false,
         });
         match self
             .docs
@@ -254,7 +260,26 @@ impl Rows {
             Err(error) => return Err(storage(error)),
         }
         self.apply(request, next_version, current).await?;
+        self.mark_applied(&ledger_id, request, next_version).await;
         Ok(receipt())
+    }
+
+    /// Note that the mutation's row write landed, so a later retry answers from
+    /// the ledger alone. A failure here is repaired by that retry.
+    async fn mark_applied(&self, ledger_id: &str, request: &ApprovalCasRequest2, version: u64) {
+        let applied = json!({
+            "record_id": request.record_id,
+            "record_json": request.next_record.record_json,
+            "version": version,
+            "applied": true,
+        });
+        if let Err(error) = self
+            .docs
+            .put(MUTATIONS, ledger_id, applied, Precondition::None)
+            .await
+        {
+            tracing::debug!(error = %error, "[approval::rows] the mutation was not marked applied");
+        }
     }
 
     /// Write the row if it is still at the version the mutation expects.
