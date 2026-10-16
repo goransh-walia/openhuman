@@ -1,5 +1,4 @@
 use super::*;
-use crate::security::approval::GateOutcome;
 
 /// A refused approval must reach the model as a refusal it can read. Passed on
 /// as the gate's own `[policy-denied] User denied ...` text it carried a policy
@@ -57,15 +56,6 @@ fn an_unanswered_approval_tells_the_model_it_was_not_answered() {
         !lower.contains("user denied") && !lower.contains("declined") && !lower.contains("human"),
         "{reason}"
     );
-}
-
-#[test]
-fn the_gate_outcome_type_is_what_the_resolver_refuses_with() {
-    // The resolver maps exactly `GateOutcome::Deny { reason }`; an allow has no text.
-    let outcome = GateOutcome::Deny {
-        reason: "x".to_string(),
-    };
-    assert!(matches!(outcome, GateOutcome::Deny { .. }));
 }
 
 #[test]
