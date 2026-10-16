@@ -29,7 +29,6 @@ mod state;
 mod view;
 
 pub(crate) use engine::NativeEngine;
-pub(crate) use view::{decided_history, row_decided};
 
 /// The SHA-256 correlation of a ticket the module stores instead of the ticket.
 pub(super) fn ticket_sha256(ticket: &str) -> String {

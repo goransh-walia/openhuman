@@ -189,6 +189,10 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
     /// honors the decision).
     async fn expire(&self, request_id: &str) -> Result<bool, EngineError>;
 
+    /// Forget a request the caller will not reserve or record, so the engine
+    /// holds nothing for it. The request itself is left as it was decided.
+    fn release(&self, request_id: &str);
+
     /// Cancel a pending or approved request that will not run.
     async fn cancel(&self, request_id: &str) -> Result<(), EngineError>;
 
@@ -266,6 +270,7 @@ impl ApprovalEngine for UnavailableEngine {
     async fn expire(&self, _request_id: &str) -> Result<bool, EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
     }
+    fn release(&self, _request_id: &str) {}
     async fn cancel(&self, _request_id: &str) -> Result<(), EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
     }

@@ -483,6 +483,10 @@ impl ApprovalEngine for NativeEngine {
         }
     }
 
+    fn release(&self, request_id: &str) {
+        host().forget_request(request_id);
+    }
+
     async fn cancel(&self, request_id: &str) -> Result<(), EngineError> {
         let entry = host().request(request_id).ok_or(EngineError::NotPending)?;
         let proxy = self.proxy().await?;

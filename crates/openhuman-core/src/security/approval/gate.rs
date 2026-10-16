@@ -45,7 +45,7 @@ use tinytools::status::POLICY_DENIED_MARKER;
 
 use super::store;
 use super::engine::{
-    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Delivery, EngineError, Posture,
+    CallOrigin, CheckInput, Checked, Choice, Delivery, EngineError, Posture,
     PromptSurface, SharedEngine, Variant,
 };
 use super::types::{

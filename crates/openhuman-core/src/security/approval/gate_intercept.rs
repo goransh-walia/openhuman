@@ -760,6 +760,7 @@ impl ApprovalGate {
         if !track {
             // The caller cannot report how the call ends, so no reservation is
             // taken that would never be closed; the approval stays as granted.
+            self.engine.release(&request_id);
             return (GateOutcome::Allow, None);
         }
         match self.engine.reserve(&request_id).await {
