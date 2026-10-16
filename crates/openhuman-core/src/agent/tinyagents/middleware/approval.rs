@@ -74,28 +74,87 @@ impl ApprovalSecurityMiddleware {
             .unwrap_or(false)
     }
 
+    /// The registered tool named `name`, if any.
+    pub(crate) fn resolve_tool(&self, name: &str) -> Option<&dyn Tool> {
+        self.tool_sets
+            .iter()
+            .flat_map(|set| set.iter())
+            .find(|tool| tool.name() == name)
+            .map(|tool| tool.as_ref())
+    }
+
+    /// Whether the user turned this desktop tool's approvals off (the desktop
+    /// default skips the channel and external-effect approval parks).
+    pub(crate) async fn desktop_approvals_disabled(
+        &self,
+        dispatch: &DispatchCtx,
+        name: &str,
+    ) -> bool {
+        #[cfg(feature = "modules")]
+        {
+            match self.resolve_tool(name) {
+                Some(tool) => crate::desktop::control::approvals_disabled_for(dispatch, tool).await,
+                None => false,
+            }
+        }
+        #[cfg(not(feature = "modules"))]
+        {
+            let _ = (dispatch, name);
+            false
+        }
+    }
+
     pub(crate) async fn requires_approval(
         &self,
         dispatch: &DispatchCtx,
         name: &str,
         args: &serde_json::Value,
     ) -> bool {
-        #[cfg(feature = "modules")]
-        let desktop_approval_disabled = match self
-            .tool_sets
-            .iter()
-            .flat_map(|set| set.iter())
-            .find(|tool| tool.name() == name)
-        {
-            Some(tool) => {
-                crate::desktop::control::approvals_disabled_for(dispatch, tool.as_ref()).await
-            }
-            None => false,
-        };
-        #[cfg(not(feature = "modules"))]
-        let desktop_approval_disabled = false;
-        self.has_external_effect(name, args) && !desktop_approval_disabled
+        self.has_external_effect(name, args) && !self.desktop_approvals_disabled(dispatch, name).await
     }
+}
+
+/// What the model is told when the approval prompt for `tool_name` expired
+/// unanswered. Like the refusal text it carries no `[policy-denied]` marker
+/// (see [`refused_approval_text`]), so the model keeps the turn to tell the user.
+fn unanswered_approval_text(tool_name: &str) -> String {
+    format!(
+        "The approval request for '{tool_name}' was not answered in time, so it was not run. \
+         Tell the user the approval window expired and that they must ask again to retry. \
+         Do not retry this call yourself this turn and do not achieve the same result another \
+         way (shell, CLI, another tool)."
+    )
+}
+
+/// What the model is told when the approval flow refused `tool_name`.
+///
+/// A refusal names no human and no timeout, so every refusal reads the same, and
+/// it rules out other routes explicitly because `shell` never prompts while
+/// autonomy is disabled (`[autonomy] enabled = false`, the default) and was used
+/// to redo a refused call. An expired prompt is not a refusal: nobody answered, so
+/// the model is told the approval window expired and that the user must ask again.
+///
+/// Neither text carries a `[policy-denied]` marker on purpose. The marker
+/// classifies as a policy failure with a zero recovery budget
+/// (`middleware::repeated_failure`), which pauses the turn before the model can
+/// answer; the model must get this turn to tell the user the action was not done.
+pub(crate) fn refused_approval_text(tool_name: &str, gate_reason: &str) -> String {
+    if crate::security::approval::is_unanswered_approval_reason(gate_reason) {
+        tracing::warn!(
+            tool = %tool_name,
+            "[tinyagents::mw] approval prompt expired unanswered"
+        );
+        return unanswered_approval_text(tool_name);
+    }
+    tracing::warn!(
+        tool = %tool_name,
+        reason = %gate_reason,
+        "[tinyagents::mw] approval flow declined the tool call"
+    );
+    "This action was refused and must not be performed this turn — do not retry this call and do \
+     not achieve the same result another way (shell, CLI, another tool). Tell the user it was not \
+     done."
+        .to_string()
 }
 
 /// Host side of the harness approval seam: the tool-set lookup, the global
@@ -158,7 +217,9 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
                     reason = %reason,
                     "[tinyagents::mw] approval gate denied tool call"
                 );
-                ApprovalResolution::Deny { reason }
+                ApprovalResolution::Deny {
+                    reason: refused_approval_text(&call.name, &reason),
+                }
             }
             GateOutcome::Allow => ApprovalResolution::Allow { ticket: request_id },
         }
@@ -178,3 +239,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
         }
     }
 }
+
+#[cfg(test)]
+#[path = "approval_tests.rs"]
+mod tests;
