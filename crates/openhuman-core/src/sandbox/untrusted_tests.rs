@@ -133,11 +133,7 @@ async fn untrusted_gate_follows_the_released_jail() {
     let (backend, status, _isolation) = super::super::native_jail::status(&config)
         .await
         .expect("the released module reports its jail");
-    eprintln!("released jail backend={backend} status={status:?}");
-    eprintln!(
-        "released jail raw status={:?}",
-        crate::modules::tinybox::jail_status(&config).await
-    );
+    let _ = (&backend, &status);
 
     let inside = run(UntrustedShell {
         config: &config,
