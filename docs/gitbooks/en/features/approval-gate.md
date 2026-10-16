@@ -133,7 +133,8 @@ The gate is interactive, so a parked call needs a surface that can answer it. Th
 | Web chat | Parks for your decision |
 | A triage dispatch from a connector or webhook payload | Parks; the module records the request |
 | An external channel turn (Telegram, Slack and so on) | Parks; the module records the request |
-| An unlabelled call site | Denied |
+| A SaaS tenant | Never parks, because there is no per-user approval surface. What the deployment's tool groups allow is recorded as an automatic approval under that tenant's own audit stream; anything else is denied |
+| An unlabelled call site | Denied, unless you put that exact tool on your Always-allow list |
 
 A triage dispatch that your own machine started keeps the authority its caller already had. One steered by an outside payload parks and leaves an audit row. No surface can decide a background park yet, so it expires at the timeout. You get the audit trail, not a working escalation, and `auto_approve_all` gives up even that.
 
