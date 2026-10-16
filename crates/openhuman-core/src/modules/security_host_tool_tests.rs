@@ -111,7 +111,9 @@ fn deny(reason: DenialReason) -> Verdict {
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn the_read_only_tier_refuses_an_acting_tool_but_not_a_read() {
     let mut gate = Gate::start().await;
-    let scope = gate.scope(&policy(AutonomyLevel::ReadOnly, true, 100)).await;
+    let scope = gate
+        .scope(&policy(AutonomyLevel::ReadOnly, true, 100))
+        .await;
     assert_eq!(
         gate.evaluate(Origin::Operator, "write_file", vec![acting(true, &scope)])
             .await,
@@ -194,23 +196,33 @@ async fn a_scheduled_turn_may_use_read_only_tools_only() {
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn the_shell_decision_comes_from_the_registered_command_scope() {
     let mut gate = Gate::start().await;
-    let read_only = gate.scope(&policy(AutonomyLevel::ReadOnly, true, 100)).await;
+    let read_only = gate
+        .scope(&policy(AutonomyLevel::ReadOnly, true, 100))
+        .await;
     assert_eq!(
         gate.evaluate(Origin::Operator, "shell", vec![shell("ls", &read_only)])
             .await,
         Verdict::Allow
     );
     assert_eq!(
-        gate.evaluate(Origin::Operator, "shell", vec![shell("touch f", &read_only)])
-            .await,
+        gate.evaluate(
+            Origin::Operator,
+            "shell",
+            vec![shell("touch f", &read_only)]
+        )
+        .await,
         deny(DenialReason::ReadOnlyMode)
     );
     let supervised = gate
         .scope(&policy(AutonomyLevel::Supervised, true, 100))
         .await;
     assert_eq!(
-        gate.evaluate(Origin::Operator, "shell", vec![shell("touch f", &supervised)])
-            .await,
+        gate.evaluate(
+            Origin::Operator,
+            "shell",
+            vec![shell("touch f", &supervised)]
+        )
+        .await,
         deny(DenialReason::ApprovalUnavailable),
         "a supervised write waits for a human"
     );

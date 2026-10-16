@@ -206,3 +206,177 @@ async fn a_module_fault_denies_once_and_does_not_fall_back_to_a_human() {
         "a fault denies with no retry and no approval path"
     );
 }
+
+// The hosted root's own gate used to answer the read-only tier, the hourly budget
+// and the scheduled-turn restriction itself. They are the module's answers now, so
+// these pin what the model is told when the shared gate relays them, through the
+// real derivation of the checks (`ModuleVerdicts`) and a scripted module.
+
+mod relayed_module_answers {
+    use super::*;
+    use crate::agent::tinyagents::middleware::tinysecurity_module::{ModuleAsk, ModuleVerdicts};
+    use tinysecurity_bus::Check;
+    use tinytools::{PermissionLevel, Tool as HostTool};
+
+    struct Registered {
+        name: &'static str,
+        permission: PermissionLevel,
+    }
+
+    #[async_trait]
+    impl HostTool for Registered {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn description(&self) -> &str {
+            "test tool"
+        }
+        fn parameters_schema(&self) -> serde_json::Value {
+            serde_json::json!({ "type": "object" })
+        }
+        fn permission_level(&self) -> PermissionLevel {
+            self.permission
+        }
+        async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
+            unreachable!("the gate never executes a tool")
+        }
+    }
+
+    /// Answers every question with `answer` and counts how often it was asked.
+    struct Scripted {
+        answer: Verdict,
+        asked: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl ModuleAsk for Scripted {
+        async fn ask(
+            &self,
+            _ctx: &RunContext<OpenHumanRunContext>,
+            _call: &TaToolCall,
+            _checks: Vec<Check>,
+            _redact: bool,
+        ) -> Result<Verdict, String> {
+            self.asked.fetch_add(1, Ordering::SeqCst);
+            Ok(self.answer.clone())
+        }
+    }
+
+    async fn relay(
+        tool: &'static str,
+        permission: PermissionLevel,
+        answer: Verdict,
+    ) -> (ToolResult, usize, usize) {
+        let module = Arc::new(Scripted {
+            answer,
+            asked: AtomicUsize::new(0),
+        });
+        let tool_sets = vec![Arc::new(vec![Box::new(Registered {
+            name: tool,
+            permission,
+        }) as Box<dyn HostTool>])];
+        let policy = TinySecurityPolicy::new(Arc::new(ModuleVerdicts::with_module(
+            tool_sets,
+            module.clone(),
+        )));
+        let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
+        stack.push_tool_middleware(Arc::new(gate(Arc::new(policy), Arc::new(Human::default()))));
+        let runs = Arc::new(AtomicUsize::new(0));
+        let ctx = RunContext::new(RunConfig::new("relay"), OpenHumanRunContext::new());
+        let call = TaToolCall {
+            id: "c1".into(),
+            name: tool.into(),
+            arguments: serde_json::json!({"path": "a.txt"}),
+            invalid: None,
+        };
+        let result = stack
+            .run_wrapped_tool(&ctx, &(), call, &super::Tool { runs: runs.clone() })
+            .await
+            .unwrap()
+            .into_result();
+        (
+            result,
+            runs.load(Ordering::SeqCst),
+            module.asked.load(Ordering::SeqCst),
+        )
+    }
+
+    #[tokio::test]
+    async fn the_read_only_tier_denial_keeps_the_policy_marker_on_the_blocked_line() {
+        let (result, runs, _) = relay(
+            "write_file",
+            PermissionLevel::Write,
+            Verdict::Deny {
+                reason: DenialReason::ReadOnlyMode,
+            },
+        )
+        .await;
+        let text = result.output();
+        assert!(result.is_error);
+        assert_eq!(runs, 0);
+        assert!(
+            text.contains(tinytools::status::POLICY_BLOCKED_MARKER),
+            "the machine-recognisable marker must survive rendering: {text}"
+        );
+        assert!(text.contains("read-only mode"), "{text}");
+        assert!(text.contains("Workaround:"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn an_exhausted_budget_denies_the_acting_tool_and_names_its_limit() {
+        let (result, runs, asked) = relay(
+            "write_file",
+            PermissionLevel::Write,
+            Verdict::Deny {
+                reason: DenialReason::RateLimited { max_per_hour: 5 },
+            },
+        )
+        .await;
+        assert!(result.is_error);
+        assert_eq!((runs, asked), (0, 1));
+        let text = result.output();
+        assert!(text.contains("Rate limit exceeded"), "{text}");
+        assert!(text.contains("5 actions/hour"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_read_runs_while_the_budget_is_spent_and_is_never_asked_about() {
+        let (result, runs, asked) = relay(
+            "read_file",
+            PermissionLevel::ReadOnly,
+            Verdict::Deny {
+                reason: DenialReason::RateLimited { max_per_hour: 5 },
+            },
+        )
+        .await;
+        assert!(!result.is_error, "{}", result.output());
+        assert_eq!((runs, asked), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_scheduled_turn_is_told_it_may_use_read_only_tools_only() {
+        let (result, runs, _) = relay(
+            "write_file",
+            PermissionLevel::Write,
+            Verdict::Deny {
+                reason: DenialReason::ScheduledReadOnly,
+            },
+        )
+        .await;
+        assert!(result.is_error);
+        assert_eq!(runs, 0);
+        assert!(
+            result.output().contains("read-only tools only"),
+            "{}",
+            result.output()
+        );
+    }
+
+    #[tokio::test]
+    async fn an_acting_tool_the_module_allows_runs() {
+        let (result, runs, asked) =
+            relay("write_file", PermissionLevel::Write, Verdict::Allow).await;
+        assert!(!result.is_error);
+        assert_eq!((runs, asked), (1, 1));
+    }
+}
