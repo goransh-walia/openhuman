@@ -417,7 +417,10 @@ Capability {
         description: "Route agent tool execution (shell, filesystem, process) through sandbox \
                       backends — Docker containers or OS-level jails (Landlock/Seatbelt) — for \
                       reduced blast radius on remote, channel, cron, or background sessions. \
-                      Configurable per agent/session/channel with safe defaults for non-main sessions.",
+                      Configurable per agent/session/channel with safe defaults for non-main sessions. \
+                      Each sandboxed command is planned by the TinySecurity module before it runs: \
+                      the module sets the mounts, the network and the isolation floor, and a \
+                      command it refuses does not run.",
         how_to: "Set sandbox_mode = \"sandboxed\" in agent.toml, or configure runtime.kind = \
                  \"docker\" in the TOML config. Use openhuman.sandbox_status / \
                  openhuman.sandbox_resolve_policy RPC to inspect. Switched off by [components] sandbox = false (also set by the legacy [sandbox] enabled = false), which never loads the TinyBox module, runs commands unjailed under the Rust path checks, and answers COMPONENT_DISABLED:sandbox.",
