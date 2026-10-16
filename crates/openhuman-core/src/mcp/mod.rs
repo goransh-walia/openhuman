@@ -82,6 +82,10 @@ pub fn start_boot_jobs(config: &crate::config::Config) {
 
     let cfg_for_mcp = config.clone();
     tokio::spawn(async move {
+        // The jail's toolchain grants come from TinyBox; resolve them before
+        // the first stdio server starts so it is not launched with a narrower
+        // jail that a later reconfiguration would replace.
+        stdio_sandbox::prepare(&cfg_for_mcp).await;
         registry::boot::spawn_installed_servers(&cfg_for_mcp).await;
     });
     // Installed servers re-cache their tool lists as they connect above; the
@@ -207,6 +211,8 @@ pub mod audit;
 // of its own. Gating this would break the build with the domain turned off.
 pub mod host;
 pub mod registry;
+#[cfg(feature = "mcp")]
+pub(crate) mod stdio_sandbox;
 pub mod server;
 #[cfg(feature = "mcp")]
 pub mod ui;
