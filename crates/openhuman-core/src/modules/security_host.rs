@@ -12,8 +12,13 @@ use tinybus::{
     BusName, CallContext, Connection, Interface, InterfaceName, MemberName, ObjectPath, Result,
 };
 use tinysecurity_bus::{
-    callback_names2, names, KeyringBackend2, KeyringConsentRequest2, KeyringConsentResponse2,
+    callback_names2, names, ApprovalCasRequest2, ApprovalCasResponse2, ApprovalDeliveryRequest2,
+    ApprovalDeliveryResponse2, ApprovalLoadRequest2, ApprovalLoadResponse2, AuditSinkRequest2,
+    AuditSinkResponse2, HumanDecisionReceipt2, KeyringBackend2, KeyringConsentRequest2,
+    KeyringConsentResponse2, VerifyHumanRequest2,
 };
+
+use crate::security::approval::native::callbacks as approvals;
 
 const LOG_PREFIX: &str = "[security-host]";
 
@@ -36,6 +41,67 @@ impl KeyringConsent {
             self.backend.as_ref(),
             &request,
         ))
+    }
+}
+
+fn refused(error: String) -> tinybus::Error {
+    log::debug!("{LOG_PREFIX} callback refused: {error}");
+    tinybus::Error::failed("approval callback refused")
+}
+
+/// The module's approval store: the latest rows of one subject, and the
+/// compare-and-swap of one row. The approval engine's host side
+/// (`security::approval::native`) keeps the rows.
+#[derive(Clone)]
+struct ApprovalStore;
+
+#[tinybus::interface(name = "ai.tinyhumans.tinysecurity.ApprovalStore2")]
+impl ApprovalStore {
+    /// The rows of the subject the module names, by the handle it registered.
+    async fn load(&self, request: ApprovalLoadRequest2) -> tinybus::Result<ApprovalLoadResponse2> {
+        approvals::load(request).await.map_err(refused)
+    }
+
+    /// One compare-and-swap, answering the original receipt on an exact retry.
+    async fn cas(&self, request: ApprovalCasRequest2) -> tinybus::Result<ApprovalCasResponse2> {
+        approvals::cas(request).await.map_err(refused)
+    }
+}
+
+/// The module's durable audit sink: contiguous, identity-checked batches.
+#[derive(Clone)]
+struct AuditSink;
+
+#[tinybus::interface(name = "ai.tinyhumans.tinysecurity.AuditSink2")]
+impl AuditSink {
+    /// One ordered batch of one subject's stream.
+    async fn append(&self, request: AuditSinkRequest2) -> tinybus::Result<AuditSinkResponse2> {
+        approvals::append(request).await.map_err(refused)
+    }
+}
+
+/// The module's approval prompt: showing a durable request to the person, and
+/// binding the person's decision to it.
+#[derive(Clone)]
+struct ApprovalPrompt;
+
+#[tinybus::interface(name = "ai.tinyhumans.tinysecurity.ApprovalPrompt2")]
+impl ApprovalPrompt {
+    /// Show a request. Delivery alone is never authority.
+    async fn prompt(
+        &self,
+        request: ApprovalDeliveryRequest2,
+    ) -> tinybus::Result<ApprovalDeliveryResponse2> {
+        approvals::prompt(request).await.map_err(refused)
+    }
+
+    /// Verify the ticket of a decision the host authenticated, against the exact
+    /// pending row.
+    async fn verify_human(
+        &self,
+        request: VerifyHumanRequest2,
+    ) -> tinybus::Result<HumanDecisionReceipt2> {
+        approvals::verify_human(request).await.map_err(refused)
     }
 }
 
@@ -95,5 +161,36 @@ pub(super) async fn install(
         )
         .await?;
     log::debug!("{LOG_PREFIX} KeyringConsent2 callback served");
+    // The approval engine's host side. Each handler resolves the subject by the
+    // handle the module itself returned at registration, so a call for any other
+    // subject is refused.
+    connection
+        .serve_at(
+            ObjectPath::new(callback_names2::OBJECT_PATH)?,
+            ModuleOnly {
+                inner: ApprovalStore,
+                connection: connection.clone(),
+            },
+        )
+        .await?;
+    connection
+        .serve_at(
+            ObjectPath::new(callback_names2::OBJECT_PATH)?,
+            ModuleOnly {
+                inner: AuditSink,
+                connection: connection.clone(),
+            },
+        )
+        .await?;
+    connection
+        .serve_at(
+            ObjectPath::new(callback_names2::OBJECT_PATH)?,
+            ModuleOnly {
+                inner: ApprovalPrompt,
+                connection: connection.clone(),
+            },
+        )
+        .await?;
+    log::debug!("{LOG_PREFIX} ApprovalStore2, AuditSink2 and ApprovalPrompt2 callbacks served");
     Ok(())
 }
