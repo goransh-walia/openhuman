@@ -11,7 +11,6 @@ mod llm;
 mod ops;
 mod prompt;
 mod resolver;
-mod script_gate;
 mod tier;
 pub(crate) mod tools;
 

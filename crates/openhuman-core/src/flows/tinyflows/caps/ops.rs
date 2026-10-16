@@ -614,7 +614,6 @@ pub fn build_capabilities(
     state_namespace: impl Into<String>,
     flow_run: Option<crate::security::approval::FlowRunContext>,
 ) -> Capabilities {
-    super::script_gate::require_jailed_scripts();
     let approval = crate::security::approval::ApprovalTurnContext {
         flow_run,
         ..Default::default()
