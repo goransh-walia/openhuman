@@ -8575,14 +8575,14 @@ dependencies = [
 
 [[package]]
 name = "tinybox-bus"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "tinybox-core"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "async-trait",
  "serde",
@@ -8592,7 +8592,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-docker"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -8603,7 +8603,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-drivers"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "log",
  "serde_json",
@@ -8614,7 +8614,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-host"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "async-trait",
  "cap-std",
@@ -8628,7 +8628,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-jail"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "landlock",
  "log",
@@ -8641,7 +8641,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-linux"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "async-trait",
  "tinybox-core",
@@ -8649,7 +8649,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-microvm"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "async-trait",
  "serde",
@@ -8659,7 +8659,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-module"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "log",
  "tempfile",
@@ -8682,7 +8682,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-ssh"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "async-trait",
  "tinybox-core",
