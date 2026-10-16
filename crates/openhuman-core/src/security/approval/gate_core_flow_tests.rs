@@ -621,6 +621,7 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
     // resolve, and the miss is the benign already-decided race.
     stub.leave_pending("req-decided", "composio", Duration::from_secs(600));
     stub.decide("req-decided", Choice::Once, "approve_once")
+        .await
         .unwrap();
     assert!(gate
         .decide("req-decided", ApprovalDecision::Deny)
