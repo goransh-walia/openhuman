@@ -18,6 +18,8 @@
 //! the posture of each call.
 
 pub(crate) mod engine;
+#[cfg(test)]
+pub(crate) mod engine_stub;
 mod flow_surface;
 pub mod gate;
 #[cfg(feature = "security-module")]

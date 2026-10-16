@@ -1,4 +1,6 @@
+use super::engine_stub::StubEngine;
 use super::*;
+use crate::agent::turn_origin;
 use crate::config::test_env::EnvVarGuard;
 use tempfile::TempDir;
 
@@ -14,25 +16,14 @@ const EXPIRY_TEST_TTL: Duration = Duration::from_secs(2);
 /// with [`EXPIRY_TEST_TTL`]) would let them pass against the wrong source.
 const BOOT_TTL_UNDER_TEST: Duration = Duration::from_secs(7);
 
-/// A gate whose park window is the production [`DEFAULT_APPROVAL_TTL`].
+/// A gate whose park window is the production [`DEFAULT_APPROVAL_TTL`], over a
+/// scripted engine (see `engine_stub.rs`).
 ///
-/// Most tests here park a call, poll for the row, then decide it; none of
-/// them wait for expiry, so the window only has to outlast the poll. It
-/// twice did not. #2367 raised it 500ms → 2s after the row expired before
-/// `decide` could fire, and 2s then lost the same race under
-/// `cargo-llvm-cov`: the poll loops budget 50×10ms, but each
-/// `sleep(10ms)` stretches on a contended runner, and once the row is past
-/// `expires_at` the `expire_stale_with_now` pass inside [`store::decide`]
-/// denies it before that call's own `UPDATE ... WHERE decided_at IS NULL`
-/// can match — so `decide` returns `Ok(None)`, the waiter is never woken,
-/// and the park resolves as a TTL `Deny`.
-///
-/// Raising the number a third time would only move the threshold, so the
-/// coupling is gone instead: tests that do not exercise expiry cannot
-/// reach it, and the five that do ask for [`EXPIRY_TEST_TTL`] explicitly
-/// via [`expiry_gate`]. That also removes an undocumented contract
-/// between this helper and those distant call sites — two of them still
-/// carried a `// TTL = 500ms` comment three raises later.
+/// Most tests here park a call, poll for the waiter, then decide it; none of
+/// them wait for expiry, so the window only has to outlast the poll. The tests
+/// that do exercise expiry ask for [`EXPIRY_TEST_TTL`] explicitly via
+/// [`expiry_gate`], so no test depends on how close a shared number sits to
+/// the one it needs.
 fn test_gate() -> (ApprovalGate, TempDir) {
     test_gate_with_ttl(DEFAULT_APPROVAL_TTL)
 }
@@ -50,15 +41,33 @@ fn test_gate_with_ttl(ttl: Duration) -> (ApprovalGate, TempDir) {
     // `debug_assert!` regression guard in `ApprovalGate::new`
     // doesn't trip in tests.
     let session = format!("session-{}", uuid::Uuid::new_v4());
-    let gate = ApprovalGate::new(config, session, ttl);
+    let stub = StubEngine::new();
+    let gate = ApprovalGate::with_engine(config, session, ttl, stub.clone());
+    STUBS
+        .lock()
+        .unwrap()
+        .insert(Arc::as_ptr(&gate.parked) as usize, stub);
     (gate, dir)
 }
 
-/// Return a request id after the approval row has been persisted and its
-/// waiter has been registered. Unlike `list_pending`, this observation does
-/// not lazily expire the row while a short-TTL test is waiting for insertion.
+/// The scripted engines by gate, so a test reaches the engine of the gate it built.
+static STUBS: std::sync::LazyLock<std::sync::Mutex<HashMap<usize, Arc<StubEngine>>>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// The scripted engine behind `gate`.
+fn stub_of(gate: &ApprovalGate) -> Arc<StubEngine> {
+    STUBS
+        .lock()
+        .unwrap()
+        .get(&(Arc::as_ptr(&gate.parked) as usize))
+        .cloned()
+        .expect("the gate was built by test_gate")
+}
+
+/// Return a request id once the engine delivered the prompt and the waiter has
+/// been registered.
 fn parked_request_id(gate: &ApprovalGate) -> Option<String> {
-    gate.waiters.lock().keys().next().cloned()
+    gate.parked.waiters.lock().keys().next().cloned()
 }
 
 /// A gate for the tests that let a park expire, plus the env lock they
@@ -88,18 +97,18 @@ async fn expiry_gate() -> (ApprovalGate, TempDir, EnvVarGuard) {
     (gate, dir, env)
 }
 
-/// Decide a row that the test has just seen parked, failing on the expiry
+/// Decide a request that the test has just seen parked, failing on the expiry
 /// race rather than through it.
 ///
-/// [`ApprovalGate::decide`] returns `Ok(None)` when the row was already
-/// resolved — which, per [`DecideMiss::AlreadyResolved`], includes *lazily
-/// expired*. A bare `.unwrap()` there unwraps the `Result`, not the
-/// `Option`, so that case passes silently and the test instead fails a few
-/// lines later on "the outcome was not `Allow`", naming the wrong event.
-fn decide_parked(gate: &ApprovalGate, request_id: &str, decision: ApprovalDecision) {
+/// [`ApprovalGate::decide`] returns `Ok(None)` when the request was already
+/// resolved — which, per [`DecideMiss::AlreadyResolved`], includes expired. A
+/// bare `.unwrap()` there unwraps the `Result`, not the `Option`, so that case
+/// passes silently and the test instead fails a few lines later on "the outcome
+/// was not `Allow`", naming the wrong event.
+async fn decide_parked(gate: &ApprovalGate, request_id: &str, decision: ApprovalDecision) {
     assert!(
-        gate.decide(request_id, decision).unwrap().is_some(),
-        "the parked row {request_id} was already resolved before the decision \
+        gate.decide(request_id, decision).await.unwrap().is_some(),
+        "the parked request {request_id} was already resolved before the decision \
          landed — it expired mid-test rather than being decided"
     );
 }
