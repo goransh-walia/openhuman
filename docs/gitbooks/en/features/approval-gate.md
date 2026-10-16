@@ -126,12 +126,13 @@ The gate is interactive, so a parked call needs a surface that can answer it. Th
 
 | Turn origin | At the gate |
 | --- | --- |
-| Cron and internal background jobs | Allowed, no row, no event |
+| Cron | External effects denied, no row, no event |
+| Internal background jobs | Allowed, no row, no event |
 | A saved flow's pre-declared action | Allowed, no row, no event |
 | CLI, a delegated sub-agent, and a triage dispatch started on your own machine | Allowed, no row, no event |
 | Web chat | Parks for your decision |
-| A triage dispatch from a connector or webhook payload | Parks and writes a pending-approval row |
-| An external channel turn (Telegram, Slack and so on) | Parks and writes a row |
+| A triage dispatch from a connector or webhook payload | Parks; the module records the request |
+| An external channel turn (Telegram, Slack and so on) | Parks; the module records the request |
 | An unlabelled call site | Denied |
 
 A triage dispatch that your own machine started keeps the authority its caller already had. One steered by an outside payload parks and leaves an audit row. No surface can decide a background park yet, so it expires at the timeout. You get the audit trail, not a working escalation, and `auto_approve_all` gives up even that.
