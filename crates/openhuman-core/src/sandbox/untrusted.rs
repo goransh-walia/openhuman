@@ -57,8 +57,7 @@ fn with_inline_stdin(command: &str, stdin: &[u8]) -> anyhow::Result<String> {
     let encoded = base64::engine::general_purpose::STANDARD.encode(stdin);
     Ok(format!(
         "printf '%s' '{encoded}' | base64 -d | (\n{command}\n)"
-    )
-    .replace("\\n", "\n"))
+    ))
 }
 
 /// Run `spawn` under the isolation floor.
