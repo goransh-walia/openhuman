@@ -49,9 +49,7 @@ fn a_configured_backend_holds_the_approvals_instead_of_approval_db(case: Case) {
     // configured backend's records are not in it.
     assert!(openhuman_core::storage::clear());
     assert!(!store::is_flow_tool_trusted(&config, "flow-1", "shell").unwrap());
-    assert!(store::list_recorded_decisions(&config, 10)
-        .unwrap()
-        .is_empty());
+    assert!(store::list_recorded_decisions(&config, 10).unwrap().is_empty());
     assert!(workspace.path().join("storage").join("storage.db").exists());
 }
 

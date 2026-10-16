@@ -104,8 +104,7 @@ async fn events_stream_forwards_only_the_bound_client() {
     let token = crate::core_host::core::event_bind_tokens::issue("stream-client", None)
         .expect("bind token")
         .token;
-    let response =
-        events_handler(HeaderMap::new(), None, query("stream-client", Some(&token))).await;
+    let response = events_handler(HeaderMap::new(), None, query("stream-client", Some(&token))).await;
     assert_eq!(response.status(), StatusCode::OK);
     let mut body = response.into_body().into_data_stream();
 

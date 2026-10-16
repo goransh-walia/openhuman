@@ -162,9 +162,7 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
     assert_eq!(pending["tool_name"], "shell");
     assert_eq!(pending["action_summary"], "execute command");
     assert_eq!(pending["args_redacted"]["command"], "echo hello");
-    assert!(pending["request_id"]
-        .as_str()
-        .is_some_and(|id| !id.is_empty()));
+    assert!(pending["request_id"].as_str().is_some_and(|id| !id.is_empty()));
     assert!(pending["expires_at"].is_string());
     assert!(pending.get("session_id").is_none());
     let request_id = pending["request_id"].as_str().unwrap().to_owned();
@@ -175,7 +173,10 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
     )
     .await;
     assert_eq!(result(&decided), &pending);
-    assert!(matches!(parked.await.unwrap(), GateOutcome::Deny { .. }));
+    assert!(matches!(
+        parked.await.unwrap(),
+        GateOutcome::Deny { .. }
+    ));
     assert_eq!(
         result(&rpc(&router, "openhuman.approval_list_pending", json!({})).await),
         &json!([])
