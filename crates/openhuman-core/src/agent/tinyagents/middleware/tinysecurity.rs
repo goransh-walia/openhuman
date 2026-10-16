@@ -86,14 +86,19 @@ pub(crate) fn combine_decisions(decisions: Vec<PolicyDecision>) -> PolicyDecisio
 }
 
 /// The one security policy every agent path registers. The module decides; this
-/// translates.
+/// translates. Several sources fold with [`combine_decisions`]: a fault from any
+/// source is a denial, so a source can only narrow the answer.
 pub(crate) struct TinySecurityPolicy {
-    source: Arc<dyn VerdictSource>,
+    sources: Vec<Arc<dyn VerdictSource>>,
 }
 
 impl TinySecurityPolicy {
     pub(crate) fn new(source: Arc<dyn VerdictSource>) -> Self {
-        Self { source }
+        Self::with_sources(vec![source])
+    }
+
+    pub(crate) fn with_sources(sources: Vec<Arc<dyn VerdictSource>>) -> Self {
+        Self { sources }
     }
 }
 
@@ -108,19 +113,24 @@ impl ToolCallPolicy<OpenHumanRunContext> for TinySecurityPolicy {
         ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> PolicyDecision {
-        match self.source.verdict(ctx, call).await {
-            Ok(verdict) => {
-                let decision = verdict_to_policy_decision(&verdict);
-                tracing::debug!(tool = %call.name, "[tinyagents::mw] tinysecurity verdict mapped");
-                decision
-            }
-            Err(_fault) => {
-                tracing::warn!(tool = %call.name, "[tinyagents::mw] tinysecurity module fault; denying");
-                PolicyDecision::Deny {
-                    reason: "security module unavailable".to_string(),
+        let mut decisions = Vec::with_capacity(self.sources.len());
+        for source in &self.sources {
+            match source.verdict(ctx, call).await {
+                Ok(verdict) => {
+                    tracing::debug!(tool = %call.name, "[tinyagents::mw] tinysecurity verdict mapped");
+                    decisions.push(verdict_to_policy_decision(&verdict));
+                }
+                // A fault never allows and is never retried: the call is denied
+                // here, without asking the remaining sources.
+                Err(_fault) => {
+                    tracing::warn!(tool = %call.name, "[tinyagents::mw] tinysecurity module fault; denying");
+                    return PolicyDecision::Deny {
+                        reason: "security module unavailable".to_string(),
+                    };
                 }
             }
         }
+        combine_decisions(decisions)
     }
 }
 
