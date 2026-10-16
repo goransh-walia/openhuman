@@ -43,10 +43,11 @@ pub(super) async fn ensure(
         };
         tracing::debug!("[sandbox:plan] retiring the least recently used sandbox scope");
         if let Err(error) = client::retire_scope(proxy, &oldest).await {
-            // Still registered in the module, so keep tracking it and refuse this
-            // registration rather than growing past what the host can account for.
-            live.push_front(oldest);
-            return Err(unavailable(error));
+            // The module does not know it (it restarted) or cannot retire it. Either way
+            // the host stops relying on it: a plan under it is refused by the module, and
+            // registering it again is idempotent. The module's own bound still holds, so
+            // a module that keeps failing runs out of room and refuses new scopes.
+            tracing::warn!(%error, "[sandbox:plan] could not retire a sandbox scope; dropping it");
         }
     }
     let receipt = client::register_scope(
