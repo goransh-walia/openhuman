@@ -33,9 +33,9 @@ Production admission pins TinySecurity v0.9.0 and its published archive checksum
 in the module registry. `scripts/ci/security-native-fixture.sh` loads those
 released archives and invokes their admission, path, and latency tests. Explicit
 local fixtures remain available for development; their digests never become
-production release pins. Shell policy,
-approvals, redaction, and crypto continue to use their existing host engines
-until their own migration phases are implemented and verified.
+production release pins. Shell policy, approvals and redaction run on the
+module; crypto continues to use its existing host engines until its own
+migration phase is implemented and verified.
 
 Host latency budget (committed). The host path-policy gate runs
 `OPENHUMAN_SECURITY_PERF_BUDGET=1 scripts/ci/security-native-fixture.sh` (a
@@ -225,8 +225,11 @@ observe the swap at the next session boundary.
 ### Approval
 
 [`approval/`](./approval/) is the human-in-the-loop gate for calls the policy prompts on.
-The gate persists a pending row, publishes `DomainEvent::ApprovalRequested` so
-the UI can show a card, parks the tool future on a oneshot, and wakes on the
+The approval itself is the TinySecurity module's (its durable lifecycle, exact
+binding, grants, expiry and audit trail); the host serves its store, audit sink,
+prompt and human verification. The gate asks the module, publishes
+`DomainEvent::ApprovalRequested` when the module asks for the prompt so the UI
+can show a card, parks the tool future on a oneshot, and wakes on the
 `approval_decide` RPC or a typed chat reply. Timeouts and denials fail closed.
 `approval_gate_boot_decision` (`core/types.rs`, applied in
 `core/runtime/bootstrap.rs`) always installs the gate for
@@ -240,7 +243,7 @@ decision. See [approval/README.md](approval/README.md).
 | Path | What it does |
 | --- | --- |
 | [`policy/`](policy/README.md) | `SecurityPolicy`, autonomy tiers, command classification and path checks. |
-| [`approval/`](approval/README.md) | The approval gate, its SQLite store, argument redaction and the `approval_*` RPCs. |
+| [`approval/`](approval/README.md) | The approval gate, the module-backed approval engine and its host callbacks, argument redaction and the `approval_*` RPCs. |
 | [`credentials/`](credentials/README.md) | The backend credential slots, auth profiles, provider OAuth and the `auth.*` RPC namespace. |
 | [`devices/`](devices/README.md) | Mobile device pairing and the end-to-end encrypted tunnel to iOS clients. |
 | [`egress/`](egress/README.md) | Descriptors for every external data transfer and the `LocalOnly` enforcement chokepoint. |
