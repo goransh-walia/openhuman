@@ -78,6 +78,7 @@ pub(crate) struct PlannedSpawn {
 }
 
 /// What a spawn is planned from.
+#[derive(Clone, Copy)]
 pub(crate) struct SpawnRequest<'a> {
     pub(crate) config: &'a Config,
     /// The resolved policy: which sandbox backend, workspace, mounts and network.
@@ -86,18 +87,6 @@ pub(crate) struct SpawnRequest<'a> {
     pub(crate) operation: &'a SpawnOperation<'a>,
     /// The operator turned the sandbox off for this process (never under SaaS).
     pub(crate) host_off: bool,
-}
-
-impl<'a> SpawnRequest<'a> {
-    fn clone_ref(&self) -> SpawnRequest<'a> {
-        SpawnRequest {
-            config: self.config,
-            policy: self.policy,
-            source: self.source,
-            operation: self.operation,
-            host_off: self.host_off,
-        }
-    }
 }
 
 /// The requested resource bounds, from the policy's Docker overrides.
@@ -337,7 +326,7 @@ impl PlannedSpawn {
 /// before the caller launches it, so it cannot be admitted twice and the audit trail
 /// shows plan and admission for the same operation.
 pub(crate) async fn admit(request: SpawnRequest<'_>) -> Result<SandboxPolicy, PlanError> {
-    let planned = plan(request.clone_ref()).await?;
+    let planned = plan(request).await?;
     consume(request.config, &planned).await?;
     Ok(planned.apply(request.policy))
 }
