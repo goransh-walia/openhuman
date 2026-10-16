@@ -2,6 +2,7 @@ use super::*;
 use crate::security::approval::engine::PromptSurface;
 use crate::security::approval::native::rows::Rows;
 use crate::security::approval::native::scopes::ScopeEntry;
+use crate::security::approval::native::state::Ticket;
 use std::sync::{Arc, Mutex};
 use tinysecurity_bus::{
     ApprovalBinding2, ApprovalLifecycle2, ApprovalRow2, AuditCorrelation2, CallerContext, Check,

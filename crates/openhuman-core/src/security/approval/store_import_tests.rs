@@ -1,6 +1,7 @@
 use super::*;
 use crate::security::approval::store as live;
 use crate::security::approval::types::{ApprovalDecision, ApprovalSourceContext};
+use serde_json::Value;
 use crate::storage::import::{run_with, Outcome};
 use crate::storage::rusqlite;
 use chrono::{Duration, Utc};
@@ -68,6 +69,19 @@ fn seed_trust(config: &Config, flow: &str, tool: &str) {
     .unwrap();
 }
 
+/// The stored document of `id` in the `approvals` collection, as the importer wrote it.
+fn stored(config: &Config, id: &str) -> Option<Value> {
+    let docs = crate::storage::local::open("approval::import-test", &config.workspace_dir)
+        .unwrap()
+        .scoped()
+        .unwrap();
+    let docs = std::sync::Arc::clone(docs.documents());
+    let id = id.to_string();
+    crate::storage::block_on(async move { docs.get("approvals", &id).await })
+        .unwrap()
+        .map(|found| found.doc)
+}
+
 fn import(config: &Config) -> Outcome {
     let backend = crate::storage::local::backend_for(&config.workspace_dir).unwrap();
     run_with(&backend, config, &[super::super::import_source()])
@@ -96,54 +110,72 @@ fn legacy_rows_are_imported_once_and_the_file_is_left_alone() {
         }
     ));
 
-    let pending = live::list_pending(&config).unwrap();
-    let mut ids: Vec<_> = pending.iter().map(|p| p.request_id.as_str()).collect();
-    ids.sort_unstable();
-    // Listing expires the stale request, as it always did.
-    assert_eq!(ids, ["pending-1"]);
-    let first = &pending[0];
-    assert_eq!(first.tool_name, "composio");
-    assert_eq!(first.action_summary, "summary pending-1");
-    assert_eq!(first.args_redacted["id"], "pending-1");
-    assert_eq!(first.tool_call_id.as_deref(), Some("call-pending-1"));
-    assert_eq!(first.agent_id.as_deref(), Some("agent-7"));
+    // A request an earlier launch left pending stays a pending document: the
+    // module's engine cannot resume it, so it is never listed or decided again.
+    let first = stored(&config, "pending-1").expect("imported");
+    assert_eq!(first["pending"], true);
+    assert_eq!(first["tool_name"], "composio");
+    assert_eq!(first["action_summary"], "summary pending-1");
+    assert_eq!(first["tool_call_id"], "call-pending-1");
+    assert_eq!(first["agent_id"], "agent-7");
+    assert!(first["expires_ts"].is_i64(), "the expiry key was imported");
+    let context: ApprovalSourceContext =
+        serde_json::from_str(first["source_context"].as_str().unwrap()).unwrap();
     assert!(matches!(
-        first.source_context,
-        Some(ApprovalSourceContext::Flow { ref flow_id, .. }) if flow_id == "flow-1"
+        context,
+        ApprovalSourceContext::Flow { ref flow_id, .. } if flow_id == "flow-1"
     ));
+    assert_eq!(stored(&config, "stale-1").unwrap()["pending"], true);
+
+    // What was decided is history.
+    let recorded = live::list_recorded_decisions(&config, 10).unwrap();
+    let mut decided: Vec<(&str, ApprovalDecision)> = recorded
+        .iter()
+        .map(|entry| (entry.request_id.as_str(), entry.decision))
+        .collect();
+    decided.sort_unstable_by_key(|(id, _)| *id);
     assert_eq!(
-        live::get_decision(&config, "approved-1").unwrap(),
-        Some(ApprovalDecision::ApproveOnce)
-    );
-    assert_eq!(
-        live::get_decision(&config, "denied-1").unwrap(),
-        Some(ApprovalDecision::Deny)
+        decided,
+        [
+            ("approved-1", ApprovalDecision::ApproveOnce),
+            ("denied-1", ApprovalDecision::Deny)
+        ]
     );
     assert!(live::is_flow_tool_trusted(&config, "flow-1", "shell").unwrap());
     assert!(live::is_flow_tool_trusted(&config, "flow-1", "http").unwrap());
     assert!(!live::is_flow_tool_trusted(&config, "flow-2", "http").unwrap());
-    // The expiry key was imported: the stale request was expired.
-    assert_eq!(
-        live::get_decision(&config, "stale-1").unwrap(),
-        Some(ApprovalDecision::Deny)
-    );
     assert_eq!(std::fs::read(&db).unwrap(), before, "approval.db untouched");
 
     // A second run does not import again: a change made since stays made.
-    live::decide(&config, "pending-1", ApprovalDecision::Deny).unwrap();
+    let docs = crate::storage::local::open("approval::import-test", &config.workspace_dir)
+        .unwrap()
+        .scoped()
+        .unwrap();
+    let docs = std::sync::Arc::clone(docs.documents());
+    crate::storage::block_on(async move {
+        let mut changed = docs.get("approvals", "pending-1").await?.unwrap();
+        changed.doc["pending"] = Value::Bool(false);
+        changed.doc["decision"] = Value::String("deny".into());
+        changed.doc["decided_at"] = Value::String(Utc::now().to_rfc3339());
+        docs.put(
+            "approvals",
+            "pending-1",
+            changed.doc,
+            tinystoragedrivers::Precondition::None,
+        )
+        .await
+        .map(|_| ())
+    })
+    .unwrap();
     assert!(matches!(import(&config), Outcome::AlreadyDone));
-    assert_eq!(
-        live::get_decision(&config, "pending-1").unwrap(),
-        Some(ApprovalDecision::Deny)
-    );
-    assert!(live::list_pending(&config).unwrap().is_empty());
+    assert_eq!(stored(&config, "pending-1").unwrap()["decision"], "deny");
 }
 
 #[test]
 fn a_workspace_with_no_legacy_file_starts_empty() {
     let (_dir, config) = workspace();
     assert!(matches!(import(&config), Outcome::NoSource));
-    assert!(live::list_pending(&config).unwrap().is_empty());
+    assert!(live::list_recorded_decisions(&config, 10).unwrap().is_empty());
 }
 
 #[test]
@@ -173,11 +205,9 @@ fn an_old_schema_is_brought_forward_and_its_session_ids_scrubbed() {
     let before = std::fs::read(&db).unwrap();
 
     assert!(matches!(import(&config), Outcome::Imported { .. }));
-    let pending = live::list_pending(&config).unwrap();
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].request_id, "old");
+    let old = stored(&config, "old").expect("imported");
     assert!(
-        pending[0].agent_id.is_none(),
+        old.get("agent_id").is_none(),
         "an old row is the process's own"
     );
     // The credential-shaped session id was scrubbed before it was read.

@@ -65,6 +65,6 @@ async fn a_build_without_the_module_refuses_every_gated_call() {
         Err(EngineError::NotPending)
     );
     assert_eq!(engine.is_decided("r").await, Ok(None));
-    assert_eq!(engine.history(5).await, Ok(Vec::new()));
+    assert!(engine.history(5).await.unwrap().is_empty());
     engine.release("r");
 }

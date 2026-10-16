@@ -8,7 +8,8 @@
 
 use super::*;
 use crate::modules::security::native_tests::{native_approval_fixture, NativeFixture};
-use crate::security::approval::engine::{Delivery, PromptSurface};
+use crate::security::approval::engine::{Delivery, Posture, PromptSurface};
+use crate::security::approval::types::ApprovalDecision;
 use std::sync::{Arc, Mutex};
 
 /// A prompt surface that records what the engine asked it to show.
@@ -135,7 +136,7 @@ async fn a_person_approves_reserves_and_the_outcome_is_recorded() {
     let history = world.engine.history(10).await.unwrap();
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].request_id, request_id);
-    assert_eq!(history[0].decision, super::super::types::ApprovalDecision::ApproveOnce);
+    assert_eq!(history[0].decision, ApprovalDecision::ApproveOnce);
     assert!(history[0].decided_by.is_none(), "a person decided");
     drop(world.fixture);
 }
@@ -156,7 +157,7 @@ async fn a_denial_leaves_nothing_to_reserve() {
     );
     assert!(world.engine.reserve(&request_id).await.is_err());
     let history = world.engine.history(10).await.unwrap();
-    assert_eq!(history[0].decision, super::super::types::ApprovalDecision::Deny);
+    assert_eq!(history[0].decision, ApprovalDecision::Deny);
     // Deciding again finds nothing pending.
     assert_eq!(
         world
@@ -288,7 +289,7 @@ async fn a_request_nobody_answers_expires_and_is_recorded_as_denied() {
     tokio::time::sleep(Duration::from_millis(wait)).await;
     assert!(world.engine.expire(&request_id).await.unwrap());
     let history = world.engine.history(10).await.unwrap();
-    assert_eq!(history[0].decision, super::super::types::ApprovalDecision::Deny);
+    assert_eq!(history[0].decision, ApprovalDecision::Deny);
     assert!(
         world.engine.reserve(&request_id).await.is_err(),
         "an expired request cannot be reserved"

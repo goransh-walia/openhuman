@@ -1,5 +1,5 @@
-use super::engine_stub::StubEngine;
 use super::*;
+use crate::security::approval::engine_stub::StubEngine;
 use crate::agent::turn_origin;
 use crate::config::test_env::EnvVarGuard;
 use tempfile::TempDir;
