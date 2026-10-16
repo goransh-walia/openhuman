@@ -575,37 +575,11 @@ impl OpenHumanSessionHost {
             super::ensure_tinyjuice_tools_visible(&mut visible, agent_id, config);
         }
 
-        if let Some(def) = target_def {
-            if !def.disallowed_tools.is_empty() {
-                match &def.tools {
-                    ToolScope::Wildcard => {
-                        visible = tools
-                            .iter()
-                            .map(|t| t.name().to_string())
-                            .chain(
-                                delegation_tools
-                                    .iter()
-                                    .filter(|t| t.exposure() != tinytools::ToolExposure::Hidden)
-                                    .map(|t| t.name().to_string()),
-                            )
-                            .filter(|name| {
-                                !crate::tools::rules::glob_list_matches(&def.disallowed_tools, name)
-                            })
-                            .collect();
-                    }
-                    ToolScope::Named(_) => {
-                        visible.retain(|name| {
-                            !crate::tools::rules::glob_list_matches(&def.disallowed_tools, name)
-                        });
-                    }
-                }
-                // Disallowing every tool must remain a zero-tool scope. An
-                // empty visible set means "no filter" to the harness.
-                if visible.is_empty() {
-                    visible.insert(NO_TOOLS_SENTINEL.to_string());
-                }
-            }
-        }
+        // `disallowed_tools` is not applied here. It is a deny rule in the
+        // definition's rule layer (`tools::rules::agent_rule_layer`), which the
+        // harness gate applies to the catalogue, `tool_search` and every call;
+        // trimming the belt as well would be a second, drifting copy of that
+        // check.
 
         // The delegation tools stay beside the durable registry rather than
         // inside it: the builder holds them in `OpenHumanSessionHost::synthesized_tools`,
