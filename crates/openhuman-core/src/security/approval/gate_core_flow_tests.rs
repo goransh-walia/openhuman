@@ -57,7 +57,7 @@ async fn approve_once_returns_allow() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
         .unwrap();
 
     let outcome = handle.await.unwrap();
@@ -90,7 +90,7 @@ async fn deny_returns_deny_with_reason() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
-    gate.decide(&pending.request_id, ApprovalDecision::Deny).await
+    gate.decide(&pending.request_id, ApprovalDecision::Deny)
         .unwrap();
 
     let outcome = handle.await.unwrap();
@@ -175,7 +175,7 @@ async fn aborting_older_chat_waiter_preserves_newer_thread_route() {
     }
     assert_ne!(stub.state(&new_request_id), Some(State::Cancelled));
 
-    gate.decide(&new_request_id, ApprovalDecision::ApproveOnce).await
+    gate.decide(&new_request_id, ApprovalDecision::ApproveOnce)
         .unwrap();
     assert!(matches!(new_handle.await.unwrap(), GateOutcome::Allow));
     assert!(gate.pending_for_thread("t-test").is_none());
@@ -362,7 +362,7 @@ async fn auto_approve_all_off_still_parks() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
         .unwrap();
     let outcome = handle.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Allow));
@@ -598,7 +598,7 @@ async fn cancel_flow_run_parks_for_approval_when_a_gate_is_present() {
 async fn decide_unknown_id_is_noop() {
     let (gate, _dir) = test_gate();
     let decided = gate
-        .decide("does-not-exist", ApprovalDecision::ApproveOnce).await
+        .decide("does-not-exist", ApprovalDecision::ApproveOnce)
         .unwrap();
     assert!(decided.is_none());
 }
@@ -614,7 +614,7 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
 
     // Never stored → genuine loss, keep visible.
     assert_eq!(
-        gate.classify_decide_miss("never-existed").await,
+        gate.classify_decide_miss("never-existed"),
         DecideMiss::NeverRegistered
     );
 
@@ -630,7 +630,7 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
         .unwrap()
         .is_none());
     assert_eq!(
-        gate.classify_decide_miss("req-decided").await,
+        gate.classify_decide_miss("req-decided"),
         DecideMiss::AlreadyResolved
     );
 
@@ -644,7 +644,7 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
         .unwrap()
         .is_none());
     assert_eq!(
-        gate.classify_decide_miss("req-expired").await,
+        gate.classify_decide_miss("req-expired"),
         DecideMiss::AlreadyResolved
     );
 
@@ -652,7 +652,7 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
     // was lost, which stays a signal.
     stub.leave_pending("req-orphan", "composio", Duration::from_secs(600));
     assert_eq!(
-        gate.classify_decide_miss("req-orphan").await,
+        gate.classify_decide_miss("req-orphan"),
         DecideMiss::NeverRegistered
     );
 }

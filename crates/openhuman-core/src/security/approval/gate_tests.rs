@@ -105,9 +105,9 @@ async fn expiry_gate() -> (ApprovalGate, TempDir, EnvVarGuard) {
 /// bare `.unwrap()` there unwraps the `Result`, not the `Option`, so that case
 /// passes silently and the test instead fails a few lines later on "the outcome
 /// was not `Allow`", naming the wrong event.
-async fn decide_parked(gate: &ApprovalGate, request_id: &str, decision: ApprovalDecision) {
+fn decide_parked(gate: &ApprovalGate, request_id: &str, decision: ApprovalDecision) {
     assert!(
-        gate.decide(request_id, decision).await.unwrap().is_some(),
+        gate.decide(request_id, decision).unwrap().is_some(),
         "the parked request {request_id} was already resolved before the decision \
          landed — it expired mid-test rather than being decided"
     );

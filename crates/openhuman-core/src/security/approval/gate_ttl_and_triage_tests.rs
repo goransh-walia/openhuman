@@ -258,7 +258,7 @@ async fn intercept_audited_bounded_abandons_park_and_leaves_row_pending() {
 
     // The row is LEFT open — a later human card-click still resolves it.
     let decided = gate
-        .decide(&request_id, ApprovalDecision::ApproveOnce).await
+        .decide(&request_id, ApprovalDecision::ApproveOnce)
         .unwrap();
     assert!(
         decided.is_some(),
@@ -420,7 +420,7 @@ async fn copilot_streaming_park_persists_the_clamped_expiry() {
         "sanity: the persisted expiry must be shorter than the unclamped default TTL"
     );
 
-    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce).await
+    gate.decide(&pending.request_id, ApprovalDecision::ApproveOnce)
         .unwrap();
     let outcome = handle.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Allow));

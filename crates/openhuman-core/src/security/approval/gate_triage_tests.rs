@@ -302,7 +302,7 @@ async fn a_parked_approval_is_recoverable_from_its_thread_for_replay() {
         "a thread with nothing parked must have nothing to replay"
     );
 
-    gate.decide(&row.request_id, ApprovalDecision::Deny).await
+    gate.decide(&row.request_id, ApprovalDecision::Deny)
         .unwrap();
     let _ = handle.await.unwrap();
 

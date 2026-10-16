@@ -84,7 +84,7 @@ async fn forced_approval_ignores_auto_approval_and_rejects_persistent_grants() {
     .expect("forced approval with auto flags never parked");
     assert!(!handle.is_finished());
     assert!(gate
-        .decide(&request_id, ApprovalDecision::ApproveAlwaysForTool).await
+        .decide(&request_id, ApprovalDecision::ApproveAlwaysForTool)
         .is_err());
     assert!(!handle.is_finished());
     decide_parked(&gate, &request_id, ApprovalDecision::Deny).await;

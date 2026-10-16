@@ -104,7 +104,7 @@ impl ToolBackend for NativeToolBackend {
                         .err()
                         .map(ToString::to_string)
                         .as_deref(),
-                ).await;
+                );
             }
         }
 

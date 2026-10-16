@@ -278,7 +278,7 @@ async fn start_chat_inner(
     if let Some(gate) = crate::security::approval::ApprovalGate::try_global() {
         if let Some(request_id) = gate.pending_for_thread(&thread_id) {
             if let Some(decision) = crate::security::approval::parse_approval_reply(&message) {
-                match gate.decide(&request_id, decision).await {
+                match gate.decide(&request_id, decision) {
                     Ok(Some(_)) => {
                         log::info!(
                             "[web-channel] routed chat reply to approval gate thread_id={} request_id={} decision={}",
