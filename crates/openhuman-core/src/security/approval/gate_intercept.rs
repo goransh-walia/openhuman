@@ -813,11 +813,21 @@ impl ApprovalGate {
     }
 }
 
-/// The arguments as the engine takes them: always a JSON object.
+/// Largest argument document handed to the engine, in bytes. The module refuses
+/// more than 32 KiB; what the host redacts is far smaller, and anything larger is
+/// stood in for by its size rather than failing the whole call.
+const MAX_ARGUMENT_BYTES: usize = 30_000;
+
+/// The arguments as the engine takes them: always a JSON object of bounded size.
 fn object_arguments(value: serde_json::Value) -> serde_json::Value {
-    match value {
+    let object = match value {
         serde_json::Value::Object(_) => value,
         serde_json::Value::Null => serde_json::json!({}),
         other => serde_json::json!({ "value": other }),
+    };
+    let bytes = object.to_string().len();
+    if bytes > MAX_ARGUMENT_BYTES {
+        return serde_json::json!({ "truncated": true, "bytes": bytes });
     }
+    object
 }
