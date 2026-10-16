@@ -103,7 +103,7 @@ fn refused_by_module(error: &anyhow::Error) -> bool {
     #[cfg(feature = "security-module")]
     {
         error
-            .downcast_ref::<super::spawn_plan::PlanError>()
+            .downcast_ref::<super::super::spawn_plan::PlanError>()
             .is_some()
     }
     #[cfg(not(feature = "security-module"))]
