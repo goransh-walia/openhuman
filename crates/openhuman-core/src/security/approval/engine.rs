@@ -165,7 +165,14 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
 
     /// Apply a human's decision to a pending request. `Err(NotPending)` when the
     /// request is not pending in this process.
-    async fn decide(&self, request_id: &str, choice: Choice) -> Result<Decided, EngineError>;
+    /// `label` is what the user chose in the host's own words (for example
+    /// `approve_always_for_tool`), kept beside the row for the history view.
+    async fn decide(
+        &self,
+        request_id: &str,
+        choice: Choice,
+        label: &str,
+    ) -> Result<Decided, EngineError>;
 
     /// Reserve an approved request for execution, exactly once.
     async fn reserve(&self, request_id: &str) -> Result<(), EngineError>;
@@ -231,7 +238,12 @@ impl ApprovalEngine for UnavailableEngine {
     async fn check(&self, _input: CheckInput) -> Result<Checked, EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
     }
-    async fn decide(&self, _request_id: &str, _choice: Choice) -> Result<Decided, EngineError> {
+    async fn decide(
+        &self,
+        _request_id: &str,
+        _choice: Choice,
+        _label: &str,
+    ) -> Result<Decided, EngineError> {
         Err(EngineError::NotPending)
     }
     async fn reserve(&self, _request_id: &str) -> Result<(), EngineError> {
