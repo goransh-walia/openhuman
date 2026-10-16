@@ -89,7 +89,7 @@ pub async fn approval_list_recent_decisions(
         return Ok(Outcome::new(Vec::new(), vec![]));
     };
     let limit = limit.unwrap_or(50);
-    let rows = match gate.list_recent_decisions(limit) {
+    let rows = match gate.list_recent_decisions(limit).await {
         Ok(rows) => rows,
         Err(err) => {
             tracing::error!(error = %err, "[rpc:approval_list_recent_decisions] store error");
@@ -223,8 +223,8 @@ pub async fn approval_decide(
         anyhow!("approval gate is not installed; supervised mode disabled")
     })?;
     let decided = match agent_id {
-        Some(agent) => gate.decide_for_agent(agent, request_id, decision),
-        None => gate.decide(request_id, decision),
+        Some(agent) => gate.decide_for_agent(agent, request_id, decision).await,
+        None => gate.decide(request_id, decision).await,
     };
     let decided = match decided {
         Ok(row) => row,
@@ -248,7 +248,7 @@ pub async fn approval_decide(
             // "no pending approval found" wording that `expected_error_kind`
             // demotes, while the never-registered arm emits a distinct string
             // that stays a captured Sentry signal.
-            return match gate.classify_decide_miss(request_id) {
+            return match gate.classify_decide_miss(request_id).await {
                 DecideMiss::AlreadyResolved => {
                     tracing::warn!(
                         request_id = request_id,

@@ -41,7 +41,7 @@ pub(super) async fn try_route_approval_reply(
     let Some(decision) = crate::security::approval::parse_approval_reply(&msg.content) else {
         return false;
     };
-    match gate.decide(&request_id, decision) {
+    match gate.decide(&request_id, decision).await {
         Ok(Some(_)) => {
             tracing::info!(
                 "[dispatch] routed chat reply to approval gate channel={} thread_id={} request_id={} decision={}",
