@@ -75,6 +75,7 @@ pub(crate) struct PlannedSpawn {
     request: SandboxPlanRequest2,
     subject: SubjectScope,
     stream: AuditStream,
+    proxy: tinybus::Proxy,
 }
 
 /// Where the module's bus proxy comes from.
@@ -214,6 +215,7 @@ async fn plan_with(
         source,
         operation,
         host_off,
+        module,
     } = *request;
     let saas = crate::core::runtime::is_saas();
     let tenant = crate::core::runtime::tenant::current_tenant()
@@ -224,6 +226,7 @@ async fn plan_with(
         saas,
     )
     .map_err(unavailable)?;
+    let proxy = module.proxy(config).await?;
     let executor = probe(config, policy).await?;
     let scope = facts::scope(&facts::FactsInput {
         config,
@@ -238,14 +241,14 @@ async fn plan_with(
     let stream = AuditStream::open(config, subject.clone())
         .await
         .map_err(unavailable)?;
-    registry::ensure(config, &scope, stream.stream_id()).await?;
+    registry::ensure(&proxy, &scope, stream.stream_id()).await?;
 
     let operation_json = operation
         .canonical()
         .ok_or_else(|| unavailable("the working directory is not valid text"))?;
     let grants = grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
     let ordered = stream.lock().await;
-    let generation = client::generation(config).await.map_err(unavailable)?;
+    let generation = client::generation(&proxy).await.map_err(unavailable)?;
     let audit = stream.correlation(generation).await.map_err(unavailable)?;
     let call_id = audit.event_id.clone();
     let planned = SandboxPlanRequest2 {
@@ -264,7 +267,7 @@ async fn plan_with(
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
     };
-    let response = client::plan(config, planned.clone()).await;
+    let response = client::plan(&proxy, planned.clone()).await;
     drop(ordered);
     let response = match response {
         Ok(response) => response,
@@ -306,6 +309,7 @@ async fn plan_with(
         request: planned,
         subject,
         stream,
+        proxy,
     })
 }
 
@@ -346,21 +350,23 @@ impl PlannedSpawn {
 /// shows plan and admission for the same operation.
 pub(crate) async fn admit(request: SpawnRequest<'_>) -> Result<SandboxPolicy, PlanError> {
     let planned = plan(request).await?;
-    consume(request.config, &planned).await?;
+    consume(&planned).await?;
     Ok(planned.apply(request.policy))
 }
 
 /// Reserve `planned` once, immediately before launching it.
-pub(crate) async fn consume(config: &Config, planned: &PlannedSpawn) -> Result<(), PlanError> {
+pub(crate) async fn consume(planned: &PlannedSpawn) -> Result<(), PlanError> {
     let _ordered = planned.stream.lock().await;
-    let generation = client::generation(config).await.map_err(unavailable)?;
+    let generation = client::generation(&planned.proxy)
+        .await
+        .map_err(unavailable)?;
     let audit = planned
         .stream
         .correlation(generation)
         .await
         .map_err(unavailable)?;
     let response = client::consume(
-        config,
+        &planned.proxy,
         ConsumeSandboxPlanRequest2 {
             request: planned.request.clone(),
             artifact: planned.artifact.clone(),

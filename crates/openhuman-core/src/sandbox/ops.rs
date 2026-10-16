@@ -529,6 +529,7 @@ async fn admit_spawn(
         source: super::spawn_plan::SpawnSource::Agent,
         operation: &operation,
         host_off,
+        module: super::spawn_plan::ModuleSource::Production,
     })
     .await
     .map_err(anyhow::Error::new)

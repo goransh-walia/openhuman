@@ -222,6 +222,7 @@ async fn admit(
         source: super::spawn_plan::SpawnSource::Untrusted,
         operation: &operation,
         host_off: false,
+        module: super::spawn_plan::ModuleSource::Production,
     })
     .await
     .map_err(anyhow::Error::new)
