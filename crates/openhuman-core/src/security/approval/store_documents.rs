@@ -25,9 +25,7 @@ use tinystoragedrivers::{
     CollectionSpec, ErrorKind, Filter, IndexSpec, Precondition, Query, Sort, Versioned,
 };
 
-use super::types::{
-    ApprovalAuditEntry, ApprovalDecision, ApprovalSourceContext, ExecutionOutcome, PendingApproval,
-};
+use super::types::{ApprovalAuditEntry, ApprovalDecision, ApprovalSourceContext};
 
 pub(super) const APPROVALS: &str = "approvals";
 pub(super) const FLOW_TRUST: &str = "approval_flow_trust";
@@ -49,17 +47,6 @@ pub(super) struct Docs {
 pub(super) fn current(config: &Config) -> Result<Docs> {
     let opened = local::open(DOMAIN, &config.workspace_dir)?;
     Ok(Docs::new(&opened.scoped()?))
-}
-
-/// The store of embedded agent `agent`'s scope, whichever scope the caller
-/// runs in.
-pub(super) fn for_agent(config: &Config, agent: &str) -> Result<Docs> {
-    let opened = local::open(DOMAIN, &config.workspace_dir)?;
-    let scoped = opened
-        .backend
-        .for_scope(&crate::storage::scope_for_agent(agent))
-        .map_err(|error| anyhow!("[approval::store] open the agent's scope: {error}"))?;
-    Ok(Docs::new(&scoped))
 }
 
 /// The legacy `approval.db`, as the storage importer reads it.
@@ -109,10 +96,13 @@ fn text<'a>(doc: &'a Value, field: &str) -> Option<&'a str> {
     doc.get(field).and_then(Value::as_str)
 }
 
-/// A stored request as a [`PendingApproval`].
-fn to_pending(stored: &Versioned<Value>) -> PendingApproval {
+/// A decided request as an [`ApprovalAuditEntry`]; `None` if it is not
+/// decided or its decision is unknown.
+fn to_audit(stored: &Versioned<Value>) -> Option<ApprovalAuditEntry> {
     let doc = &stored.doc;
-    PendingApproval {
+    let decided_at = parse_time(text(doc, "decided_at"))?;
+    let decision = ApprovalDecision::from_str(text(doc, "decision")?)?;
+    Some(ApprovalAuditEntry {
         request_id: stored.id.clone(),
         tool_name: text(doc, "tool_name").unwrap_or_default().to_string(),
         action_summary: text(doc, "action_summary").unwrap_or_default().to_string(),
@@ -121,39 +111,10 @@ fn to_pending(stored: &Versioned<Value>) -> PendingApproval {
             .unwrap_or(Value::Null),
         created_at: parse_time(text(doc, "created_at")).unwrap_or_else(Utc::now),
         expires_at: parse_time(text(doc, "expires_at")),
-        source_context: text(doc, "source_context").and_then(|raw| {
-            serde_json::from_str::<ApprovalSourceContext>(raw)
-                .map_err(|error| {
-                    tracing::warn!(
-                        %error,
-                        "[approval::store] failed to decode source_context JSON — treating as absent"
-                    );
-                })
-                .ok()
-        }),
-        tool_call_id: text(doc, "tool_call_id").map(str::to_string),
-        agent_id: text(doc, "agent_id").map(str::to_string),
-    }
-}
-
-/// A decided request as an [`ApprovalAuditEntry`]; `None` if it is not
-/// decided or its decision is unknown.
-fn to_audit(stored: &Versioned<Value>) -> Option<ApprovalAuditEntry> {
-    let pending = to_pending(stored);
-    let decided_at = parse_time(text(&stored.doc, "decided_at"))?;
-    let decision = ApprovalDecision::from_str(text(&stored.doc, "decision")?)?;
-    Some(ApprovalAuditEntry {
-        request_id: pending.request_id,
-        tool_name: pending.tool_name,
-        action_summary: pending.action_summary,
-        args_redacted: pending.args_redacted,
-        created_at: pending.created_at,
-        expires_at: pending.expires_at,
         decided_at,
         decision,
-        decided_by: text(&stored.doc, "decided_by").map(str::to_owned),
-        judge: stored
-            .doc
+        decided_by: text(doc, "decided_by").map(str::to_owned),
+        judge: doc
             .get("judge")
             .and_then(|value| serde_json::from_value(value.clone()).ok()),
     })
