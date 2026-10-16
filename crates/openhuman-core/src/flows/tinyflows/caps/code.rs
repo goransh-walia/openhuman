@@ -197,7 +197,7 @@ impl CodeRunner for OpenHumanCode {
                     &id,
                     exec,
                     outcome.as_ref().err().map(ToString::to_string).as_deref(),
-                );
+                ).await;
             }
         }
 

@@ -174,7 +174,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
                 ExecutionOutcome::Success
             };
             let error = result.is_error.then(|| result.output());
-            gate.record_execution(ticket, exec, error.as_deref());
+            gate.record_execution(ticket, exec, error.as_deref()).await;
         }
     }
 }

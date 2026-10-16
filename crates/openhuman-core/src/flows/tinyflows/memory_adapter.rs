@@ -188,7 +188,7 @@ impl OpenHumanMemory {
             success,
             "{LOG_PREFIX} write: recording execution outcome on the approval audit trail"
         );
-        gate.record_execution(id, exec, error);
+        gate.record_execution(id, exec, error).await;
     }
 
     /// Shapes one result row. Text that did not come from a plain agent

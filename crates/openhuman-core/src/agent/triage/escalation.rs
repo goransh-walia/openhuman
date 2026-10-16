@@ -180,7 +180,7 @@ pub async fn apply_decision(
                         Some(e.to_string()),
                     ),
                 };
-                gate.record_execution(req_id, exec_outcome, err_text.as_deref());
+                gate.record_execution(req_id, exec_outcome, err_text.as_deref()).await;
             }
             match dispatch_result {
                 Ok(output) => {

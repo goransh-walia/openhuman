@@ -353,7 +353,7 @@ impl EventHandler<DomainEvent> for ProactiveMessageSubscriber {
                             Some(e.to_string()),
                         ),
                     };
-                    gate.record_execution(req_id, exec_outcome, err_text.as_deref());
+                    gate.record_execution(req_id, exec_outcome, err_text.as_deref()).await;
                 }
 
                 match send_result {
