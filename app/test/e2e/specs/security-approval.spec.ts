@@ -6,9 +6,11 @@
  *   S1.1 — the approval history panel mounts from Settings
  *   S1.2 — the panel renders its table or empty state
  *
- * Judged (`auto:jev`) rows need the module-backed approval engine to produce
- * them; their rendering (badge, scores, expiry) is pinned by the Vitest suite
- * `ApprovalHistoryPanel.test.tsx` until that engine is the source of rows.
+ * Judged (`auto:jev`) rows come from the module-backed approval engine, whose
+ * rows are the history source; they need a live judge endpoint, which the mocked
+ * desktop core does not have, so their rendering (badge, scores, expiry) is
+ * pinned by the Vitest suite `ApprovalHistoryPanel.test.tsx` and the module-backed
+ * Rust tests (`security/approval/native/engine_tests.rs`).
  */
 import { waitForApp } from '../helpers/app-helpers';
 import { waitForTestId } from '../helpers/element-helpers';
