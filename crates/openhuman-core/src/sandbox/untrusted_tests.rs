@@ -174,10 +174,23 @@ async fn untrusted_gate_follows_the_released_jail() {
         }
         _ => {
             let error = inside.expect_err("a jail below the floor must refuse");
+            // Either floor refuses it: the module's plan (a jail that is not
+            // kernel-isolated is `Unsupported` for untrusted text) or, without the
+            // module, the host's own `IsolationFloor`.
+            let module_refused = error
+                .downcast_ref::<super::super::spawn_plan::PlanError>()
+                .is_some_and(|plan| {
+                    matches!(
+                        plan,
+                        super::super::spawn_plan::PlanError::Refused(_)
+                            | super::super::spawn_plan::PlanError::Unavailable(_)
+                    )
+                });
             assert!(
-                error
-                    .downcast_ref::<super::super::ops::IsolationFloor>()
-                    .is_some(),
+                module_refused
+                    || error
+                        .downcast_ref::<super::super::ops::IsolationFloor>()
+                        .is_some(),
                 "{error}"
             );
             assert!(
