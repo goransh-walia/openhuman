@@ -209,3 +209,24 @@ async fn untrusted_gate_follows_the_released_jail() {
         }
     }
 }
+
+/// The Docker path has no stdin channel, so input rides in the command as
+/// base64 and the wrapped command reads it back byte for byte.
+#[test]
+fn docker_stdin_rides_inside_the_command_and_round_trips() {
+    let payload = b"{\"event\":\"it's \\\"quoted\\\"\"}\n";
+    let wrapped = with_inline_stdin("cat", payload).unwrap();
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&wrapped)
+        .output()
+        .expect("sh runs");
+    assert!(output.status.success(), "{wrapped}");
+    assert_eq!(output.stdout, payload);
+}
+
+#[test]
+fn docker_stdin_over_the_argument_limit_is_refused() {
+    let error = with_inline_stdin("cat", &vec![b'x'; DOCKER_STDIN_MAX + 1]).unwrap_err();
+    assert!(error.to_string().contains("exceeds"), "{error}");
+}
