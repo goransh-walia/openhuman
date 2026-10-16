@@ -2,29 +2,34 @@ use crate::core::runtime::DispatchCtx;
 
 impl ApprovalGate {
     /// Write the *terminal* status of a tool call onto its approval
-    /// audit row — see [`store::record_execution`] for semantics.
+    /// audit row: how the call the gate reserved ended.
     ///
     /// Logs (but does not propagate) write errors: the tool has
     /// already run, so audit-log loss should never bubble up as a
     /// tool execution failure to the agent. If durable audit storage
     /// is required for compliance, callers wire it via a stronger
     /// guarantee than this best-effort hook.
-    pub fn record_execution(
+    ///
+    /// `error` is the (already sanitized) failure text of the call. The
+    /// engine records the outcome class only; the text is never stored, which
+    /// keeps whatever it quotes out of the durable log.
+    pub async fn record_execution(
         &self,
         request_id: &str,
         outcome: ExecutionOutcome,
         error: Option<&str>,
     ) {
-        match store::record_execution(&self.config, request_id, outcome, error) {
-            Ok(true) => tracing::debug!(
+        match self.engine.record_execution(request_id, outcome).await {
+            Ok(()) => tracing::debug!(
                 request_id = %request_id,
                 outcome = outcome.as_str(),
+                had_error = error.is_some(),
                 "[approval::gate] recorded terminal execution"
             ),
-            Ok(false) => tracing::warn!(
+            Err(EngineError::NotPending) => tracing::warn!(
                 request_id = %request_id,
                 outcome = outcome.as_str(),
-                "[approval::gate] record_execution found no matching decided row"
+                "[approval::gate] record_execution found no matching reserved request"
             ),
             Err(err) => tracing::error!(
                 request_id = %request_id,
@@ -36,108 +41,94 @@ impl ApprovalGate {
     }
 
     /// Apply a user decision. Returns the now-decided
-    /// [`PendingApproval`] row when one was found.
-    pub fn decide(
+    /// [`PendingApproval`] when the request was parked in this process.
+    ///
+    /// `Ok(None)` means there is nothing to decide: the request was already
+    /// decided, expired or cancelled, or was never parked here (an earlier launch
+    /// left it; the engine cannot resume another instance's request).
+    pub async fn decide(
         &self,
         request_id: &str,
         decision: ApprovalDecision,
     ) -> anyhow::Result<Option<PendingApproval>> {
-        // Release the routing lock before acquiring the instance barrier:
-        // registration holds that barrier while inserting its route.
-        let scope = self.request_scope(request_id);
-        match scope {
-            Some(scope) => scope
-                .with_open(|| self.decide_open(request_id, decision))
-                .unwrap_or(Ok(None)),
-            None => self.decide_open(request_id, decision),
+        let Some(route) = self.parked.request_routes.lock().get(request_id).cloned() else {
+            return Ok(None);
+        };
+        // A removed agent's requests are denied by its teardown; a decision
+        // racing it must not approve one.
+        if route
+            .approval_scope
+            .as_deref()
+            .is_some_and(super::ApprovalScope::is_closed)
+        {
+            return Ok(None);
         }
-    }
-
-    /// Commit a decision and release its waiter while the instance is still open.
-    fn decide_open(
-        &self,
-        request_id: &str,
-        decision: ApprovalDecision,
-    ) -> anyhow::Result<Option<PendingApproval>> {
         if !matches!(
             decision,
             ApprovalDecision::ApproveOnce | ApprovalDecision::Deny
-        ) && self
-            .request_routes
-            .lock()
-            .get(request_id)
-            .is_some_and(|route| route.forced)
+        ) && route.forced
         {
             anyhow::bail!("this action requires a one-time approval or denial");
         }
-        let decided = self.decide_in_parked_scope(request_id, decision)?;
-        if let Some(row) = &decided {
-            // `ApproveAlwaysForTool` persistence (append to `autonomy.auto_approve`
-            // + reload the live policy) is handled by the `approval_decide` RPC
-            // handler, which is async and owns the config save+reload path. The
-            // gate only resolves the parked future and emits the audit event.
-            if let Some(tx) = self.take_waiter(request_id) {
-                let _ = tx.send(decision);
+        let choice = if decision.is_approve() {
+            Choice::Once
+        } else {
+            Choice::Deny
+        };
+        match self
+            .engine
+            .decide(request_id, choice, decision.as_str())
+            .await
+        {
+            Ok(_) => {}
+            Err(EngineError::NotPending) => return Ok(None),
+            Err(EngineError::Unavailable(message)) => {
+                anyhow::bail!("the approval engine could not apply the decision: {message}")
             }
-            // Routing (thread/client/tool_call_id) was recorded at park time —
-            // see `intercept_audited_inner` — so a decision made after the
-            // in-memory waiter already resolved (e.g. via the TTL/channel-drop
-            // paths in `gate_intercept.rs`) still reports `None` here, which is
-            // correct: this fn only fires for a live `decide()` call.
-            let route = self.take_request_route(request_id);
-            BUS.publish(DomainEvent::ApprovalDecided {
-                request_id: row.request_id.clone(),
-                tool_name: row.tool_name.clone(),
-                decision: decision.as_str().to_string(),
-                thread_id: route.as_ref().and_then(|r| r.thread_id.clone()),
-                client_id: route.as_ref().and_then(|r| r.client_id.clone()),
-                tool_call_id: route.and_then(|r| r.tool_call_id),
-                resolution: None,
-                agent_id: row.agent_id.clone(),
-            });
         }
-        Ok(decided)
-    }
-
-    /// Commits `decision` in the store the request was parked in when this
-    /// process parked it (the parking task's storage scope, remembered on its
-    /// route), else in the caller's scope — an orphan from an earlier launch has
-    /// no route, so the caller's scope is where it can be looked for.
-    pub(super) fn decide_in_parked_scope(
-        &self,
-        request_id: &str,
-        decision: ApprovalDecision,
-    ) -> anyhow::Result<Option<PendingApproval>> {
-        let parked_in = self
-            .request_routes
-            .lock()
-            .get(request_id)
-            .and_then(|route| route.docs.clone());
-        match parked_in {
-            Some(docs) => store::decide_in(&docs, request_id, decision),
-            None => store::decide(&self.config, request_id, decision),
+        // `ApproveAlwaysForTool` persistence (append to `autonomy.auto_approve`
+        // + reload the live policy) is handled by the `approval_decide` RPC
+        // handler, which is async and owns the config save+reload path. The
+        // engine only records the decision for this one call; the next call
+        // reads the saved list as its posture.
+        if let Some(tx) = self.parked.take_waiter(request_id) {
+            let _ = tx.send(decision);
         }
+        // Routing (thread/client/tool_call_id) was recorded at park time —
+        // see `Surface::deliver` — so a decision made after the in-memory
+        // waiter already resolved (e.g. via the TTL/channel-drop paths in
+        // `gate_intercept_decision.rs`) still reports `None` here, which is
+        // correct: this fn only fires for a live `decide()` call.
+        let route = self.parked.take_request_route(request_id).unwrap_or(route);
+        BUS.publish(DomainEvent::ApprovalDecided {
+            request_id: request_id.to_string(),
+            tool_name: route.pending.tool_name.clone(),
+            decision: decision.as_str().to_string(),
+            thread_id: route.thread_id.clone(),
+            client_id: route.client_id.clone(),
+            tool_call_id: route.tool_call_id.clone(),
+            resolution: None,
+            agent_id: route.agent_id.clone(),
+        });
+        Ok(Some(route.pending))
     }
 
     /// [`Self::decide`] on behalf of `agent`: refuses with
     /// [`ApprovalError::WrongAgent`] when the request was parked by any other
     /// agent (or by the process itself), so one agent cannot answer another's
     /// approval.
-    pub fn decide_for_agent(
+    pub async fn decide_for_agent(
         &self,
         agent: &str,
         request_id: &str,
         decision: ApprovalDecision,
     ) -> anyhow::Result<Option<PendingApproval>> {
-        let owner = match self
+        let owner = self
+            .parked
             .request_routes
             .lock()
             .get(request_id)
-            .map(|route| route.agent_id.clone())
-        {
-            Some(owner) => Some(owner),
-            None => store::pending_agent(&self.config, request_id)?,
-        };
+            .map(|route| route.agent_id.clone());
         if let Some(owner) = owner {
             if owner.as_deref() != Some(agent) {
                 tracing::warn!(
@@ -152,43 +143,52 @@ impl ApprovalGate {
                 .into());
             }
         }
-        self.decide(request_id, decision)
+        self.decide(request_id, decision).await
     }
 
     /// Deny every undecided request `agent` parked, resolving its waiters.
-    /// Returns how many rows were denied.
-    pub fn deny_all_for_agent(
+    /// Returns how many requests were denied.
+    pub async fn deny_all_for_agent(
         &self,
-        ctx: &DispatchCtx,
+        _ctx: &DispatchCtx,
         agent: &str,
         resolution: &str,
     ) -> anyhow::Result<usize> {
-        if !store::exists(&self.config) {
-            return Ok(0);
-        }
-        let rows = store::list_pending_for_agent(ctx, &self.config, Some(agent))?;
+        let request_ids: Vec<String> = self
+            .parked
+            .request_routes
+            .lock()
+            .iter()
+            .filter(|(_, route)| route.agent_id.as_deref() == Some(agent))
+            .map(|(id, _)| id.clone())
+            .collect();
         let mut denied = 0;
-        for row in rows {
-            let Some(decided) =
-                self.decide_in_parked_scope(&row.request_id, ApprovalDecision::Deny)?
-            else {
+        for request_id in request_ids {
+            let Some(route) = self.parked.take_request_route(&request_id) else {
                 continue;
             };
+            if let Err(error) = self.engine.cancel(&request_id).await {
+                tracing::debug!(
+                    request_id = %request_id,
+                    error = %error,
+                    "[approval::gate] the engine did not cancel a removed agent's request"
+                );
+            }
             denied += 1;
-            if let Some(tx) = self.take_waiter(&decided.request_id) {
+            if let Some(tx) = self.parked.take_waiter(&request_id) {
                 let _ = tx.send(ApprovalDecision::Deny);
             }
-            let route = self.take_request_route(&decided.request_id);
-            if let Some(thread_key) = route.as_ref().and_then(|r| r.thread_key.as_deref()) {
-                self.clear_thread_route_if_owned(thread_key, &decided.request_id);
+            if let Some(thread_key) = route.thread_key.as_deref() {
+                self.parked
+                    .clear_thread_route_if_owned(thread_key, &request_id);
             }
             BUS.publish(DomainEvent::ApprovalDecided {
-                request_id: decided.request_id.clone(),
-                tool_name: decided.tool_name.clone(),
+                request_id: request_id.clone(),
+                tool_name: route.pending.tool_name.clone(),
                 decision: ApprovalDecision::Deny.as_str().to_string(),
-                thread_id: route.as_ref().and_then(|r| r.thread_id.clone()),
-                client_id: route.as_ref().and_then(|r| r.client_id.clone()),
-                tool_call_id: route.and_then(|r| r.tool_call_id),
+                thread_id: route.thread_id.clone(),
+                client_id: route.client_id.clone(),
+                tool_call_id: route.tool_call_id.clone(),
                 resolution: Some(resolution.to_string()),
                 agent_id: Some(agent.to_string()),
             });
@@ -203,73 +203,98 @@ impl ApprovalGate {
     }
 
     /// Classify a [`Self::decide`] miss — i.e. when `decide` returned
-    /// `Ok(None)` because the instance was closed or its conditional
-    /// `UPDATE ... WHERE decided_at IS NULL` matched 0 rows.
+    /// `Ok(None)` because the request is no longer pending here.
     ///
-    /// - [`DecideMiss::AlreadyResolved`] — the row exists but was **already
-    ///   decided, lazily expired (denied), superseded, or closed for removal**.
+    /// - [`DecideMiss::AlreadyResolved`] — the request exists but was **already
+    ///   decided, expired, cancelled, or closed for removal**.
     ///   This is the benign
     ///   double-tap / two-operator / expiry-while-live race the inline-approvals
     ///   design spec classifies as benign (TAURI-RUST-5EH).
-    /// - [`DecideMiss::NeverRegistered`] — no row was ever persisted for this
+    /// - [`DecideMiss::NeverRegistered`] — no request was ever stored for this
     ///   request_id. That is a genuine lost registration (a core restart dropped
-    ///   the parked future before persisting, or a stray id) and must stay a
+    ///   the parked future before storing, or a stray id) and must stay a
     ///   Sentry signal.
     ///
-    /// We disambiguate by consulting [`store::get_decision`], which returns a
-    /// decision only when `decided_at IS NOT NULL` — exactly the already-resolved
-    /// case (expiry writes a `Deny` decision, so expired rows report here too).
-    /// A closed instance can still have an undecided row while removal takes
-    /// its denial snapshot; this is also a benign refusal. If the lookup itself
-    /// errors we conservatively keep
-    /// the event visible (`NeverRegistered`) rather than silently demoting.
-    pub fn classify_decide_miss(&self, request_id: &str) -> DecideMiss {
+    /// We disambiguate by asking the engine whether it stored the request and
+    /// whether it left `Pending`. If the lookup itself errors we conservatively
+    /// keep the event visible (`NeverRegistered`) rather than silently demoting.
+    pub async fn classify_decide_miss(&self, request_id: &str) -> DecideMiss {
         if self
             .request_scope(request_id)
             .is_some_and(|scope| scope.is_closed())
         {
             return DecideMiss::AlreadyResolved;
         }
-        match store::get_decision(&self.config, request_id) {
-            Ok(Some(_)) => DecideMiss::AlreadyResolved,
+        match self.engine.is_decided(request_id).await {
+            Ok(Some(true)) => DecideMiss::AlreadyResolved,
+            Ok(Some(false)) => DecideMiss::NeverRegistered,
             Ok(None) => DecideMiss::NeverRegistered,
             Err(err) => {
                 tracing::warn!(
                     request_id = %request_id,
                     error = %err,
-                    "[approval::gate] classify_decide_miss: get_decision failed; treating as never-registered (keep visible)"
+                    "[approval::gate] classify_decide_miss: lookup failed; treating as never-registered (keep visible)"
                 );
                 DecideMiss::NeverRegistered
             }
         }
     }
 
-    /// List all undecided rows, including orphans from prior launches.
-    /// Orphan rows have no live parked future so a `decide` on them
-    /// updates the DB but cannot resume an action — see [`store::list_pending`].
+    /// The requests this tenant has parked and not yet seen decided, oldest
+    /// first. A SaaS profile sees every agent's; anything else sees only its own
+    /// agent's (the process, for the default orchestrator).
     pub fn list_pending(&self) -> anyhow::Result<Vec<PendingApproval>> {
-        store::list_pending(&self.config)
+        let tenant = super::gate::current_route_tenant();
+        Ok(self.pending_where(|route| {
+            route.tenant.profile == tenant.profile
+                && (tenant.profile.is_some() || route.tenant.agent == tenant.agent)
+        }))
     }
 
-    /// [`Self::list_pending`] narrowed to `agent`'s rows; `None` lists the
-    /// process's own rows.
+    /// [`Self::list_pending`] narrowed to `agent`'s requests; `None` lists the
+    /// process's own.
     pub fn list_pending_for_agent(
         &self,
         ctx: &DispatchCtx,
         agent: Option<&str>,
     ) -> anyhow::Result<Vec<PendingApproval>> {
-        store::list_pending_for_agent(ctx, &self.config, agent)
+        let profile = ctx.tenant().ok().and_then(|tenant| tenant.profile);
+        Ok(self.pending_where(|route| {
+            route.tenant.profile == profile && route.pending.belongs_to(agent)
+        }))
     }
 
-    /// List recently decided rows for durable audit views.
-    pub fn list_recent_decisions(
+    fn pending_where(&self, keep: impl Fn(&RequestRoute) -> bool) -> Vec<PendingApproval> {
+        let mut rows: Vec<PendingApproval> = self
+            .parked
+            .request_routes
+            .lock()
+            .values()
+            .filter(|route| keep(route))
+            .map(|route| route.pending.clone())
+            .collect();
+        rows.sort_by_key(|row| row.created_at);
+        rows
+    }
+
+    /// List recently decided requests for durable audit views.
+    pub async fn list_recent_decisions(
         &self,
         limit: usize,
     ) -> anyhow::Result<Vec<super::types::ApprovalAuditEntry>> {
-        store::list_recent_decisions(&self.config, limit)
+        let limit = limit.clamp(1, 500);
+        let mut entries = self
+            .engine
+            .history(limit)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        entries.extend(store::list_recorded_decisions(&self.config, limit)?);
+        entries.sort_by(|a, b| b.decided_at.cmp(&a.decided_at));
+        entries.truncate(limit);
+        Ok(entries)
     }
 
-    /// List undecided rows correlated with a specific flow run (issue
+    /// List undecided requests correlated with a specific flow run (issue
     /// flow-approval-surface, PR2) — lets a dedicated Workflows review
     /// surface fetch just the gates blocking one run instead of filtering
     /// [`Self::list_pending`] client-side.
@@ -278,21 +303,31 @@ impl ApprovalGate {
         flow_id: &str,
         run_id: &str,
     ) -> anyhow::Result<Vec<PendingApproval>> {
-        store::list_pending_for_flow_run(&self.config, flow_id, run_id)
+        Ok(self
+            .list_pending()?
+            .into_iter()
+            .filter(|row| {
+                matches!(
+                    &row.source_context,
+                    Some(ApprovalSourceContext::Flow { flow_id: f, run_id: r, .. })
+                        if f == flow_id && r == run_id
+                )
+            })
+            .collect())
     }
 
     /// Grant "approve always for this flow" trust to `(flow_id, tool_name)`.
     /// Called by the `approval_decide` RPC handler after an
     /// [`ApprovalDecision::ApproveAlwaysForFlow`] decides a flow-origin row —
     /// mirrors the RPC-owns-persistence split documented on
-    /// [`Self::decide`] for `ApproveAlwaysForTool`.
+    /// [`Self::decide`] for `ApproveAlwaysForTool`. The grant reaches the engine
+    /// as the posture of the flow's next call.
     pub fn insert_flow_trust(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<()> {
         store::insert_flow_trust(&self.config, flow_id, tool_name)
     }
 
     /// Whether `(flow_id, tool_name)` currently holds "approve always for
-    /// this flow" trust. Exposed for tests and diagnostics; `intercept_audited`
-    /// consults [`store::is_flow_tool_trusted`] directly.
+    /// this flow" trust. Exposed for tests and diagnostics.
     pub fn is_flow_tool_trusted(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<bool> {
         store::is_flow_tool_trusted(&self.config, flow_id, tool_name)
     }
@@ -334,36 +369,11 @@ impl ApprovalGate {
 
     /// Clone the instance barrier without retaining the routing-map lock.
     fn request_scope(&self, request_id: &str) -> Option<Arc<super::ApprovalScope>> {
-        self.request_routes
+        self.parked
+            .request_routes
             .lock()
             .get(request_id)
             .and_then(|route| route.approval_scope.clone())
-    }
-
-    fn take_waiter(&self, request_id: &str) -> Option<oneshot::Sender<ApprovalDecision>> {
-        let mut waiters = self.waiters.lock();
-        waiters.remove(request_id)
-    }
-
-    /// Record the routing correlation for a newly-parked request. Called at
-    /// park time in `intercept_audited_inner`, alongside the `thread_to_request`
-    /// insert.
-    fn insert_request_route(&self, request_id: &str, route: RequestRoute) {
-        self.request_routes
-            .lock()
-            .insert(request_id.to_string(), route);
-    }
-
-    /// Remove and return the routing correlation for `request_id`, if any.
-    /// Consumed exactly once per request — by whichever path resolves the
-    /// decision first (`decide`, a TTL timeout, or a dropped channel).
-    fn take_request_route(&self, request_id: &str) -> Option<RequestRoute> {
-        self.request_routes.lock().remove(request_id)
-    }
-
-    fn evict_waiter(&self, request_id: &str) {
-        let mut waiters = self.waiters.lock();
-        waiters.remove(request_id);
     }
 
     /// The request_id of the approval currently parked on `thread_id` by the
@@ -389,7 +399,8 @@ impl ApprovalGate {
         tenant: &crate::core::runtime::Tenant,
         thread_id: &str,
     ) -> Option<String> {
-        self.thread_to_request
+        self.parked
+            .thread_to_request
             .lock()
             .get(&thread_route_key(tenant, thread_id))
             .cloned()
@@ -411,29 +422,29 @@ impl ApprovalGate {
     /// reconciliation, so a socket (re)joining a thread can be handed whatever
     /// is parked on it.
     ///
-    /// Reads the routing map first and the durable rows second, so a request
-    /// decided between the two reads simply falls out as `None` rather than
-    /// replaying a card the user has already answered.
+    /// Reads the routing map twice, so a request decided in between simply
+    /// falls out as `None` rather than replaying a card the user has already
+    /// answered.
     pub fn parked_request_for_thread(&self, thread_id: &str) -> Option<PendingApproval> {
         let request_id = self.pending_for_thread(thread_id)?;
         let row = self
-            .list_pending()
-            .ok()?
-            .into_iter()
-            .find(|row| row.request_id == request_id)?;
-        // Re-read the route before answering. `list_pending` is a store read and
-        // runs without the route lock held, so between the two the mapping can
-        // be cleared by a caller-bound abandon or overwritten by a replacement
-        // turn parking a new approval on the same thread (#4774's scenario).
-        // Either leaves this row pending while it is no longer the thread's, and
-        // the only caller replays what it gets straight onto the user's screen —
-        // so a stale row here is a stale approval card, not a harmless read.
+            .parked
+            .request_routes
+            .lock()
+            .get(&request_id)
+            .map(|route| route.pending.clone())?;
+        // Re-read the thread route before answering: between the two reads the
+        // mapping can be cleared by a caller-bound abandon or overwritten by a
+        // replacement turn parking a new approval on the same thread (#4774's
+        // scenario). Either leaves this row pending while it is no longer the
+        // thread's, and the only caller replays what it gets straight onto the
+        // user's screen — so a stale row here is a stale approval card, not a
+        // harmless read.
         //
-        // Narrowing, not closing: the row itself could still be decided after
-        // this check. That is the pre-existing fire-and-forget property of the
-        // replay path, and `request_id` idempotency on the client is what covers
-        // it; this only stops the lookup from *starting* with a row it can
-        // already tell is not the thread's (#6212 review).
+        // Narrowing, not closing: the request itself could still be decided
+        // after this check. That is the pre-existing fire-and-forget property of
+        // the replay path, and `request_id` idempotency on the client is what
+        // covers it (#6212 review).
         self.pending_for_thread(thread_id)
             .is_some_and(|current| current == request_id)
             .then_some(row)
@@ -449,37 +460,18 @@ impl ApprovalGate {
     /// can rebuild every card, not only the last one raised.
     pub fn parked_requests_for_thread(&self, thread_id: &str) -> Vec<PendingApproval> {
         let agent = crate::core::runtime::agent_scope::current_agent_id();
-        let parked_here = |route: &RequestRoute| {
-            route.thread_id.as_deref() == Some(thread_id)
-                && route.agent_id.as_deref() == agent.as_deref()
-        };
-        let ids: std::collections::HashSet<String> = self
+        let mut rows: Vec<PendingApproval> = self
+            .parked
             .request_routes
             .lock()
-            .iter()
-            .filter(|(_, route)| parked_here(route))
-            .map(|(id, _)| id.clone())
+            .values()
+            .filter(|route| {
+                route.thread_id.as_deref() == Some(thread_id)
+                    && route.agent_id.as_deref() == agent.as_deref()
+            })
+            .map(|route| route.pending.clone())
             .collect();
-        if ids.is_empty() {
-            return Vec::new();
-        }
-        let mut rows: Vec<PendingApproval> = match self.list_pending() {
-            Ok(rows) => rows
-                .into_iter()
-                .filter(|row| ids.contains(&row.request_id))
-                .collect(),
-            Err(error) => {
-                tracing::warn!(
-                    error = %error,
-                    "[approval::gate] parked_requests_for_thread: store read failed"
-                );
-                return Vec::new();
-            }
-        };
-        // Re-check after the unlocked store read, as `parked_request_for_thread`
-        // does: a request decided in between must not be replayed.
-        let routes = self.request_routes.lock();
-        rows.retain(|row| routes.get(&row.request_id).is_some_and(parked_here));
+        rows.sort_by_key(|row| row.created_at);
         rows
     }
 
@@ -487,28 +479,10 @@ impl ApprovalGate {
     /// detached task (an async-delegated sub-agent), so the replayed card keeps
     /// the live event's `detached` flag. `false` for an unknown request.
     pub fn request_is_detached(&self, request_id: &str) -> bool {
-        self.request_routes
+        self.parked
+            .request_routes
             .lock()
             .get(request_id)
             .is_some_and(|route| route.detached)
-    }
-
-    /// Drop the thread → request mapping when it still belongs to this request.
-    fn clear_thread(&self, thread_key: &Option<String>, request_id: &str) {
-        if let Some(key) = thread_key {
-            self.clear_thread_route_if_owned(key, request_id);
-        }
-    }
-
-    /// Drop the thread → request mapping **only if** it still points at
-    /// `request_id`. Used by [`WaiterGuard::drop`] on external teardown, where a
-    /// replacement turn may have already parked a new approval on the same
-    /// thread and overwritten the entry; clearing unconditionally would delete
-    /// the *new* request's routing (#4774).
-    fn clear_thread_route_if_owned(&self, thread_key: &str, request_id: &str) {
-        let mut map = self.thread_to_request.lock();
-        if map.get(thread_key).is_some_and(|rid| rid == request_id) {
-            map.remove(thread_key);
-        }
     }
 }
