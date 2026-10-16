@@ -236,3 +236,12 @@ fn a_read_only_mount_the_jail_baseline_already_covers_is_not_requested() {
         "only the baseline's own subtree is dropped, never a lookalike"
     );
 }
+
+#[test]
+fn the_workspace_grant_is_not_blocked_by_the_path_tools_reserved_names() {
+    let scope = facts(&Config::default(), &policy("/work/action"), |_| {});
+    assert!(scope.paths.reserved_names.is_empty());
+    // The core's internal state stays reserved.
+    assert!(!scope.paths.reserved_paths.is_empty());
+    assert!(!scope.paths.reserved_prefixes.is_empty());
+}

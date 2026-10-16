@@ -139,6 +139,12 @@ fn configured(config: &Config) -> bool {
 /// refuses the protected floor and the core's internal state under every root.
 fn paths(config: &Config, policy: &SandboxPolicy) -> PathPolicy {
     let mut paths = crate::modules::security::policy_translation::path_policy(config);
+    // Reserved names protect internal files from the path tools (`.env`, `SOUL.md`...)
+    // wherever they sit under the action dir. A jail's workspace grant is the whole
+    // action dir by design, so under that rule no workspace could ever be granted.
+    // The core's internal state under `workspace_dir` stays protected by its own
+    // reservations, and a grant that overlaps `workspace_dir` is still refused.
+    paths.reserved_names.clear();
     let roots = std::iter::once((&policy.workspace_root, PathAccess::ReadWrite))
         .chain(
             policy
