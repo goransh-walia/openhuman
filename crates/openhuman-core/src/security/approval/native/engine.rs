@@ -206,6 +206,11 @@ impl NativeEngine {
         };
         for stored in stale {
             let request_id = stored.row.request_id;
+            // A request still parked in this process expires through its own
+            // timer, which also settles the call waiting on it.
+            if host().request(&request_id).is_some() {
+                continue;
+            }
             let _guard = scope.stream.lock().await;
             let Ok(audit) = Self::correlation(scope, generation).await else {
                 return;
