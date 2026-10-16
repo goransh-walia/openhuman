@@ -43,6 +43,7 @@ use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
 use tinytools::status::POLICY_DENIED_MARKER;
 
+use super::store;
 use super::engine::{
     ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Delivery, EngineError, Posture,
     PromptSurface, SharedEngine, Variant,
