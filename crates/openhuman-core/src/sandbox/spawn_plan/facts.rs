@@ -85,11 +85,27 @@ fn grant(path: &Path, write: bool) -> Option<PathGrant> {
     })
 }
 
+/// System directories the native jail reads on its own (TinyBox's baseline). A
+/// read-only grant under one is redundant, and the module refuses it anyway: a grant
+/// may not cover a protected installation root.
+const JAIL_BASELINE_ROOTS: &[&str] = &["/usr", "/bin", "/sbin", "/lib", "/lib64"];
+
+/// Whether `path` is read by the jail's own baseline, so no grant is needed for it.
+fn under_baseline(path: &Path) -> bool {
+    JAIL_BASELINE_ROOTS
+        .iter()
+        .any(|root| path.starts_with(root))
+}
+
 /// The grants a spawn may ask for: its workspace read-write plus the policy's mounts.
 /// `None` when a path cannot cross the bus as text.
 pub(crate) fn grant_ceiling(policy: &SandboxPolicy) -> Option<Vec<PathGrant>> {
     let mut grants = vec![grant(&policy.workspace_root, true)?];
-    for path in &policy.read_only_mounts {
+    for path in policy
+        .read_only_mounts
+        .iter()
+        .filter(|path| !under_baseline(path))
+    {
         grants.push(grant(path, false)?);
     }
     for path in &policy.read_write_mounts {

@@ -7,7 +7,7 @@ fn policy(backend: SandboxBackendKind) -> SandboxPolicy {
         backend,
         workspace_root: PathBuf::from("/work/action"),
         state_dir: PathBuf::from("/state"),
-        read_only_mounts: vec![PathBuf::from("/usr/local")],
+        read_only_mounts: vec![PathBuf::from("/opt")],
         read_write_mounts: vec![PathBuf::from("/home/u/.cargo/registry")],
         allow_network: false,
         env_passthrough: vec![],
@@ -51,13 +51,13 @@ fn a_local_jail_asks_for_every_mount_and_a_container_for_none_it_cannot_write() 
         described,
         [
             ("/home/u/.cargo/registry", true),
-            ("/usr/local", false),
+            ("/opt", false),
             ("/work/action", true),
         ]
     );
     let docker = grants(&policy(SandboxBackendKind::Docker)).expect("grants");
     let described: Vec<_> = docker.iter().map(|g| (g.path.as_str(), g.write)).collect();
-    assert_eq!(described, [("/usr/local", false), ("/work/action", true)]);
+    assert_eq!(described, [("/opt", false), ("/work/action", true)]);
 }
 
 #[test]

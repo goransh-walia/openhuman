@@ -210,3 +210,29 @@ fn a_path_that_is_not_text_cannot_be_named_to_the_module() {
     };
     assert!(scope(&input).is_none());
 }
+
+#[test]
+fn a_read_only_mount_the_jail_baseline_already_covers_is_not_requested() {
+    let mut base = policy("/work/action");
+    base.read_only_mounts = vec![
+        PathBuf::from("/usr/local"),
+        PathBuf::from("/usr"),
+        PathBuf::from("/lib64/python"),
+        PathBuf::from("/opt"),
+        PathBuf::from("/usrx/share"),
+    ];
+    let described: Vec<_> = grant_ceiling(&base)
+        .expect("ceiling")
+        .into_iter()
+        .map(|g| (g.path, g.write))
+        .collect();
+    assert_eq!(
+        described,
+        [
+            ("/opt".to_owned(), false),
+            ("/usrx/share".to_owned(), false),
+            ("/work/action".to_owned(), true),
+        ],
+        "only the baseline's own subtree is dropped, never a lookalike"
+    );
+}
