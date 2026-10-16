@@ -191,6 +191,13 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
 
     /// Cancel a pending or approved request that will not run.
     async fn cancel(&self, request_id: &str) -> Result<(), EngineError>;
+
+    /// Whether the request is stored and has left `Pending`; `None` when it was
+    /// never stored in the current scope.
+    async fn is_decided(&self, request_id: &str) -> Result<Option<bool>, EngineError>;
+
+    /// The most recently decided requests of the current scope, newest first.
+    async fn history(&self, limit: usize) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError>;
 }
 
 /// The shared engine handle a gate holds.
@@ -261,6 +268,15 @@ impl ApprovalEngine for UnavailableEngine {
     }
     async fn cancel(&self, _request_id: &str) -> Result<(), EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
+    async fn is_decided(&self, _request_id: &str) -> Result<Option<bool>, EngineError> {
+        Ok(None)
+    }
+    async fn history(
+        &self,
+        _limit: usize,
+    ) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError> {
+        Ok(Vec::new())
     }
 }
 

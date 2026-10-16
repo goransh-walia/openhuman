@@ -16,7 +16,7 @@ use super::super::engine::{
     ApprovalEngine, CallOrigin, Checked, CheckInput, Choice, Decided, EngineError, Sealed,
     Variant,
 };
-use super::super::types::ExecutionOutcome;
+use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
 use super::scopes::{self, ScopeEntry};
 use super::state::{host, CallEntry, RequestEntry, Ticket};
 use crate::config::Config;
@@ -506,6 +506,21 @@ impl ApprovalEngine for NativeEngine {
             tracing::debug!(error = %error, "{LOG} the module did not cancel the request");
             unavailable("TinySecurity CancelApproval2 failed")
         })
+    }
+
+    async fn is_decided(&self, request_id: &str) -> Result<Option<bool>, EngineError> {
+        super::view::row_decided(&self.config, request_id)
+            .await
+            .map_err(|error| unavailable(error.to_string()))
+    }
+
+    async fn history(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<ApprovalAuditEntry>, EngineError> {
+        super::view::decided_history(&self.config, limit)
+            .await
+            .map_err(|error| unavailable(error.to_string()))
     }
 }
 
