@@ -54,7 +54,7 @@ impl std::fmt::Debug for ScopeEntry {
 }
 
 impl ScopeEntry {
-    fn new(subject: SubjectScope, stream_id: String, rows: Rows) -> Self {
+    pub(super) fn new(subject: SubjectScope, stream_id: String, rows: Rows) -> Self {
         let scope_id = digest_id(&["scope", &subject.user, &subject.workspace, &subject.agent]);
         Self {
             subject,
@@ -81,6 +81,22 @@ impl ScopeEntry {
         }
         *swept = Some(Instant::now());
         true
+    }
+
+    /// Record the module's handle for the subject and make callbacks resolve it.
+    pub(super) async fn bind(self: &Arc<Self>, handle: SubjectScope) {
+        if self.handle.get().is_some() {
+            return;
+        }
+        // Callbacks look the subject up by this handle, so it is known before the
+        // first call under the scope can reach them.
+        host()
+            .scopes
+            .lock()
+            .await
+            .by_handle
+            .insert(handle_key(&handle), Arc::clone(self));
+        let _ = self.handle.set(handle);
     }
 
     /// Make the module hold `posture` for this subject.
@@ -139,18 +155,7 @@ impl ScopeEntry {
         if receipt.scope_id != self.scope_id {
             return Err("TinySecurity returned a receipt for another approval scope".into());
         }
-        if self.handle.get().is_none() {
-            let handle = receipt.scope_handle.clone();
-            // Callbacks look the subject up by this handle, so it is known before
-            // the first call under the scope can reach them.
-            host()
-                .scopes
-                .lock()
-                .await
-                .by_handle
-                .insert(handle_key(&handle), Arc::clone(self));
-            let _ = self.handle.set(handle);
-        }
+        self.bind(receipt.scope_handle.clone()).await;
         tracing::debug!(
             scope = %self.scope_id,
             outcome = ?receipt.outcome,

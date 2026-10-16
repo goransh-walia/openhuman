@@ -9,9 +9,7 @@
 use super::*;
 use crate::modules::security::native_tests::{native_approval_fixture, NativeFixture};
 use crate::security::approval::engine::{Delivery, PromptSurface};
-use std::sync::Mutex;
-
-const IGNORE: &str = "requires a released host key or an explicitly selected local native fixture";
+use std::sync::{Arc, Mutex};
 
 /// A prompt surface that records what the engine asked it to show.
 #[derive(Default)]
@@ -357,7 +355,7 @@ async fn concurrent_calls_of_one_subject_all_get_their_own_request() {
     assert_eq!(ids.len(), 8, "each call got its own durable request");
     // The audit stream stayed contiguous: one event per request.
     let scope = {
-        let scopes = state::host().scopes.lock().await;
+        let scopes = super::super::state::host().scopes.lock().await;
         scopes
             .by_subject
             .values()
