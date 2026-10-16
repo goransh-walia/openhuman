@@ -44,6 +44,9 @@ pub(crate) struct NativeShellRun {
     pub(crate) isolate_network: bool,
     /// Receives the command's output as it streams, for progress reporting.
     pub(crate) meter: Option<super::shell_progress::ShellOutputMeter>,
+    /// Bytes written to the command's stdin, which is then closed. `None` gives
+    /// the command no input.
+    pub(crate) stdin: Option<Vec<u8>>,
     /// Native confinement; `None` is ordinary local execution.
     #[cfg(feature = "modules")]
     pub(crate) jail: Option<contract::NativeJailConfig>,
@@ -69,6 +72,7 @@ impl NativeShellRun {
             hide_window: false,
             isolate_network: false,
             meter: None,
+            stdin: None,
             #[cfg(feature = "modules")]
             jail: None,
         }
@@ -215,7 +219,7 @@ pub(crate) fn shell_exec_request(
         timeout_ms: u64::try_from(run.timeout.as_millis())
             .unwrap_or(u64::MAX)
             .clamp(1, 86_400_000),
-        stdin: None,
+        stdin: run.stdin,
         jail: run.jail,
         hide_window: run.hide_window,
     })

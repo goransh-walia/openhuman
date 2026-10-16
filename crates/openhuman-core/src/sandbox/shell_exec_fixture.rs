@@ -53,9 +53,21 @@ pub(crate) async fn run(run: NativeShellRun) -> anyhow::Result<SandboxExecResult
         }
     }
     command.envs(&run.env);
+    // The fixture feeds stdin from a file; the module writes it to a pipe.
+    let _stdin_file = match &run.stdin {
+        Some(bytes) => {
+            let mut file = tempfile::NamedTempFile::new()?;
+            std::io::Write::write_all(&mut file, bytes)?;
+            command.stdin(std::fs::File::open(file.path())?);
+            Some(file)
+        }
+        None => {
+            command.stdin(Stdio::null());
+            None
+        }
+    };
     command
         .current_dir(&run.cwd)
-        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);

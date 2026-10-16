@@ -101,6 +101,34 @@ pub(crate) async fn execute(
     preserve_pipeline_status: bool,
     meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
+    execute_with_stdin(
+        config,
+        policy,
+        command,
+        working_dir,
+        extra_env,
+        timeout,
+        explicitly_requested,
+        preserve_pipeline_status,
+        meter,
+        None,
+    )
+    .await
+}
+
+/// [`execute`] with bytes written to the command's stdin (then closed).
+pub(crate) async fn execute_with_stdin(
+    config: &Config,
+    policy: &SandboxPolicy,
+    command: &str,
+    working_dir: &Path,
+    extra_env: &HashMap<OsString, OsString>,
+    timeout: Duration,
+    explicitly_requested: bool,
+    preserve_pipeline_status: bool,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
+    stdin: Option<Vec<u8>>,
+) -> anyhow::Result<SandboxExecResult> {
     #[cfg(feature = "modules")]
     {
         let config = config.clone();
@@ -120,6 +148,7 @@ pub(crate) async fn execute(
                 explicitly_requested,
                 preserve_pipeline_status,
                 meter,
+                stdin,
             )
             .await
         })
@@ -138,6 +167,7 @@ pub(crate) async fn execute(
             explicitly_requested,
             preserve_pipeline_status,
             meter,
+            stdin,
         );
         anyhow::bail!("TinyBox module support is disabled; native jail execution is unavailable")
     }
@@ -154,6 +184,7 @@ async fn execute_owned(
     explicitly_requested: bool,
     preserve_pipeline_status: bool,
     meter: Option<super::shell_progress::ShellOutputMeter>,
+    stdin: Option<Vec<u8>>,
 ) -> anyhow::Result<SandboxExecResult> {
     let status = tinybox::jail_status(config)
         .await
@@ -188,6 +219,7 @@ async fn execute_owned(
     run.isolate_network = !policy.allow_network;
     run.preserve_pipeline_status = preserve_pipeline_status;
     run.meter = meter;
+    run.stdin = stdin;
     // TinyBox adds its own per-call scratch directory to the writable grants and
     // points TMPDIR, TMP and TEMP at it unless the caller overrides them.
     run.jail = Some(jail_request(policy, isolation)?);
