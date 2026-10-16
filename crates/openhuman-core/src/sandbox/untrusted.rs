@@ -12,7 +12,8 @@
 //!
 //! `scripts/ci/spawner-inventory.json` names every caller of this gate.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::ffi::OsString;
 use std::path::Path;
 use std::time::Duration;
 
@@ -33,6 +34,31 @@ pub(crate) struct UntrustedShell<'a> {
     pub(crate) timeout: Duration,
     /// Keep the shell's own last-stage pipeline status instead of `pipefail`.
     pub(crate) preserve_pipeline_status: bool,
+    /// Extra environment variables for the command (none for a scheduled job).
+    pub(crate) env: &'a BTreeMap<String, String>,
+    /// Bytes written to the command's stdin (a hook's event JSON), if any.
+    pub(crate) stdin: Option<&'a [u8]>,
+}
+
+/// Largest stdin the Docker path can carry. The container runs `sh -c <text>`
+/// with no stdin channel, so input rides inside the command as base64 and must
+/// fit one argument (Linux caps a single argument at 128 KiB).
+const DOCKER_STDIN_MAX: usize = 72 * 1024;
+
+/// Wrap `command` so it reads `stdin` as its standard input.
+fn with_inline_stdin(command: &str, stdin: &[u8]) -> anyhow::Result<String> {
+    use base64::Engine as _;
+    if stdin.len() > DOCKER_STDIN_MAX {
+        anyhow::bail!(
+            "stdin of {} bytes exceeds the {DOCKER_STDIN_MAX}-byte limit of the Docker sandbox",
+            stdin.len()
+        );
+    }
+    let encoded = base64::engine::general_purpose::STANDARD.encode(stdin);
+    Ok(format!(
+        "printf '%s' '{encoded}' | base64 -d | (\n{command}\n)"
+    )
+    .replace("\\n", "\n"))
 }
 
 /// Run `spawn` under the isolation floor.
@@ -48,6 +74,8 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         state_dir,
         timeout,
         preserve_pipeline_status,
+        env,
+        stdin,
     } = spawn;
     let saas = crate::core::runtime::is_saas();
     // The scheduler has no dispatch context of its own; the task's ambient one
@@ -63,17 +91,11 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         crate::config::ensure_usable_cwd(cwd)?;
         std::fs::create_dir_all(state_dir)
             .map_err(|error| anyhow::anyhow!("Cannot prepare sandbox state directory: {error}"))?;
-        return super::shell_exec::run_host(
-            config,
-            command,
-            cwd,
-            state_dir,
-            std::collections::BTreeMap::new(),
-            timeout,
-            preserve_pipeline_status,
-            None,
-        )
-        .await;
+        let mut shell = super::shell_exec::NativeShellRun::new(command, cwd, state_dir, timeout);
+        shell.env = env.clone();
+        shell.preserve_pipeline_status = preserve_pipeline_status;
+        shell.stdin = stdin.map(<[u8]>::to_vec);
+        return super::shell_exec::run(config, shell).await;
     }
 
     let mut policy = super::ops::resolve_command_policy_with_config(&ctx, config, cwd, state_dir)
@@ -91,26 +113,38 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
             crate::config::ensure_usable_cwd(cwd)?;
             policy = super::local_grants::with_resolved_grants(config, &policy).await?;
             tracing::debug!("[sandbox:untrusted] running under the native jail");
-            super::native_jail::execute(
+            let extra_env: HashMap<OsString, OsString> = env
+                .iter()
+                .map(|(name, value)| (name.into(), value.into()))
+                .collect();
+            super::native_jail::execute_with_stdin(
                 config,
                 &policy,
                 command,
                 cwd,
-                &HashMap::new(),
+                &extra_env,
                 timeout,
                 explicitly_requested,
                 preserve_pipeline_status,
                 None,
+                stdin.map(<[u8]>::to_vec),
             )
             .await
         }
         SandboxBackendKind::Docker => {
             crate::config::ensure_usable_cwd(&policy.workspace_root)?;
             tracing::debug!("[sandbox:untrusted] running in the sandbox container");
+            let command = match stdin {
+                Some(stdin) => with_inline_stdin(command, stdin)?,
+                None => command.to_owned(),
+            };
             let request = SandboxExecRequest {
-                command: command.to_owned(),
+                command,
                 working_dir: cwd.to_path_buf(),
-                env: HashMap::new(),
+                env: env
+                    .iter()
+                    .map(|(name, value)| (name.into(), value.into()))
+                    .collect(),
                 timeout,
             };
             super::docker::docker_exec(config, &policy, &request).await
