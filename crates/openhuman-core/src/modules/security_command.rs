@@ -212,3 +212,7 @@ mod tests;
 #[cfg(test)]
 #[path = "security_command_characterization_tests.rs"]
 mod characterization_tests;
+
+#[cfg(test)]
+#[path = "security_host_tool_tests.rs"]
+mod host_tool_tests;
