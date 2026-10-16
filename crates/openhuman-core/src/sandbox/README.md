@@ -186,21 +186,56 @@ translates a TinySecurity `SandboxArtifact2` onto TinyBox's vocabulary (grants,
 network, resource bounds, isolation requirement) and refuses what TinyBox cannot
 enforce exactly: the Noop backend, mediated egress without a host proxy, CPU-time
 bounds, zero bounds, and namespace or microVM executors the host does not drive.
-Nothing calls the module's `Plan2` yet, because sandbox scopes are init-only and
-bound to the audit subject (see issue #7328). A folder-confined (Seatbelt) jail,
-whose reads are allow-by-default, gets the credential-store floor as `deny_read`
-(TinyBox contract 1.20, `local_grants::credential_store_paths`); allow-list jails
-already deny those paths.
+A folder-confined (Seatbelt) jail, whose reads are allow-by-default, gets the
+credential-store floor as `deny_read` (TinyBox contract 1.20,
+`local_grants::credential_store_paths`); allow-list jails already deny those paths.
 
-Command hooks reach the gate: the tinyagents hook engine hands each `command`
-hook to `hooks/spawner.rs` (a `CommandSpawner`, tinyagents#485), which calls
-`untrusted::run` with the hook's environment and its event JSON as stdin. The
-jail picks the shell. A refusal (no jail, a jail below the floor, or Docker
-unavailable) is an error to the engine, so a `fail_closed` hook denies and any
-other hook is a logged no-op; the hook process is never started on the host.
-Only the operator's own sandbox opt-out runs a hook unjailed, never under SaaS.
-Under the Docker backend the event JSON rides inside the command as base64, so
-stdin above 72 KiB is refused.
+### Planning through the module (issue #7328, phase 5)
+
+Every spawn that resolved to the native jail or a container (the agent's shell
+through `execute_in_sandbox`, scheduled and hook text through `untrusted::run`) is
+planned by the TinySecurity module before it launches ([`spawn_plan/`](./spawn_plan/mod.rs)).
+The module owns the decision: the isolation floor (mandatory under SaaS and for text
+the host did not author), whether the declared executor enforces every constraint
+exactly, the filesystem and network ceilings, and the resource bounds. The host owns
+the facts, the concrete operation and the execution:
+
+1. `facts.rs` derives immutable scope facts from the resolved policy, the
+   configuration and the executor TinyBox verified (`executors.rs`: a constraint is
+   `Enforced` only when TinyBox says so, so a best-effort jail never satisfies a hard
+   requirement). A scope's id digests its facts, so a spawn with other facts gets its
+   own scope instead of widening an existing one.
+2. `registry.rs` registers the scope at runtime (`RegisterSandboxScope2`, contract
+   1.19) on the subject's own audit stream (`security::approval::native::audit_stream`,
+   shared with the subject's approvals so their events extend one ordered ledger). The
+   host keeps at most 256 scopes registered and retires the least recently used one;
+   the module never evicts.
+3. `plan` sends `Plan2` for the concrete operation (`operation.rs`: the command,
+   working directory, environment and stdin, bound by digest where they may hold
+   secrets) and maps the artifact through `BoxPlan::from_artifact`.
+4. `admit` reserves the artifact once (`ConsumeSandboxPlan2`) immediately before the
+   spawn and returns the policy the spawn runs under: mounts, network and container
+   bounds come from the artifact, not from the policy that was asked.
+
+A module fault, a denial, an unusable answer and a plan the host cannot map all mean
+the command does not run; nothing falls back to a host-side decision. Plan binds the
+exact operation, so planning happens at the spawn boundary, where the command is
+known, not when the policy is resolved: `resolve_sandbox_policy`,
+`resolve_command_policy*` and `command_requires_sandbox` stay the request side (what
+the agent or the operator asked to sandbox and with which backend), and the module's
+plan bounds what is actually run.
+
+Known gaps the module's rules expose (not host policy):
+
+- **Host network.** The module plans the host's own network only after an exact human
+  approval, and no sandboxed spawn has a surface to ask for one. A policy that allows
+  the network is planned as asked; when the module answers that it needs the approval,
+  the spawn is planned again with no network (it only narrows) and a `warn` is logged.
+  Sandboxed commands therefore run without network until a mediated egress proxy
+  (`PlanMappingError::EgressProxyUnavailable`) or an approval prompt exists.
+- **Folder-confined jails (macOS Seatbelt)** report best-effort enforcement, which the
+  module never accepts as exact, so the local desktop sandbox on macOS is refused
+  (`Unsupported`) instead of running folder-confined as before.
 
 Spawn sites that do not reach the gate today, and why:
 
@@ -226,6 +261,8 @@ Spawn sites that do not reach the gate today, and why:
 | [`local_grants.rs`](./local_grants.rs) | Host adapter for `ResolveLocalGrants`: sends the credential floor as input and re-applies it to the module's reply. |
 | [`docker.rs`](./docker.rs) | Policy-to-`RunDocker` mapping, module status/cleanup calls, Docker policy validation. |
 | [`schemas.rs`](./schemas.rs) | The `sandbox.*` controllers. |
+| [`spawn_plan/`](./spawn_plan/mod.rs) | Module planning of each sandboxed spawn: scope facts, executor declarations, operation binding, scope registry, plan and admit. |
+| [`plan.rs`](./plan.rs) | `BoxPlan::from_artifact`, the artifact-to-TinyBox mapping. |
 
 ## Key types and entry points
 

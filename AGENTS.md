@@ -599,7 +599,7 @@ method constants, request and response types, and its contract version.
 | `tinymcp-bus` | `mcp` |
 | `tinychannels-bus` | channel vocabulary |
 | `tinyconnectors-bus` | OAuth connector (Composio) wire contract; called through `integrations/composio/module_client.rs` |
-| `tinysecurity-bus` | `security-module` (filesystem path authorization, shell command gating, the network and write tier gates, the approval engine, and password crypt today; sandbox plans pending, issue #7328); called through `modules/security.rs`, `modules/security_command.rs`, `modules/security_crypto.rs` and `security/approval/native/`, which also serves the module's approval store, audit sink and prompt callbacks from `modules/security_host.rs` |
+| `tinysecurity-bus` | `security-module` (filesystem path authorization, shell command gating, the network and write tier gates, the approval engine, password crypt, and sandbox plans for every sandboxed spawn); called through `modules/security.rs`, `modules/security_command.rs`, `modules/security_crypto.rs`, `modules/security_sandbox.rs` (driven by `sandbox/spawn_plan/`) and `security/approval/native/`, which also serves the module's approval store, audit sink and prompt callbacks from `modules/security_host.rs` |
 
 Rules:
 
