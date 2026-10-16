@@ -80,6 +80,40 @@ pub(crate) async fn command_decision(
     }
 }
 
+/// The registered scope id of `policy` for the workspace whose configuration binds
+/// the module, registering it on first use (contract 1.20). A host-tool admission
+/// names it so the module reads the same hourly budget a shell run spends; an equal
+/// policy reuses its scope and therefore its ledger. `Err` is a refusal.
+pub(crate) async fn command_scope_id(
+    workspace_dir: &Path,
+    policy: CommandPolicy,
+) -> Result<CommandPolicyId, String> {
+    let config = config::host_config(workspace_dir, crate::core::runtime::is_saas()).await?;
+    require_enabled(&config)?;
+    let mut state = state().lock().await;
+    let result = async {
+        let proxy = super::proxy(&config, &mut state)
+            .await
+            .map_err(CallError::faulted)?;
+        register_cached_command_scope(&mut state, &proxy, policy).await
+    }
+    .await;
+    match result {
+        Ok(id) => Ok(id),
+        Err(error) => {
+            log::warn!(
+                "[security][command] scope registration failed fault={}: {}",
+                error.fault,
+                error.message
+            );
+            if error.fault {
+                state.latch();
+            }
+            Err(error.message)
+        }
+    }
+}
+
 /// The registration cache plus one confidential call, shared by the production
 /// path and the native-module tests.
 pub(super) async fn command_on(
