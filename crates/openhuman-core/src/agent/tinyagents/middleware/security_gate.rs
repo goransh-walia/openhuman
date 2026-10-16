@@ -37,7 +37,8 @@ pub(crate) fn install(
         let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets));
         let gate = ToolPolicyGateMiddleware::new(Arc::new(policy))
             .with_approval_resolver(resolver)
-            .with_denial_renderer(Arc::new(|call, policy, decision| match decision {
+            .with_denial_renderer(Arc::new(|call, policy, decision| {
+                let denial = match decision {
                 PolicyDecision::RequireApproval { reason } => PolicyDenial::ApprovalRequired {
                     tool: &call.name,
                     policy,
@@ -53,8 +54,9 @@ pub(crate) fn install(
                     policy,
                     reason: "",
                 },
-            }
-            .render()));
+                };
+                denial.render()
+            }));
         harness.push_tool_middleware(Arc::new(gate));
     }
     #[cfg(not(feature = "security-module"))]
