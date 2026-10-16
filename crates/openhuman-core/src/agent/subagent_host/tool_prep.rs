@@ -92,14 +92,16 @@ pub(super) fn is_subagent_spawn_tool(name: &str) -> bool {
 /// isn't Clone) and lets us reuse the parent's existing instances.
 ///
 /// Filters are applied in this order (shorter-circuit first):
-/// 1. `disallowed` — explicit deny list.
-/// 2. `skill_filter` — restrict to tools named `{skill}__*`.
-/// 3. `scope` — `Wildcard` (everything remaining) or `Named` allowlist.
+/// 1. `skill_filter` — restrict to tools named `{skill}__*`.
+/// 2. `scope` — `Wildcard` (everything remaining) or `Named` allowlist.
+///
+/// A definition's `disallowed_tools` is deliberately not a filter here: it is a
+/// deny rule in the child's rule policy (`OpenHumanRunContext::for_subagent`),
+/// which the harness gate applies to the catalogue, `tool_search` and every call.
 ///
 pub(super) fn filter_tool_indices(
     parent_tools: &[Box<dyn Tool>],
     scope: &ToolScope,
-    disallowed: &[String],
     skill_filter: Option<&str>,
 ) -> Vec<usize> {
     let skill_prefix = skill_filter.map(|s| format!("{s}__"));
@@ -109,13 +111,10 @@ pub(super) fn filter_tool_indices(
         .enumerate()
         .filter(|(_, tool)| {
             let name = tool.name();
-            if crate::tools::rules::glob_list_matches(disallowed, name) {
-                return false;
-            }
             // The CCR recovery tool is advertised to any agent that has a tool
             // surface — compaction applies to its tool output, so the retrieve
             // footer must be actionable regardless of scope/skill filters (an
-            // explicit `disallow` above still wins). A deliberately tool-less
+            // explicit `disallowed_tools` still wins, as a deny rule). A deliberately tool-less
             // agent (`Named([])`, e.g. the payload summarizer) runs no tools,
             // produces no compacted output, and so stays tool-less.
             if crate::inference::tokenjuice::is_recovery_tool(name) {
