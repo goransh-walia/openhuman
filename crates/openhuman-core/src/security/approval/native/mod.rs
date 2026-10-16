@@ -14,6 +14,7 @@
 //! | --- | --- |
 //! | `engine.rs` | `NativeEngine`, the module calls |
 //! | `scopes.rs` | subject registration, posture and grants |
+//! | `audit_stream.rs` | a subject's audit stream, leased by the sandbox planner |
 //! | `rows.rs` | the document-port store behind `Load`, `Cas` and `Append` |
 //! | `callbacks.rs` | what `modules/security_host.rs` serves |
 //! | `state.rs` | calls, requests and human tickets in flight |
@@ -21,6 +22,7 @@
 
 use sha2::{Digest, Sha256};
 
+pub(crate) mod audit_stream;
 pub(crate) mod callbacks;
 mod engine;
 mod rows;

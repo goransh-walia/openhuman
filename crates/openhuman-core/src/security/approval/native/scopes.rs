@@ -115,6 +115,18 @@ impl ScopeEntry {
         let _ = self.handle.set(handle);
     }
 
+    /// Make the audit sink resolve this subject's stream before the module's first
+    /// event under it. Unlike [`Self::bind`] this needs no approval handle: the
+    /// sink names a subject only by its stream.
+    pub(super) async fn bind_stream(self: &Arc<Self>) {
+        host()
+            .scopes
+            .lock()
+            .await
+            .by_stream
+            .insert(self.stream_id.clone(), Arc::clone(self));
+    }
+
     /// Make the module hold `posture` for this subject.
     async fn register(
         self: &Arc<Self>,
@@ -247,6 +259,31 @@ pub(super) async fn ensure(
         }
     };
     entry.register(proxy, posture, generation).await?;
+    Ok(entry)
+}
+
+/// The subject's persisted audit stream, creating it on first use, without
+/// registering an approval posture. Sandbox plans and approvals of one subject
+/// share the stream, so their events extend one ordered ledger.
+pub(super) async fn audit_entry(
+    config: &Config,
+    subject: SubjectScope,
+) -> Result<Arc<ScopeEntry>, String> {
+    let key = subject_key(&subject);
+    let entry = {
+        let mut scopes = host().scopes.lock().await;
+        match scopes.by_subject.get(&key) {
+            Some(found) => Arc::clone(found),
+            None => {
+                let rows = Rows::current(config).map_err(|error| error.to_string())?;
+                let stream_id = rows.stream_for(&key).await?;
+                let entry = Arc::new(ScopeEntry::new(subject, stream_id, rows));
+                scopes.by_subject.insert(key, Arc::clone(&entry));
+                entry
+            }
+        }
+    };
+    entry.bind_stream().await;
     Ok(entry)
 }
 
