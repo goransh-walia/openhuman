@@ -14,6 +14,8 @@ pub mod docker;
 pub(crate) mod local_grants;
 pub(crate) mod native_jail;
 pub mod ops;
+#[cfg(feature = "security-module")]
+pub mod plan;
 pub mod schemas;
 pub(crate) mod shell_exec;
 pub(crate) mod shell_progress;
