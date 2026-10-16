@@ -65,15 +65,6 @@
       "test": "n/a"
     },
     {
-      "file": "crates/openhuman-core/src/hooks/shell.rs",
-      "spawns": 3,
-      "trust": "untrusted",
-      "plan": "hook commands from config and skills -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
-      "executor": "direct",
-      "test": "pending",
-      "note": "blocked: the hook engine (tinyagents_runtime::command_hooks) spawns the process through a synchronous shell factory, so jailing needs an async spawner seam upstream; tinyagents main is 142 commits past the host pin. Refused under SaaS (shell_tests.rs)"
-    },
-    {
       "file": "crates/openhuman-core/src/inference/host_runtime/service/speech.rs",
       "spawns": 1,
       "trust": "host-probe",
@@ -150,10 +141,10 @@
       "file": "crates/openhuman-core/src/sandbox/untrusted.rs",
       "spawns": 1,
       "trust": "untrusted",
-      "plan": "operator-authorized scheduled shell job -> jail policy resolved by sandbox::ops (native jail or Docker), refused below the isolation floor",
+      "plan": "operator-authorized scheduled shell job and hook commands (hooks/spawner.rs) -> jail policy resolved by sandbox::ops (native jail or Docker), refused below the isolation floor",
       "executor": "jailed",
       "test": "crates/openhuman-core/src/sandbox/untrusted_tests.rs",
-      "note": "the one gate (sandbox::untrusted::run); its only direct spawn is the operator opt-out (OPENHUMAN_SANDBOX=off, [sandbox] enabled=false), never reachable under SaaS"
+      "note": "the one gate, with callers cron scheduler shell jobs and command hooks (hooks/spawner_tests.rs) (sandbox::untrusted::run); its only direct spawn is the operator opt-out (OPENHUMAN_SANDBOX=off, [sandbox] enabled=false), never reachable under SaaS"
     },
     {
       "file": "crates/openhuman-core/src/security/secret_storage/encrypted_store.rs",

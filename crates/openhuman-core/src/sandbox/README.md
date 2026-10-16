@@ -192,13 +192,21 @@ whose reads are allow-by-default, gets the credential-store floor as `deny_read`
 (TinyBox contract 1.20, `local_grants::credential_store_paths`); allow-list jails
 already deny those paths.
 
+Command hooks reach the gate: the tinyagents hook engine hands each `command`
+hook to `hooks/spawner.rs` (a `CommandSpawner`, tinyagents#485), which calls
+`untrusted::run` with the hook's environment and its event JSON as stdin. The
+jail picks the shell. A refusal (no jail, a jail below the floor, or Docker
+unavailable) is an error to the engine, so a `fail_closed` hook denies and any
+other hook is a logged no-op; the hook process is never started on the host.
+Only the operator's own sandbox opt-out runs a hook unjailed, never under SaaS.
+Under the Docker backend the event JSON rides inside the command as base64, so
+stdin above 72 KiB is refused.
+
 Spawn sites that do not reach the gate today, and why:
 
 - tinymcp stdio servers start inside the loaded tinymcp module; a jail needs an
   interactive (piped stdio) execution member in the TinyBox contract and a
   tinymcp launcher seam over it (`StdioSpawner` exists, the TinyBox side does not).
-- Command hooks: the tinyagents hook engine spawns through a synchronous shell
-  factory, so jailing needs an async spawner seam upstream.
 - tinyflows' `ProcessCodeRunner`/`ProcessShellRunner` are behind its `host-caps`
   feature, which the host does not enable; the `code` node runs through
   `execute_in_sandbox`.
