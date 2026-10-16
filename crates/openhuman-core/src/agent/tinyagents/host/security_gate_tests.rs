@@ -95,7 +95,12 @@ async fn a_nested_call_is_refused_even_for_a_read_only_tool() {
 #[tokio::test]
 async fn a_plain_call_is_left_to_the_security_middleware() {
     let gate = OpenHumanSecurityGate::default();
-    for tool in ["read_file", "write_file", "shell", "not_registered_anywhere"] {
+    for tool in [
+        "read_file",
+        "write_file",
+        "shell",
+        "not_registered_anywhere",
+    ] {
         let decision = gate
             .authorize_tool(&req(tool, json!({ "path": "notes.md", "command": "ls" })))
             .await

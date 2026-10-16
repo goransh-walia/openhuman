@@ -62,9 +62,8 @@ fn an_unanswered_approval_tells_the_model_it_was_not_answered() {
 fn the_desktop_exception_is_off_when_the_tool_is_unknown() {
     let middleware = ApprovalSecurityMiddleware::new(Vec::new());
     assert!(middleware.resolve_tool("missing").is_none());
-    let disabled = futures::executor::block_on(middleware.desktop_approvals_disabled(
-        &DispatchCtx::ambient(),
-        "missing",
-    ));
+    let disabled = futures::executor::block_on(
+        middleware.desktop_approvals_disabled(&DispatchCtx::ambient(), "missing"),
+    );
     assert!(!disabled);
 }

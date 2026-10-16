@@ -90,7 +90,10 @@ impl ModuleAsk for Recorder {
 }
 
 fn ctx() -> RunContext<OpenHumanRunContext> {
-    RunContext::new(RunConfig::new("module-verdicts"), OpenHumanRunContext::new())
+    RunContext::new(
+        RunConfig::new("module-verdicts"),
+        OpenHumanRunContext::new(),
+    )
 }
 
 fn call(name: &str, arguments: serde_json::Value) -> TaToolCall {
@@ -112,11 +115,7 @@ async fn verdict(
         .await
 }
 
-fn host_action(
-    permission: ToolPermission,
-    external_effect: bool,
-    spend: bool,
-) -> Check {
+fn host_action(permission: ToolPermission, external_effect: bool, spend: bool) -> Check {
     Check::HostAction {
         permission,
         external_effect,
@@ -128,7 +127,12 @@ fn host_action(
 #[tokio::test]
 async fn an_unregistered_tool_is_denied_and_never_asked() {
     let module = Recorder::answering(Ok(Verdict::Allow));
-    let answer = verdict(&module, registry(), call("definitely_not_a_tool", json!({}))).await;
+    let answer = verdict(
+        &module,
+        registry(),
+        call("definitely_not_a_tool", json!({})),
+    )
+    .await;
     assert_eq!(
         answer,
         Ok(Verdict::Deny {
@@ -187,10 +191,15 @@ async fn a_tool_with_an_external_effect_asks_with_redacted_evidence_and_no_spend
     );
     assert_eq!(
         module.asked(),
-        vec![(vec![host_action(ToolPermission::ReadOnly, true, false)], true)]
+        vec![(
+            vec![host_action(ToolPermission::ReadOnly, true, false)],
+            true
+        )]
     );
     let module = Recorder::answering(Ok(Verdict::Allow));
-    verdict(&module, registry(), call("gmail_send", json!({"to": "x"}))).await.unwrap();
+    verdict(&module, registry(), call("gmail_send", json!({"to": "x"})))
+        .await
+        .unwrap();
     assert_eq!(
         module.asked(),
         vec![(vec![host_action(ToolPermission::Write, true, true)], true)]
@@ -270,7 +279,12 @@ async fn with_no_approval_gate_a_module_that_cannot_answer_does_not_stop_a_plain
         Ok(Verdict::Allow)
     );
     assert_eq!(
-        verdict(&module, registry(), call(SHELL_TOOL, json!({"command": "ls"}))).await,
+        verdict(
+            &module,
+            registry(),
+            call(SHELL_TOOL, json!({"command": "ls"}))
+        )
+        .await,
         Err("module unavailable".to_string())
     );
 }
@@ -299,7 +313,8 @@ async fn a_scheduled_origin_in_the_task_scope_reaches_the_module_too() {
         job_id: "cron-1".into(),
         source: TrustedAutomationSource::Cron,
     };
-    let seen = crate::agent::turn_origin::with_origin(origin, async { module_origin(&ctx()) }).await;
+    let seen =
+        crate::agent::turn_origin::with_origin(origin, async { module_origin(&ctx()) }).await;
     assert_eq!(seen, Origin::Cron);
 }
 

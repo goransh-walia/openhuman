@@ -183,7 +183,10 @@ fn denial_text(tool: &str, reason: DenialReason) -> String {
 #[test]
 fn the_read_only_tier_refuses_an_acting_tool_with_the_policy_marker() {
     let text = denial_text("write_file", DenialReason::ReadOnlyMode);
-    assert!(text.contains(tinytools::status::POLICY_BLOCKED_MARKER), "{text}");
+    assert!(
+        text.contains(tinytools::status::POLICY_BLOCKED_MARKER),
+        "{text}"
+    );
     assert!(text.contains("read-only mode"), "{text}");
     assert!(text.contains("'write_file'"), "{text}");
 }
@@ -199,7 +202,10 @@ fn a_spent_budget_names_its_limit_and_how_to_raise_it() {
 #[test]
 fn a_scheduled_turn_is_told_it_may_use_read_only_tools_only() {
     let text = denial_text("write_file", DenialReason::ScheduledReadOnly);
-    assert!(text.contains(tinytools::status::POLICY_DENIED_MARKER), "{text}");
+    assert!(
+        text.contains(tinytools::status::POLICY_DENIED_MARKER),
+        "{text}"
+    );
     assert!(text.contains("read-only tools only"), "{text}");
     assert!(text.contains("'write_file'"), "{text}");
 }
@@ -215,7 +221,10 @@ fn a_refused_shell_command_reads_as_the_shell_refusal() {
         (DenialReason::HighRisk, Refusal::HighRisk),
         (DenialReason::Access, Refusal::Category),
     ] {
-        assert_eq!(denial_text("shell", reason.clone()), refusal_message(refusal));
+        assert_eq!(
+            denial_text("shell", reason.clone()),
+            refusal_message(refusal)
+        );
         assert!(
             !denial_text("write_file", reason.clone()).contains("hidden command"),
             "a plain tool never reads as a shell refusal"

@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use serde_json::json;
 use tinyagents_harness::context::RunConfig;
 use tinytools::{
-    PermissionLevel, TaskProfile, TaskRiskLevel, ToolPolicyDecision, ToolPolicySession,
-    ToolResult,
+    PermissionLevel, TaskProfile, TaskRiskLevel, ToolPolicyDecision, ToolPolicySession, ToolResult,
 };
 
 /// Builds a session whose channel policy yields `action` for `tool_name`.
@@ -62,7 +61,10 @@ fn source(action: ToolPolicyAction) -> ChannelApprovalVerdicts {
 }
 
 fn ctx() -> RunContext<OpenHumanRunContext> {
-    RunContext::new(RunConfig::new("channel-verdicts"), OpenHumanRunContext::new())
+    RunContext::new(
+        RunConfig::new("channel-verdicts"),
+        OpenHumanRunContext::new(),
+    )
 }
 
 fn call(name: &str) -> TaToolCall {

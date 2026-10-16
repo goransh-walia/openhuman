@@ -43,7 +43,11 @@ struct TurnResolver {
 }
 
 impl TurnResolver {
-    async fn park_for_approval_on(&self, gate: &ApprovalGate, call: &TaToolCall) -> ApprovalResolution {
+    async fn park_for_approval_on(
+        &self,
+        gate: &ApprovalGate,
+        call: &TaToolCall,
+    ) -> ApprovalResolution {
         self.resolver.resolve_on(gate, &self.ctx, call).await
     }
 }
@@ -51,7 +55,7 @@ impl TurnResolver {
 fn security_gate_for(run: &OpenHumanRunContext) -> TurnResolver {
     TurnResolver {
         resolver: ApprovalSecurityMiddleware::new(vec![std::sync::Arc::new(vec![
-            Box::new(Effectful) as Box<dyn Tool>
+            Box::new(Effectful) as Box<dyn Tool>,
         ])]),
         ctx: RunContext::new(RunConfig::new("gate-turn-context"), run.clone()),
     }

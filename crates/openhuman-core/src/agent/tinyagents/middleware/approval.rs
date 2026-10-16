@@ -110,7 +110,8 @@ impl ApprovalSecurityMiddleware {
         name: &str,
         args: &serde_json::Value,
     ) -> bool {
-        self.has_external_effect(name, args) && !self.desktop_approvals_disabled(dispatch, name).await
+        self.has_external_effect(name, args)
+            && !self.desktop_approvals_disabled(dispatch, name).await
     }
 }
 

@@ -396,7 +396,9 @@ async fn auto_approve_all_allows_without_parking_and_records_an_audited_approval
     let recorded = audit
         .iter()
         .find(|e| e.tool_name == "char_auto_all")
-        .expect("the blanket bypass is recorded as an approval (accepted in #5634, audited since #7328)");
+        .expect(
+        "the blanket bypass is recorded as an approval (accepted in #5634, audited since #7328)",
+    );
     assert_eq!(recorded.decided_by.as_deref(), Some("auto:host-policy"));
     // The unknown-origin exclusion still holds with the bypass on.
     let ws = fx.config.workspace_dir.clone();

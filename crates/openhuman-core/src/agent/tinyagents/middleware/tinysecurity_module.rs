@@ -128,14 +128,12 @@ impl VerdictSource for ModuleVerdicts {
         let dispatch = ctx.data.dispatch_ctx();
         let shell = call.name == SHELL_TOOL;
         // Unknown name: nothing to reason about, and "unknown" never means fine.
-        let Some((level, declared_external)) =
-            self.effects.resolve_tool(&call.name).map(|tool| {
-                (
-                    tool.permission_level_with_args(&call.arguments),
-                    tool.external_effect_with_args(&call.arguments),
-                )
-            })
-        else {
+        let Some((level, declared_external)) = self.effects.resolve_tool(&call.name).map(|tool| {
+            (
+                tool.permission_level_with_args(&call.arguments),
+                tool.external_effect_with_args(&call.arguments),
+            )
+        }) else {
             tracing::warn!(tool = %call.name, "{LOG} denied: tool is not registered in this session");
             return Ok(Verdict::Deny {
                 reason: DenialReason::UnsupportedEffect,
@@ -188,7 +186,9 @@ fn level_acts(level: PermissionLevel) -> bool {
 /// The shell command gate for `arguments`, or `None` when the call carries no
 /// command to classify. The model's `category` can only raise the class.
 fn shell_check(arguments: &serde_json::Value) -> Option<Check> {
-    let command = arguments.get("command").and_then(serde_json::Value::as_str)?;
+    let command = arguments
+        .get("command")
+        .and_then(serde_json::Value::as_str)?;
     let declared_class = arguments
         .get("category")
         .and_then(serde_json::Value::as_str)

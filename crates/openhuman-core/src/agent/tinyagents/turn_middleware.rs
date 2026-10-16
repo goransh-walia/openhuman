@@ -488,7 +488,11 @@ pub(super) fn install_turn_middleware(
         harness,
         tool_sets.clone(),
         hosted_security_gate
-            .then(|| tool_policy.as_ref().map(|enforcement| enforcement.session.clone()))
+            .then(|| {
+                tool_policy
+                    .as_ref()
+                    .map(|enforcement| enforcement.session.clone())
+            })
             .flatten(),
     );
 

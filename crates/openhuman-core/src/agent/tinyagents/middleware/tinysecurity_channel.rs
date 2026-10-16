@@ -42,10 +42,7 @@ pub(crate) struct ChannelApprovalVerdicts {
 }
 
 impl ChannelApprovalVerdicts {
-    pub(crate) fn new(
-        session: ToolPolicySession,
-        tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
-    ) -> Self {
+    pub(crate) fn new(session: ToolPolicySession, tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>) -> Self {
         Self {
             session,
             effects: ApprovalSecurityMiddleware::new(tool_sets),
