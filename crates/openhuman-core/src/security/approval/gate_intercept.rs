@@ -428,7 +428,7 @@ impl ApprovalGate {
                 CallOrigin::Operator
             },
             ttl: effective_ttl,
-            prompt: surface,
+            prompt: Arc::clone(&surface) as Arc<dyn PromptSurface>,
         };
         let checked = match self.engine.check(input).await {
             Ok(checked) => checked,
@@ -452,6 +452,15 @@ impl ApprovalGate {
         match checked {
             Checked::Approved { request_id } => {
                 guard.disarm();
+                // A person's decision can land while the engine is still
+                // finishing the check (the prompt was already shown); the
+                // decision took the waiter and route, and the thread mapping
+                // is all that is left of the park.
+                if let Some(shown) = surface.delivered_request() {
+                    self.parked.evict_waiter(&shown);
+                    self.parked.take_request_route(&shown);
+                    self.parked.clear_thread(&thread_key, &shown);
+                }
                 tracing::debug!(
                     request_id = %request_id,
                     tool = tool_name,
