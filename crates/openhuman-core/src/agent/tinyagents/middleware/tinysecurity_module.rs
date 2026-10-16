@@ -95,14 +95,6 @@ fn permission(level: PermissionLevel) -> ToolPermission {
     }
 }
 
-/// The host-derived checks for one call, or the verdict that needs none.
-enum Plan {
-    /// Ask the module these checks, under the named autonomy scope.
-    Ask { checks: Vec<Check>, redact: bool },
-    /// The answer is known without asking.
-    Settled(Verdict),
-}
-
 #[async_trait]
 impl VerdictSource for ModuleVerdicts {
     async fn verdict(
@@ -112,69 +104,56 @@ impl VerdictSource for ModuleVerdicts {
     ) -> Result<Verdict, String> {
         let dispatch = ctx.data.dispatch_ctx();
         let shell = call.name == SHELL_TOOL;
-        let plan = {
-            // Unknown name: nothing to reason about, and "unknown" never means fine.
-            let Some(tool) = self.effects.resolve_tool(&call.name) else {
-                tracing::warn!(tool = %call.name, "{LOG} denied: tool is not registered in this session");
-                return Ok(Verdict::Deny {
-                    reason: DenialReason::UnsupportedEffect,
-                });
-            };
-            let level = tool.permission_level_with_args(&call.arguments);
-            let external = tool.external_effect_with_args(&call.arguments);
-            (level, external)
+        // Unknown name: nothing to reason about, and "unknown" never means fine.
+        let Some((level, declared_external)) =
+            self.effects.resolve_tool(&call.name).map(|tool| {
+                (
+                    tool.permission_level_with_args(&call.arguments),
+                    tool.external_effect_with_args(&call.arguments),
+                )
+            })
+        else {
+            tracing::warn!(tool = %call.name, "{LOG} denied: tool is not registered in this session");
+            return Ok(Verdict::Deny {
+                reason: DenialReason::UnsupportedEffect,
+            });
         };
-        let (level, declared_external) = plan;
         // The desktop approvals-off exception only ever lifts a prompt.
         let external = declared_external
             && !self
                 .effects
                 .desktop_approvals_disabled(&dispatch, &call.name)
                 .await;
-        let plan = if shell {
-            match shell_check(&call.arguments) {
-                Some(check) => Plan::Ask {
-                    checks: vec![check],
-                    redact: false,
-                },
-                None => Plan::Settled(Verdict::Deny {
+        let acts = level_acts(level);
+        let (checks, redact) = if shell {
+            let Some(check) = shell_check(&call.arguments) else {
+                return Ok(Verdict::Deny {
                     reason: DenialReason::Command,
-                }),
-            }
-        } else if !level_acts(level) && !external {
-            Plan::Settled(Verdict::Allow)
-        } else {
-            Plan::Ask {
-                checks: vec![Check::HostAction {
-                    permission: permission(level),
-                    external_effect: external,
-                    // An allowed acting call spends one action of the hourly budget.
-                    spend: level_acts(level),
-                    command_policy: None,
-                }],
-                redact: external,
-            }
-        };
-        let Plan::Ask { checks, redact } = plan else {
-            let Plan::Settled(verdict) = plan else {
-                unreachable!("a plan is either asked or settled");
+                });
             };
-            return Ok(verdict);
+            (vec![check], false)
+        } else if !acts && !external {
+            // The module allows a reading tool in every tier and origin.
+            return Ok(Verdict::Allow);
+        } else {
+            let check = Check::HostAction {
+                permission: permission(level),
+                external_effect: external,
+                // An allowed acting call spends one action of the hourly budget.
+                spend: acts,
+                command_policy: None,
+            };
+            (vec![check], external)
         };
-        match self
-            .ask(ctx, &dispatch, call, checks, redact)
-            .await
-        {
-            Ok(verdict) => Ok(verdict),
-            Err(fault) if !shell && ApprovalGate::try_global().is_none() => {
+        match self.ask(ctx, &dispatch, call, checks, redact).await {
+            Err(_fault) if !shell && ApprovalGate::try_global().is_none() => {
                 tracing::warn!(
                     tool = %call.name,
                     "{LOG} no approval gate installed and the module cannot answer; not refusing a non-shell tool"
                 );
-                let _ = fault;
                 Ok(Verdict::Allow)
             }
-            Err(fault) => Err(fault),
+            answer => answer,
         }
     }
 }
