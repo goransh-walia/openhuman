@@ -27,7 +27,9 @@ fn judge(evidence: &JudgeEvidence2) -> JudgeVerdict {
 /// human was approved once; the label the host kept distinguishes "always allow".
 fn decision(row: &ApprovalRow2, label: Option<&str>) -> ApprovalDecision {
     match row.state {
-        ApprovalLifecycle2::Approved | ApprovalLifecycle2::Reserved | ApprovalLifecycle2::Executed
+        ApprovalLifecycle2::Approved
+        | ApprovalLifecycle2::Reserved
+        | ApprovalLifecycle2::Executed
             if row.choice != Some(ApprovalChoice2::Deny) =>
         {
             label
@@ -56,7 +58,9 @@ fn entry(stored: &StoredRow, label: Option<&str>) -> Option<ApprovalAuditEntry> 
         action_summary: row.summary.clone(),
         args_redacted: serde_json::from_str::<Value>(&row.args_redacted).unwrap_or(Value::Null),
         created_at: instant(i64::try_from(row.created_at_ms).unwrap_or(i64::MAX)),
-        expires_at: Some(instant(i64::try_from(row.expires_at_ms).unwrap_or(i64::MAX))),
+        expires_at: Some(instant(
+            i64::try_from(row.expires_at_ms).unwrap_or(i64::MAX),
+        )),
         decided_at,
         decision: decision(row, label),
         decided_by: decided_by(row),

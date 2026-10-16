@@ -196,11 +196,7 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
                     // spawned task, because `AGENT_TURN_ORIGIN` is a task-local
                     // and does not cross `tokio::spawn`.
                     let origin = remote_trigger_origin(&envelope);
-                    if let Err(e) = with_origin(
-                        origin,
-                        apply_decision(&ctx, run, &envelope),
-                    )
-                    .await
+                    if let Err(e) = with_origin(origin, apply_decision(&ctx, run, &envelope)).await
                     {
                         tracing::error!(
                             label = %envelope.display_label,

@@ -106,7 +106,10 @@ async fn an_agent_whose_approvals_are_off_reaches_the_engine_as_no_requirement()
     // such a context is built. The posture it yields is what the engine is told.
     let ctx = crate::core::runtime::DispatchCtx::ambient();
     let posture = gate.posture(&ctx, Variant::Standard);
-    assert!(posture.require_approval, "the default agent requires approval");
+    assert!(
+        posture.require_approval,
+        "the default agent requires approval"
+    );
     let forced = gate.posture(&ctx, Variant::Forced);
     assert!(forced.require_approval);
     assert!(!forced.auto_approve_all);
@@ -149,7 +152,10 @@ async fn a_forced_call_is_its_own_posture_and_ignores_every_shortcut() {
     assert_eq!(seen.variant, Variant::Forced);
     assert!(seen.posture.require_approval);
     assert!(!seen.posture.auto_approve_all, "auto-approve is ignored");
-    assert!(seen.posture.tool_grants.is_empty(), "the always list is ignored");
+    assert!(
+        seen.posture.tool_grants.is_empty(),
+        "the always list is ignored"
+    );
     decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
 }
@@ -168,7 +174,8 @@ async fn a_workflow_that_requires_approval_is_never_approved_by_the_global_tool_
         dir.path().to_path_buf(),
         dir.path().to_path_buf(),
     );
-    gate.insert_flow_trust("flow-strict", "other_trusted_tool").unwrap();
+    gate.insert_flow_trust("flow-strict", "other_trusted_tool")
+        .unwrap();
 
     let (handle, request_id) = park(
         &gate,
@@ -182,7 +189,10 @@ async fn a_workflow_that_requires_approval_is_never_approved_by_the_global_tool_
     .await;
     let seen = stub_of(&gate).seen().remove(0);
     assert_eq!(seen.variant, Variant::FlowStrict);
-    assert!(seen.posture.tool_grants.is_empty(), "the global list is withheld");
+    assert!(
+        seen.posture.tool_grants.is_empty(),
+        "the global list is withheld"
+    );
     assert_eq!(seen.flow.as_deref(), Some("flow-strict"));
     assert_eq!(
         seen.posture.flow_grants,
@@ -352,7 +362,9 @@ async fn a_call_that_cannot_be_reserved_is_denied() {
     )
     .await;
     match outcome {
-        GateOutcome::Deny { reason } => assert!(reason.contains("could not be reserved"), "{reason}"),
+        GateOutcome::Deny { reason } => {
+            assert!(reason.contains("could not be reserved"), "{reason}")
+        }
         other => panic!("an approval that cannot be reserved must deny, got {other:?}"),
     }
     assert!(id.is_none());
@@ -362,14 +374,23 @@ async fn a_call_that_cannot_be_reserved_is_denied() {
 async fn an_agent_removed_before_the_approved_call_runs_cancels_it() {
     let (gate, _dir) = test_gate();
     let stub = stub_of(&gate);
-    stub.leave_pending("approved-then-removed", "composio", Duration::from_secs(600));
+    stub.leave_pending(
+        "approved-then-removed",
+        "composio",
+        Duration::from_secs(600),
+    );
     stub.decide("approved-then-removed", Choice::Once, "approve_once")
         .await
         .unwrap();
     let scope = crate::security::approval::ApprovalScope::default();
     scope.close("agent_removed");
     let (outcome, id) = gate
-        .reserved("approved-then-removed".into(), "composio", Some(&scope), true)
+        .reserved(
+            "approved-then-removed".into(),
+            "composio",
+            Some(&scope),
+            true,
+        )
         .await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }));
     assert!(id.is_none());
@@ -381,7 +402,9 @@ async fn a_request_that_expires_while_its_decision_races_it_honors_the_decision(
     let (gate, _dir) = test_gate();
     let stub = stub_of(&gate);
     stub.leave_pending("raced", "composio", Duration::from_secs(600));
-    stub.decide("raced", Choice::Once, "approve_once").await.unwrap();
+    stub.decide("raced", Choice::Once, "approve_once")
+        .await
+        .unwrap();
     // The window ended just as the decision committed: expiry finds it decided.
     assert!(!gate.expire_with_retry("raced").await.unwrap());
     let (outcome, id) = {
@@ -452,8 +475,14 @@ async fn a_request_the_engine_no_longer_holds_is_denied_when_its_window_ends() {
 
 #[test]
 fn arguments_are_always_a_bounded_object() {
-    assert_eq!(object_arguments(serde_json::json!({"a": 1})), serde_json::json!({"a": 1}));
-    assert_eq!(object_arguments(serde_json::Value::Null), serde_json::json!({}));
+    assert_eq!(
+        object_arguments(serde_json::json!({"a": 1})),
+        serde_json::json!({"a": 1})
+    );
+    assert_eq!(
+        object_arguments(serde_json::Value::Null),
+        serde_json::json!({})
+    );
     assert_eq!(
         object_arguments(serde_json::json!(["x"])),
         serde_json::json!({ "value": ["x"] })
@@ -494,7 +523,8 @@ async fn pending_requests_are_listed_from_this_process_only_and_by_tenant() {
     assert_eq!(listed[0].args_redacted["k"], "v");
     assert!(listed[0].expires_at.is_some());
     assert_eq!(
-        gate.parked_request_for_thread("t-test").map(|row| row.request_id),
+        gate.parked_request_for_thread("t-test")
+            .map(|row| row.request_id),
         Some(request_id.clone())
     );
     // Deciding the orphan finds nothing to resolve: it was never parked here.
@@ -523,7 +553,10 @@ async fn a_saas_call_the_deployment_allows_is_recorded_as_an_automatic_approval(
     assert_eq!(stub.state(&id), Some(State::Reserved));
     assert_eq!(stub.attribution(&id), Some("auto:host-policy"));
     let seen = stub.seen().remove(0);
-    assert!(!seen.posture.require_approval, "the deployment is the pre-authorization");
+    assert!(
+        !seen.posture.require_approval,
+        "the deployment is the pre-authorization"
+    );
     assert!(seen.thread.is_none() && seen.flow.is_none());
     assert_eq!(seen.origin, CallOrigin::Operator);
 

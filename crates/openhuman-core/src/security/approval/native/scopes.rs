@@ -29,7 +29,10 @@ const POLICY_REF: &str = "openhuman/approval/v1";
 
 /// The key a subject is registered under.
 pub(super) fn subject_key(subject: &SubjectScope) -> String {
-    format!("{}\u{1f}{}\u{1f}{}", subject.user, subject.workspace, subject.agent)
+    format!(
+        "{}\u{1f}{}\u{1f}{}",
+        subject.user, subject.workspace, subject.agent
+    )
 }
 
 /// One registered subject.

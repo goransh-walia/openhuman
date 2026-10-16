@@ -402,7 +402,9 @@ pub(crate) async fn execute_in_sandbox_metered(
     // the one spawn boundary, instead of falling through to the host shell.
     if crate::core::runtime::is_saas() && policy.backend == SandboxBackendKind::None {
         tracing::warn!("[sandbox] refusing an unsandboxed spawn under SaaS");
-        anyhow::bail!("SaaS commands must run in the user's sandbox; an unsandboxed spawn is refused");
+        anyhow::bail!(
+            "SaaS commands must run in the user's sandbox; an unsandboxed spawn is refused"
+        );
     }
     // Validate the working directory up front so a missing/bad action_dir
     // surfaces an actionable, path-naming error here rather than an opaque OS

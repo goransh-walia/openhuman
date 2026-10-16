@@ -73,8 +73,11 @@ pub(crate) async fn import_legacy(data_dir: &Path) -> Result<Outcome> {
     let Some(backend) = crate::storage::installed() else {
         return Ok(Outcome::NoBackend);
     };
-    let scope = super::storage_host::current_module_scope(&crate::core::runtime::DispatchCtx::ambient(), MODULE_ID)
-        .map_err(|error| anyhow!("resolve the module scope: {:?}", error.kind()))?;
+    let scope = super::storage_host::current_module_scope(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        MODULE_ID,
+    )
+    .map_err(|error| anyhow!("resolve the module scope: {:?}", error.kind()))?;
     let scoped = backend
         .for_scope(&scope)
         .map_err(|error| anyhow!("open the module scope: {:?}", error.kind()))?;

@@ -121,7 +121,8 @@ impl StubEngine {
     /// Every request id, oldest first.
     pub(crate) fn request_ids(&self) -> Vec<String> {
         let rows = self.rows.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut ids: Vec<(&String, u64)> = rows.iter().map(|(id, row)| (id, row.created_ms)).collect();
+        let mut ids: Vec<(&String, u64)> =
+            rows.iter().map(|(id, row)| (id, row.created_ms)).collect();
         ids.sort_by_key(|(_, created)| *created);
         ids.into_iter().map(|(id, _)| id.clone()).collect()
     }
@@ -304,14 +305,18 @@ impl ApprovalEngine for StubEngine {
 
     async fn reserve(&self, request_id: &str) -> Result<(), EngineError> {
         if self.fail_reserve.load(Ordering::SeqCst) {
-            return Err(EngineError::Unavailable("the stub engine cannot reserve".into()));
+            return Err(EngineError::Unavailable(
+                "the stub engine cannot reserve".into(),
+            ));
         }
         self.with(request_id, |row| {
             if row.state == State::Approved {
                 row.state = State::Reserved;
                 Ok(())
             } else {
-                Err(EngineError::Unavailable("the request is not approved".into()))
+                Err(EngineError::Unavailable(
+                    "the request is not approved".into(),
+                ))
             }
         })
         .unwrap_or(Err(EngineError::NotPending))
@@ -328,7 +333,9 @@ impl ApprovalEngine for StubEngine {
                 Ok(())
             }
             State::Executed(done) if done == outcome => Ok(()),
-            _ => Err(EngineError::Unavailable("the request was not reserved".into())),
+            _ => Err(EngineError::Unavailable(
+                "the request was not reserved".into(),
+            )),
         })
         .unwrap_or(Err(EngineError::NotPending))
     }

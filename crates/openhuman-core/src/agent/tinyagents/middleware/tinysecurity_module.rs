@@ -113,10 +113,9 @@ impl VerdictSource for ModuleVerdicts {
             tier: AccessTier::Full,
         })?;
         let tool = approval_tool_name(&call.name, &call.arguments).into_owned();
-        let arguments_json = serde_json::to_string(&crate::security::redact::arguments(
-            &call.arguments,
-        ))
-        .map_err(|_| "argument encoding failed".to_string())?;
+        let arguments_json =
+            serde_json::to_string(&crate::security::redact::arguments(&call.arguments))
+                .map_err(|_| "argument encoding failed".to_string())?;
         let decision = crate::modules::security::evaluate(
             &config,
             caller,

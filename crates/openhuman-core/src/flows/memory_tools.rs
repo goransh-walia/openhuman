@@ -347,15 +347,18 @@ impl Tool for FlowMemoryRecallTool {
             .and_then(serde_json::Value::as_u64)
             .map_or(5, |v| v as usize);
 
-        let config = match crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context)
-            .load_config().await {
-            Ok(config) => config,
-            Err(error) => {
-                return Ok(ToolResult::error(format!(
-                    "Flow memory recall failed: {error}"
-                )))
-            }
-        };
+        let config =
+            match crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context)
+                .load_config()
+                .await
+            {
+                Ok(config) => config,
+                Err(error) => {
+                    return Ok(ToolResult::error(format!(
+                        "Flow memory recall failed: {error}"
+                    )))
+                }
+            };
         tracing::debug!(
             target: "flows",
             scope,
@@ -497,15 +500,18 @@ impl Tool for FlowMemoryRememberTool {
             ));
         }
 
-        let config = match crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context)
-            .load_config().await {
-            Ok(config) => config,
-            Err(error) => {
-                return Ok(ToolResult::error(format!(
-                    "Failed to store flow memory: {error}"
-                )))
-            }
-        };
+        let config =
+            match crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(tool_context)
+                .load_config()
+                .await
+            {
+                Ok(config) => config,
+                Err(error) => {
+                    return Ok(ToolResult::error(format!(
+                        "Failed to store flow memory: {error}"
+                    )))
+                }
+            };
         match remember_keyed(&config, &flow_id, key, content, kind).await {
             Ok(_) => Ok(ToolResult::success(format!("Stored flow memory: {key}"))),
             Err(error) => {

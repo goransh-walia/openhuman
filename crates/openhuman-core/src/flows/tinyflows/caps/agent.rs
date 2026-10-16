@@ -266,7 +266,7 @@ impl AgentRunner for OpenHumanAgentRunner {
                             entry_model.as_deref(),
                             None,
                         )
-                            .await
+                        .await
                     }
                     AgentRoute::RegistryFallback => {
                         tracing::info!(
@@ -385,11 +385,9 @@ impl OpenHumanAgentRunner {
 
         let built = match &host {
             Some(host) => host.session_host(effective.as_ref(), None),
-            None => OpenHumanSessionHost::from_config_for_agent(
-                dispatch,
-                effective.as_ref(),
-                agent_ref,
-            ),
+            None => {
+                OpenHumanSessionHost::from_config_for_agent(dispatch, effective.as_ref(), agent_ref)
+            }
         };
         let mut agent = built.map_err(|e| {
             EngineError::Capability(format!(
@@ -526,18 +524,15 @@ impl OpenHumanAgentRunner {
         conn: Option<&str>,
     ) -> Result<Value> {
         // Resolve + validate the requested agent kind against the registry.
-        let entry = crate::agent::registry::get_agent(
-            dispatch,
-            agent_ref,
-        )
-        .await
-        .map_err(EngineError::Capability)?
-        .ok_or_else(|| {
-            EngineError::Capability(format!(
+        let entry = crate::agent::registry::get_agent(dispatch, agent_ref)
+            .await
+            .map_err(EngineError::Capability)?
+            .ok_or_else(|| {
+                EngineError::Capability(format!(
                 "agent node: unknown agent_ref '{agent_ref}' (neither a harness definition nor \
                      a custom agent registry entry)"
             ))
-        })?;
+            })?;
         if !entry.enabled {
             return Err(EngineError::Capability(format!(
                 "agent node: agent_ref '{agent_ref}' is disabled"

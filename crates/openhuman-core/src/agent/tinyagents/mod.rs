@@ -23,9 +23,9 @@ pub mod config;
 mod context_wiring;
 mod deadline_wind_down;
 pub mod discovery;
+mod egress_model;
 mod embeddings;
 pub mod host;
-mod egress_model;
 pub(crate) mod hosted_error;
 pub(crate) mod journal;
 // The tool harness behind a live voice session (`voice::live`).
@@ -58,15 +58,15 @@ mod steering_forwarder;
 pub(crate) mod stop_hooks;
 pub mod todos;
 pub(crate) mod tool_registration;
+mod turn_exec;
+mod turn_middleware;
 mod turn_model_resolver;
 mod turn_models;
 mod turn_outcome;
+mod turn_plan;
 mod turn_policy;
 mod turn_run_error;
 mod turn_run_finalize;
-mod turn_exec;
-mod turn_middleware;
-mod turn_plan;
 mod use_skill_dispatch;
 mod verify_before_finish;
 
@@ -78,6 +78,7 @@ pub(crate) use crate::agent::message_convert::ta_call_to_oh_call;
 pub(crate) use embeddings::ProviderEmbeddingModel;
 pub(crate) use observability::SubagentScope;
 pub(crate) use reasoning::{apply_requested_effort, parse_reasoning_effort};
+pub(crate) use turn_exec::TurnSpec;
 pub use turn_models::TurnModelSource;
 pub(crate) use turn_models::TurnModels;
 pub(crate) use turn_outcome::TinyagentsTurnOutcome;
@@ -87,7 +88,6 @@ pub(crate) use turn_policy::{
     agent_turn_wall_clock_ms_for, chat_provider_is_local, local_web_turn_backstop_secs,
     ToolPolicyEnforcement,
 };
-pub(crate) use turn_exec::TurnSpec;
 
 // Test-only glue so `tinyagents_tests.rs`'s `use super::*;` sees the
 // lower-level policy helpers it exercises directly (they otherwise stay

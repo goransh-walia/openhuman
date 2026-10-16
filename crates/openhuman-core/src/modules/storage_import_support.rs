@@ -20,8 +20,11 @@ pub(super) fn module_scope(module_id: &str) -> Result<Option<ScopedStorage>> {
     let Some(backend) = crate::storage::installed() else {
         return Ok(None);
     };
-    let scope = super::storage_host::current_module_scope(&crate::core::runtime::DispatchCtx::ambient(), module_id)
-        .map_err(|error| anyhow!("resolve the module scope: {:?}", error.kind()))?;
+    let scope = super::storage_host::current_module_scope(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        module_id,
+    )
+    .map_err(|error| anyhow!("resolve the module scope: {:?}", error.kind()))?;
     let scoped = backend
         .for_scope(&scope)
         .map_err(|error| anyhow!("open the module scope: {:?}", error.kind()))?;

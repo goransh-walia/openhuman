@@ -218,6 +218,19 @@ fn jail_request(
     policy: &SandboxPolicy,
     isolation: SandboxIsolation,
 ) -> anyhow::Result<contract::NativeJailConfig> {
+    // A tenant never reaches the operator's home, so SaaS names no host paths.
+    let home = super::local_grants::grant_home(crate::core::runtime::is_saas(), dirs::home_dir);
+    jail_request_for_home(policy, isolation, home.as_deref())
+}
+
+/// [`jail_request`] for an explicit operator home (`None`: no host credential
+/// stores to name).
+#[cfg(feature = "modules")]
+pub(crate) fn jail_request_for_home(
+    policy: &SandboxPolicy,
+    isolation: SandboxIsolation,
+    home: Option<&Path>,
+) -> anyhow::Result<contract::NativeJailConfig> {
     let isolated = isolation == SandboxIsolation::Isolated;
     Ok(contract::NativeJailConfig {
         read_only: policy
@@ -240,6 +253,14 @@ fn jail_request(
             contract::JailEnforcement::Declared
         },
         require_process_isolation: isolated,
+        // Allow-list jails (Landlock, AppContainer) already deny paths outside
+        // their grants. Seatbelt reads are allow-by-default, so it is the one
+        // that needs the host's credential-store floor spelled out.
+        deny_read: if isolated {
+            Vec::new()
+        } else {
+            super::local_grants::credential_store_paths(home)
+        },
     })
 }
 

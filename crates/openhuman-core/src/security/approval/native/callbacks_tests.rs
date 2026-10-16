@@ -237,11 +237,14 @@ async fn a_prompt_reaches_the_call_that_asked_and_registers_its_request() {
 #[tokio::test]
 async fn a_prompt_nobody_asked_for_or_that_is_not_the_calls_is_refused() {
     // No call is waiting under this correlation (another process's request).
-    assert!(
-        super::prompt(delivery_for(row("prompt-none", "2", "bbbb0002", "gmail_send")))
-            .await
-            .is_err()
-    );
+    assert!(super::prompt(delivery_for(row(
+        "prompt-none",
+        "2",
+        "bbbb0002",
+        "gmail_send"
+    )))
+    .await
+    .is_err());
 
     let scope = bound("prompt-mismatch").await;
     let surface = Arc::new(Surface::default());
@@ -254,22 +257,23 @@ async fn a_prompt_nobody_asked_for_or_that_is_not_the_calls_is_refused() {
         },
     ));
     // Another tool than the call asked about.
-    assert!(
-        super::prompt(delivery_for(row(
-            "prompt-mismatch",
-            "3",
-            "cccc0003",
-            "slack_post"
-        )))
-        .await
-        .is_err()
-    );
+    assert!(super::prompt(delivery_for(row(
+        "prompt-mismatch",
+        "3",
+        "cccc0003",
+        "slack_post"
+    )))
+    .await
+    .is_err());
     // Another subject than the call's.
-    assert!(
-        super::prompt(delivery_for(row("someone-else", "3", "cccc0003", "gmail_send")))
-            .await
-            .is_err()
-    );
+    assert!(super::prompt(delivery_for(row(
+        "someone-else",
+        "3",
+        "cccc0003",
+        "gmail_send"
+    )))
+    .await
+    .is_err());
     assert!(surface.shown.lock().unwrap().is_empty());
     host().end_call("cccc0003");
 }
@@ -335,17 +339,23 @@ async fn a_ticket_the_host_issued_for_this_row_yields_a_receipt() {
             "operator".into(),
         ),
     );
-    let receipt = super::verify_human(verify(&pending, "ticket-ok")).await.unwrap();
+    let receipt = super::verify_human(verify(&pending, "ticket-ok"))
+        .await
+        .unwrap();
     assert_eq!(receipt.row, pending);
     assert_eq!(receipt.actor, "operator");
     assert_eq!(receipt.choice, ApprovalChoice2::Once);
     assert_eq!(receipt.ticket_sha256, ticket_sha256("ticket-ok"));
     assert_eq!(receipt.ticket_sha256.len(), 64);
     // The module may verify the same ticket again when it retries.
-    assert!(super::verify_human(verify(&pending, "ticket-ok")).await.is_ok());
+    assert!(super::verify_human(verify(&pending, "ticket-ok"))
+        .await
+        .is_ok());
     host().revoke("ticket-ok");
     assert!(
-        super::verify_human(verify(&pending, "ticket-ok")).await.is_err(),
+        super::verify_human(verify(&pending, "ticket-ok"))
+            .await
+            .is_err(),
         "a revoked ticket verifies nothing"
     );
 }
@@ -363,7 +373,9 @@ async fn a_forged_ticket_or_another_row_is_never_verified() {
         "ticket-other".into(),
         Ticket::new("7".repeat(32), ApprovalChoice2::Once, "operator".into()),
     );
-    assert!(super::verify_human(verify(&pending, "ticket-other")).await.is_err());
+    assert!(super::verify_human(verify(&pending, "ticket-other"))
+        .await
+        .is_err());
 
     // A real ticket for this request, presented with a row that differs from what was shown.
     host().issue(
@@ -376,7 +388,9 @@ async fn a_forged_ticket_or_another_row_is_never_verified() {
     );
     let mut altered = pending.clone();
     altered.summary = "a different action".into();
-    assert!(super::verify_human(verify(&altered, "ticket-altered")).await.is_err());
+    assert!(super::verify_human(verify(&altered, "ticket-altered"))
+        .await
+        .is_err());
 
     // A request this process never showed.
     let stranger = row("verify-forged", "8", "9999aaaa", "gmail_send");
@@ -388,7 +402,9 @@ async fn a_forged_ticket_or_another_row_is_never_verified() {
             "operator".into(),
         ),
     );
-    assert!(super::verify_human(verify(&stranger, "ticket-stranger")).await.is_err());
+    assert!(super::verify_human(verify(&stranger, "ticket-stranger"))
+        .await
+        .is_err());
     for ticket in ["ticket-other", "ticket-altered", "ticket-stranger"] {
         host().revoke(ticket);
     }
@@ -405,7 +421,9 @@ async fn only_the_choices_the_host_offers_are_verified() {
             "operator".into(),
         ),
     );
-    assert!(super::verify_human(verify(&pending, "ticket-tool")).await.is_err());
+    assert!(super::verify_human(verify(&pending, "ticket-tool"))
+        .await
+        .is_err());
     host().revoke("ticket-tool");
     host().issue(
         "ticket-deny".into(),
@@ -416,7 +434,10 @@ async fn only_the_choices_the_host_offers_are_verified() {
         ),
     );
     assert_eq!(
-        super::verify_human(verify(&pending, "ticket-deny")).await.unwrap().choice,
+        super::verify_human(verify(&pending, "ticket-deny"))
+            .await
+            .unwrap()
+            .choice,
         ApprovalChoice2::Deny
     );
     host().revoke("ticket-deny");

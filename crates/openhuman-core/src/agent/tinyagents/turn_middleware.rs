@@ -19,10 +19,9 @@ use tinyagents_harness::middleware::{
     ShellTurnBudget, TurnClockMiddleware, DIRECT_WEB_READ_LIMIT,
 };
 use tinyagents_harness::middleware::{
-    plan_mode_middleware, ArgRecoveryMiddleware, BudgetLimits,
-    BudgetMiddleware, BudgetParityObserver, ContextCompressionMiddleware,
-    PromptCacheGuardMiddleware, RepeatProgressMiddleware, RunModeHandle,
-    ToolPolicyMiddleware as TaToolPolicyMiddleware,
+    plan_mode_middleware, ArgRecoveryMiddleware, BudgetLimits, BudgetMiddleware,
+    BudgetParityObserver, ContextCompressionMiddleware, PromptCacheGuardMiddleware,
+    RepeatProgressMiddleware, RunModeHandle, ToolPolicyMiddleware as TaToolPolicyMiddleware,
 };
 use tinyagents_harness::runtime::AgentHarness;
 use tinyagents_harness::steering::SteeringHandle;

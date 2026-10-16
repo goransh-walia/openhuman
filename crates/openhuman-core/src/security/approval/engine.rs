@@ -201,7 +201,10 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
     async fn is_decided(&self, request_id: &str) -> Result<Option<bool>, EngineError>;
 
     /// The most recently decided requests of the current scope, newest first.
-    async fn history(&self, limit: usize) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError>;
+    async fn history(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError>;
 }
 
 /// The shared engine handle a gate holds.

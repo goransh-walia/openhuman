@@ -1,7 +1,7 @@
 use super::*;
-use crate::security::approval::engine_stub::StubEngine;
 use crate::agent::turn_origin;
 use crate::config::test_env::EnvVarGuard;
+use crate::security::approval::engine_stub::StubEngine;
 use tempfile::TempDir;
 
 /// TTL for the tests that assert the *timeout* path — the only ones that
@@ -223,7 +223,7 @@ mod subagent_tests;
 mod tenant_tests;
 #[path = "gate_triage_tests.rs"]
 mod triage_tests;
-#[path = "gate_turn_context_tests.rs"]
-mod turn_context_tests;
 #[path = "gate_ttl_and_triage_tests.rs"]
 mod ttl_and_triage_tests;
+#[path = "gate_turn_context_tests.rs"]
+mod turn_context_tests;

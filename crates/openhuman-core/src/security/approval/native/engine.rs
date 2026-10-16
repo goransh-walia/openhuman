@@ -13,8 +13,7 @@ use tinysecurity_bus::{
 };
 
 use super::super::engine::{
-    ApprovalEngine, CallOrigin, Checked, CheckInput, Choice, Decided, EngineError, Sealed,
-    Variant,
+    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Sealed, Variant,
 };
 use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
 use super::scopes::{self, ScopeEntry};
@@ -135,7 +134,11 @@ impl NativeEngine {
 
     /// The subject a call runs under: the tenant, the workspace and the agent,
     /// with the variant that selects its posture.
-    fn subject(&self, tenant: &crate::core::runtime::Tenant, variant: Variant) -> Result<SubjectScope, EngineError> {
+    fn subject(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+    ) -> Result<SubjectScope, EngineError> {
         let mut subject = policy_translation::subject_scope(
             tenant,
             &self.config.workspace_dir,
@@ -258,10 +261,15 @@ impl ApprovalEngine for NativeEngine {
         let proxy = self.proxy().await?;
         let subject = self.subject(&input.tenant, input.variant)?;
         let generation = Self::generation(&proxy).await?;
-        let scope =
-            scopes::ensure(&self.config, &proxy, subject.clone(), &input.posture, generation)
-                .await
-                .map_err(EngineError::Unavailable)?;
+        let scope = scopes::ensure(
+            &self.config,
+            &proxy,
+            subject.clone(),
+            &input.posture,
+            generation,
+        )
+        .await
+        .map_err(EngineError::Unavailable)?;
         self.sweep(&proxy, &scope, generation).await;
 
         let arguments_json =
@@ -296,7 +304,9 @@ impl ApprovalEngine for NativeEngine {
             let _guard = scope.stream.lock().await;
             let generation = Self::generation(&proxy).await?;
             let audit = Self::correlation(&scope, generation).await?;
-            let ttl_ms = u64::try_from(input.ttl.as_millis()).unwrap_or(u64::MAX).max(1);
+            let ttl_ms = u64::try_from(input.ttl.as_millis())
+                .unwrap_or(u64::MAX)
+                .max(1);
             let evaluated: Result<EvaluateApprovalResponse2, _> = proxy
                 .call_confidential(
                     names::methods::EVALUATE_APPROVAL2,
@@ -317,10 +327,7 @@ impl ApprovalEngine for NativeEngine {
         let record = response.record;
         match response.decision.verdict {
             Verdict::Allow if record.state == ApprovalLifecycle2::Approved => {
-                host().insert_request(
-                    &record.request_id,
-                    RequestEntry::new(scope, request, None),
-                );
+                host().insert_request(&record.request_id, RequestEntry::new(scope, request, None));
                 tracing::debug!(
                     request_id = %record.request_id,
                     attribution = record.attribution.as_deref().unwrap_or(""),
@@ -496,7 +503,9 @@ impl ApprovalEngine for NativeEngine {
                     Ok(false)
                 } else {
                     tracing::warn!(error = %error, "{LOG} the module refused to expire the request");
-                    Err(unavailable(format!("TinySecurity ExpireApproval2 failed: {error}")))
+                    Err(unavailable(format!(
+                        "TinySecurity ExpireApproval2 failed: {error}"
+                    )))
                 }
             }
         }
@@ -537,10 +546,7 @@ impl ApprovalEngine for NativeEngine {
             .map_err(|error| unavailable(error.to_string()))
     }
 
-    async fn history(
-        &self,
-        limit: usize,
-    ) -> Result<Vec<ApprovalAuditEntry>, EngineError> {
+    async fn history(&self, limit: usize) -> Result<Vec<ApprovalAuditEntry>, EngineError> {
         super::view::decided_history(&self.config, limit)
             .await
             .map_err(|error| unavailable(error.to_string()))

@@ -16,6 +16,23 @@ use crate::security::SecurityPolicy;
 /// Credential directories under `$HOME` that no grant may reach or contain.
 const HOME_CREDENTIAL_DIRS: &[&str] = &[".ssh", ".gnupg", ".aws", ".azure", ".kube"];
 
+/// Absolute credential-store paths under `home` the host floor protects: the
+/// `deny_read` list for a jail whose reads are allow-by-default. TinyBox drops
+/// the ones that do not exist.
+pub(crate) fn credential_store_paths(home: Option<&std::path::Path>) -> Vec<String> {
+    let Some(home) = home else {
+        return Vec::new();
+    };
+    let mut paths: Vec<String> = HOME_CREDENTIAL_DIRS
+        .iter()
+        .map(|dir| home.join(dir).display().to_string())
+        .collect();
+    if cfg!(target_os = "macos") {
+        paths.push(home.join("Library").join("Keychains").display().to_string());
+    }
+    paths
+}
+
 /// Paths the jail is granted beyond the workspace root.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct JailGrants {

@@ -68,7 +68,10 @@ fn storage(error: StorageError) -> String {
 
 /// The sort key of a scope handle: its three digests, joined.
 pub(super) fn scope_key(scope: &SubjectScope) -> String {
-    format!("{}\u{1f}{}\u{1f}{}", scope.user, scope.workspace, scope.agent)
+    format!(
+        "{}\u{1f}{}\u{1f}{}",
+        scope.user, scope.workspace, scope.agent
+    )
 }
 
 /// A short stable document id for an unbounded string.
@@ -348,9 +351,10 @@ impl Rows {
     pub(super) async fn stale(&self, now: u64, limit: usize) -> Result<Vec<StoredRow>, String> {
         self.ready().await?;
         let cutoff = i64::try_from(now).unwrap_or(i64::MAX);
-        let query = Query::filter(Filter::eq("pending", true).and(Filter::lte("expires_ts", cutoff)))
-            .sort(Sort::asc("expires_ts"))
-            .limit(limit);
+        let query =
+            Query::filter(Filter::eq("pending", true).and(Filter::lte("expires_ts", cutoff)))
+                .sort(Sort::asc("expires_ts"))
+                .limit(limit);
         let page = self.docs.query(ROWS, &query).await.map_err(storage)?;
         page.items.iter().map(decode_row).collect()
     }
@@ -461,7 +465,12 @@ impl Rows {
             let stream = uuid::Uuid::new_v4().simple().to_string();
             match self
                 .docs
-                .put(STREAMS, &id, json!({ "stream_id": stream }), Precondition::Absent)
+                .put(
+                    STREAMS,
+                    &id,
+                    json!({ "stream_id": stream }),
+                    Precondition::Absent,
+                )
                 .await
             {
                 Ok(_) => return Ok(stream),
@@ -476,7 +485,12 @@ impl Rows {
     pub(super) async fn put_label(&self, request_id: &str, label: &str) -> Result<(), String> {
         self.ready().await?;
         self.docs
-            .put(META, request_id, json!({ "label": label }), Precondition::None)
+            .put(
+                META,
+                request_id,
+                json!({ "label": label }),
+                Precondition::None,
+            )
             .await
             .map(|_| ())
             .map_err(storage)
@@ -497,9 +511,9 @@ impl Rows {
 /// The module's record envelope of a stored row, exactly as it was written.
 fn envelope(stored: &Versioned<Value>) -> Result<ApprovalRecord2, String> {
     let field = |name: &str| {
-        text(&stored.doc, name).map(str::to_owned).ok_or_else(|| {
-            format!("{DOMAIN}: a stored row has no {name}")
-        })
+        text(&stored.doc, name)
+            .map(str::to_owned)
+            .ok_or_else(|| format!("{DOMAIN}: a stored row has no {name}"))
     };
     Ok(ApprovalRecord2 {
         record_id: stored.id.clone(),

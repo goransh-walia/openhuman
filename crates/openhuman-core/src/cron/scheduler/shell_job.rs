@@ -182,10 +182,7 @@ pub(super) async fn run_job_command_with_timeout(
             log::warn!("[cron][shell] refused: the sandbox is below the isolation floor");
             // The `blocked by security policy:` prefix halts the retry loop: a
             // missing jail does not appear by waiting.
-            return (
-                false,
-                format!("blocked by security policy: {error}"),
-            );
+            return (false, format!("blocked by security policy: {error}"));
         }
         Err(error) => {
             log::warn!("[cron][shell] sandboxed execution failed: {error}");

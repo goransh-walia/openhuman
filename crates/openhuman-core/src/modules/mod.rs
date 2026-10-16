@@ -84,14 +84,14 @@ pub mod runtime;
 pub mod schemas;
 #[cfg(feature = "modules")]
 pub mod search;
+#[cfg(feature = "modules")]
+mod search_path;
 #[cfg(feature = "security-module")]
 pub mod security;
 #[cfg(feature = "security-module")]
 mod security_host;
 #[cfg(feature = "security-module")]
 mod security_watch;
-#[cfg(feature = "modules")]
-mod search_path;
 #[cfg(feature = "modules")]
 pub(crate) mod site_memory_host;
 mod source;
@@ -243,7 +243,10 @@ where
     F: std::future::Future<Output = anyhow::Result<T>>,
     T: std::fmt::Debug + Settled,
 {
-    let scope = match storage_host::current_module_scope(&crate::core::runtime::DispatchCtx::ambient(), module_id) {
+    let scope = match storage_host::current_module_scope(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        module_id,
+    ) {
         Ok(scope) => format!("{scope:?}"),
         Err(error) => {
             log::warn!("[{kind}] legacy storage import skipped: {:?}", error.kind());
@@ -333,7 +336,13 @@ pub(crate) fn expiring_blob_module_scopes() -> Vec<crate::storage::Scope> {
     {
         [storage_grant_tinyjuice::MODULE_ID]
             .into_iter()
-            .filter_map(|id| storage_host::current_module_scope(&crate::core::runtime::DispatchCtx::ambient(), id).ok())
+            .filter_map(|id| {
+                storage_host::current_module_scope(
+                    &crate::core::runtime::DispatchCtx::ambient(),
+                    id,
+                )
+                .ok()
+            })
             .collect()
     }
     // Without the loader no module holds blobs.

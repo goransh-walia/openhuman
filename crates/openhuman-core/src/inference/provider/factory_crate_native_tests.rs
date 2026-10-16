@@ -191,15 +191,28 @@ async fn one_shot_chat_models_preserve_factory_temperature_as_request_default() 
         .await
         .expect("explicit-temperature invoke");
 
-    let turn_model = create_turn_chat_model(&crate::core::runtime::DispatchCtx::ambient(), "chat", &config, "hint:chat", 0.2).expect("turn model");
+    let turn_model = create_turn_chat_model(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        "chat",
+        &config,
+        "hint:chat",
+        0.2,
+    )
+    .expect("turn model");
     turn_model
         .invoke(&(), ModelRequest::new(vec![Message::user("turn default")]))
         .await
         .expect("turn default-temperature invoke");
 
-    let explicit_turn_model =
-        create_turn_chat_model_from_string(&crate::core::runtime::DispatchCtx::ambient(), "chat", "openhuman", &config, "hint:chat", 0.4)
-            .expect("explicit turn model");
+    let explicit_turn_model = create_turn_chat_model_from_string(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        "chat",
+        "openhuman",
+        &config,
+        "hint:chat",
+        0.4,
+    )
+    .expect("explicit turn model");
     explicit_turn_model
         .invoke(
             &(),
@@ -527,8 +540,14 @@ async fn native_claude_turn_routes_disclose_pinned_models() {
     let pinned_sdk = "egress-sdk-pinned-marker";
     let mut sdk_config = Config::default();
     sdk_config.chat_provider = Some(format!("claude_agent_sdk:{configured_sdk}"));
-    create_turn_chat_model(&crate::core::runtime::DispatchCtx::ambient(), "chat", &sdk_config, pinned_sdk, 0.0)
-        .expect("Claude Agent SDK turn model should build");
+    create_turn_chat_model(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        "chat",
+        &sdk_config,
+        pinned_sdk,
+        0.0,
+    )
+    .expect("Claude Agent SDK turn model should build");
 
     let configured_code = "egress-code-configured-marker";
     let pinned_code = "egress-code-pinned-marker";
@@ -537,7 +556,13 @@ async fn native_claude_turn_routes_disclose_pinned_models() {
     // Egress is disclosed once the effective model is selected, before the
     // environment probe. The test therefore remains valid on hosts without the
     // Claude Code CLI.
-    let _ = create_turn_chat_model(&crate::core::runtime::DispatchCtx::ambient(), "chat", &code_config, pinned_code, 0.0);
+    let _ = create_turn_chat_model(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        "chat",
+        &code_config,
+        pinned_code,
+        0.0,
+    );
 
     let sentinel = "egress-native-claude-sentinel-end";
     BUS.publish(DomainEvent::ExternalTransferPending {

@@ -39,21 +39,21 @@ pub(crate) fn install(
             .with_approval_resolver(resolver)
             .with_denial_renderer(Arc::new(|call, policy, decision| {
                 let denial = match decision {
-                PolicyDecision::RequireApproval { reason } => PolicyDenial::ApprovalRequired {
-                    tool: &call.name,
-                    policy,
-                    reason,
-                },
-                PolicyDecision::Deny { reason } => PolicyDenial::PolicyDenied {
-                    tool: &call.name,
-                    policy,
-                    reason,
-                },
-                PolicyDecision::Allow => PolicyDenial::PolicyDenied {
-                    tool: &call.name,
-                    policy,
-                    reason: "",
-                },
+                    PolicyDecision::RequireApproval { reason } => PolicyDenial::ApprovalRequired {
+                        tool: &call.name,
+                        policy,
+                        reason,
+                    },
+                    PolicyDecision::Deny { reason } => PolicyDenial::PolicyDenied {
+                        tool: &call.name,
+                        policy,
+                        reason,
+                    },
+                    PolicyDecision::Allow => PolicyDenial::PolicyDenied {
+                        tool: &call.name,
+                        policy,
+                        reason: "",
+                    },
                 };
                 denial.render()
             }));

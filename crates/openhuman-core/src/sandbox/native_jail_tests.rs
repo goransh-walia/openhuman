@@ -94,6 +94,46 @@ fn native_jail_request_preserves_grants_and_requires_enforcement() -> anyhow::Re
 }
 
 #[cfg(feature = "modules")]
+fn local_policy(root: &Path) -> SandboxPolicy {
+    SandboxPolicy {
+        backend: super::super::types::SandboxBackendKind::Local,
+        workspace_root: root.to_path_buf(),
+        state_dir: root.to_path_buf(),
+        read_only_mounts: Vec::new(),
+        read_write_mounts: Vec::new(),
+        allow_network: false,
+        env_passthrough: Vec::new(),
+        docker_overrides: None,
+    }
+}
+
+/// The credential-store floor travels with a folder-confined (Seatbelt) jail,
+/// whose reads are allow-by-default; allow-list jails already deny those paths
+/// and TinyBox refuses a denial that lies inside a grant it cannot carve out.
+#[cfg(feature = "modules")]
+#[test]
+fn folder_confined_jail_denies_reads_of_credential_stores() -> anyhow::Result<()> {
+    let root = tempfile::tempdir()?;
+    let home = tempfile::tempdir()?;
+    let policy = local_policy(root.path());
+
+    let confined =
+        jail_request_for_home(&policy, SandboxIsolation::FolderConfined, Some(home.path()))?;
+    for dir in [".ssh", ".gnupg", ".aws", ".azure", ".kube"] {
+        let expected = home.path().join(dir).display().to_string();
+        assert!(confined.deny_read.contains(&expected), "{expected} missing");
+    }
+
+    let isolated = jail_request_for_home(&policy, SandboxIsolation::Isolated, Some(home.path()))?;
+    assert!(isolated.deny_read.is_empty());
+
+    // No operator home (SaaS tenants), no host credential paths to name.
+    let tenant = jail_request_for_home(&policy, SandboxIsolation::FolderConfined, None)?;
+    assert!(tenant.deny_read.is_empty());
+    Ok(())
+}
+
+#[cfg(feature = "modules")]
 #[test]
 fn approved_environment_carries_only_the_callers_overrides() -> anyhow::Result<()> {
     let extra = HashMap::from([(OsString::from("CUSTOM_SAFE"), OsString::from("value"))]);

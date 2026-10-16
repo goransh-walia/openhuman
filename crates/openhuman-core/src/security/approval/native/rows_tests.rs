@@ -104,7 +104,10 @@ async fn a_row_is_created_once_and_advanced_only_from_the_expected_version() {
     assert_eq!(advanced.resulting_version, 2);
     let stored = store.row(&first.request_id).await.unwrap().unwrap();
     assert_eq!(stored.row.state, ApprovalLifecycle2::Denied);
-    assert!(stored.decided_ms.is_some(), "leaving pending stamps the decision time");
+    assert!(
+        stored.decided_ms.is_some(),
+        "leaving pending stamps the decision time"
+    );
 }
 
 #[tokio::test]
@@ -123,7 +126,13 @@ async fn a_retried_mutation_returns_its_original_receipt_even_after_later_versio
     // The module retries the create after the row moved on: the first receipt, not a conflict.
     assert_eq!(store.cas(&created).await.unwrap(), original);
     assert_eq!(
-        store.row(&first.request_id).await.unwrap().unwrap().row.version,
+        store
+            .row(&first.request_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .row
+            .version,
         2,
         "replaying an old mutation does not roll the row back"
     );
@@ -263,7 +272,10 @@ async fn a_subjects_audit_stream_is_created_once_and_kept() {
 async fn what_the_user_chose_is_kept_beside_the_row() {
     let store = rows();
     assert_eq!(store.label("r").await.unwrap(), None);
-    store.put_label("r", "approve_always_for_tool").await.unwrap();
+    store
+        .put_label("r", "approve_always_for_tool")
+        .await
+        .unwrap();
     assert_eq!(
         store.label("r").await.unwrap().as_deref(),
         Some("approve_always_for_tool")

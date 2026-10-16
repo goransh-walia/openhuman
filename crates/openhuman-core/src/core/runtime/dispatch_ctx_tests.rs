@@ -63,7 +63,9 @@ async fn explicit_turn_origin_wins_over_the_scoped_one_and_does_not_cross() {
         assert_eq!(thread_of(&explicit), "b");
         assert_eq!(explicit.turn_origin_or_scoped().map(|_| ()), Some(()));
         let moved = explicit.clone();
-        let from_task = tokio::spawn(async move { thread_of(&moved) }).await.unwrap();
+        let from_task = tokio::spawn(async move { thread_of(&moved) })
+            .await
+            .unwrap();
         assert_eq!(from_task, "b");
         assert_eq!(thread_of(&DispatchCtx::new(Arc::clone(&a))), "a");
     })

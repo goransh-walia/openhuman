@@ -92,7 +92,10 @@ fn an_automatic_approval_names_who_decided() {
     let mut automatic = row(ApprovalLifecycle2::Approved);
     automatic.attribution = Some("auto:tool-grant".into());
     assert_eq!(
-        entry(&stored(automatic), None).unwrap().decided_by.as_deref(),
+        entry(&stored(automatic), None)
+            .unwrap()
+            .decided_by
+            .as_deref(),
         Some("auto:tool-grant")
     );
 }

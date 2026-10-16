@@ -52,7 +52,13 @@ fn a_name_the_module_never_grants_is_dropped_not_fatal() {
     // A human-only or native tool in the user's list must not fail every
     // registration of the subject; it simply is never auto-approved.
     let granted = grants(&posture(
-        &["device_crypto", "native_secret_grant", "policy_change", "gmail_send", "  "],
+        &[
+            "device_crypto",
+            "native_secret_grant",
+            "policy_change",
+            "gmail_send",
+            "  ",
+        ],
         &[("flow", "sandbox_host_network"), ("flow", "http")],
     ));
     assert_eq!(granted.tools, ["gmail_send"]);
@@ -63,7 +69,9 @@ fn a_name_the_module_never_grants_is_dropped_not_fatal() {
 
 #[test]
 fn grants_never_exceed_the_modules_bounds() {
-    let many: Vec<String> = (0..MAX_TOOL_GRANTS2 + 10).map(|n| format!("tool_{n}")).collect();
+    let many: Vec<String> = (0..MAX_TOOL_GRANTS2 + 10)
+        .map(|n| format!("tool_{n}"))
+        .collect();
     let granted = grants(&Posture {
         tool_grants: many,
         ..Posture::default()

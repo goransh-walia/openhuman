@@ -380,11 +380,12 @@ impl OpenHumanTurnPrelude {
             connected.len(),
             self.agent_definition_id
         );
-        let mcp_servers = crate::mcp::registry::connections::connected_overview(&self.dispatch_ctx())
-            .await
-            .into_iter()
-            .map(|server| server.qualified_name)
-            .collect::<std::collections::HashSet<_>>();
+        let mcp_servers =
+            crate::mcp::registry::connections::connected_overview(&self.dispatch_ctx())
+                .await
+                .into_iter()
+                .map(|server| server.qualified_name)
+                .collect::<std::collections::HashSet<_>>();
         let mut mutable = self
             .mutable
             .lock()
@@ -423,11 +424,12 @@ impl OpenHumanTurnPrelude {
                 mutable.connected_integrations_authoritative = authoritative;
             }
         }
-        let connected_mcp = crate::mcp::registry::connections::connected_overview(&self.dispatch_ctx())
-            .await
-            .into_iter()
-            .map(|server| server.qualified_name)
-            .collect::<Vec<_>>();
+        let connected_mcp =
+            crate::mcp::registry::connections::connected_overview(&self.dispatch_ctx())
+                .await
+                .into_iter()
+                .map(|server| server.qualified_name)
+                .collect::<Vec<_>>();
         let mut mutable = self
             .mutable
             .lock()

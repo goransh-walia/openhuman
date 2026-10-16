@@ -36,8 +36,10 @@ struct World {
 
 async fn world() -> World {
     let fixture = native_approval_fixture().await;
-    let dir = tempfile::tempdir_in(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp"))
-        .unwrap_or_else(|_| tempfile::tempdir().unwrap());
+    let dir = tempfile::tempdir_in(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp"),
+    )
+    .unwrap_or_else(|_| tempfile::tempdir().unwrap());
     let config = Config {
         workspace_dir: dir.path().to_path_buf(),
         ..Config::default()
@@ -106,7 +108,10 @@ async fn a_person_approves_reserves_and_the_outcome_is_recorded() {
     assert_eq!(deliveries[0].request_id, request_id);
     assert_eq!(deliveries[0].tool_name, "gmail_send");
     assert!(
-        !deliveries[0].args_redacted.to_string().contains("not-a-real-token-value"),
+        !deliveries[0]
+            .args_redacted
+            .to_string()
+            .contains("not-a-real-token-value"),
         "the stored arguments are redacted"
     );
     assert!(expires_at_ms > deliveries[0].created_at_ms);
@@ -147,7 +152,13 @@ async fn a_person_approves_reserves_and_the_outcome_is_recorded() {
 async fn a_denial_leaves_nothing_to_reserve() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
-    let (request_id, _) = pending(world.engine.check(input("gmail_send", &shown)).await.unwrap());
+    let (request_id, _) = pending(
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
+    );
     assert_eq!(
         world
             .engine
@@ -180,7 +191,10 @@ async fn the_users_tool_grant_approves_without_a_prompt_and_is_audited() {
     let Checked::Approved { request_id } = checked else {
         panic!("a granted tool is approved without a human: {checked:?}");
     };
-    assert!(shown.deliveries.lock().unwrap().is_empty(), "nobody was asked");
+    assert!(
+        shown.deliveries.lock().unwrap().is_empty(),
+        "nobody was asked"
+    );
     world.engine.reserve(&request_id).await.unwrap();
     world
         .engine
@@ -212,7 +226,11 @@ async fn a_grant_the_user_removes_stops_approving_the_next_call() {
     ));
     // The same subject, with the grant gone.
     assert!(matches!(
-        world.engine.check(input("gmail_send", &shown)).await.unwrap(),
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
         Checked::Pending { .. }
     ));
 }
@@ -302,7 +320,13 @@ async fn a_request_nobody_answers_expires_and_is_recorded_as_denied() {
 async fn a_cancelled_request_cannot_be_decided() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
-    let (request_id, _) = pending(world.engine.check(input("gmail_send", &shown)).await.unwrap());
+    let (request_id, _) = pending(
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
+    );
     world.engine.cancel(&request_id).await.unwrap();
     assert_eq!(
         world
@@ -379,7 +403,13 @@ async fn two_workspaces_are_two_subjects_with_their_own_rows() {
     };
     let other = NativeEngine::on(other_config, world.fixture.proxy.clone());
     let shown = Arc::new(Shown::default());
-    let (mine, _) = pending(world.engine.check(input("gmail_send", &shown)).await.unwrap());
+    let (mine, _) = pending(
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
+    );
     let (theirs, _) = pending(other.check(input("gmail_send", &shown)).await.unwrap());
     assert_ne!(mine, theirs);
     // Neither workspace's history shows the other's request.
@@ -397,7 +427,13 @@ async fn two_workspaces_are_two_subjects_with_their_own_rows() {
 async fn a_ticket_the_host_never_issued_decides_nothing() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
-    let (request_id, _) = pending(world.engine.check(input("gmail_send", &shown)).await.unwrap());
+    let (request_id, _) = pending(
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
+    );
     let entry = super::super::state::host()
         .request(&request_id)
         .expect("the delivered request is remembered");
@@ -405,7 +441,9 @@ async fn a_ticket_the_host_never_issued_decides_nothing() {
     // What a model could try: the module's own `Decide2` with a ticket it made up.
     let forged = {
         let _guard = entry.scope.stream.lock().await;
-        let generation = NativeEngine::generation(&world.fixture.proxy).await.unwrap();
+        let generation = NativeEngine::generation(&world.fixture.proxy)
+            .await
+            .unwrap();
         let audit = NativeEngine::correlation(&entry.scope, generation)
             .await
             .unwrap();
@@ -423,7 +461,10 @@ async fn a_ticket_the_host_never_issued_decides_nothing() {
             )
             .await
     };
-    assert!(forged.is_err(), "the host refused to verify a forged ticket");
+    assert!(
+        forged.is_err(),
+        "the host refused to verify a forged ticket"
+    );
     let stored = entry.scope.rows.row(&request_id).await.unwrap().unwrap();
     assert_eq!(stored.row.state, ApprovalLifecycle2::Pending);
     assert!(world.engine.reserve(&request_id).await.is_err());
@@ -462,6 +503,9 @@ async fn only_the_module_may_call_the_hosts_approval_callbacks() {
         let answered = proxy
             .call::<serde_json::Value>(member, (serde_json::json!({}),))
             .await;
-        assert!(answered.is_err(), "{interface}.{member} answered a stranger");
+        assert!(
+            answered.is_err(),
+            "{interface}.{member} answered a stranger"
+        );
     }
 }

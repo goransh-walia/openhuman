@@ -1,10 +1,10 @@
 use super::*;
 use crate::security::approval::store as live;
 use crate::security::approval::types::{ApprovalDecision, ApprovalSourceContext};
-use serde_json::Value;
 use crate::storage::import::{run_with, Outcome};
 use crate::storage::rusqlite;
 use chrono::{Duration, Utc};
+use serde_json::Value;
 use tempfile::TempDir;
 
 fn workspace() -> (TempDir, Config) {
@@ -175,7 +175,9 @@ fn legacy_rows_are_imported_once_and_the_file_is_left_alone() {
 fn a_workspace_with_no_legacy_file_starts_empty() {
     let (_dir, config) = workspace();
     assert!(matches!(import(&config), Outcome::NoSource));
-    assert!(live::list_recorded_decisions(&config, 10).unwrap().is_empty());
+    assert!(live::list_recorded_decisions(&config, 10)
+        .unwrap()
+        .is_empty());
 }
 
 #[test]

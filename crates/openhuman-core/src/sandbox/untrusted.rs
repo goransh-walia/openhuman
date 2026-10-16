@@ -81,7 +81,10 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         .map_err(|error| anyhow::anyhow!(error))?;
     // Landlock named explicitly in the config must really be the backend.
     let explicitly_requested = !saas
-        && matches!(config.sandbox.backend, crate::config::SandboxBackend::Landlock)
+        && matches!(
+            config.sandbox.backend,
+            crate::config::SandboxBackend::Landlock
+        )
         && policy.backend == SandboxBackendKind::Local;
     match policy.backend {
         SandboxBackendKind::Local => {

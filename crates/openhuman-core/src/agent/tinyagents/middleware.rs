@@ -33,14 +33,14 @@ pub(crate) mod memory_pack;
 pub(crate) mod packed_tool_route;
 pub(crate) mod repeated_failure;
 pub(crate) mod security_gate;
-pub(crate) mod tool_outcome_capture;
-pub(crate) mod tool_output;
-pub(crate) mod tool_policy;
-pub(crate) mod turn_context;
 #[cfg(feature = "security-module")]
 pub(crate) mod tinysecurity;
 #[cfg(feature = "security-module")]
 pub(crate) mod tinysecurity_module;
+pub(crate) mod tool_outcome_capture;
+pub(crate) mod tool_output;
+pub(crate) mod tool_policy;
+pub(crate) mod turn_context;
 
 /// Render the canonical TinyTools content blocks at the OpenHuman boundary.
 /// Middleware that used the retired string-shaped harness result must not

@@ -10,19 +10,22 @@ fn guard_cleanup_only_clears_routing_it_still_owns() {
     // must not clobber the *new* request's mapping.
     let (gate, _dir) = test_gate();
 
-    gate.parked.thread_to_request
+    gate.parked
+        .thread_to_request
         .lock()
         .insert("thread-1".into(), "req-new".into());
 
     // Stale guard for the superseded request is a no-op.
-    gate.parked.clear_thread_route_if_owned("thread-1", "req-old");
+    gate.parked
+        .clear_thread_route_if_owned("thread-1", "req-old");
     assert_eq!(
         gate.pending_for_thread("thread-1").as_deref(),
         Some("req-new")
     );
 
     // The owning request's guard clears its own routing.
-    gate.parked.clear_thread_route_if_owned("thread-1", "req-new");
+    gate.parked
+        .clear_thread_route_if_owned("thread-1", "req-new");
     assert!(gate.pending_for_thread("thread-1").is_none());
 }
 
