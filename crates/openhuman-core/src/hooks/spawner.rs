@@ -29,10 +29,13 @@ pub(super) struct SandboxedHookSpawner;
 #[async_trait]
 impl CommandSpawner for SandboxedHookSpawner {
     async fn run(&self, request: CommandRequest) -> Result<CommandOutput, String> {
-        let config = DispatchCtx::ambient().load_config().await.map_err(|error| {
-            log::warn!("[hooks] refused: cannot read config for the sandbox: {error}");
-            format!("cannot read config to sandbox the hook: {error}")
-        })?;
+        let config = DispatchCtx::ambient()
+            .load_config()
+            .await
+            .map_err(|error| {
+                log::warn!("[hooks] refused: cannot read config for the sandbox: {error}");
+                format!("cannot read config to sandbox the hook: {error}")
+            })?;
         run_in(&config, request).await
     }
 }
