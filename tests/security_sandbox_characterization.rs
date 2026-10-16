@@ -224,10 +224,7 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
     drop(dir);
 
     // An explicit operator backend requires a sandbox even for a default agent...
-    for backend in [
-        SandboxBackend::Landlock,
-        SandboxBackend::Docker,
-    ] {
+    for backend in [SandboxBackend::Landlock, SandboxBackend::Docker] {
         let label = format!("{backend:?}");
         let (dir, _config) = scratch_config(backend, None).await;
         let _ws = env_guard::EnvVarGuard::set_path("OPENHUMAN_WORKSPACE", dir.path());
