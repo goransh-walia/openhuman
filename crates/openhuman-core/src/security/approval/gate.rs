@@ -37,7 +37,7 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
-use crate::agent::turn_origin::{self, AgentTurnOrigin, TrustedAutomationSource};
+use crate::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
