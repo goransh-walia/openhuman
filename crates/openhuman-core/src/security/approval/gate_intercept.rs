@@ -356,7 +356,7 @@ impl ApprovalGate {
         // closed. Everything that parks goes to the engine, which also applies
         // the user's allowlist, per-flow trust and auto-approve setting as
         // audited automatic approvals.
-        let (variant, flow_id) = match &origin {
+        let (variant, flow_id, unlabelled) = match &origin {
             AgentTurnOrigin::WebChat { .. } => (
                 if forced {
                     Variant::Forced
@@ -364,6 +364,7 @@ impl ApprovalGate {
                     Variant::Standard
                 },
                 None,
+                false,
             ),
             AgentTurnOrigin::ExternalChannel {
                 channel,
@@ -383,7 +384,7 @@ impl ApprovalGate {
                 // We do NOT short-circuit to Allow here — remote inputs are
                 // untrusted. Without a routable surface the park TTL-denies; a
                 // decision can still arrive via the thread card before the TTL.
-                (Variant::Standard, None)
+                (Variant::Standard, None, false)
             }
             AgentTurnOrigin::TrustedAutomation {
                 source: TrustedAutomationSource::Cron,
@@ -440,7 +441,7 @@ impl ApprovalGate {
                 // The engine does not apply the global tool allowlist to this
                 // posture, so a flow the user forced to be reviewed stays
                 // reviewed; per-flow trust and auto-approve still do.
-                (Variant::FlowStrict, Some(job_id.clone()))
+                (Variant::FlowStrict, Some(job_id.clone()), false)
             }
             // Same trust decision for both: a local operator invoking the core
             // directly. They differ only in whether the turn's text was written
@@ -454,6 +455,23 @@ impl ApprovalGate {
                     "[approval::gate] CLI / sub-agent caller — allowing without prompt"
                 );
                 return (GateOutcome::Allow, None);
+            }
+            // The one thing that has always approved a call from an unlabelled
+            // site is the user's own "Always allow" for that exact tool. Nothing
+            // else does: not auto-approve-everything, not an agent's approvals
+            // being off, and nobody is asked.
+            AgentTurnOrigin::Unknown
+                if !forced
+                    && self
+                        .live_auto_approve(&turn_ctx)
+                        .iter()
+                        .any(|allowed| allowed == tool_name) =>
+            {
+                tracing::debug!(
+                    tool = tool_name,
+                    "[approval::gate] unlabelled call to a tool on the user's Always-allow list"
+                );
+                (Variant::Standard, None, true)
             }
             AgentTurnOrigin::Unknown => {
                 tracing::warn!(
@@ -617,7 +635,17 @@ impl ApprovalGate {
         let input = CheckInput {
             tenant: route_tenant,
             variant,
-            posture: self.posture(&turn_ctx, variant),
+            posture: if unlabelled {
+                // Only the user's tool grant stands; nothing else is configured
+                // for a call nobody labelled, and the grant is what approves it.
+                Posture {
+                    require_approval: true,
+                    tool_grants: vec![tool_name.to_string()],
+                    ..Posture::default()
+                }
+            } else {
+                self.posture(&turn_ctx, variant)
+            },
             call_id: fresh_call_id(),
             tool: tool_name.to_string(),
             args: object_arguments(args_redacted),
