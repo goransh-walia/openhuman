@@ -1,4 +1,5 @@
 use super::*;
+use crate::security::approval::engine_stub::State;
 
 #[tokio::test]
 async fn pending_for_thread_tracks_request_under_chat_context_and_clears() {
@@ -157,9 +158,10 @@ async fn waiter_future_dropped_mid_park_evicts_waiter_clears_routing_and_denies_
         gate.parked.waiters.lock().contains_key(&request_id),
         "waiter must be registered while parked"
     );
-    assert!(
-        matches!(store::get_decision(&gate.config, &request_id), Ok(None)),
-        "pending row must be open (undecided) while parked"
+    assert_eq!(
+        stub_of(&gate).state(&request_id),
+        Some(State::Pending),
+        "the request must be open (undecided) while parked"
     );
 
     // External teardown: the wall-clock backstop tears the turn future down
@@ -175,13 +177,17 @@ async fn waiter_future_dropped_mid_park_evicts_waiter_clears_routing_and_denies_
         gate.pending_for_thread("t-test").is_none(),
         "thread→request routing must be cleared on external teardown"
     );
-    assert!(
-        matches!(
-            store::get_decision(&gate.config, &request_id),
-            Ok(Some(ApprovalDecision::Deny))
-        ),
-        "pending row must be denied when the parked future is dropped"
-    );
+    // The engine cancels the request off the dropped future.
+    let stub = stub_of(&gate);
+    let mut tries = 0;
+    while stub.state(&request_id) != Some(State::Cancelled) {
+        tries += 1;
+        assert!(
+            tries < 500,
+            "the request must be cancelled when the parked future is dropped"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 // ── caller park bound (issue #4756) ──────────────────────────────
