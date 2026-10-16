@@ -11,7 +11,8 @@ use std::path::Path;
 
 use sha2::{Digest, Sha256};
 use tinysecurity_bus::{
-    AccessTier, NetworkPolicy, Origin, PathGrant, ResourceLimits2, SandboxDeployment2,
+    AccessTier, NetworkPolicy, Origin, PathAccess, PathGrant, PathPolicy, PathTrustedRoot,
+    ResourceLimits2, SandboxDeployment2,
     SandboxExecutor2, SandboxScope2, SandboxSetting2, SandboxSource2, SourceTrust, SubjectScope,
 };
 
@@ -117,6 +118,39 @@ fn configured(config: &Config) -> bool {
     )
 }
 
+/// The owner filesystem policy: the configured one, plus the roots the host already
+/// chose for this spawn (its workspace and the mounts it resolved). The module still
+/// refuses the protected floor and the core's internal state under every root.
+fn paths(config: &Config, policy: &SandboxPolicy) -> PathPolicy {
+    let mut paths = crate::modules::security::policy_translation::path_policy(config);
+    let roots = std::iter::once((&policy.workspace_root, PathAccess::ReadWrite))
+        .chain(
+            policy
+                .read_only_mounts
+                .iter()
+                .map(|path| (path, PathAccess::ReadOnly)),
+        )
+        .chain(
+            policy
+                .read_write_mounts
+                .iter()
+                .map(|path| (path, PathAccess::ReadWrite)),
+        );
+    for (path, access) in roots {
+        if !paths
+            .trusted_roots
+            .iter()
+            .any(|root| &root.path == path && root.access == access)
+        {
+            paths.trusted_roots.push(PathTrustedRoot {
+                path: path.clone(),
+                access,
+            });
+        }
+    }
+    paths
+}
+
 /// The scope for `input`, or `None` when a path cannot be named to the module.
 pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
     let FactsInput {
@@ -143,7 +177,7 @@ pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
         // A scope is only planned for a spawn the agent or operator asked to sandbox.
         agent_mode: setting(policy.backend != SandboxBackendKind::None),
         configured: setting(configured(config)),
-        paths: super::super::super::modules::security::policy_translation::path_policy(config),
+        paths: paths(config, policy),
         grant_ceiling: grant_ceiling(policy)?,
         network_ceiling: network_ceiling(policy),
         limits: ResourceLimits2::default(),
