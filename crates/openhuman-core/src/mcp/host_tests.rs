@@ -16,6 +16,7 @@ fn populated_server() -> HostServer {
             enabled: false,
             allowed_tools: vec!["forecast".into()],
             disallowed_tools: vec!["debug".into()],
+            operator_trusted: false,
             timeout_secs: 9,
             auth: McpAuthConfig::BearerToken { token: "t".into() },
         },
@@ -161,4 +162,39 @@ async fn ambient_config_follows_the_explicit_context() {
             .map(|config| config.workspace_dir.clone()),
         "an unbound context falls back to the process default, never a scope"
     );
+}
+
+#[cfg(feature = "mcp")]
+#[test]
+fn operators_own_servers_are_trusted_and_the_stdio_jail_requires_isolation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let mut config = Config::default();
+    config.workspace_dir = temp.path().to_path_buf();
+    let mut server = populated_server();
+    server.server.enabled = true;
+    config.mcp_client.servers.push(server);
+
+    let converted = client_config(&config);
+    assert!(
+        converted.servers[0].operator_trusted,
+        "a server from the operator's own config keeps its direct spawn"
+    );
+    let sandbox = converted.stdio_sandbox.expect("registry servers get a jail");
+    assert!(sandbox.require_process_isolation);
+    assert_eq!(
+        std::path::Path::new(&sandbox.workspace),
+        temp.path().join("mcp").join("stdio")
+    );
+}
+
+#[cfg(feature = "mcp")]
+#[test]
+fn a_flag_written_in_the_config_file_does_not_decide_trust() {
+    // The host decides trust from where the server was declared, so a file
+    // entry cannot opt a SaaS tenant (or anyone) out of that decision.
+    let mut config = Config::default();
+    let mut server = populated_server();
+    server.server.operator_trusted = false;
+    config.mcp_client.servers.push(server);
+    assert!(client_config(&config).servers[0].operator_trusted);
 }
