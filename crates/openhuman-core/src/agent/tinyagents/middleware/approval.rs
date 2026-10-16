@@ -194,7 +194,9 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
             );
             return ApprovalResolution::Allow { ticket: None };
         };
-        let approval_name = approval_tool_name(&call.name, &call.arguments);
+        self.resolve_on(&gate, ctx, call).await
+    }
+ = approval_tool_name(&call.name, &call.arguments);
         tracing::debug!(
             tool = %call.name,
             approval_name = %approval_name,
