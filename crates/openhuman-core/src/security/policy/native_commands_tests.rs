@@ -204,7 +204,10 @@ mod projection {
         assert_eq!(disabled.max_actions_per_hour, 1);
         let enabled = scope(true, crate::security::AutonomyLevel::ReadOnly, 7);
         assert!(enabled.enabled);
-        assert_eq!(enabled.autonomy, tinysecurity_bus::CommandAutonomy::ReadOnly);
+        assert_eq!(
+            enabled.autonomy,
+            tinysecurity_bus::CommandAutonomy::ReadOnly
+        );
         assert_eq!(enabled.max_actions_per_hour, 7);
         // The authorize stage never spends the budget the run reserves.
         let authorize = SecurityPolicy {
