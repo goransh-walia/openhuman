@@ -319,3 +319,52 @@ async fn a_module_that_cannot_be_reached_refuses_the_spawn() {
     .unwrap_err();
     assert!(matches!(refused, PlanError::Unavailable(_)), "{refused:?}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn the_host_retires_the_least_recently_used_scope_instead_of_growing_without_bound() {
+    use tinysecurity_bus::{RegisterSandboxScopeRequest2, SandboxScopeOutcome2};
+
+    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let stream = "9".repeat(32);
+    let scope_for = |index: usize| {
+        let mut policy = policy(&world, false);
+        policy.workspace_root = world.action.join(format!("w{index}"));
+        facts::scope(&facts::FactsInput {
+            config: &world.config,
+            policy: &policy,
+            source: SpawnSource::Agent,
+            subject: tinysecurity_bus::SubjectScope {
+                user: "local".into(),
+                workspace: "evict".into(),
+                agent: "agent".into(),
+            },
+            saas: false,
+            host_off: false,
+            executors: vec![world.module.executor.clone()],
+        })
+        .expect("scope facts")
+    };
+    let first = scope_for(0);
+    registry::ensure(&world.module.proxy, &first, &stream)
+        .await
+        .expect("first scope");
+    for index in 1..=300 {
+        registry::ensure(&world.module.proxy, &scope_for(index), &stream)
+            .await
+            .expect("later scope");
+    }
+    // The first scope fell out of the host's bound and was retired in the module: it is
+    // registered as a new scope, not found already there.
+    let receipt = client::register_scope(
+        &world.module.proxy,
+        RegisterSandboxScopeRequest2 {
+            scope: first,
+            audit_stream_id: stream,
+            report_handle: false,
+        },
+    )
+    .await
+    .expect("registration");
+    assert_eq!(receipt.outcome, SandboxScopeOutcome2::Created);
+}
