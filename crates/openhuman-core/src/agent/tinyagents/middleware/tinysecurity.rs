@@ -6,8 +6,6 @@
 //! effect-capable middleware. A module fault never allows: the decider
 //! returns `Err` and the call is denied with no retry.
 
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -18,16 +16,25 @@ use tinysecurity_bus::{DenialReason, Verdict};
 
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 
-/// Boxed async decider: module verdict for one tool call, or a fault string.
-pub(crate) type VerdictFuture = Pin<Box<dyn Future<Output = Result<Verdict, String>> + Send>>;
-pub(crate) type VerdictDecider = Arc<dyn Fn(&TaToolCall) -> VerdictFuture + Send + Sync>;
+/// Where a verdict for one tool call comes from. Production asks the
+/// TinySecurity module over its bus contract ([`super::tinysecurity_module`]);
+/// the seam exists so the mapping and precedence below are testable without a
+/// loaded module. `Err` is a module fault: it never allows and is never retried.
+#[async_trait]
+pub(crate) trait VerdictSource: Send + Sync {
+    async fn verdict(
+        &self,
+        ctx: &RunContext<OpenHumanRunContext>,
+        call: &TaToolCall,
+    ) -> Result<Verdict, String>;
+}
 
 /// Stable, payload-free text for a denial category.
 fn reason_text(reason: &DenialReason) -> &'static str {
     match reason {
         DenialReason::Floor => "blocked by the security floor",
         DenialReason::UnsupportedEffect => "unsupported effect or unknown tool",
-        DenialReason::ApprovalUnavailable => "approval is unavailable",
+        DenialReason::ApprovalUnavailable => "human approval is required",
         DenialReason::Access => "insufficient access",
         DenialReason::PathScope => "path is outside the allowed scope",
         DenialReason::PathResolution => "path could not be securely resolved",
@@ -39,9 +46,21 @@ fn reason_text(reason: &DenialReason) -> &'static str {
 
 /// Map a module verdict to the harness decision. `RequireApproval` carries the
 /// persisted request id in its reason so the approval resolver can bind to it.
+///
+/// `Deny { ApprovalUnavailable }` is the module's plain `Evaluate` answer for a
+/// host tool whose only remaining requirement is a human ("the weakest answer":
+/// every concrete check passed). It maps to `RequireApproval`, never to `Allow`;
+/// the gate fails closed when no approval resolver is attached, and the
+/// resolver itself denies when no human can be asked. Every other denial stays
+/// a denial.
 pub(crate) fn verdict_to_policy_decision(verdict: &Verdict) -> PolicyDecision {
     match verdict {
         Verdict::Allow => PolicyDecision::Allow,
+        Verdict::Deny {
+            reason: DenialReason::ApprovalUnavailable,
+        } => PolicyDecision::RequireApproval {
+            reason: reason_text(&DenialReason::ApprovalUnavailable).to_string(),
+        },
         Verdict::Deny { reason } => PolicyDecision::Deny {
             reason: reason_text(reason).to_string(),
         },
@@ -66,13 +85,15 @@ pub(crate) fn combine_decisions(decisions: Vec<PolicyDecision>) -> PolicyDecisio
     out
 }
 
+/// The one security policy every agent path registers. The module decides; this
+/// translates.
 pub(crate) struct TinySecurityPolicy {
-    decider: VerdictDecider,
+    source: Arc<dyn VerdictSource>,
 }
 
 impl TinySecurityPolicy {
-    pub(crate) fn new(decider: VerdictDecider) -> Self {
-        Self { decider }
+    pub(crate) fn new(source: Arc<dyn VerdictSource>) -> Self {
+        Self { source }
     }
 }
 
@@ -84,10 +105,10 @@ impl ToolCallPolicy<OpenHumanRunContext> for TinySecurityPolicy {
 
     async fn check(
         &self,
-        _ctx: &RunContext<OpenHumanRunContext>,
+        ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> PolicyDecision {
-        match (self.decider)(call).await {
+        match self.source.verdict(ctx, call).await {
             Ok(verdict) => {
                 let decision = verdict_to_policy_decision(&verdict);
                 tracing::debug!(tool = %call.name, "[tinyagents::mw] tinysecurity verdict mapped");
