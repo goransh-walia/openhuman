@@ -7,24 +7,30 @@ fn is_deny(d: &PolicyDecision) -> bool {
 #[test]
 fn allow_maps_to_allow() {
     assert!(matches!(
-        verdict_to_policy_decision(&Verdict::Allow),
+        verdict_to_policy_decision("shell", &Verdict::Allow),
         PolicyDecision::Allow
     ));
 }
 
 #[test]
 fn deny_maps_to_deny_without_payload() {
-    let d = verdict_to_policy_decision(&Verdict::Deny {
-        reason: DenialReason::Floor,
-    });
+    let d = verdict_to_policy_decision(
+        "shell",
+        &Verdict::Deny {
+            reason: DenialReason::Floor,
+        },
+    );
     assert!(is_deny(&d));
 }
 
 #[test]
 fn require_approval_carries_request_id() {
-    let d = verdict_to_policy_decision(&Verdict::RequireApproval {
-        request_id: "req-1".into(),
-    });
+    let d = verdict_to_policy_decision(
+        "shell",
+        &Verdict::RequireApproval {
+            request_id: "req-1".into(),
+        },
+    );
     match d {
         PolicyDecision::RequireApproval { reason } => assert!(reason.contains("req-1")),
         _ => panic!("expected RequireApproval"),
@@ -130,9 +136,12 @@ async fn policy_maps_require_approval_verdict() {
 
 #[test]
 fn the_modules_human_needed_answer_requires_approval_and_never_allows() {
-    let decision = verdict_to_policy_decision(&Verdict::Deny {
-        reason: DenialReason::ApprovalUnavailable,
-    });
+    let decision = verdict_to_policy_decision(
+        "shell",
+        &Verdict::Deny {
+            reason: DenialReason::ApprovalUnavailable,
+        },
+    );
     assert!(matches!(decision, PolicyDecision::RequireApproval { .. }));
 }
 
@@ -147,10 +156,109 @@ fn every_other_denial_stays_a_denial() {
         DenialReason::Command,
         DenialReason::InvalidContext,
         DenialReason::Content,
+        DenialReason::ReadOnlyMode,
+        DenialReason::RateLimited { max_per_hour: 3 },
+        DenialReason::ScheduledReadOnly,
+        DenialReason::HighRisk,
     ] {
-        let decision = verdict_to_policy_decision(&Verdict::Deny { reason });
-        assert!(is_deny(&decision), "{decision:?}");
+        for tool in ["shell", "write_file"] {
+            let decision = verdict_to_policy_decision(
+                tool,
+                &Verdict::Deny {
+                    reason: reason.clone(),
+                },
+            );
+            assert!(is_deny(&decision), "{tool}: {decision:?}");
+        }
     }
+}
+
+fn denial_text(tool: &str, reason: DenialReason) -> String {
+    match verdict_to_policy_decision(tool, &Verdict::Deny { reason }) {
+        PolicyDecision::Deny { reason } => reason,
+        other => panic!("expected a denial, got {other:?}"),
+    }
+}
+
+#[test]
+fn the_read_only_tier_refuses_an_acting_tool_with_the_policy_marker() {
+    let text = denial_text("write_file", DenialReason::ReadOnlyMode);
+    assert!(text.contains(tinytools::status::POLICY_BLOCKED_MARKER), "{text}");
+    assert!(text.contains("read-only mode"), "{text}");
+    assert!(text.contains("'write_file'"), "{text}");
+}
+
+#[test]
+fn a_spent_budget_names_its_limit_and_how_to_raise_it() {
+    let text = denial_text("write_file", DenialReason::RateLimited { max_per_hour: 7 });
+    assert!(text.contains("Rate limit exceeded"), "{text}");
+    assert!(text.contains("7 actions/hour"), "{text}");
+    assert!(text.contains("Agent autonomy"), "{text}");
+}
+
+#[test]
+fn a_scheduled_turn_is_told_it_may_use_read_only_tools_only() {
+    let text = denial_text("write_file", DenialReason::ScheduledReadOnly);
+    assert!(text.contains(tinytools::status::POLICY_DENIED_MARKER), "{text}");
+    assert!(text.contains("read-only tools only"), "{text}");
+    assert!(text.contains("'write_file'"), "{text}");
+}
+
+#[test]
+fn a_refused_shell_command_reads_as_the_shell_refusal() {
+    use crate::security::policy::native_commands::refusal_message;
+    use crate::security::policy::Refusal;
+    for (reason, refusal) in [
+        (DenialReason::Floor, Refusal::Protected),
+        (DenialReason::ReadOnlyMode, Refusal::ReadOnly),
+        (DenialReason::Command, Refusal::Hidden),
+        (DenialReason::HighRisk, Refusal::HighRisk),
+        (DenialReason::Access, Refusal::Category),
+    ] {
+        assert_eq!(denial_text("shell", reason.clone()), refusal_message(refusal));
+        assert!(
+            !denial_text("write_file", reason.clone()).contains("hidden command"),
+            "a plain tool never reads as a shell refusal"
+        );
+    }
+    assert!(denial_text("shell", DenialReason::Floor)
+        .contains(tinytools::status::POLICY_BLOCKED_MARKER));
+}
+
+#[test]
+fn a_source_can_replace_the_text_of_its_own_denial_only() {
+    struct Worded;
+    #[async_trait]
+    impl VerdictSource for Worded {
+        async fn verdict(
+            &self,
+            _ctx: &RunContext<OpenHumanRunContext>,
+            _call: &TaToolCall,
+        ) -> Result<Verdict, String> {
+            Ok(Verdict::Deny {
+                reason: DenialReason::Access,
+            })
+        }
+        fn denial_text(&self, _call: &TaToolCall, _verdict: &Verdict) -> Option<String> {
+            Some("worded by the source".into())
+        }
+    }
+    let source: Arc<dyn VerdictSource> = Arc::new(Worded);
+    let decision = futures::executor::block_on(
+        TinySecurityPolicy::new(source).check(&test_ctx(), &test_call()),
+    );
+    assert!(matches!(
+        decision,
+        PolicyDecision::Deny { reason } if reason == "worded by the source"
+    ));
+    // An allow keeps no custom text.
+    let (allow, _) = Scripted::new(Ok(Verdict::Allow));
+    assert!(matches!(
+        futures::executor::block_on(
+            TinySecurityPolicy::new(allow).check(&test_ctx(), &test_call())
+        ),
+        PolicyDecision::Allow
+    ));
 }
 
 #[tokio::test]
