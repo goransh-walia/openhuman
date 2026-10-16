@@ -39,17 +39,40 @@ use crate::security::policy::{CommandFlow, CommandStage, SecurityPolicy};
 
 const LOG: &str = "[tinyagents::mw::tinysecurity]";
 
+/// Puts host-derived checks to the module and returns its verdict. Production is
+/// [`BusModule`]; the seam lets the derivation below be tested without a loaded
+/// module. `Err` is a fault: the policy denies and never retries.
+#[async_trait]
+pub(crate) trait ModuleAsk: Send + Sync {
+    async fn ask(
+        &self,
+        ctx: &RunContext<OpenHumanRunContext>,
+        call: &TaToolCall,
+        checks: Vec<Check>,
+        redact: bool,
+    ) -> Result<Verdict, String>;
+}
+
 /// Asks the module through `modules::security::evaluate`.
 pub(crate) struct ModuleVerdicts {
     /// Resolves a call's tool and its external-effect declaration, and applies
     /// the desktop approvals-off exception the approval resolver always applied.
     effects: ApprovalSecurityMiddleware,
+    module: Arc<dyn ModuleAsk>,
 }
 
 impl ModuleVerdicts {
     pub(crate) fn new(tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>) -> Self {
+        Self::with_module(tool_sets, Arc::new(BusModule))
+    }
+
+    pub(crate) fn with_module(
+        tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+        module: Arc<dyn ModuleAsk>,
+    ) -> Self {
         Self {
             effects: ApprovalSecurityMiddleware::new(tool_sets),
+            module,
         }
     }
 }
@@ -64,7 +87,7 @@ fn turn_origin(ctx: &RunContext<OpenHumanRunContext>) -> Option<AgentTurnOrigin>
 }
 
 /// The origin class the module sees, from the verified turn context.
-fn module_origin(ctx: &RunContext<OpenHumanRunContext>) -> Origin {
+pub(super) fn module_origin(ctx: &RunContext<OpenHumanRunContext>) -> Origin {
     if matches!(
         turn_origin(ctx),
         Some(AgentTurnOrigin::TrustedAutomation {
@@ -145,7 +168,7 @@ impl VerdictSource for ModuleVerdicts {
             };
             (vec![check], external)
         };
-        match self.ask(ctx, &dispatch, call, checks, redact).await {
+        match self.module.ask(ctx, call, checks, redact).await {
             Err(_fault) if !shell && ApprovalGate::try_global().is_none() => {
                 tracing::warn!(
                     tool = %call.name,
@@ -180,15 +203,19 @@ fn shell_check(arguments: &serde_json::Value) -> Option<Check> {
     })
 }
 
-impl ModuleVerdicts {
+/// The production module client: the live bus.
+pub(crate) struct BusModule;
+
+#[async_trait]
+impl ModuleAsk for BusModule {
     async fn ask(
         &self,
         ctx: &RunContext<OpenHumanRunContext>,
-        dispatch: &crate::core::runtime::DispatchCtx,
         call: &TaToolCall,
         mut checks: Vec<Check>,
         redact: bool,
     ) -> Result<Verdict, String> {
+        let dispatch = &ctx.data.dispatch_ctx();
         let config = dispatch.load_config().await?;
         // The scope the shell tool spends its hourly budget through: the same
         // settings, so an equal policy reuses the registered scope and its ledger.
@@ -255,3 +282,7 @@ impl ModuleVerdicts {
         Ok(decision.verdict)
     }
 }
+
+#[cfg(test)]
+#[path = "tinysecurity_module_tests.rs"]
+mod tests;
