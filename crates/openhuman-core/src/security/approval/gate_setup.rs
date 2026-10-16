@@ -156,17 +156,22 @@ impl ApprovalGate {
                 ..Posture::default()
             };
         }
-        let flow_grants = match store::list_all_flow_trust(&self.config) {
-            Ok(grants) => grants,
-            Err(error) => {
-                // Fail-safe: without the grants the call is still gated, never
-                // silently allowed.
-                tracing::warn!(
-                    error = %error,
-                    "[approval::gate] flow trust lookup failed — falling through to normal gating"
-                );
-                Vec::new()
+        // Per-flow trust only ever applies to a workflow's own calls.
+        let flow_grants = if variant == Variant::FlowStrict {
+            match store::list_all_flow_trust(&self.config) {
+                Ok(grants) => grants,
+                Err(error) => {
+                    // Fail-safe: without the grants the call is still gated,
+                    // never silently allowed.
+                    tracing::warn!(
+                        error = %error,
+                        "[approval::gate] flow trust lookup failed — falling through to normal gating"
+                    );
+                    Vec::new()
+                }
             }
+        } else {
+            Vec::new()
         };
         Posture {
             require_approval: !ctx.approvals_disabled(),
