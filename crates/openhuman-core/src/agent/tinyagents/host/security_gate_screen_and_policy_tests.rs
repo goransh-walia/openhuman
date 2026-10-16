@@ -315,3 +315,98 @@ async fn a_plain_call_is_unaffected_by_the_nested_refusal() {
         .unwrap();
     assert_eq!(decision, GateDecision::Allow);
 }
+
+// Hosted-root characterization (issue #7328, phase 6): the two stages below had
+// no direct coverage before the hosted gate's decisions move onto the shared
+// TinySecurity policy path, so they are pinned here first.
+
+fn enabled_policy(max_actions_per_hour: u32) -> Arc<SecurityPolicy> {
+    Arc::new(SecurityPolicy {
+        enabled: true,
+        autonomy: AutonomyLevel::Full,
+        max_actions_per_hour,
+        ..SecurityPolicy::default()
+    })
+}
+
+#[tokio::test]
+async fn an_exhausted_hourly_budget_denies_acting_tools_but_not_reads() {
+    let policy = enabled_policy(2);
+    assert!(policy.record_action());
+    assert!(policy.record_action());
+    let gate = OpenHumanSecurityGate::new(policy, registry());
+
+    let acting = gate
+        .authorize_tool(&req("write_file", json!({ "path": "a.txt" })))
+        .await
+        .unwrap();
+    assert!(!acting.is_allowed(), "an exhausted budget must deny an acting tool");
+    assert!(acting
+        .denial_reason()
+        .expect("a Deny carries a reason")
+        .contains("Rate limit exceeded"));
+
+    let read = gate
+        .authorize_tool(&req("read_file", json!({ "path": "a.txt" })))
+        .await
+        .unwrap();
+    assert_eq!(read, GateDecision::Allow);
+}
+
+#[tokio::test]
+async fn the_budget_is_inert_while_the_autonomy_policy_is_disabled() {
+    let policy = Arc::new(SecurityPolicy {
+        enabled: false,
+        max_actions_per_hour: 1,
+        ..SecurityPolicy::default()
+    });
+    assert!(policy.record_action());
+    assert!(policy.record_action());
+    let gate = OpenHumanSecurityGate::new(policy, registry());
+    let decision = gate
+        .authorize_tool(&req("write_file", json!({ "path": "a.txt" })))
+        .await
+        .unwrap();
+    assert_eq!(decision, GateDecision::Allow);
+}
+
+#[tokio::test]
+async fn a_scheduled_turn_may_use_read_only_tools_only() {
+    use crate::agent::turn_origin::{self, AgentTurnOrigin, TrustedAutomationSource};
+
+    let cron = || AgentTurnOrigin::TrustedAutomation {
+        job_id: "cron-1".into(),
+        source: TrustedAutomationSource::Cron,
+    };
+    let gate = gate(AutonomyLevel::Full);
+
+    let read = turn_origin::with_origin(
+        cron(),
+        gate.authorize_tool(&req("read_file", json!({ "path": "a.txt" }))),
+    )
+    .await
+    .unwrap();
+    assert_eq!(read, GateDecision::Allow);
+
+    for acting in [
+        req("write_file", json!({ "path": "a.txt" })),
+        req(SHELL_TOOL, json!({ "command": "ls" })),
+    ] {
+        let name = acting.tool_name.clone();
+        let denied = turn_origin::with_origin(cron(), gate.authorize_tool(&acting))
+            .await
+            .unwrap();
+        assert!(!denied.is_allowed(), "cron must not run {name}");
+        assert!(denied
+            .denial_reason()
+            .expect("a Deny carries a reason")
+            .contains("read-only tools only"));
+    }
+
+    // The same acting call from a live origin is not affected.
+    let live = gate
+        .authorize_tool(&req("write_file", json!({ "path": "a.txt" })))
+        .await
+        .unwrap();
+    assert_eq!(live, GateDecision::Allow);
+}
