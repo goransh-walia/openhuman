@@ -35,11 +35,8 @@ async fn handle_status_returns_json() {
     })
     .await;
     let value = result.expect("status");
-    // The default backend resolution never runs unsandboxed commands as
-    // "suitable for untrusted code" without a jail that says so.
-    let report = &value["status"];
     assert!(
-        report["suitable_for_untrusted_code"].is_boolean(),
+        value["suitable_for_untrusted_code"].is_boolean(),
         "status must name the untrusted-code floor: {value:?}"
     );
 }
