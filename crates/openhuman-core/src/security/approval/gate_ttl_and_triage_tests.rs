@@ -372,13 +372,7 @@ mod resolve_park_ttl_tests {
 /// inspects the persisted `expires_at` on the pending row.
 #[tokio::test]
 async fn copilot_streaming_park_persists_the_clamped_expiry() {
-    let dir = TempDir::new().unwrap();
-    let config = Config {
-        workspace_dir: dir.path().to_path_buf(),
-        ..Config::default()
-    };
-    let session = format!("session-{}", uuid::Uuid::new_v4());
-    let gate = ApprovalGate::new(config, session, DEFAULT_APPROVAL_TTL);
+    let (gate, _dir) = test_gate();
     let gate = Arc::new(gate);
 
     let before = chrono::Utc::now();
@@ -396,11 +390,14 @@ async fn copilot_streaming_park_persists_the_clamped_expiry() {
         .await
     });
 
+    let mut tries = 0;
     let pending = loop {
         if let Some(p) = gate.list_pending().unwrap().into_iter().next() {
             break p;
         }
-        tokio::task::yield_now().await;
+        tries += 1;
+        assert!(tries < 500, "the copilot park never appeared");
+        tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
     let expires_at = pending

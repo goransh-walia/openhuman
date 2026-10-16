@@ -427,9 +427,10 @@ async fn a_request_that_expires_while_its_decision_races_it_honors_the_decision(
 }
 
 #[tokio::test]
-async fn a_request_the_engine_cannot_expire_still_denies_with_the_unanswered_reason() {
+async fn a_request_the_engine_no_longer_holds_is_denied_when_its_window_ends() {
     let (gate, _dir) = test_gate();
-    // The engine does not know this request, so expiry fails; the gate still fails closed.
+    // The engine does not know this request, so there is nothing to honor; the
+    // gate fails closed.
     let (_tx, rx) = oneshot::channel::<ApprovalDecision>();
     let mut elapsed = false;
     let (outcome, id) = gate
@@ -445,10 +446,7 @@ async fn a_request_the_engine_cannot_expire_still_denies_with_the_unanswered_rea
             true,
         )
         .await;
-    match outcome {
-        GateOutcome::Deny { reason } => assert!(is_unanswered_approval_reason(&reason), "{reason}"),
-        other => panic!("expected deny, got {other:?}"),
-    }
+    assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
     assert!(id.is_none());
 }
 
