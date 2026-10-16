@@ -116,7 +116,14 @@ pub(crate) async fn resolve_command_policy_with_config(
     Ok(policy)
 }
 
+/// Whether the host (env switch or `[components] sandbox = false`) turned the
+/// sandbox off. Never true under SaaS: the mode check precedes every operator
+/// switch, and `boot_guard` additionally refuses to boot a SaaS core that sets
+/// `OPENHUMAN_SANDBOX=off`.
 pub(crate) fn sandbox_disabled_by_host(ctx: &DispatchCtx) -> bool {
+    if crate::core::runtime::is_saas() {
+        return false;
+    }
     sandbox_off_value(std::env::var(SANDBOX_OFF_ENV).ok().as_deref()) || sandbox_component_off(ctx)
 }
 
