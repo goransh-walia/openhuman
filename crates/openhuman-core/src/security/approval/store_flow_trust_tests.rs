@@ -67,22 +67,33 @@ fn delete_flow_trust_all_purges_only_that_flow() {
 }
 
 #[test]
-fn record_flow_preauthorization_lands_in_audit_not_pending() {
+fn list_all_flow_trust_returns_every_flows_grants() {
+    let (config, _dir) = test_config();
+    assert!(list_all_flow_trust(&config).unwrap().is_empty());
+    insert_flow_trust(&config, "flow-1", "gmail_send").unwrap();
+    insert_flow_trust(&config, "flow-2", "slack_post").unwrap();
+    let mut all = list_all_flow_trust(&config).unwrap();
+    all.sort();
+    assert_eq!(
+        all,
+        [
+            ("flow-1".to_string(), "gmail_send".to_string()),
+            ("flow-2".to_string(), "slack_post".to_string())
+        ]
+    );
+}
+
+#[test]
+fn record_flow_preauthorization_lands_in_the_recorded_history() {
     let (config, _dir) = test_config();
     record_flow_preauthorization(&config, "flow-1", "slack_post", "session-test").unwrap();
 
-    // Born-decided: never actionable.
-    assert!(list_pending(&config).unwrap().is_empty());
-    // …but visible in the durable audit trail with the flow decision.
-    let decisions = list_recent_decisions(&config, 10).unwrap();
+    // Born-decided: visible in the durable audit trail with the flow decision.
+    let decisions = list_recorded_decisions(&config, 10).unwrap();
     assert_eq!(decisions.len(), 1);
     assert_eq!(decisions[0].tool_name, "slack_post");
     assert_eq!(
         decisions[0].decision,
         ApprovalDecision::ApproveAlwaysForFlow
     );
-    // And invisible to per-run pending listings (empty run_id sentinel).
-    assert!(list_pending_for_flow_run(&config, "flow-1", "run-1")
-        .unwrap()
-        .is_empty());
 }

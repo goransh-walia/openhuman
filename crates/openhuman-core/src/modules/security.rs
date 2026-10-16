@@ -319,6 +319,13 @@ pub(crate) fn spawn_activation(config: Config, generation: u64) {
     });
 }
 
+/// The attested module's bus proxy for the approval engine, loading the module
+/// first. Calls on it carry no host-side fault latching: an approval the module
+/// refuses is that request's answer, not a failure of the channel.
+pub(crate) async fn approval_proxy(config: &Config) -> Result<tinybus::Proxy, String> {
+    scoped_client::module_proxy(config).await
+}
+
 /// Read effective policy from the attested module, for authenticated host UI.
 pub async fn policy_info(config: &Config) -> Result<PolicyInfo, String> {
     require_enabled(config)?;

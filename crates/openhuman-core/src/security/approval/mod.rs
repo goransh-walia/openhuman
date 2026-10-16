@@ -2,19 +2,26 @@
 //!
 //! [`ApprovalGate`] (in [`gate`]) is the single approval path — async
 //! middleware between the agent and any tool whose
-//! [`tinytools::Tool::external_effect`] returns `true`. It
-//! persists pending rows in the storage backend, parks the tool-call future on a oneshot,
-//! and resumes when the UI dispatches `approval_decide`. Introduced for issue
-//! #1339 so external-channel writes (Slack post, email send, calendar create,
-//! …) cannot fire without explicit user consent.
+//! [`tinytools::Tool::external_effect`] returns `true`. It asks the approval
+//! engine ([`engine`]) whether the call may run, parks the tool-call future on
+//! a oneshot when a person must decide, and resumes when the UI dispatches
+//! `approval_decide`. Introduced for issue #1339 so external-channel writes
+//! (Slack post, email send, calendar create, …) cannot fire without explicit
+//! user consent.
 //!
-//! The user's "Always allow" allowlist lives in `autonomy.auto_approve` (read
-//! by the gate via [`crate::security::SecurityPolicy`]); a prior
-//! list-based `ApprovalManager` that consumed it was removed once the gate
-//! became the sole control.
+//! The engine is the TinySecurity module ([`native`], behind
+//! `security-module`): it owns each request's durable lifecycle, its exact
+//! binding to the call, the 10-minute expiry and the audit trail, and the host
+//! serves the module's store, audit sink, prompt and human verification. The
+//! user's "Always allow" allowlist lives in `autonomy.auto_approve` and per-flow
+//! trust in the store; the gate reads both live and hands them to the engine as
+//! the posture of each call.
 
+pub(crate) mod engine;
 mod flow_surface;
 pub mod gate;
+#[cfg(feature = "security-module")]
+pub(crate) mod native;
 pub mod summary;
 mod registration_scope;
 pub use registration_scope::ApprovalScope;
