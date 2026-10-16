@@ -83,15 +83,21 @@ pub(crate) struct PlannedSpawn {
 pub(crate) enum ModuleSource<'a> {
     /// The attested, pinned production module, loaded on demand.
     Production,
-    /// A proxy a test supplies for a module it loaded itself.
-    Fixed(&'a tinybus::Proxy),
+    /// A module a test loaded itself, with the executor facts it declares.
+    Fixed(&'a FixedModule),
+}
+
+/// A security module and executor facts supplied by a test.
+pub(crate) struct FixedModule {
+    pub(crate) proxy: tinybus::Proxy,
+    pub(crate) executor: tinysecurity_bus::SandboxExecutor2,
 }
 
 impl ModuleSource<'_> {
     async fn proxy(self, config: &Config) -> Result<tinybus::Proxy, PlanError> {
         match self {
             Self::Production => client::production_proxy(config).await.map_err(unavailable),
-            Self::Fixed(proxy) => Ok(proxy.clone()),
+            Self::Fixed(fixed) => Ok(fixed.proxy.clone()),
         }
     }
 }
@@ -227,7 +233,10 @@ async fn plan_with(
     )
     .map_err(unavailable)?;
     let proxy = module.proxy(config).await?;
-    let executor = probe(config, policy).await?;
+    let executor = match module {
+        ModuleSource::Production => probe(config, policy).await?,
+        ModuleSource::Fixed(fixed) => fixed.executor.clone(),
+    };
     let scope = facts::scope(&facts::FactsInput {
         config,
         policy,
