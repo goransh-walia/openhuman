@@ -19,6 +19,41 @@ use tinytools::Tool;
 use super::approval::ApprovalSecurityMiddleware;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 
+/// The gate over `policy`, settling a required approval through `resolver`.
+/// Denials render in the structured `Blocked / Reason / Workaround` shape the
+/// rest of the host's policy boundaries use.
+#[cfg(feature = "security-module")]
+pub(crate) fn gate(
+    policy: Arc<dyn tinyagents_harness::middleware::ToolCallPolicy<OpenHumanRunContext>>,
+    resolver: Arc<dyn tinyagents_harness::middleware::ApprovalResolver<OpenHumanRunContext>>,
+) -> tinyagents_harness::middleware::ToolPolicyGateMiddleware<OpenHumanRunContext> {
+    use crate::agent::tinyagents::policy_denial::PolicyDenial;
+    use tinyagents_harness::middleware::{PolicyDecision, ToolPolicyGateMiddleware};
+
+    ToolPolicyGateMiddleware::new(policy)
+        .with_approval_resolver(resolver)
+        .with_denial_renderer(Arc::new(|call, policy, decision| {
+            let denial = match decision {
+                PolicyDecision::RequireApproval { reason } => PolicyDenial::ApprovalRequired {
+                    tool: &call.name,
+                    policy,
+                    reason,
+                },
+                PolicyDecision::Deny { reason } => PolicyDenial::PolicyDenied {
+                    tool: &call.name,
+                    policy,
+                    reason,
+                },
+                PolicyDecision::Allow => PolicyDenial::PolicyDenied {
+                    tool: &call.name,
+                    policy,
+                    reason: "",
+                },
+            };
+            denial.render()
+        }))
+}
+
 /// Installs the security gate on `harness`. Call it before any other tool
 /// middleware so a refused call never reaches them.
 pub(crate) fn install(
@@ -29,38 +64,20 @@ pub(crate) fn install(
     {
         use super::tinysecurity::TinySecurityPolicy;
         use super::tinysecurity_module::ModuleVerdicts;
-        use crate::agent::tinyagents::policy_denial::PolicyDenial;
-        use tinyagents_harness::middleware::{PolicyDecision, ToolPolicyGateMiddleware};
 
         let policy = TinySecurityPolicy::new(Arc::new(ModuleVerdicts::new(tool_sets.clone())));
         let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets));
-        let gate = ToolPolicyGateMiddleware::new(Arc::new(policy))
-            .with_approval_resolver(resolver)
-            .with_denial_renderer(Arc::new(|call, policy, decision| {
-                let denial = match decision {
-                    PolicyDecision::RequireApproval { reason } => PolicyDenial::ApprovalRequired {
-                        tool: &call.name,
-                        policy,
-                        reason,
-                    },
-                    PolicyDecision::Deny { reason } => PolicyDenial::PolicyDenied {
-                        tool: &call.name,
-                        policy,
-                        reason,
-                    },
-                    PolicyDecision::Allow => PolicyDenial::PolicyDenied {
-                        tool: &call.name,
-                        policy,
-                        reason: "",
-                    },
-                };
-                denial.render()
-            }));
-        harness.push_tool_middleware(Arc::new(gate));
+        harness.push_tool_middleware(Arc::new(gate(Arc::new(policy), resolver)));
     }
     #[cfg(not(feature = "security-module"))]
-    harness.push_tool_middleware(Arc::new(tinyagents_harness::middleware::ApprovalGateMiddleware::new(
-        "approval_security",
-        Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
-    )));
+    harness.push_tool_middleware(Arc::new(
+        tinyagents_harness::middleware::ApprovalGateMiddleware::new(
+            "approval_security",
+            Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
+        ),
+    ));
 }
+
+#[cfg(all(test, feature = "security-module"))]
+#[path = "security_gate_tests.rs"]
+mod tests;
