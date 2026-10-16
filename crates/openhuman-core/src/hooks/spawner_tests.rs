@@ -1,100 +1,149 @@
-//! The hook shell is TinyBox's selection with the hook command filled in.
+//! Hook commands run behind the untrusted-spawn gate or not at all.
 
 use super::*;
-use tinybox_bus::ShellFlavor;
+use std::collections::BTreeMap;
+use std::path::Path;
+use tinyagents_runtime::command_hooks::HookEnvironment;
 
-fn posix() -> ShellInvocation {
-    ShellInvocation {
-        flavor: ShellFlavor::Posix,
-        program: "/bin/bash".into(),
-        arguments: vec![
-            "-p".into(),
-            "-c".into(),
-            format!("set -o pipefail\n{PLACEHOLDER}"),
-        ],
-        raw_arguments: None,
-        bootstrap_environment: Vec::new(),
-        remove_environment: vec!["BASH_ENV".into()],
+fn config_in(root: &Path) -> Config {
+    let workspace = root.join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let mut config = Config {
+        workspace_dir: workspace.clone(),
+        action_dir: workspace,
+        config_path: root.join("config.toml"),
+        ..Config::default()
+    };
+    config.modules.enabled = false;
+    config
+}
+
+fn request(command: &str, stdin: &[u8]) -> CommandRequest {
+    CommandRequest {
+        command: command.to_owned(),
+        cwd: None,
+        env: BTreeMap::new(),
+        stdin: stdin.to_vec(),
+        timeout: Duration::from_secs(10),
     }
 }
 
-fn cmd() -> ShellInvocation {
-    ShellInvocation {
-        flavor: ShellFlavor::Cmd,
-        program: r"C:\Windows\System32\cmd.exe".into(),
-        arguments: vec!["/D".into(), "/S".into(), "/C".into()],
-        raw_arguments: Some(format!("\"{PLACEHOLDER}\"")),
-        bootstrap_environment: Vec::new(),
-        remove_environment: Vec::new(),
+/// With no jail reachable, the hook command must be refused, not started on the
+/// host, and the engine must see an error it can turn into a denial.
+#[tokio::test]
+async fn a_hook_command_never_runs_when_the_jail_is_unreachable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = config_in(tmp.path());
+    let marker = tmp.path().join("ran");
+
+    let result = run_in(
+        &config,
+        request(&format!("touch '{}'", marker.display()), b"{}"),
+    )
+    .await;
+
+    assert!(result.is_err(), "the jail is unreachable: {result:?}");
+    assert!(!marker.exists(), "a refused spawn must never run the hook");
+}
+
+/// The operator's own opt-out is the only unjailed path; through it the hook
+/// still gets its stdin, environment and exit code.
+#[tokio::test]
+async fn a_hook_command_gets_stdin_environment_and_exit_code_through_the_gate() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = config_in(tmp.path());
+    config.sandbox.enabled = Some(false);
+    let mut spawn = request("cat; echo \"$HOOK_VAR\" 1>&2; exit 2", br#"{"event":"x"}"#);
+    spawn.env.insert("HOOK_VAR".into(), "from-engine".into());
+
+    let output = run_in(&config, spawn).await.expect("the hook ran");
+
+    assert_eq!(output.exit_code, Some(2));
+    assert_eq!(output.stdout, br#"{"event":"x"}"#);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "from-engine"
+    );
+}
+
+/// The engine, wired to this spawner, denies a `fail_closed` hook when the gate
+/// refuses it, and never starts the process.
+#[tokio::test]
+async fn a_refused_hook_denies_when_it_is_fail_closed() {
+    use tinyagents_runtime::command_hooks::config::{HookDefinition, HookKind, LoopLimit};
+    use tinyagents_runtime::command_hooks::types::{HookInput, HookPayload, ShellPayload};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let marker = tmp.path().join("ran");
+    let definition = HookDefinition {
+        command: format!("touch '{}'", marker.display()),
+        kind: HookKind::Command,
+        timeout: Some(5),
+        matcher: None,
+        loop_limit: LoopLimit::Default,
+        fail_closed: true,
+        model: None,
+        enabled: true,
+        layer: None,
+        source_dir: None,
+    };
+    let input = HookInput {
+        hook_event_name: "preToolUse".into(),
+        conversation_id: None,
+        generation_id: None,
+        session_id: None,
+        model: None,
+        agent_id: None,
+        openhuman_version: "test".into(),
+        workspace_roots: vec![],
+        cwd: None,
+        payload: HookPayload::Shell(ShellPayload {
+            command: "ls".into(),
+            sandbox: false,
+            output: None,
+            duration_ms: None,
+        }),
+    };
+    let config = config_in(tmp.path());
+    // The engine reaches the spawner the same way `host::environment` wires it.
+    struct Fixed(Config);
+    #[async_trait]
+    impl CommandSpawner for Fixed {
+        async fn run(&self, request: CommandRequest) -> Result<CommandOutput, String> {
+            run_in(&self.0, request).await
+        }
     }
+    let environment = HookEnvironment::new("OpenHuman", None)
+        .with_command_spawner(std::sync::Arc::new(Fixed(config)));
+
+    let run = tinyagents_runtime::command_hooks::exec::run(
+        &definition,
+        &input,
+        &BTreeMap::new(),
+        Duration::from_secs(5),
+        &environment,
+    )
+    .await;
+
+    assert!(run.output.is_deny(), "{run:?}");
+    assert!(!marker.exists());
 }
 
 #[test]
-fn the_hook_command_replaces_the_placeholder_in_the_selected_arguments() {
-    let process = from_selection(&posix(), "echo 'a b' | cat");
-    assert_eq!(process.get_program(), "/bin/bash");
-    let args: Vec<_> = process
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(args, ["-p", "-c", "set -o pipefail\necho 'a b' | cat"]);
-    assert!(process
-        .get_envs()
-        .any(|(name, value)| name == "BASH_ENV" && value.is_none()));
+fn a_timeout_is_an_error_not_an_exit_code() {
+    let timed_out = crate::sandbox::types::SandboxExecResult {
+        exit_code: -1,
+        stdout: String::new(),
+        stderr: String::new(),
+        timed_out: true,
+    };
+    let error = outcome(Ok(timed_out), Duration::from_secs(3)).unwrap_err();
+    assert!(error.contains("timed out after 3s"), "{error}");
 }
 
 #[test]
-fn a_command_that_contains_the_placeholder_text_is_not_rewritten_twice() {
-    let process = from_selection(&posix(), PLACEHOLDER);
-    let last = process
-        .get_args()
-        .last()
-        .unwrap()
-        .to_string_lossy()
-        .into_owned();
-    assert_eq!(last, format!("set -o pipefail\n{PLACEHOLDER}"));
-}
-
-#[test]
-fn a_selection_must_embed_the_command_exactly_once() {
-    assert!(embeds_placeholder_once(&posix()));
-    assert!(embeds_placeholder_once(&cmd()));
-    let mut none = posix();
-    none.arguments = vec!["-c".into(), "true".into()];
-    assert!(!embeds_placeholder_once(&none));
-    let mut twice = posix();
-    twice.arguments.push(PLACEHOLDER.into());
-    assert!(!embeds_placeholder_once(&twice));
-}
-
-/// The selection is process-global, so tests that install or clear it share this.
-static SELECTION: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-#[test]
-fn an_unresolved_selection_fails_the_spawn_instead_of_picking_a_shell() {
-    let _serial = SELECTION
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    *slot().write().unwrap() = None;
-    let process = command("echo hi");
-    assert_eq!(process.as_std().get_program(), UNAVAILABLE);
-}
-
-#[test]
-fn an_installed_selection_builds_the_hook_process() {
-    let _serial = SELECTION
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    install(posix());
-    let process = command("echo hi");
-    assert_eq!(process.as_std().get_program(), "/bin/bash");
-    *slot().write().unwrap() = None;
-}
-
-#[test]
-fn saas_never_starts_a_hook_command_even_with_a_resolved_selection() {
-    let process = build(Some(posix()), true, "echo hi");
-    assert_eq!(process.as_std().get_program(), UNAVAILABLE);
-    let single_user = build(Some(posix()), false, "echo hi");
-    assert_eq!(single_user.as_std().get_program(), "/bin/bash");
+fn the_isolation_floor_is_reported_as_a_security_block() {
+    let floor = anyhow::Error::new(crate::sandbox::ops::IsolationFloor).context("jail below floor");
+    let error = outcome(Err(floor), Duration::from_secs(3)).unwrap_err();
+    assert!(error.starts_with("blocked by security policy"), "{error}");
 }

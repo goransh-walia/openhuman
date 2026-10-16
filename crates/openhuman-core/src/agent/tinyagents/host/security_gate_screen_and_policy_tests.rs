@@ -340,7 +340,10 @@ async fn an_exhausted_hourly_budget_denies_acting_tools_but_not_reads() {
         .authorize_tool(&req("write_file", json!({ "path": "a.txt" })))
         .await
         .unwrap();
-    assert!(!acting.is_allowed(), "an exhausted budget must deny an acting tool");
+    assert!(
+        !acting.is_allowed(),
+        "an exhausted budget must deny an acting tool"
+    );
     assert!(acting
         .denial_reason()
         .expect("a Deny carries a reason")

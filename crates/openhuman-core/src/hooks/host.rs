@@ -48,7 +48,7 @@ pub fn engine() -> &'static HookEngine {
 /// user layer against the home directory **now**, as it did before the engine
 /// moved upstream, so a reload after `HOME` changes reads the right file.
 pub async fn reload(
-    ctx: &DispatchCtx,
+    _ctx: &DispatchCtx,
     project_dir: Option<std::path::PathBuf>,
     workspace_dir: Option<std::path::PathBuf>,
 ) -> Arc<HookConfig> {
