@@ -66,11 +66,8 @@ impl ApprovalSecurityMiddleware {
 
     /// Whether the named tool declares an external effect for these args.
     pub(crate) fn has_external_effect(&self, name: &str, args: &serde_json::Value) -> bool {
-        self.tool_sets
-            .iter()
-            .flat_map(|set| set.iter())
-            .find(|t| t.name() == name)
-            .map(|t| t.external_effect_with_args(args))
+        self.resolve_tool(name)
+            .map(|tool| tool.external_effect_with_args(args))
             .unwrap_or(false)
     }
 
