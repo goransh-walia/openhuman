@@ -203,6 +203,23 @@ impl Docs {
         })
     }
 
+    /// Every `(flow_id, tool_name)` grant, for the engine's per-flow grants.
+    pub(super) fn list_all_flow_trust(&self) -> Result<Vec<(String, String)>> {
+        self.run(|docs| async move {
+            Ok(docs
+                .query_all(FLOW_TRUST, &Query::all())
+                .await?
+                .iter()
+                .filter_map(|grant| {
+                    Some((
+                        text(&grant.doc, "flow_id")?.to_string(),
+                        text(&grant.doc, "tool_name")?.to_string(),
+                    ))
+                })
+                .collect())
+        })
+    }
+
     pub(super) fn list_flow_trust(&self, flow_id: &str) -> Result<Vec<String>> {
         let flow = flow_id.to_string();
         self.run(|docs| async move {

@@ -42,12 +42,27 @@ pub fn record_flow_preauthorization(
     )
 }
 
+/// The decided history rows the host wrote itself or older installs left:
+/// flow pre-authorizations and the requests of the engine this one replaced,
+/// newest first. The module's own rows are read through the engine.
+pub fn list_recorded_decisions(
+    config: &Config,
+    limit: usize,
+) -> Result<Vec<super::super::types::ApprovalAuditEntry>> {
+    super::super::store_documents::current(config)?.list_recent_decisions(limit)
+}
+
 /// Grant "approve always for this flow" trust to a `(flow_id, tool_name)`
 /// pair — inserted when the user picks `ApproveAlwaysForFlow` on a
 /// flow-origin park. `INSERT OR IGNORE` makes re-granting an already-trusted
 /// pair a harmless no-op rather than a primary-key error.
 pub fn insert_flow_trust(config: &Config, flow_id: &str, tool_name: &str) -> Result<()> {
     super::super::store_documents::current(config)?.insert_flow_trust(flow_id, tool_name)
+}
+
+/// Every `(flow_id, tool_name)` grant: the per-flow trust the engine is told.
+pub fn list_all_flow_trust(config: &Config) -> Result<Vec<(String, String)>> {
+    super::super::store_documents::current(config)?.list_all_flow_trust()
 }
 
 /// List every `tool_name` currently holding "approve always for this flow"
