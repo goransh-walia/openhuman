@@ -577,8 +577,8 @@ async fn a_sandboxed_spawn_the_module_cannot_plan_is_refused() {
     .expect_err("no module, no plan");
     assert!(
         matches!(
-            error.downcast_ref::<super::spawn_plan::PlanError>(),
-            Some(super::spawn_plan::PlanError::Unavailable(_))
+            error.downcast_ref::<crate::sandbox::spawn_plan::PlanError>(),
+            Some(crate::sandbox::spawn_plan::PlanError::Unavailable(_))
         ),
         "{error:#}"
     );
