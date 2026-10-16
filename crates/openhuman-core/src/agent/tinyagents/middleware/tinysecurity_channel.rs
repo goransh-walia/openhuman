@@ -103,3 +103,7 @@ impl VerdictSource for ChannelApprovalVerdicts {
         .then(|| NO_APPROVAL_FLOW.to_string())
     }
 }
+
+#[cfg(test)]
+#[path = "tinysecurity_channel_tests.rs"]
+mod tests;
