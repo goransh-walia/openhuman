@@ -347,6 +347,11 @@ impl Rows {
         request
             .validate()
             .map_err(|_| "the audit batch is malformed".to_string())?;
+        // A batch may start at the committed tail or replay an earlier one; it may
+        // never leave a gap, so nothing is written for one that does.
+        if request.expected_tail > self.tail(&request.stream_id).await? {
+            return Err("the audit batch leaves a gap after the committed tail".into());
+        }
         let mut last = None;
         for event in &request.events {
             let id = format!("{}:{:020}", request.stream_id, event.sequence);
