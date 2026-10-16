@@ -7,8 +7,8 @@
 //! plan made against one state is refused once the state changes.
 
 use tinysecurity_bus::{
-    ConstraintEnforcement2, ConstraintSupport2, IsolationLevel2, SandboxBackend, SandboxConstraint2,
-    SandboxExecutor2,
+    ConstraintEnforcement2, ConstraintSupport2, IsolationLevel2, SandboxBackend,
+    SandboxConstraint2, SandboxExecutor2,
 };
 
 use super::super::types::SandboxBackendKind;
@@ -36,7 +36,10 @@ fn isolation(reported: &str) -> IsolationLevel2 {
     }
 }
 
-fn support(constraint: SandboxConstraint2, enforcement: ConstraintEnforcement2) -> ConstraintSupport2 {
+fn support(
+    constraint: SandboxConstraint2,
+    enforcement: ConstraintEnforcement2,
+) -> ConstraintSupport2 {
     ConstraintSupport2 {
         constraint,
         enforcement,

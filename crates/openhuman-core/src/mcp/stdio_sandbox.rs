@@ -22,7 +22,7 @@ use tinymcp_bus::StdioSandboxConfig;
 
 use crate::config::Config;
 use crate::sandbox::local_grants::{
-    JailGrants, admit_module_grants, credential_store_paths, grant_home, grant_request,
+    admit_module_grants, credential_store_paths, grant_home, grant_request, JailGrants,
 };
 
 /// System paths a server's runtime commonly needs, read-only. Missing ones

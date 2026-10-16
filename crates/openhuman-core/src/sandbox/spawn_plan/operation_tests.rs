@@ -78,10 +78,12 @@ fn environment_values_never_appear_in_the_document() {
 #[test]
 fn a_short_command_is_readable_and_a_long_one_is_bound_by_digest() {
     let cwd = Path::new("/work");
-    let short: serde_json::Value = serde_json::from_str(&canonical(&operation("echo hi", cwd))).unwrap();
+    let short: serde_json::Value =
+        serde_json::from_str(&canonical(&operation("echo hi", cwd))).unwrap();
     assert_eq!(short["command"], "echo hi");
     let long_text = "x".repeat(INLINE_COMMAND_BYTES + 1);
-    let long: serde_json::Value = serde_json::from_str(&canonical(&operation(&long_text, cwd))).unwrap();
+    let long: serde_json::Value =
+        serde_json::from_str(&canonical(&operation(&long_text, cwd))).unwrap();
     assert!(long["command"].is_null());
     assert_eq!(long["command_len"], long_text.len());
     assert_eq!(long["command_sha256"], hex(long_text.as_bytes()));
@@ -90,7 +92,10 @@ fn a_short_command_is_readable_and_a_long_one_is_bound_by_digest() {
     assert!(canonical(&operation(&huge, cwd)).len() < 4096);
     // A longer command still differs from another one of the same length.
     let other = "z".repeat(INLINE_COMMAND_BYTES + 1);
-    assert_ne!(canonical(&operation(&long_text, cwd)), canonical(&operation(&other, cwd)));
+    assert_ne!(
+        canonical(&operation(&long_text, cwd)),
+        canonical(&operation(&other, cwd))
+    );
 }
 
 #[cfg(unix)]

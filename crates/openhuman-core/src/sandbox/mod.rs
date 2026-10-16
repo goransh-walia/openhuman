@@ -17,10 +17,10 @@ pub mod ops;
 #[cfg(feature = "security-module")]
 pub mod plan;
 pub mod schemas;
-#[cfg(feature = "security-module")]
-pub(crate) mod spawn_plan;
 pub(crate) mod shell_exec;
 pub(crate) mod shell_progress;
+#[cfg(feature = "security-module")]
+pub(crate) mod spawn_plan;
 pub mod types;
 pub(crate) mod untrusted;
 

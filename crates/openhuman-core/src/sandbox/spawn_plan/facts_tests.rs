@@ -90,7 +90,11 @@ fn equal_facts_share_an_identity_and_any_difference_gets_its_own() {
     ids.push(reference.scope_id);
     ids.sort();
     ids.dedup();
-    assert_eq!(ids.len(), variants.len() + 1, "every variant has its own scope");
+    assert_eq!(
+        ids.len(),
+        variants.len() + 1,
+        "every variant has its own scope"
+    );
 }
 
 #[test]

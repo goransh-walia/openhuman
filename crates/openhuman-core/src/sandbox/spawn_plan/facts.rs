@@ -12,8 +12,8 @@ use std::path::Path;
 use sha2::{Digest, Sha256};
 use tinysecurity_bus::{
     AccessTier, NetworkPolicy, Origin, PathAccess, PathGrant, PathPolicy, PathTrustedRoot,
-    ResourceLimits2, SandboxDeployment2,
-    SandboxExecutor2, SandboxScope2, SandboxSetting2, SandboxSource2, SourceTrust, SubjectScope,
+    ResourceLimits2, SandboxDeployment2, SandboxExecutor2, SandboxScope2, SandboxSetting2,
+    SandboxSource2, SourceTrust, SubjectScope,
 };
 
 use super::super::types::{SandboxBackendKind, SandboxPolicy};
@@ -189,7 +189,11 @@ pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
         approval_scope_id: None,
         scope_id: String::new(),
         subject: subject.clone(),
-        origin: if *saas { Origin::Saas } else { Origin::Operator },
+        origin: if *saas {
+            Origin::Saas
+        } else {
+            Origin::Operator
+        },
         tier: AccessTier::Full,
         deployment: if *saas {
             SandboxDeployment2::Saas

@@ -446,15 +446,8 @@ pub(crate) async fn execute_in_sandbox_metered(
                 })?,
             };
             let policy = super::local_grants::with_resolved_grants(&config, policy).await?;
-            let policy = admit_spawn(
-                &config,
-                &policy,
-                command,
-                working_dir,
-                &extra_env,
-                host_off,
-            )
-            .await?;
+            let policy =
+                admit_spawn(&config, &policy, command, working_dir, &extra_env, host_off).await?;
             super::native_jail::execute(
                 &config,
                 &policy,

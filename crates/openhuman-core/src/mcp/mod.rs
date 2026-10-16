@@ -211,9 +211,9 @@ pub mod audit;
 // of its own. Gating this would break the build with the domain turned off.
 pub mod host;
 pub mod registry;
+pub mod server;
 #[cfg(feature = "mcp")]
 pub(crate) mod stdio_sandbox;
-pub mod server;
 #[cfg(feature = "mcp")]
 pub mod ui;
 

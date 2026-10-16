@@ -39,8 +39,12 @@ fn only_existing_paths_are_granted_and_operator_extras_are_included() {
     ];
     config.runtime.local_jail.extra_read_write = vec![extra.path().display().to_string()];
     let sandbox = for_config(&config).expect("a sandbox");
-    assert!(sandbox.read_only.contains(&extra.path().display().to_string()));
-    assert!(sandbox.read_write.contains(&extra.path().display().to_string()));
+    assert!(sandbox
+        .read_only
+        .contains(&extra.path().display().to_string()));
+    assert!(sandbox
+        .read_write
+        .contains(&extra.path().display().to_string()));
     assert!(
         sandbox
             .read_only
@@ -82,16 +86,13 @@ fn prepared_toolchain_grants_widen_only_that_workspaces_jail() {
     let other = tempfile::tempdir().expect("other");
     let toolchain = tempfile::tempdir().expect("toolchain");
     let config = config_in(temp.path());
-    prepared()
-        .lock()
-        .expect("lock")
-        .insert(
-            config.workspace_dir.clone(),
-            JailGrants {
-                read_only: vec![toolchain.path().to_path_buf()],
-                read_write: Vec::new(),
-            },
-        );
+    prepared().lock().expect("lock").insert(
+        config.workspace_dir.clone(),
+        JailGrants {
+            read_only: vec![toolchain.path().to_path_buf()],
+            read_write: Vec::new(),
+        },
+    );
     let widened = for_config(&config).expect("a sandbox");
     assert!(widened
         .read_only

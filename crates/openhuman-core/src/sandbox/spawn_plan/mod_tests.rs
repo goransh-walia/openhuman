@@ -28,19 +28,38 @@ fn with_overrides(cpu: Option<f64>, memory_mb: Option<u64>) -> SandboxPolicy {
 
 #[test]
 fn bounds_come_from_the_docker_overrides_and_never_loosen() {
-    assert_eq!(limits(&policy(SandboxBackendKind::Local)), ResourceLimits2::default());
+    assert_eq!(
+        limits(&policy(SandboxBackendKind::Local)),
+        ResourceLimits2::default()
+    );
     let bounded = limits(&with_overrides(Some(1.5), Some(512)));
     assert_eq!(bounded.cpu_millicores, Some(1500));
     assert_eq!(bounded.memory_bytes, Some(512 * 1024 * 1024));
     assert_eq!(bounded.cpu_time_ms, None);
     // A fraction rounds up to the next millicore rather than down to a looser bound.
-    assert_eq!(limits(&with_overrides(Some(0.0004), None)).cpu_millicores, Some(1));
+    assert_eq!(
+        limits(&with_overrides(Some(0.0004), None)).cpu_millicores,
+        Some(1)
+    );
     // Absent, zero and non-finite bounds are not bounds.
-    for cpu in [None, Some(0.0), Some(-1.0), Some(f64::NAN), Some(f64::INFINITY)] {
-        assert_eq!(limits(&with_overrides(cpu, None)).cpu_millicores, None, "{cpu:?}");
+    for cpu in [
+        None,
+        Some(0.0),
+        Some(-1.0),
+        Some(f64::NAN),
+        Some(f64::INFINITY),
+    ] {
+        assert_eq!(
+            limits(&with_overrides(cpu, None)).cpu_millicores,
+            None,
+            "{cpu:?}"
+        );
     }
     assert_eq!(limits(&with_overrides(None, Some(0))).memory_bytes, None);
-    assert_eq!(limits(&with_overrides(None, Some(u64::MAX))).memory_bytes, None);
+    assert_eq!(
+        limits(&with_overrides(None, Some(u64::MAX))).memory_bytes,
+        None
+    );
 }
 
 #[test]

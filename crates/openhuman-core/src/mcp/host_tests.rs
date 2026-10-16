@@ -179,7 +179,9 @@ fn operators_own_servers_are_trusted_and_the_stdio_jail_requires_isolation() {
         converted.servers[0].operator_trusted,
         "a server from the operator's own config keeps its direct spawn"
     );
-    let sandbox = converted.stdio_sandbox.expect("registry servers get a jail");
+    let sandbox = converted
+        .stdio_sandbox
+        .expect("registry servers get a jail");
     assert!(sandbox.require_process_isolation);
     assert_eq!(
         std::path::Path::new(&sandbox.workspace),

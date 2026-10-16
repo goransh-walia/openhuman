@@ -345,8 +345,11 @@ impl PlannedSpawn {
                 overrides.network = Some("none".to_owned());
             }
             let limits = &self.artifact.limits;
-            overrides.memory_limit_mb = limits.memory_bytes.map(|bytes| bytes.div_ceil(1024 * 1024));
-            overrides.cpu_limit = limits.cpu_millicores.map(|millis| f64::from(millis) / 1000.0);
+            overrides.memory_limit_mb =
+                limits.memory_bytes.map(|bytes| bytes.div_ceil(1024 * 1024));
+            overrides.cpu_limit = limits
+                .cpu_millicores
+                .map(|millis| f64::from(millis) / 1000.0);
         }
         applied
     }
@@ -389,7 +392,10 @@ pub(crate) async fn consume(planned: &PlannedSpawn) -> Result<(), PlanError> {
         return Ok(());
     }
     let denial = response.denial.unwrap_or(SandboxDenial2::InvalidContext);
-    tracing::warn!(?denial, "[sandbox:plan] the module refused to admit the spawn");
+    tracing::warn!(
+        ?denial,
+        "[sandbox:plan] the module refused to admit the spawn"
+    );
     Err(PlanError::Refused(denial))
 }
 

@@ -121,7 +121,11 @@ fn request<'a>(
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn a_kernel_jail_spawn_is_planned_reserved_once_and_audited() {
     let _ = IGNORE;
-    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let world = world(executor(
+        IsolationLevel2::Kernel,
+        ConstraintEnforcement2::Enforced,
+    ))
+    .await;
     let policy = policy(&world, false);
     let op = operation(&world, "echo hello");
     let planned = plan(request(&world, &policy, &op, SpawnSource::Agent))
@@ -134,7 +138,9 @@ async fn a_kernel_jail_spawn_is_planned_reserved_once_and_audited() {
         planned.plan.jail.read_write,
         [world.action.to_str().unwrap().to_owned()]
     );
-    consume(&planned).await.expect("an issued plan is admitted once");
+    consume(&planned)
+        .await
+        .expect("an issued plan is admitted once");
     assert_eq!(
         consume(&planned).await.unwrap_err(),
         PlanError::Refused(SandboxDenial2::InvalidContext),
@@ -148,13 +154,20 @@ async fn a_kernel_jail_spawn_is_planned_reserved_once_and_audited() {
         .await
         .expect("correlation")
         .expected_tail;
-    assert!(tail >= 2, "plan and consume were both audited (tail {tail})");
+    assert!(
+        tail >= 2,
+        "plan and consume were both audited (tail {tail})"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn a_changed_operation_never_reuses_a_plan() {
-    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let world = world(executor(
+        IsolationLevel2::Kernel,
+        ConstraintEnforcement2::Enforced,
+    ))
+    .await;
     let policy = policy(&world, false);
     let op = operation(&world, "echo hello");
     let mut planned = plan(request(&world, &policy, &op, SpawnSource::Agent))
@@ -167,7 +180,11 @@ async fn a_changed_operation_never_reuses_a_plan() {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn host_network_is_narrowed_to_none_when_the_module_wants_a_human_approval() {
-    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let world = world(executor(
+        IsolationLevel2::Kernel,
+        ConstraintEnforcement2::Enforced,
+    ))
+    .await;
     let asked = policy(&world, true);
     let op = operation(&world, "curl example.com");
     let planned = plan(request(&world, &asked, &op, SpawnSource::Agent))
@@ -175,7 +192,10 @@ async fn host_network_is_narrowed_to_none_when_the_module_wants_a_human_approval
         .expect("planned without the network");
     assert!(!planned.plan.jail.allow_net);
     let applied = planned.apply(&asked);
-    assert!(!applied.allow_network, "the run policy follows the plan, not the request");
+    assert!(
+        !applied.allow_network,
+        "the run policy follows the plan, not the request"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -219,7 +239,11 @@ async fn text_the_host_did_not_write_needs_kernel_isolation_whatever_the_switche
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn a_grant_outside_the_host_chosen_roots_or_inside_a_credential_store_is_refused() {
-    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let world = world(executor(
+        IsolationLevel2::Kernel,
+        ConstraintEnforcement2::Enforced,
+    ))
+    .await;
     let mut policy = policy(&world, false);
     // The host's own mount list names a credential store: the module's floor refuses it.
     policy.read_only_mounts = vec![PathBuf::from("/home/someone/.ssh")];
@@ -232,7 +256,11 @@ async fn a_grant_outside_the_host_chosen_roots_or_inside_a_credential_store_is_r
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn container_bounds_come_from_the_plan() {
-    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let world = world(executor(
+        IsolationLevel2::Kernel,
+        ConstraintEnforcement2::Enforced,
+    ))
+    .await;
     let mut policy = policy(&world, false);
     policy.backend = SandboxBackendKind::Docker;
     policy.docker_overrides = Some(DockerOverrides {
@@ -259,14 +287,22 @@ async fn container_bounds_come_from_the_plan() {
     let overrides = applied.docker_overrides.expect("overrides");
     assert_eq!(overrides.memory_limit_mb, Some(256));
     assert_eq!(overrides.cpu_limit, Some(0.5));
-    assert_eq!(overrides.network.as_deref(), Some("none"), "the container joins no network");
+    assert_eq!(
+        overrides.network.as_deref(),
+        Some("none"),
+        "the container joins no network"
+    );
     assert!(!applied.allow_network);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn another_subject_gets_its_own_scope_and_ledger() {
-    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let world = world(executor(
+        IsolationLevel2::Kernel,
+        ConstraintEnforcement2::Enforced,
+    ))
+    .await;
     let policy = policy(&world, false);
     let op = operation(&world, "echo hello");
     let first = plan(request(&world, &policy, &op, SpawnSource::Agent))
@@ -325,7 +361,11 @@ async fn a_module_that_cannot_be_reached_refuses_the_spawn() {
 async fn the_host_retires_the_least_recently_used_scope_instead_of_growing_without_bound() {
     use tinysecurity_bus::{RegisterSandboxScopeRequest2, SandboxScopeOutcome2};
 
-    let world = world(executor(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced)).await;
+    let world = world(executor(
+        IsolationLevel2::Kernel,
+        ConstraintEnforcement2::Enforced,
+    ))
+    .await;
     let stream = "9".repeat(32);
     let scope_for = |index: usize| {
         let mut policy = policy(&world, false);

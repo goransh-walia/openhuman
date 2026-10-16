@@ -12,7 +12,10 @@ fn status(isolation: &str, fs: &str, net: &str, sub: &str, available: bool) -> J
     }
 }
 
-fn enforcement_of(executor: &SandboxExecutor2, constraint: SandboxConstraint2) -> Option<ConstraintEnforcement2> {
+fn enforcement_of(
+    executor: &SandboxExecutor2,
+    constraint: SandboxConstraint2,
+) -> Option<ConstraintEnforcement2> {
     executor
         .constraints
         .iter()
@@ -50,7 +53,13 @@ fn a_kernel_jail_declares_exactly_what_tinybox_reports() {
 
 #[test]
 fn a_best_effort_jail_never_claims_enforcement() {
-    let seatbelt = jail(&status("process", "best effort", "best effort", "best effort", true));
+    let seatbelt = jail(&status(
+        "process",
+        "best effort",
+        "best effort",
+        "best effort",
+        true,
+    ));
     assert_eq!(seatbelt.isolation, IsolationLevel2::Process);
     for constraint in [
         SandboxConstraint2::Filesystem,
@@ -80,7 +89,10 @@ fn unknown_words_are_never_read_as_stronger_than_unsupported() {
         );
     }
     assert_eq!(
-        jail(&status("hardware", "enforced", "enforced", "enforced", true)).isolation,
+        jail(&status(
+            "hardware", "enforced", "enforced", "enforced", true
+        ))
+        .isolation,
         IsolationLevel2::MicroVm
     );
 }
@@ -134,6 +146,12 @@ fn docker_claims_only_what_a_run_can_apply() {
 #[test]
 fn a_backend_kind_selects_its_executor() {
     assert_eq!(kind_executor_id(SandboxBackendKind::None), None);
-    assert_eq!(kind_executor_id(SandboxBackendKind::Local), Some(JAIL_EXECUTOR));
-    assert_eq!(kind_executor_id(SandboxBackendKind::Docker), Some(DOCKER_EXECUTOR));
+    assert_eq!(
+        kind_executor_id(SandboxBackendKind::Local),
+        Some(JAIL_EXECUTOR)
+    );
+    assert_eq!(
+        kind_executor_id(SandboxBackendKind::Docker),
+        Some(DOCKER_EXECUTOR)
+    );
 }
