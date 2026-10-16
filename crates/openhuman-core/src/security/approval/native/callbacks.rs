@@ -14,7 +14,7 @@ use tinysecurity_bus::{
 };
 
 use super::super::engine::Delivery;
-use super::scopes::by_handle;
+use super::scopes::{by_handle, by_stream};
 use super::state::{host, RequestEntry};
 use super::ticket_sha256;
 
@@ -46,14 +46,17 @@ pub(crate) async fn cas(request: ApprovalCasRequest2) -> Result<ApprovalCasRespo
     Ok(receipt)
 }
 
-/// `AuditSink2.Append`: one ordered audit batch of one stream.
+/// `AuditSink2.Append`: one ordered audit batch of one subject's stream.
 pub(crate) async fn append(request: AuditSinkRequest2) -> Result<AuditSinkResponse2, String> {
-    let scope = by_handle(&request.scope)
+    // The batch names its subject only by the module's identifier hash, so the
+    // stream the host assigned to the subject is what identifies it; the first
+    // batch fixes how the stream's subject is spelled and later ones must repeat it.
+    let scope = by_stream(&request.stream_id)
         .await
-        .ok_or("audit sink: unknown subject")?;
-    if scope.stream_id != request.stream_id {
-        tracing::warn!("{LOG} audit batch for a stream the subject does not own");
-        return Err("audit sink: the stream is not the subject's".into());
+        .ok_or("audit sink: unknown stream")?;
+    if !scope.audit_scope_matches(&request.scope) {
+        tracing::warn!("{LOG} audit batch names another subject than its stream's");
+        return Err("audit sink: the stream belongs to another subject".into());
     }
     let receipt = scope.rows.append(&request).await?;
     tracing::trace!(new_tail = receipt.new_tail, "{LOG} audit batch committed");

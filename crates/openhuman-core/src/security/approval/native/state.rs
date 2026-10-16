@@ -79,8 +79,13 @@ impl Ticket {
 pub(super) struct Scopes {
     /// By `(user, workspace, agent)` of the original subject.
     pub(super) by_subject: HashMap<String, Arc<ScopeEntry>>,
-    /// By the module's handle for the subject, which its callbacks carry.
+    /// By the module's handle for the subject, which its store and prompt
+    /// callbacks carry.
     pub(super) by_handle: HashMap<(String, String, String), Arc<ScopeEntry>>,
+    /// By the audit stream id the host chose for the subject. The sink callback
+    /// carries the subject only as a lossy identifier hash, so the stream id,
+    /// which is unique to one subject, is what names it.
+    pub(super) by_stream: HashMap<String, Arc<ScopeEntry>>,
 }
 
 /// The process-wide host state.

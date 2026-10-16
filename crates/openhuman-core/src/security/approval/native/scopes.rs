@@ -45,6 +45,9 @@ pub(super) struct ScopeEntry {
     /// What the module currently holds for the subject.
     registered: tokio::sync::Mutex<Option<String>>,
     swept: Mutex<Option<Instant>>,
+    /// The subject identifiers the module's audit batches carried the first time,
+    /// which every later batch of the stream must repeat.
+    audit_scope: OnceLock<SubjectScope>,
 }
 
 impl std::fmt::Debug for ScopeEntry {
@@ -65,12 +68,19 @@ impl ScopeEntry {
             stream: tokio::sync::Mutex::new(()),
             registered: tokio::sync::Mutex::new(None),
             swept: Mutex::new(None),
+            audit_scope: OnceLock::new(),
         }
     }
 
     /// The module's handle for the subject, known once it is registered.
     pub(super) fn handle(&self) -> Option<&SubjectScope> {
         self.handle.get()
+    }
+
+    /// Whether `scope` is the subject identification this stream's audit batches
+    /// have always carried; the first batch fixes it.
+    pub(super) fn audit_scope_matches(&self, scope: &SubjectScope) -> bool {
+        self.audit_scope.get_or_init(|| scope.clone()) == scope
     }
 
     /// Whether a stale-request sweep is due, and mark it done.
@@ -88,14 +98,17 @@ impl ScopeEntry {
         if self.handle.get().is_some() {
             return;
         }
-        // Callbacks look the subject up by this handle, so it is known before the
-        // first call under the scope can reach them.
-        host()
-            .scopes
-            .lock()
-            .await
-            .by_handle
-            .insert(handle_key(&handle), Arc::clone(self));
+        // Callbacks look the subject up by this handle (and its audit stream), so
+        // both are known before the first call under the scope can reach them.
+        {
+            let mut scopes = host().scopes.lock().await;
+            scopes
+                .by_handle
+                .insert(handle_key(&handle), Arc::clone(self));
+            scopes
+                .by_stream
+                .insert(self.stream_id.clone(), Arc::clone(self));
+        }
         let _ = self.handle.set(handle);
     }
 
@@ -152,7 +165,7 @@ impl ScopeEntry {
                     error = %error,
                     "[approval::native] the module refused the approval scope"
                 );
-                format!("TinySecurity {member} failed")
+                format!("TinySecurity {member} failed: {error}")
             })?;
         if receipt.scope_id != self.scope_id {
             return Err("TinySecurity returned a receipt for another approval scope".into());
@@ -232,6 +245,11 @@ pub(super) async fn ensure(
     };
     entry.register(proxy, posture, generation).await?;
     Ok(entry)
+}
+
+/// The registered subject whose audit stream is `stream_id`.
+pub(super) async fn by_stream(stream_id: &str) -> Option<Arc<ScopeEntry>> {
+    host().scopes.lock().await.by_stream.get(stream_id).cloned()
 }
 
 /// The registered subject a module callback names by its handle.

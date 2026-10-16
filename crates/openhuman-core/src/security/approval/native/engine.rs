@@ -311,7 +311,7 @@ impl ApprovalEngine for NativeEngine {
                 .await;
             evaluated.map_err(|error| {
                 tracing::warn!(error = %error, "{LOG} the module refused to evaluate the call");
-                unavailable("TinySecurity EvaluateApproval2 failed")
+                unavailable(format!("TinySecurity EvaluateApproval2 failed: {error}"))
             })?
         };
         let record = response.record;
@@ -391,7 +391,7 @@ impl ApprovalEngine for NativeEngine {
                 .await
                 .map_err(|error| {
                     tracing::debug!(error = %error, "{LOG} the module refused the decision");
-                    unavailable("TinySecurity Decide2 failed")
+                    unavailable(format!("TinySecurity Decide2 failed: {error}"))
                 })
         }
         .await;
@@ -429,7 +429,7 @@ impl ApprovalEngine for NativeEngine {
             .await
             .map_err(|error| {
                 tracing::warn!(error = %error, "{LOG} the module refused to reserve the call");
-                unavailable("TinySecurity ConsumeApproval2 failed")
+                unavailable(format!("TinySecurity ConsumeApproval2 failed: {error}"))
             })?;
         if row.state == ApprovalLifecycle2::Reserved {
             Ok(())
@@ -460,7 +460,7 @@ impl ApprovalEngine for NativeEngine {
                 .await
                 .map_err(|error| {
                     tracing::warn!(error = %error, "{LOG} the module refused the execution record");
-                    unavailable("TinySecurity RecordExecution2 failed")
+                    unavailable(format!("TinySecurity RecordExecution2 failed: {error}"))
                 })?;
         }
         host().forget_request(request_id);
@@ -496,7 +496,7 @@ impl ApprovalEngine for NativeEngine {
                     Ok(false)
                 } else {
                     tracing::warn!(error = %error, "{LOG} the module refused to expire the request");
-                    Err(unavailable("TinySecurity ExpireApproval2 failed"))
+                    Err(unavailable(format!("TinySecurity ExpireApproval2 failed: {error}")))
                 }
             }
         }
@@ -527,7 +527,7 @@ impl ApprovalEngine for NativeEngine {
         host().forget_request(request_id);
         cancelled.map(|_| ()).map_err(|error| {
             tracing::debug!(error = %error, "{LOG} the module did not cancel the request");
-            unavailable("TinySecurity CancelApproval2 failed")
+            unavailable(format!("TinySecurity CancelApproval2 failed: {error}"))
         })
     }
 
