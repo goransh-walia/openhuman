@@ -174,7 +174,7 @@ async fn probe(
 /// running with it.
 pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, PlanError> {
     let asked = facts::network_ceiling(request.policy);
-    match plan_with(&request, asked).await {
+    match plan_with(&request, asked.clone()).await {
         Err(PlanError::Refused(SandboxDenial2::Approval)) if asked == NetworkPolicy::Host => {
             tracing::warn!(
                 "[sandbox:plan] host network needs a human approval; planning without network"
