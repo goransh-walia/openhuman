@@ -135,6 +135,8 @@ impl ScopeEntry {
             },
             grants,
             audit_stream_id: self.stream_id.clone(),
+            // The handle keys every callback the module makes for this subject.
+            report_handle: true,
         };
         let member = if first {
             names::methods::REGISTER_APPROVAL_SCOPE2
@@ -155,7 +157,10 @@ impl ScopeEntry {
         if receipt.scope_id != self.scope_id {
             return Err("TinySecurity returned a receipt for another approval scope".into());
         }
-        self.bind(receipt.scope_handle.clone()).await;
+        let handle = receipt
+            .scope_handle
+            .ok_or("TinySecurity did not report the approval scope handle")?;
+        self.bind(handle).await;
         tracing::debug!(
             scope = %self.scope_id,
             outcome = ?receipt.outcome,
