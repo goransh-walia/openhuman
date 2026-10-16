@@ -28,7 +28,7 @@ mod registry;
 use std::path::Path;
 
 use tinysecurity_bus::{
-    ConsumeSandboxPlanRequest2, PathGrant, ResourceLimits2, SandboxArtifact2,
+    ConsumeSandboxPlanRequest2, NetworkPolicy, PathGrant, ResourceLimits2, SandboxArtifact2,
     SandboxDenial2, SandboxPlanRequest2, SubjectScope, Verdict,
 };
 
@@ -163,14 +163,38 @@ async fn probe(
 }
 
 /// Plan one spawn through the module.
+///
+/// The module plans the host's own network only after an exact human approval, which
+/// no sandboxed spawn has a surface to ask for yet. A spawn whose policy allows the
+/// network is therefore planned as asked first; if the module answers that it needs
+/// that approval, the spawn is planned again with no network. The module only ever
+/// narrows what the host asked for: the command never gets more than the policy
+/// allowed, and one that needs the network fails inside the sandbox instead of
+/// running with it.
 pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, PlanError> {
+    let asked = facts::network_ceiling(request.policy);
+    match plan_with(&request, asked).await {
+        Err(PlanError::Refused(SandboxDenial2::Approval)) if asked == NetworkPolicy::Host => {
+            tracing::warn!(
+                "[sandbox:plan] host network needs a human approval; planning without network"
+            );
+            plan_with(&request, NetworkPolicy::None).await
+        }
+        other => other,
+    }
+}
+
+async fn plan_with(
+    request: &SpawnRequest<'_>,
+    network: NetworkPolicy,
+) -> Result<PlannedSpawn, PlanError> {
     let SpawnRequest {
         config,
         policy,
         source,
         operation,
         host_off,
-    } = request;
+    } = *request;
     let saas = crate::core::runtime::is_saas();
     let tenant = crate::core::runtime::tenant::current_tenant()
         .map_err(|_| unavailable("no tenant scope"))?;
@@ -200,7 +224,6 @@ pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, Plan
         .canonical()
         .ok_or_else(|| unavailable("the working directory is not valid text"))?;
     let grants = grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
-    let network = facts::network_ceiling(policy);
     let ordered = stream.lock().await;
     let generation = client::generation(config).await.map_err(unavailable)?;
     let audit = stream.correlation(generation).await.map_err(unavailable)?;
@@ -264,6 +287,31 @@ pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, Plan
         subject,
         stream,
     })
+}
+
+impl PlannedSpawn {
+    /// The policy the spawn runs under: the caller's policy narrowed to what the module
+    /// planned. Mounts, network reach and container bounds come from the artifact, never
+    /// from the policy that was asked.
+    pub(crate) fn apply(&self, policy: &SandboxPolicy) -> SandboxPolicy {
+        let mut applied = policy.clone();
+        let workspace = policy.workspace_root.to_str();
+        let paths = |list: &[String]| -> Vec<std::path::PathBuf> {
+            list.iter()
+                .filter(|path| Some(path.as_str()) != workspace)
+                .map(std::path::PathBuf::from)
+                .collect()
+        };
+        applied.read_only_mounts = paths(&self.plan.jail.read_only);
+        applied.read_write_mounts = paths(&self.plan.jail.read_write);
+        applied.allow_network = self.plan.jail.allow_net;
+        if let Some(overrides) = applied.docker_overrides.as_mut() {
+            let limits = &self.artifact.limits;
+            overrides.memory_limit_mb = limits.memory_bytes.map(|bytes| bytes.div_ceil(1024 * 1024));
+            overrides.cpu_limit = limits.cpu_millicores.map(|millis| f64::from(millis) / 1000.0);
+        }
+        applied
+    }
 }
 
 /// Reserve `planned` once, immediately before launching it.
