@@ -343,7 +343,7 @@ async fn intercept_audited_for_call_threads_tool_call_id_onto_the_pending_row_an
     };
     assert_eq!(pending.tool_call_id.as_deref(), Some("call-abc"));
 
-    decide_parked(&gate, &pending.request_id, ApprovalDecision::ApproveOnce).await;
+    decide_parked(&gate, &pending.request_id, ApprovalDecision::ApproveOnce);
     let (outcome, _id) = handle.await.unwrap();
     assert!(matches!(outcome, GateOutcome::Allow));
 }

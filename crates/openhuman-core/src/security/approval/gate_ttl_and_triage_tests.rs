@@ -47,7 +47,7 @@ async fn pending_for_thread_tracks_request_under_chat_context_and_clears() {
     };
 
     // Decide via the mapped request_id (as the chat ingress router will).
-    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce).await;
+    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
 
     // Mapping is cleared once intercept returns.
@@ -111,7 +111,7 @@ async fn webchat_origin_routes_park_when_approval_chat_context_absent() {
 
     // A decision on that mapped request resolves the park (the card can
     // surface and be approved), instead of silently TTL-denying.
-    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce).await;
+    decide_parked(&gate, &request_id, ApprovalDecision::ApproveOnce);
     assert!(matches!(handle.await.unwrap(), GateOutcome::Allow));
     assert!(gate.pending_for_thread("thread-async").is_none());
 }

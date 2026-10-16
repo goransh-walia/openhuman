@@ -306,8 +306,7 @@ async fn auto_approve_all_is_a_recorded_automatic_approval() {
     let seen = &stub.seen()[0];
     assert!(seen.posture.auto_approve_all);
     assert_eq!(seen.tool, "openhuman_test_aaa_audit");
-    gate.record_execution(&request_id, ExecutionOutcome::Success, None)
-        .await;
+    gate.record_execution(&request_id, ExecutionOutcome::Success, None);
     assert_eq!(
         stub.state(&request_id),
         Some(State::Executed(ExecutionOutcome::Success))
@@ -622,11 +621,9 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
     // resolve, and the miss is the benign already-decided race.
     stub.leave_pending("req-decided", "composio", Duration::from_secs(600));
     stub.decide("req-decided", Choice::Once, "approve_once")
-        .await
         .unwrap();
     assert!(gate
         .decide("req-decided", ApprovalDecision::Deny)
-        .await
         .unwrap()
         .is_none());
     assert_eq!(
@@ -640,7 +637,6 @@ async fn classify_decide_miss_distinguishes_resolved_from_unknown() {
     assert!(stub.expire("req-expired").await.unwrap());
     assert!(gate
         .decide("req-expired", ApprovalDecision::ApproveOnce)
-        .await
         .unwrap()
         .is_none());
     assert_eq!(
