@@ -472,6 +472,7 @@ impl Drop for CancelGuard {
 }
 
 include!("gate_setup.rs");
+include!("gate_surface.rs");
 include!("gate_intercept.rs");
 include!("gate_intercept_decision.rs");
 include!("gate_state.rs");
