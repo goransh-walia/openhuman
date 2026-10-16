@@ -13,7 +13,6 @@
 
 use std::sync::Arc;
 
-use tinyagents_harness::middleware::ApprovalGateMiddleware;
 use tinyagents_harness::runtime::AgentHarness;
 use tinytools::Tool;
 
@@ -60,7 +59,7 @@ pub(crate) fn install(
         harness.push_tool_middleware(Arc::new(gate));
     }
     #[cfg(not(feature = "security-module"))]
-    harness.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new(
+    harness.push_tool_middleware(Arc::new(tinyagents_harness::middleware::ApprovalGateMiddleware::new(
         "approval_security",
         Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
     )));
