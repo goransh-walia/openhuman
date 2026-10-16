@@ -372,7 +372,8 @@ pub(crate) async fn execute_in_sandbox_metered(
     // must be checked at the spawn boundary, including callers that resolved
     // their policy from an older or default RuntimeConfig.
     let mut effective_policy = policy.clone();
-    if !crate::core::runtime::is_saas() && sandbox_disabled_by_host(ctx) {
+    let host_off = !crate::core::runtime::is_saas() && sandbox_disabled_by_host(ctx);
+    if host_off {
         effective_policy.backend = SandboxBackendKind::None;
     }
     let mut module_config = None;
@@ -445,6 +446,15 @@ pub(crate) async fn execute_in_sandbox_metered(
                 })?,
             };
             let policy = super::local_grants::with_resolved_grants(&config, policy).await?;
+            let policy = admit_spawn(
+                &config,
+                &policy,
+                command,
+                working_dir,
+                &extra_env,
+                host_off,
+            )
+            .await?;
             super::native_jail::execute(
                 &config,
                 &policy,
@@ -472,9 +482,69 @@ pub(crate) async fn execute_in_sandbox_metered(
                     anyhow::anyhow!("Cannot read module configuration: {error}")
                 })?,
             };
-            docker::docker_exec(&config, policy, &request).await
+            let policy = admit_spawn(
+                &config,
+                policy,
+                command,
+                working_dir,
+                &request.env,
+                host_off,
+            )
+            .await?;
+            docker::docker_exec(&config, &policy, &request).await
         }
     }
+}
+
+/// Have the TinySecurity module plan and admit one sandboxed spawn, and return the
+/// policy it must run under. The module's plan, not the resolved policy, bounds the
+/// mounts, the network and the container limits; a refusal or a module fault is an
+/// error and the command does not run.
+#[cfg(feature = "security-module")]
+async fn admit_spawn(
+    config: &crate::config::Config,
+    policy: &SandboxPolicy,
+    command: &str,
+    working_dir: &Path,
+    env: &HashMap<OsString, OsString>,
+    host_off: bool,
+) -> anyhow::Result<SandboxPolicy> {
+    let env = env
+        .iter()
+        .map(|(name, value)| match (name.to_str(), value.to_str()) {
+            (Some(name), Some(value)) => Ok((name.to_owned(), value.to_owned())),
+            _ => Err(anyhow::anyhow!("sandbox environment is not UTF-8")),
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let operation = super::spawn_plan::SpawnOperation {
+        command,
+        cwd: working_dir,
+        env,
+        stdin: None,
+        preserve_pipeline_status: false,
+    };
+    super::spawn_plan::admit(super::spawn_plan::SpawnRequest {
+        config,
+        policy,
+        source: super::spawn_plan::SpawnSource::Agent,
+        operation: &operation,
+        host_off,
+    })
+    .await
+    .map_err(anyhow::Error::new)
+}
+
+/// Without the module there is no plan to ask for, so the resolved policy stands.
+#[cfg(not(feature = "security-module"))]
+async fn admit_spawn(
+    _config: &crate::config::Config,
+    policy: &SandboxPolicy,
+    _command: &str,
+    _working_dir: &Path,
+    _env: &HashMap<OsString, OsString>,
+    _host_off: bool,
+) -> anyhow::Result<SandboxPolicy> {
+    Ok(policy.clone())
 }
 
 /// Apply an operator-selected backend. Auto retains the caller's existing
