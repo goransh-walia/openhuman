@@ -168,14 +168,8 @@ impl OpenHumanHostBundleFactory {
         let definitions = Arc::new(definitions_adapter);
         // An untrusted-input turn is read from its own explicit run context:
         // a screen may run on another task, so no ambient scope is consulted.
-        let mut security = OpenHumanSecurityGate::new(inputs.security_policy, inputs.tool_sets)
-            .with_input_screening(!turn.untrusted_input_turn)
-            .with_approval(turn.approval.clone())
-            .with_dispatch(turn.dispatch_ctx());
-        if let Some(policy) = inputs.tool_policy {
-            security = security.with_tool_policy(policy);
-        }
-        let security = Arc::new(security);
+        let security =
+            Arc::new(OpenHumanSecurityGate::new().with_input_screening(!turn.untrusted_input_turn));
         let models = Arc::new(OpenHumanModelResolver::new(Arc::clone(&inputs.config)));
         let budget = Arc::new(
             OpenHumanBudgetGate::new(Arc::clone(&inputs.config)).with_dispatch(turn.dispatch_ctx()),
