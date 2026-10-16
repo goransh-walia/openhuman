@@ -201,7 +201,7 @@ pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, Plan
         .ok_or_else(|| unavailable("the working directory is not valid text"))?;
     let grants = grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
     let network = facts::network_ceiling(policy);
-    let _ordered = stream.lock().await;
+    let ordered = stream.lock().await;
     let generation = client::generation(config).await.map_err(unavailable)?;
     let audit = stream.correlation(generation).await.map_err(unavailable)?;
     let call_id = audit.event_id.clone();
@@ -221,7 +221,9 @@ pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, Plan
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
     };
-    let response = match client::plan(config, planned.clone()).await {
+    let response = client::plan(config, planned.clone()).await;
+    drop(ordered);
+    let response = match response {
         Ok(response) => response,
         Err(error) => {
             registry::forget(&scope.scope_id).await;
