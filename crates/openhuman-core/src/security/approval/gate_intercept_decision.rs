@@ -33,6 +33,8 @@ impl ApprovalGate {
                 if decision.is_approve() {
                     self.reserved(request_id.to_string(), tool_name, scope, track).await
                 } else {
+                    // Nothing will reserve or record a denied request.
+                    self.engine.release(request_id);
                     (
                         GateOutcome::Deny {
                             reason: format!(
