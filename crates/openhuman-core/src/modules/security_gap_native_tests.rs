@@ -174,7 +174,7 @@ async fn spending_and_peeking_share_the_command_ledger() {
         let command_policy = scope.clone();
         async move {
             proxy
-                .call_confidential::<_, BudgetDecision2>(
+                .call_confidential::<BudgetDecision2>(
                     member,
                     (BudgetRequest2 { command_policy },),
                 )
