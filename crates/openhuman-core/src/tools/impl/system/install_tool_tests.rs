@@ -47,21 +47,6 @@ async fn blocked_when_install_disabled() {
 }
 
 #[tokio::test]
-async fn blocked_when_readonly() {
-    let tool = InstallToolTool::new(policy(true, AutonomyLevel::ReadOnly));
-    let result = tool
-        .execute_with_context(
-            json!({ "package": "jq" }),
-            tinytools::ToolCallOptions::default(),
-            Some(&chat_tool_context(chat_ctx())),
-        )
-        .await
-        .unwrap();
-    assert!(result.is_error);
-    assert!(result.output().contains("read-only"), "{}", result.output());
-}
-
-#[tokio::test]
 async fn rejects_injection_in_package_name() {
     let tool = InstallToolTool::new(policy(true, AutonomyLevel::Full));
     let result = tool

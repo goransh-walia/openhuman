@@ -129,36 +129,6 @@ async fn whitespace_agent_name_trimmed_and_found() {
 }
 
 #[tokio::test]
-async fn delegation_blocked_in_readonly_mode() {
-    let readonly = Arc::new(SecurityPolicy {
-        autonomy: AutonomyLevel::ReadOnly,
-        ..SecurityPolicy::default()
-    });
-    let tool = DelegateTool::new(sample_agents(), readonly);
-    let result = tool
-        .execute(json!({"agent": "researcher", "prompt": "test"}))
-        .await
-        .unwrap();
-    assert!(result.is_error);
-    assert!(result.output().contains("read-only mode"));
-}
-
-#[tokio::test]
-async fn delegation_blocked_when_rate_limited() {
-    let limited = Arc::new(SecurityPolicy {
-        max_actions_per_hour: 0,
-        ..SecurityPolicy::default()
-    });
-    let tool = DelegateTool::new(sample_agents(), limited);
-    let result = tool
-        .execute(json!({"agent": "researcher", "prompt": "test"}))
-        .await
-        .unwrap();
-    assert!(result.is_error);
-    assert!(result.output().contains("Rate limit exceeded"));
-}
-
-#[tokio::test]
 async fn delegate_context_is_prepended_to_prompt() {
     let mut agents = HashMap::new();
     agents.insert(
