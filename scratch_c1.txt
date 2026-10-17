@@ -1,0 +1,48 @@
+   Compiling openhuman v0.64.15 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/crates/openhuman-core)
+warning: unused import: `resources::enforce_resource_cap`
+  --> vendor/tinymcp/crates/tinymcp/src/transport/mod.rs:25:16
+   |
+25 | pub(crate) use resources::enforce_resource_cap;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `bound_mcp_tool_result` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:17:15
+   |
+17 | pub(crate) fn bound_mcp_tool_result(mut result: McpToolResult) -> McpToolResult {
+   |               ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `bound_other_content` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:38:4
+   |
+38 | fn bound_other_content(
+   |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `bound_text` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:56:15
+   |
+56 | pub(crate) fn bound_text(text: String) -> String {
+   |               ^^^^^^^^^^
+
+warning: function `bound_json` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:64:15
+   |
+64 | pub(crate) fn bound_json(data: Value) -> Value {
+   |               ^^^^^^^^^^
+
+warning: function `elide_oversized_block` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:73:15
+   |
+73 | pub(crate) fn elide_oversized_block(block: &McpToolContent) -> Value {
+   |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `elision_marker` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:83:4
+   |
+83 | fn elision_marker(bytes: usize) -> String {
+   |    ^^^^^^^^^^^^^^
+
+warning: `tinymcp` (lib) generated 7 warnings (run `cargo clippy --fix --lib -p tinymcp -- -D warnings` to apply 1 suggestion)
