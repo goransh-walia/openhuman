@@ -20,8 +20,6 @@ pub struct DaemonConfig {
     /// Encrypted secret store settings.
     #[serde(default)]
     pub secrets: SecretsConfig,
-    /// Audit logging settings.
-    #[serde(default)]
 }
 
 impl DaemonConfig {
