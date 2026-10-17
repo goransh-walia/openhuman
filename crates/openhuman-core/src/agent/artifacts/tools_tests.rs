@@ -7,6 +7,9 @@ fn test_config() -> Arc<Config> {
 
 #[test]
 fn metadata_is_stable() {
+    let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::with_credential_floor(),
+    ));
     let cfg = test_config();
     assert_eq!(ArtifactListTool::new(cfg.clone()).name(), "artifact_list");
     assert_eq!(ArtifactGetTool::new(cfg.clone()).name(), "artifact_get");
@@ -27,6 +30,9 @@ fn metadata_is_stable() {
 
 #[test]
 fn read_tools_are_concurrency_safe() {
+    let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::with_credential_floor(),
+    ));
     let cfg = test_config();
     assert!(ArtifactListTool::new(cfg.clone()).is_concurrency_safe(&serde_json::Value::Null));
     assert!(ArtifactGetTool::new(cfg).is_concurrency_safe(&serde_json::Value::Null));
@@ -34,6 +40,9 @@ fn read_tools_are_concurrency_safe() {
 
 #[tokio::test]
 async fn get_requires_artifact_id() {
+    let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::with_credential_floor(),
+    ));
     let tool = ArtifactGetTool::new(test_config());
     let err = tool
         .execute(json!({}))
@@ -44,6 +53,9 @@ async fn get_requires_artifact_id() {
 
 #[tokio::test]
 async fn delete_requires_artifact_id() {
+    let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::with_credential_floor(),
+    ));
     let tool = ArtifactDeleteTool::new(test_config());
     let err = tool
         .execute(json!({ "artifact_id": "  " }))
@@ -54,6 +66,9 @@ async fn delete_requires_artifact_id() {
 
 #[tokio::test]
 async fn list_returns_artifacts_envelope() {
+    let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::with_credential_floor(),
+    ));
     // Config::default() points at a workspace dir; listing an empty/missing
     // artifacts root yields an empty list, not an error.
     let tool = ArtifactListTool::new(test_config());
