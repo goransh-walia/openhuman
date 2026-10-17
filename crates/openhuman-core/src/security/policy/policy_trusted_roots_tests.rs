@@ -447,5 +447,3 @@ fn from_config_does_not_duplicate_user_granted_projects_root() {
         "must preserve the user-granted access level"
     );
 }
-
-// -- canonical_workspace cache ------------------------------------

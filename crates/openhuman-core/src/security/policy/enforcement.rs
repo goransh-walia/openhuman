@@ -1,8 +1,6 @@
 use std::path::Path;
 
 use super::types::{SecurityPolicy, TrustedAccess, TrustedRoot};
-use std::sync::Arc;
-use tokio::sync::OnceCell;
 
 impl SecurityPolicy {
     /// Build from config sections
@@ -177,7 +175,6 @@ impl SecurityPolicy {
             allow_tool_install: autonomy_config.allow_tool_install,
             auto_approve: autonomy_config.auto_approve.clone(),
             auto_approve_all: autonomy_config.auto_approve_all,
-            canonical_workspace: Arc::new(OnceCell::new()),
             command_gateway: None,
         }
     }

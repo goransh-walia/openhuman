@@ -3,7 +3,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::OnceCell;
 
 /// How much autonomy the agent has
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -212,33 +211,6 @@ pub struct SecurityPolicy {
     /// `is_always_forbidden`, `is_workspace_internal_path`, or
     /// `ToolPolicyMiddleware`, which are independent code paths.
     pub auto_approve_all: bool,
-    /// Lazily-cached canonical form of [`workspace_dir`].
-    ///
-    /// `validate_path` / `validate_parent_path` use the canonical workspace
-    /// root to check resolved paths against `forbidden_paths`. Without a cache
-    /// each call invokes `tokio::fs::canonicalize(&workspace_dir)` — one
-    /// `stat(2)` + symlink walk on the same path on every file op. A single
-    /// agent turn doing tens of read/edit/shell-path validations hits this
-    /// repeatedly with identical input.
-    ///
-    /// `workspace_dir` is effectively immutable for a given `SecurityPolicy`
-    /// (a config update builds a *new* policy via `from_config` and swaps the
-    /// `Arc` in [`live_policy`]), so caching the resolved value is safe and
-    /// stays correct across config updates.
-    ///
-    /// `Arc<OnceCell<_>>` so the struct stays `Clone` (clone the `Arc`) and
-    /// init happens lazily on the first async call site without blocking
-    /// constructors. Fallback (raw `workspace_dir` if canonicalize fails)
-    /// matches the previous inline behavior exactly.
-    ///
-    /// Visibility is `pub` to match every other field on the struct: external
-    /// crates (Cargo examples, downstream consumers) construct
-    /// `SecurityPolicy` with the `..SecurityPolicy::default()` functional-update
-    /// spread, and Rust requires every field of the target struct to be
-    /// visible to the caller in that syntax — even fields supplied by the
-    /// default. `pub(crate)` was an over-tight first cut that broke
-    /// `examples/mouse_smoke.rs` with E0451.
-    pub canonical_workspace: Arc<OnceCell<PathBuf>>,
     /// Who answers shell-command questions for this policy. `None` is the
     /// TinySecurity module and is the only value production code sets; the
     /// gateway trait is sealed, so only this crate's test double can be
@@ -278,7 +250,6 @@ impl Default for SecurityPolicy {
             allow_tool_install: false,
             auto_approve: Vec::new(),
             auto_approve_all: false,
-            canonical_workspace: Arc::new(OnceCell::new()),
             command_gateway: None,
         }
     }
