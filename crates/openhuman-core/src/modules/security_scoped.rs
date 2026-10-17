@@ -196,6 +196,7 @@ pub(super) async fn module_proxy_in(
     state: &tokio::sync::Mutex<ClientState>,
     config: &Config,
 ) -> Result<tinybus::Proxy, String> {
+    super::require_enabled(config)?;
     let mut state = state.lock().await;
     let result = super::proxy(config, &mut state).await;
     if result.is_err() {
