@@ -258,7 +258,7 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     // and this test would be measuring the retryable path instead of the
     // blocked one — passing for entirely the wrong reason.
     assert!(
-        !security.can_act(),
+        security.enabled && security.autonomy == crate::security::AutonomyLevel::ReadOnly,
         "fixture must be read-only, or this test does not exercise the blocked path"
     );
 
@@ -311,7 +311,10 @@ async fn a_shell_job_runs_on_this_platform() {
             .with_gateway(StubGateway::allow());
     // Fixture guard: a policy that refused to act would make this pass by
     // never spawning anything.
-    assert!(security.can_act(), "the fixture policy must permit acting");
+    assert!(
+        !security.enabled || security.autonomy != crate::security::AutonomyLevel::ReadOnly,
+        "the fixture policy must permit acting"
+    );
 
     let job = test_job("echo tinyhumans");
 
@@ -409,7 +412,10 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
             .with_gateway(StubGateway::allow());
     // Fixture guard: a policy that refused to act would report failure for a
     // reason that has nothing to do with the pipeline.
-    assert!(security.can_act(), "the fixture policy must permit acting");
+    assert!(
+        !security.enabled || security.autonomy != crate::security::AutonomyLevel::ReadOnly,
+        "the fixture policy must permit acting"
+    );
 
     let job = test_job("false | true");
 
