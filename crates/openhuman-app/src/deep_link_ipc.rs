@@ -151,19 +151,6 @@ fn live_handler() -> &'static LiveHandlerSlot {
     LIVE_HANDLER.get_or_init(|| Mutex::new(None))
 }
 
-/// Strip query string and fragment from a deep-link URL before logging.
-/// OAuth callbacks carry tokens in the query string; logging the raw URL
-/// would persist secrets in log files and crash reports.
-fn redact_url_for_log(url: &str) -> String {
-    url.parse::<url::Url>()
-        .map(|mut parsed| {
-            parsed.set_query(None);
-            parsed.set_fragment(None);
-            parsed.to_string()
-        })
-        .unwrap_or_else(|_| "<invalid deep link>".to_string())
-}
-
 fn dispatch_url(url: String) {
     // Try the live handler first.
     if let Ok(guard) = live_handler().lock() {

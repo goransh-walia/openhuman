@@ -109,16 +109,6 @@ fn live_handler() -> &'static Mutex<Option<LiveHandler>> {
     LIVE_HANDLER.get_or_init(|| Mutex::new(None))
 }
 
-pub(crate) fn redact_url_for_log(url: &str) -> String {
-    url.parse::<url::Url>()
-        .map(|mut parsed| {
-            parsed.set_query(None);
-            parsed.set_fragment(None);
-            parsed.to_string()
-        })
-        .unwrap_or_else(|_| "<invalid deep link>".to_string())
-}
-
 fn dispatch_url(url: String) {
     if let Ok(guard) = live_handler().lock() {
         if let Some(ref handler) = *guard {
