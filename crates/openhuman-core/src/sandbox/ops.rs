@@ -327,21 +327,17 @@ pub(super) async fn admit_planned(
     use super::spawn_plan::{ModuleSource, PlanError, SpawnRequest};
     use tinysecurity_bus::SandboxDenial2;
 
-    let request = |policy: &SandboxPolicy, host_run: bool| -> Admission {
-        Admission {
-            request: SpawnRequest {
-                config,
-                policy,
-                source,
-                operation,
-                operator_off,
-                host_run,
-                module: ModuleSource::Production,
-            },
-        }
+    let request = |policy: &'_ SandboxPolicy, host_run: bool| SpawnRequest {
+        config,
+        policy,
+        source,
+        operation,
+        operator_off,
+        host_run,
+        module: ModuleSource::Production,
     };
     if operator_off {
-        match request(policy, true).admit().await {
+        match admit_request(request(policy, true)).await {
             Ok(admitted) => return Ok(admitted),
             Err(PlanError::Refused(SandboxDenial2::Floor)) => {
                 tracing::debug!(
@@ -359,8 +355,7 @@ pub(super) async fn admit_planned(
     } else {
         super::local_grants::with_resolved_grants(config, policy).await?
     };
-    let mut admitted = request(&granted, false)
-        .admit()
+    let mut admitted = admit_request(request(&granted, false))
         .await
         .map_err(plan_error)?;
     if admitted.executor == Executor::Docker {
@@ -376,26 +371,22 @@ pub(super) async fn admit_planned(
     Ok(admitted)
 }
 
+/// Plan one request, reserve the plan and map it to the executor the module chose.
 #[cfg(feature = "security-module")]
-struct Admission<'a> {
-    request: super::spawn_plan::SpawnRequest<'a>,
-}
-
-#[cfg(feature = "security-module")]
-impl Admission<'_> {
-    async fn admit(&self) -> Result<Admitted, super::spawn_plan::PlanError> {
-        let planned = super::spawn_plan::plan(self.request).await?;
-        super::spawn_plan::consume(&planned).await?;
-        Ok(Admitted {
-            executor: match planned.plan.executor {
-                super::plan::PlannedExecutor::Host => Executor::Host,
-                super::plan::PlannedExecutor::NativeJail => Executor::Jail,
-                super::plan::PlannedExecutor::Docker => Executor::Docker,
-            },
-            policy: planned.apply(self.request.policy),
-            jail: planned.plan.jail,
-        })
-    }
+async fn admit_request(
+    request: super::spawn_plan::SpawnRequest<'_>,
+) -> Result<Admitted, super::spawn_plan::PlanError> {
+    let planned = super::spawn_plan::plan(request).await?;
+    super::spawn_plan::consume(&planned).await?;
+    Ok(Admitted {
+        executor: match planned.plan.executor {
+            super::plan::PlannedExecutor::Host => Executor::Host,
+            super::plan::PlannedExecutor::NativeJail => Executor::Jail,
+            super::plan::PlannedExecutor::Docker => Executor::Docker,
+        },
+        policy: planned.apply(request.policy),
+        jail: planned.plan.jail,
+    })
 }
 
 #[cfg(feature = "security-module")]
