@@ -264,8 +264,10 @@ async fn an_unlabelled_call_is_approved_only_by_the_users_grant_of_that_exact_to
         Some("auto:tool-grant"),
         "the grant approved it, not auto-approve-everything"
     );
+    // The gate labels the call and hands over the user's posture as it is; that
+    // only a whole-tool grant approves an unlabelled call is the module's rule.
     let seen = stub.seen().remove(0);
-    assert!(!seen.posture.auto_approve_all);
+    assert_eq!(seen.origin, CallOrigin::Unlabelled);
     assert_eq!(seen.posture.tool_grants, [tool]);
 
     // Auto-approve-everything does not approve an unlabelled call to any other tool.
@@ -277,9 +279,19 @@ async fn an_unlabelled_call_is_approved_only_by_the_users_grant_of_that_exact_to
             serde_json::json!({}),
         )
         .await;
-    assert!(matches!(outcome, GateOutcome::Deny { .. }));
+    assert!(
+        matches!(&outcome, GateOutcome::Deny { reason } if reason.contains("missing its origin label")),
+        "{outcome:?}"
+    );
     assert!(id.is_none());
-    assert_eq!(stub.seen().len(), 1, "the engine was not asked");
+    let asked = stub.seen();
+    assert_eq!(asked.len(), 2, "the engine decides, not the gate");
+    assert_eq!(asked[1].origin, CallOrigin::Unlabelled);
+    assert!(!asked[1]
+        .posture
+        .tool_grants
+        .iter()
+        .any(|t| t == "some_other_tool"));
 }
 
 #[tokio::test]
