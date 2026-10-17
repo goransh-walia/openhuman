@@ -89,6 +89,11 @@ fn a_process_level_plan_carries_the_credential_store_floor() {
     planned.minimum_isolation = IsolationLevel2::Process;
     let plan = BoxPlan::from_artifact(&planned, Some(home)).unwrap();
     assert!(!plan.jail.require_process_isolation);
+    assert_eq!(
+        plan.jail.enforcement,
+        JailEnforcement::Declared,
+        "a process-level plan carries best-effort constraints (Seatbelt)"
+    );
     assert!(plan
         .jail
         .deny_read
