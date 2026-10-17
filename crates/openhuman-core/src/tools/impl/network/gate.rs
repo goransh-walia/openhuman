@@ -10,7 +10,7 @@ use tinytools_std::network::{Destination, DestinationFuture, NetGate};
 use crate::config::PrivacyMode;
 use crate::security::egress::assess::{assess_payload, Assessment};
 use crate::security::egress::{
-    emit_external_transfer, local_only_tool_block, DataKind, EgressDescriptor, IdentificationRisk,
+    emit_external_transfer, local_only_tool_block_blocking, DataKind, EgressDescriptor, IdentificationRisk,
 };
 use crate::security::{GateDecision, SecurityPolicy};
 use tinybox_bus::CommandClass;
@@ -101,7 +101,7 @@ impl NetGate for RoutedGate {
     }
 
     fn local_only_block(&self, host: &str) -> Option<String> {
-        local_only_tool_block(&self.assessed(EgressDescriptor::network_fetch(host)))
+        local_only_tool_block_blocking(&self.assessed(EgressDescriptor::network_fetch(host)))
     }
 
     fn disclose(&self, host: &str, has_body: bool, has_headers: bool) {
@@ -185,16 +185,19 @@ impl NetGate for SecurityPolicy {
     fn can_act(&self) -> bool {
         // The module's gate for network-class actions: a tier that blocks them
         // (read-only), or a module that cannot answer, refuses the call.
-        SecurityPolicy::can_act(self)
+        self.tier_allows_acting_blocking()
             && network_gate(self).is_some_and(|gate| gate != GateDecision::Block)
     }
 
     fn is_rate_limited(&self) -> bool {
-        SecurityPolicy::is_rate_limited(self)
+        // The hourly budget is spent once per call by the tool gate before the
+        // tool runs; counting again here would charge two actions for one call.
+        false
     }
 
     fn record_action(&self) -> bool {
-        SecurityPolicy::record_action(self)
+        // See `is_rate_limited`: the call's action is already reserved.
+        true
     }
 
     fn network_needs_approval(&self) -> bool {
@@ -204,7 +207,7 @@ impl NetGate for SecurityPolicy {
     }
 
     fn local_only_block(&self, host: &str) -> Option<String> {
-        local_only_tool_block(&EgressDescriptor::network_fetch(host))
+        local_only_tool_block_blocking(&EgressDescriptor::network_fetch(host))
     }
 
     fn authorize_destination<'a>(

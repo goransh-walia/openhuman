@@ -1,4 +1,5 @@
 use super::*;
+use crate::security::egress::egress_blocks_message;
 use crate::security::live_policy::test_privacy_scope;
 
 #[test]
