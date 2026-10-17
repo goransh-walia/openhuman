@@ -4,14 +4,18 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// Which sandbox backend to use for a session.
+/// The executor an operator or a deployment asks the security module to plan onto.
+///
+/// This is a request, never a decision: the module picks the executor from the ones
+/// the host verified and may refuse (`sandbox/spawn_plan/`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SandboxBackendKind {
-    /// No sandbox — commands execute directly on the host.
+    /// No preference: the module plans onto the first verified executor that meets
+    /// the spawn's isolation floor.
     #[default]
     None,
-    /// Module-owned native process jail selected by TinyBox.
+    /// The module-owned native process jail selected by TinyBox.
     Local,
     /// Docker container isolation.
     Docker,
@@ -21,7 +25,8 @@ pub enum SandboxBackendKind {
 /// origin, and global config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SandboxPolicy {
-    /// Which backend to use.
+    /// The executor the module is required to plan onto, or none for the module's own
+    /// choice.
     pub backend: SandboxBackendKind,
     /// Workspace root mounted into the sandbox (read/write).
     pub workspace_root: PathBuf,
@@ -41,6 +46,14 @@ pub struct SandboxPolicy {
     pub env_passthrough: Vec<String>,
     /// Docker-specific overrides (image, resource limits).
     pub docker_overrides: Option<DockerOverrides>,
+    /// Whether a container mounts `workspace_root`. `false` asks the module for a plan
+    /// with no workspace grant (`[runtime.docker] mount_workspace = false`).
+    #[serde(default = "mount_workspace_default")]
+    pub mount_workspace: bool,
+}
+
+fn mount_workspace_default() -> bool {
+    true
 }
 
 /// Docker-specific sandbox overrides layered on top of the global
