@@ -1,5 +1,5 @@
 use super::*;
-use crate::security::{AutonomyLevel, SecurityPolicy};
+use crate::security::SecurityPolicy;
 
 fn test_security() -> Arc<SecurityPolicy> {
     Arc::new(SecurityPolicy::default())

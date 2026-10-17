@@ -13,7 +13,7 @@ use serde_json::json;
 use tinytools::{Tool, ToolCallOptions, ToolRunContext, WorkspaceDescriptor};
 use tinytools_std::filesystem::{
     ApplyPatchTool, CsvExportTool, EditFileTool, FileReadTool, FileWriteTool, FsGate,
-    GitOperationsTool, GlobTool, GrepTool, ListFilesTool,
+    GitOperationsTool,
 };
 
 use crate::security::policy::native_commands_stub::StubGateway;

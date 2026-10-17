@@ -1,5 +1,4 @@
 use super::*;
-use crate::security::AutonomyLevel;
 use tempfile::TempDir;
 
 async fn test_setup() -> (TempDir, Config, Arc<SecurityPolicy>) {
