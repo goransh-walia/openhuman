@@ -1,4 +1,6 @@
 use super::*;
+use crate::security::prompt_injection::scanner_stub::StubScanner;
+use crate::security::prompt_injection::with_scanner;
 use serde_json::json;
 use tinyagents_harness::host::security_gate::{ContentOrigin, ScreenOutcome, SecurityGate};
 
@@ -18,7 +20,9 @@ async fn injection_payloads_are_blocked_from_every_origin() {
         ContentOrigin::Agent,
         ContentOrigin::Stored,
     ] {
-        let outcome = gate.screen_input(payload, origin).await.unwrap();
+        let outcome = with_scanner(StubScanner::phrases(), gate.screen_input(payload, origin))
+            .await
+            .unwrap();
         assert!(!outcome.is_admissible(), "origin {origin:?} must block");
         // The blocked text must never be echoed back inside the reason.
         let reason = outcome.block_reason().expect("block reason");
@@ -31,9 +35,32 @@ async fn injection_payloads_are_blocked_from_every_origin() {
 async fn ordinary_text_passes_screening_unchanged() {
     let gate = OpenHumanSecurityGate::new();
     let text = "The build finished in 12 seconds with two warnings.";
-    let outcome = gate.screen_input(text, ContentOrigin::Tool).await.unwrap();
+    let outcome = with_scanner(
+        StubScanner::phrases(),
+        gate.screen_input(text, ContentOrigin::Tool),
+    )
+    .await
+    .unwrap();
     assert_eq!(outcome, ScreenOutcome::Pass);
     assert_eq!(outcome.effective_text(text), Some(text));
+}
+
+/// The screen is on the hot path of every tool output, so a screen that cannot
+/// answer must hold the content, never wave it through.
+#[tokio::test]
+async fn content_the_screen_could_not_check_is_held_not_admitted() {
+    let gate = OpenHumanSecurityGate::new();
+    for scanner in [StubScanner::unavailable(), StubScanner::hanging()] {
+        let outcome = with_scanner(
+            scanner,
+            gate.screen_input("The build finished in 12 seconds.", ContentOrigin::Tool),
+        )
+        .await
+        .unwrap();
+        assert!(!outcome.is_admissible(), "an unchecked output must not pass");
+        let reason = outcome.block_reason().expect("block reason");
+        assert!(reason.contains("screen."), "{reason}");
+    }
 }
 
 #[tokio::test]
@@ -66,7 +93,9 @@ async fn screen_input_never_redacts_while_replayed_history_is_trusted() {
         "api key sk-live-0123456789abcdefghijklmnop",
     ] {
         for origin in [ContentOrigin::User, ContentOrigin::Tool] {
-            let outcome = gate.screen_input(text, origin).await.unwrap();
+            let outcome = with_scanner(StubScanner::phrases(), gate.screen_input(text, origin))
+                .await
+                .unwrap();
             assert!(
                 !matches!(outcome, ScreenOutcome::Redacted(_)),
                 "gate returned Redacted for {origin:?}; revisit #6710's replayed_prefix opt-in"
