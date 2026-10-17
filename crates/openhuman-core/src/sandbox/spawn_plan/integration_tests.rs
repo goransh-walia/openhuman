@@ -14,8 +14,8 @@ use tinysecurity_bus::{
 };
 
 use super::*;
-use crate::modules::tinybox::contract::{JailEnforcement, NetworkPolicy};
 use crate::modules::security::native_tests::{native_fixture_configured, NativeFixture};
+use crate::modules::tinybox::contract::{JailEnforcement, NetworkPolicy};
 use crate::sandbox::types::DockerOverrides;
 
 const IGNORE: &str = "requires a released host key or an explicitly selected local native fixture";
@@ -191,7 +191,10 @@ async fn a_policy_that_allows_the_network_gets_it_without_a_per_command_approval
     let planned = plan(request(&world, &asked, &op, SpawnSource::Agent))
         .await
         .expect("planned with the network");
-    assert!(planned.plan.jail.allow_net, "the allowance reaches the plan");
+    assert!(
+        planned.plan.jail.allow_net,
+        "the allowance reaches the plan"
+    );
     assert_eq!(planned.plan.network, NetworkPolicy::Open);
     assert!(planned.apply(&asked).allow_network);
 
