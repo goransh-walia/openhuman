@@ -26,8 +26,10 @@ cannot replace another agent's settings through global module reinitialization.
 The host links only `tinysecurity-bus`. The engine canonicalizes paths and
 checks read/write grants in the native module. A missing module, an untrusted
 recipient, a timeout, or a malformed response denies access without a local
-fallback. Synchronous lexical checks remain host preflights during this phase;
-they do not substitute for the asynchronous I/O authorization.
+fallback; with the feature off `validate_path` and `validate_parent_path` deny.
+Synchronous lexical checks remain host preflights (the module has no batch or
+scope-free query yet); they do not substitute for the asynchronous I/O
+authorization.
 
 Production admission pins TinySecurity v0.13.0 and its published archive checksums
 in the module registry. `scripts/ci/security-native-fixture.sh` loads those
@@ -99,7 +101,6 @@ answer when it is off:
 | `record_action`, `is_rate_limited` | `policy/enforcement.rs` | never limited |
 | `is_path_string_allowed` | [`policy/path_checks.rs`](./policy/path_checks.rs) | `true` after the floor checks |
 | `is_resolved_path_allowed_for` | `policy/path_checks.rs` | `true` after the floor check |
-| `check_resolved_against_forbidden` | `policy/path_checks.rs` | `Ok(())` after the floor check |
 
 So with the policy disabled, command classification still runs in the security
 module (callers get a `CommandClass` back) but nothing is gated on it: no approval prompt, no
