@@ -73,8 +73,9 @@ pub(super) async fn ensure(engine: &NativeEngine, proxy: &Proxy) {
         return;
     }
     let workspace = engine.config().workspace_dir.clone();
-    let mut tried = attempted().lock().await;
-    if !tried.insert(workspace) {
+    // Claimed before the run and released at once: the run itself calls back into
+    // the engine, which reaches this function again and must find the claim taken.
+    if !attempted().lock().await.insert(workspace) {
         return;
     }
     match run(engine, proxy).await {
