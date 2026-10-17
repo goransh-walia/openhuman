@@ -242,7 +242,11 @@ async fn a_flow_grant_applies_to_that_flow_only() {
     let shown = Arc::new(Shown::default());
     world
         .engine
-        .grant_flow_trust(&crate::core::runtime::Tenant::default(), "flow-1", "http_request")
+        .grant_flow_trust(
+            &crate::core::runtime::Tenant::default(),
+            "flow-1",
+            "http_request",
+        )
         .await
         .expect("the module keeps the flow trust");
     let mut in_flow = input("http_request", &shown);
@@ -342,7 +346,7 @@ async fn a_cancelled_request_cannot_be_decided() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn a_cron_origin_never_reaches_the_engine_and_a_reserved_name_is_refused() {
+async fn a_reserved_tool_name_is_refused_as_a_host_tool() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
     // The module's own effect classes and human-only tools are not host tools.
@@ -626,11 +630,17 @@ async fn the_module_decides_what_each_origin_class_is_allowed() {
             "{origin:?} is an audited automatic approval"
         );
     }
-    assert!(shown.deliveries.lock().unwrap().is_empty(), "nobody was asked");
+    assert!(
+        shown.deliveries.lock().unwrap().is_empty(),
+        "nobody was asked"
+    );
 
     let mut cron = input("gmail_send", &shown);
     cron.origin = CallOrigin::Cron;
-    assert_eq!(world.engine.check(cron).await.unwrap_err(), EngineError::Refused);
+    assert_eq!(
+        world.engine.check(cron).await.unwrap_err(),
+        EngineError::Refused
+    );
 
     let mut unlabelled = input("gmail_send", &shown);
     unlabelled.origin = CallOrigin::Unlabelled;

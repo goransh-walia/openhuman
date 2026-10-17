@@ -160,7 +160,9 @@ pub(super) fn recent_decided(history: &LegacyHistory) -> Vec<&LegacyApproval> {
 async fn read(config: Config) -> Result<Option<LegacyHistory>, EngineError> {
     tokio::task::spawn_blocking(move || read_legacy(&config))
         .await
-        .map_err(|error| EngineError::Unavailable(format!("the legacy read did not finish: {error}")))?
+        .map_err(|error| {
+            EngineError::Unavailable(format!("the legacy read did not finish: {error}"))
+        })?
         .map_err(|error| EngineError::Unavailable(format!("{error:#}")))
 }
 
@@ -177,7 +179,10 @@ fn write_marker(path: &Path, report: Report) -> std::io::Result<()> {
     )
 }
 
-pub(super) async fn run(engine: &NativeEngine, proxy: &Proxy) -> Result<Option<Report>, EngineError> {
+pub(super) async fn run(
+    engine: &NativeEngine,
+    proxy: &Proxy,
+) -> Result<Option<Report>, EngineError> {
     let marker = marker_path(engine.config());
     if marker.is_file() {
         return Ok(None);
@@ -212,8 +217,9 @@ pub(super) async fn run(engine: &NativeEngine, proxy: &Proxy) -> Result<Option<R
             }
         }
     }
-    write_marker(&marker, report)
-        .map_err(|error| EngineError::Unavailable(format!("could not record the import: {error}")))?;
+    write_marker(&marker, report).map_err(|error| {
+        EngineError::Unavailable(format!("could not record the import: {error}"))
+    })?;
     Ok(Some(report))
 }
 
@@ -237,7 +243,9 @@ async fn import_row(
         .await
         .map_err(|error| {
             tracing::debug!(error = %error, "{LOG} the module refused a legacy row");
-            EngineError::Unavailable(format!("TinySecurity ImportApprovalHistory2 failed: {error}"))
+            EngineError::Unavailable(format!(
+                "TinySecurity ImportApprovalHistory2 failed: {error}"
+            ))
         })?;
     Ok(())
 }

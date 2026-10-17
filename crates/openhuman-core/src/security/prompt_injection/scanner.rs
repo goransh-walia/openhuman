@@ -234,7 +234,11 @@ pub async fn screen_tool_definition(
     definition: &serde_json::Value,
 ) -> Result<DefinitionScan, String> {
     let scanner = current();
-    match tokio::time::timeout(CALL_DEADLINE, scanner.scan_tool_definition(name, definition)).await
+    match tokio::time::timeout(
+        CALL_DEADLINE,
+        scanner.scan_tool_definition(name, definition),
+    )
+    .await
     {
         Ok(result) => result,
         Err(_) => Err("the tool definition scan timed out".into()),

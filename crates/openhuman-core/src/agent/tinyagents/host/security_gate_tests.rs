@@ -57,7 +57,10 @@ async fn content_the_screen_could_not_check_is_held_not_admitted() {
         )
         .await
         .unwrap();
-        assert!(!outcome.is_admissible(), "an unchecked output must not pass");
+        assert!(
+            !outcome.is_admissible(),
+            "an unchecked output must not pass"
+        );
         let reason = outcome.block_reason().expect("block reason");
         assert!(reason.contains("screen."), "{reason}");
     }

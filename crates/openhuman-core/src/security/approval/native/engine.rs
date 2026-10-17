@@ -673,9 +673,7 @@ impl ApprovalEngine for NativeEngine {
                 },),
             )
             .await
-            .map_err(|error| {
-                unavailable(format!("TinySecurity ListFlowTrust2 failed: {error}"))
-            })?;
+            .map_err(|error| unavailable(format!("TinySecurity ListFlowTrust2 failed: {error}")))?;
         let mut tools: Vec<String> = listed.entries.into_iter().map(|e| e.tool).collect();
         tools.sort();
         tools.dedup();

@@ -207,8 +207,7 @@ fn automatic(input: &CheckInput, trusted: bool) -> Option<&'static str> {
     }
     // The module's durable flow trust approves the exact tool in the exact flow, on
     // the strict-flow subject the trust was granted under.
-    (input.variant == Variant::FlowStrict && trusted)
-        .then_some("auto:flow-grant")
+    (input.variant == Variant::FlowStrict && trusted).then_some("auto:flow-grant")
 }
 
 #[async_trait]
@@ -430,7 +429,11 @@ impl ApprovalEngine for StubEngine {
             .remove(&(flow_id.to_owned(), tool.to_owned())))
     }
 
-    async fn flow_trust(&self, _tenant: &Tenant, flow_id: &str) -> Result<Vec<String>, EngineError> {
+    async fn flow_trust(
+        &self,
+        _tenant: &Tenant,
+        flow_id: &str,
+    ) -> Result<Vec<String>, EngineError> {
         Ok(self
             .trust
             .lock()

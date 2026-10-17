@@ -30,7 +30,10 @@ fn a_legacy_decision_maps_to_the_module_state_it_ended_in() {
         ApprovalState::Denied
     );
     // A request an earlier launch left undecided can never be resumed.
-    assert_eq!(state_of(&legacy("a", None, false, 1)), ApprovalState::Expired);
+    assert_eq!(
+        state_of(&legacy("a", None, false, 1)),
+        ApprovalState::Expired
+    );
 }
 
 #[test]
@@ -47,7 +50,10 @@ fn the_legacy_record_carries_identity_without_the_arguments_or_summary() {
         u64::try_from(row.expires_at.unwrap().timestamp_millis()).unwrap()
     );
     let json = serde_json::to_string(&record).unwrap();
-    assert!(!json.contains("composio"), "the tool name is not sent: {json}");
+    assert!(
+        !json.contains("composio"),
+        "the tool name is not sent: {json}"
+    );
     // The same row always fingerprints the same, so a repeat run is recognized.
     assert_eq!(legacy_record(&row), record);
     let mut other = row.clone();
@@ -71,18 +77,26 @@ fn an_agent_scoped_row_keeps_its_agent_and_a_row_without_expiry_gets_the_default
 #[test]
 fn only_the_most_recent_decided_rows_are_carried_over_oldest_first() {
     let mut history = LegacyHistory::default();
-    history.approvals.push(legacy("undecided", None, false, 100_000));
+    history
+        .approvals
+        .push(legacy("undecided", None, false, 100_000));
     let total = HISTORY_LIMIT + 7;
     for index in 0..total {
         let age = i64::try_from(total - index).unwrap();
-        history
-            .approvals
-            .push(legacy(&format!("r{index}"), Some("approve_once"), false, age));
+        history.approvals.push(legacy(
+            &format!("r{index}"),
+            Some("approve_once"),
+            false,
+            age,
+        ));
     }
     let carried = recent_decided(&history);
     assert_eq!(carried.len(), HISTORY_LIMIT);
     assert_eq!(carried.first().unwrap().request_id, "r7");
-    assert_eq!(carried.last().unwrap().request_id, format!("r{}", total - 1));
+    assert_eq!(
+        carried.last().unwrap().request_id,
+        format!("r{}", total - 1)
+    );
     assert!(carried.iter().all(|row| row.request_id != "undecided"));
 }
 
@@ -181,6 +195,9 @@ async fn an_import_the_module_cannot_take_records_nothing_so_the_next_start_retr
     let (_host, proxy) = absent_module().await;
     let engine = NativeEngine::on(config.clone(), proxy.clone());
     let result = run(&engine, &proxy).await;
-    assert!(matches!(result, Err(EngineError::Unavailable(_))), "{result:?}");
+    assert!(
+        matches!(result, Err(EngineError::Unavailable(_))),
+        "{result:?}"
+    );
     assert!(!marker_path(&config).exists());
 }

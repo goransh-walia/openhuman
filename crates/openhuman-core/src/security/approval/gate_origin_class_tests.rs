@@ -35,7 +35,10 @@ fn every_turn_origin_maps_to_one_engine_class() {
         })),
         CallOrigin::Operator
     );
-    assert_eq!(origin_class(&AgentTurnOrigin::Cli), CallOrigin::LocalOperator);
+    assert_eq!(
+        origin_class(&AgentTurnOrigin::Cli),
+        CallOrigin::LocalOperator
+    );
     assert_eq!(
         origin_class(&AgentTurnOrigin::DirectChat),
         CallOrigin::LocalOperator
@@ -53,9 +56,15 @@ fn a_refused_scheduled_job_and_a_refused_unlabelled_call_keep_their_own_explanat
         "gmail_send",
         &EngineError::Refused,
     );
-    assert!(cron.contains("Scheduled agent turns cannot use 'gmail_send'"), "{cron}");
+    assert!(
+        cron.contains("Scheduled agent turns cannot use 'gmail_send'"),
+        "{cron}"
+    );
     let unlabelled = engine_denial(&AgentTurnOrigin::Unknown, "cron_add", &EngineError::Refused);
-    assert!(unlabelled.contains("missing its origin label"), "{unlabelled}");
+    assert!(
+        unlabelled.contains("missing its origin label"),
+        "{unlabelled}"
+    );
     for text in [&cron, &unlabelled] {
         assert!(text.starts_with(POLICY_DENIED_MARKER));
     }

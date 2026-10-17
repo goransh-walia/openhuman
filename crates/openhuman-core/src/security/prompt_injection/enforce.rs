@@ -13,10 +13,14 @@ use super::types::{
 /// are the module's; this is presentation.
 fn describe(code: &str) -> &'static str {
     match code {
-        "override.ignore_previous" => "Attempts to override existing safety or system instructions.",
+        "override.ignore_previous" => {
+            "Attempts to override existing safety or system instructions."
+        }
         "override.role_hijack" => "Attempts to redefine assistant role or policy scope.",
         "override.obfuscated_instruction" => "Detected obfuscated instruction-override phrase.",
-        "exfiltrate.system_prompt" => "Attempts to reveal hidden prompts or developer instructions.",
+        "exfiltrate.system_prompt" => {
+            "Attempts to reveal hidden prompts or developer instructions."
+        }
         "exfiltrate.secrets" => "Mentions secret-bearing nouns (potentially benign on its own).",
         "exfiltrate.credentials_with_intent" => {
             "Attempts to extract credentials, secrets, or tokens (verb + target)."
@@ -42,7 +46,10 @@ pub async fn enforce_prompt_input(
 ) -> PromptEnforcementDecision {
     let scan = screen(input).await;
     let (verdict, action) = match scan.tier {
-        Tier::Allow => (PromptInjectionVerdict::Allow, PromptEnforcementAction::Allow),
+        Tier::Allow => (
+            PromptInjectionVerdict::Allow,
+            PromptEnforcementAction::Allow,
+        ),
         Tier::Review => (
             PromptInjectionVerdict::Review,
             PromptEnforcementAction::ReviewBlocked,

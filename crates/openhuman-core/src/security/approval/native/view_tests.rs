@@ -153,7 +153,9 @@ fn a_standing_flow_trust_reads_as_the_pre_authorization_it_always_was() {
     let shown = entry(&stored(trust), None).unwrap();
     assert_eq!(shown.decision, ApprovalDecision::ApproveAlwaysForFlow);
     assert_eq!(shown.tool_name, "gmail_send");
-    assert!(shown.action_summary.starts_with("Pre-authorized for this flow"));
+    assert!(shown
+        .action_summary
+        .starts_with("Pre-authorized for this flow"));
     assert!(shown.expires_at.is_none() && shown.decided_by.is_none());
 }
 
