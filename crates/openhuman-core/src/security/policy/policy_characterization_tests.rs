@@ -7,7 +7,6 @@
 
 use super::*;
 use tinybox_bus::CommandClass;
-use tinytools::status::POLICY_BLOCKED_MARKER;
 
 fn policy(autonomy: AutonomyLevel) -> SecurityPolicy {
     SecurityPolicy {
