@@ -1,6 +1,8 @@
-//! Phase-0 sandbox characterization (issue #7328, plan Task 1): the precedence
-//! `resolve_sandbox_policy` and `command_requires_sandbox` apply today, which the
-//! tinybox-backed module path must keep. The SaaS rule (every command sandboxed
+//! Phase-0 sandbox characterization (issue #7328, plan Task 1): the request side
+//! (`spawn_policy` and `command_requires_sandbox`), which the tinybox-backed module path
+//! keeps. Which executor runs a spawn, and whether the operator's off switch skips the
+//! jail, is the security module's decision and is pinned in
+//! `sandbox/spawn_plan/integration_tests.rs`. The SaaS rule (every command sandboxed
 //! even with `OPENHUMAN_SANDBOX=off`) needs a process locked to SaaS mode, which
 //! only a SaaS boot can do, so it is pinned beside the code in
 //! `sandbox/ops_tests.rs` (`saas_requires_the_sandbox_even_when_the_host_turns_it_off`).
@@ -16,27 +18,22 @@ use std::path::Path;
 use tinyagents_definition::SandboxMode;
 
 use openhuman_core::{
-    config::{Config, RuntimeConfig, SandboxBackend},
+    config::{Config, RuntimeConfig, SandboxBackend, SandboxConfig},
     core::runtime::DispatchCtx,
     sandbox::{
-        command_requires_sandbox, create_sandbox_backend, resolve_sandbox_policy,
-        SandboxBackendKind, SandboxStatus,
+        command_requires_sandbox, create_sandbox_backend, spawn_policy, SandboxBackendKind,
+        SandboxStatus,
     },
 };
 
 const ACTION: &str = "/work/action";
 const STATE: &str = "/work/state";
 
-fn resolve(
-    mode: SandboxMode,
-    runtime: &RuntimeConfig,
-    remote: bool,
-) -> openhuman_core::sandbox::SandboxPolicy {
-    resolve_sandbox_policy(
-        &DispatchCtx::process_default(),
-        mode,
+fn resolve(runtime: &RuntimeConfig, remote: bool) -> openhuman_core::sandbox::SandboxPolicy {
+    spawn_policy(
         Path::new(ACTION),
         Path::new(STATE),
+        &SandboxConfig::default(),
         runtime,
         remote,
     )
@@ -58,79 +55,28 @@ async fn scratch_config(
 }
 
 #[test]
-fn policy_matrix_without_host_override() {
-    let _lock = env_guard::env_lock();
-    let _off = env_guard::EnvVarGuard::unset("OPENHUMAN_SANDBOX");
+fn policy_matrix_names_an_executor_only_when_the_configuration_does() {
     let local = RuntimeConfig::default();
     let docker = RuntimeConfig {
         kind: "docker".into(),
         ..RuntimeConfig::default()
     };
-    // (mode, runtime, remote) -> (backend, allow_network, docker overrides present)
+    // (runtime, remote) -> (named executor, allow_network)
     let cases = [
-        (
-            SandboxMode::None,
-            &local,
-            false,
-            SandboxBackendKind::None,
-            true,
-            false,
-        ),
-        (
-            SandboxMode::None,
-            &local,
-            true,
-            SandboxBackendKind::None,
-            true,
-            false,
-        ),
-        (
-            SandboxMode::ReadOnly,
-            &local,
-            false,
-            SandboxBackendKind::None,
-            true,
-            false,
-        ),
-        (
-            SandboxMode::Sandboxed,
-            &local,
-            false,
-            SandboxBackendKind::Local,
-            true,
-            false,
-        ),
-        (
-            SandboxMode::Sandboxed,
-            &local,
-            true,
-            SandboxBackendKind::Docker,
-            false,
-            true,
-        ),
-        (
-            SandboxMode::Sandboxed,
-            &docker,
-            false,
-            SandboxBackendKind::Docker,
-            true,
-            true,
-        ),
-        (
-            SandboxMode::Sandboxed,
-            &docker,
-            true,
-            SandboxBackendKind::Docker,
-            false,
-            true,
-        ),
+        (&local, false, SandboxBackendKind::None, true),
+        (&local, true, SandboxBackendKind::Docker, false),
+        (&docker, false, SandboxBackendKind::Docker, true),
+        (&docker, true, SandboxBackendKind::Docker, false),
     ];
-    for (mode, runtime, remote, backend, network, overrides) in cases {
-        let policy = resolve(mode, runtime, remote);
-        let label = format!("{mode:?} kind={} remote={remote}", runtime.kind);
+    for (runtime, remote, backend, network) in cases {
+        let policy = resolve(runtime, remote);
+        let label = format!("kind={} remote={remote}", runtime.kind);
         assert_eq!(policy.backend, backend, "{label}");
         assert_eq!(policy.allow_network, network, "{label}");
-        assert_eq!(policy.docker_overrides.is_some(), overrides, "{label}");
+        assert!(
+            policy.docker_overrides.is_some(),
+            "{label}: the container settings travel whichever executor is chosen"
+        );
         assert_eq!(policy.workspace_root, Path::new(ACTION), "{label}");
         assert_eq!(policy.state_dir, Path::new(STATE), "{label}");
         assert!(
@@ -142,7 +88,7 @@ fn policy_matrix_without_host_override() {
 
 #[test]
 fn env_passthrough_is_the_pinned_safe_allowlist() {
-    let policy = resolve(SandboxMode::Sandboxed, &RuntimeConfig::default(), false);
+    let policy = resolve(&RuntimeConfig::default(), false);
     assert_eq!(
         policy.env_passthrough,
         ["PATH", "HOME", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "USER", "SHELL", "TMPDIR"]
@@ -156,21 +102,6 @@ fn env_passthrough_is_the_pinned_safe_allowlist() {
             !policy.env_passthrough.iter().any(|v| v == secret),
             "{secret}"
         );
-    }
-}
-
-#[test]
-fn host_off_switch_unconfines_only_sandboxed_mode() {
-    let _lock = env_guard::env_lock();
-    for spelling in ["off", "OFF", " none ", "0", "false", "disabled"] {
-        let _env = env_guard::EnvVarGuard::set("OPENHUMAN_SANDBOX", spelling);
-        let policy = resolve(SandboxMode::Sandboxed, &RuntimeConfig::default(), true);
-        assert_eq!(policy.backend, SandboxBackendKind::None, "{spelling:?}");
-    }
-    for spelling in ["on", "", "1", "local", "yes"] {
-        let _env = env_guard::EnvVarGuard::set("OPENHUMAN_SANDBOX", spelling);
-        let policy = resolve(SandboxMode::Sandboxed, &RuntimeConfig::default(), false);
-        assert_eq!(policy.backend, SandboxBackendKind::Local, "{spelling:?}");
     }
 }
 
@@ -210,10 +141,11 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
         .await
         .unwrap());
     }
-    // The host off switch beats the agent's own request.
+    // The off switch no longer routes around the module: a sandboxed request is still
+    // planned there, and the module decides whether the jail may be skipped.
     {
         let _off = env_guard::EnvVarGuard::set("OPENHUMAN_SANDBOX", "off");
-        assert!(!command_requires_sandbox(
+        assert!(command_requires_sandbox(
             &DispatchCtx::process_default(),
             Some(SandboxMode::Sandboxed)
         )
@@ -243,12 +175,14 @@ async fn command_requires_sandbox_precedence_for_single_user_hosts() {
         );
     }
 
-    // ...unless the legacy `enabled = false` flag turns isolation off.
+    // ...also with the legacy `enabled = false` flag: the flag is declared to the module,
+    // which plans the run on the host for the trusted operator, rather than the host
+    // skipping the plan.
     let (dir, _config) = scratch_config(SandboxBackend::Docker, Some(false)).await;
     let _ws = env_guard::EnvVarGuard::set_path("OPENHUMAN_WORKSPACE", dir.path());
     let _off = env_guard::EnvVarGuard::unset("OPENHUMAN_SANDBOX");
     assert!(
-        !command_requires_sandbox(&DispatchCtx::process_default(), None)
+        command_requires_sandbox(&DispatchCtx::process_default(), None)
             .await
             .unwrap()
     );
@@ -271,7 +205,7 @@ async fn backend_handles_report_a_defined_status() {
     // never silently Ready without a jail.
     let local = create_sandbox_backend(
         &DispatchCtx::process_default(),
-        &resolve(SandboxMode::Sandboxed, &RuntimeConfig::default(), false),
+        &resolve(&RuntimeConfig::default(), false),
     )
     .await;
     assert_eq!(local.kind, SandboxBackendKind::Local);

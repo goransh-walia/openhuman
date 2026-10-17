@@ -28,7 +28,7 @@ use std::time::Duration;
 #[cfg(windows)]
 use openhuman_core::config::RuntimeConfig;
 #[cfg(windows)]
-use openhuman_core::sandbox::ops::{execute_in_sandbox, resolve_sandbox_policy};
+use openhuman_core::sandbox::ops::execute_in_sandbox;
 #[cfg(windows)]
 use tinyagents_definition::SandboxMode;
 
