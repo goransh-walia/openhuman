@@ -240,6 +240,9 @@ async fn probe(config: &Config, policy: &SandboxPolicy) -> Result<Vec<SandboxExe
 /// what the host asked for: the command never gets more than the policy allowed, and
 /// one that needs the network fails inside the sandbox instead of running with it.
 pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, PlanError> {
+    if request.host_run {
+        return plan_with(&request, NetworkPolicy::Host).await;
+    }
     let asked = facts::network_ceiling(request.policy);
     match plan_with(&request, asked.clone()).await {
         Err(PlanError::Refused(SandboxDenial2::Approval)) if asked == NetworkPolicy::Host => {
@@ -261,7 +264,8 @@ async fn plan_with(
         policy,
         source,
         operation,
-        host_off,
+        operator_off,
+        host_run,
         module,
     } = *request;
     let saas = crate::core::runtime::is_saas();
@@ -274,9 +278,11 @@ async fn plan_with(
     )
     .map_err(unavailable)?;
     let proxy = module.proxy(config).await?;
-    let executor = match module {
+    // A run on the host confines nothing, so no executor is verified for it.
+    let executors = match module {
+        _ if host_run => Vec::new(),
         ModuleSource::Production => probe(config, policy).await?,
-        ModuleSource::Fixed(fixed) => fixed.executor.clone(),
+        ModuleSource::Fixed(fixed) => fixed.executors.clone(),
     };
     let scope = facts::scope(&facts::FactsInput {
         config,
@@ -284,8 +290,8 @@ async fn plan_with(
         source,
         subject: subject.clone(),
         saas,
-        host_off,
-        executors: vec![executor],
+        operator_off,
+        executors,
     })
     .ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
     let stream = AuditStream::open(config, subject.clone())
@@ -296,7 +302,14 @@ async fn plan_with(
     let operation_json = operation
         .canonical()
         .ok_or_else(|| unavailable("the working directory is not valid text"))?;
-    let grants = grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
+    // A run on the host claims no confinement: no grants and no bounds.
+    let (grants, limits) = if host_run {
+        (Vec::new(), ResourceLimits2::default())
+    } else {
+        let grants =
+            grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
+        (grants, limits(policy))
+    };
     let ordered = stream.lock().await;
     let generation = client::generation(&proxy).await.map_err(unavailable)?;
     let audit = stream.correlation(generation).await.map_err(unavailable)?;
@@ -311,9 +324,10 @@ async fn plan_with(
         operation_json,
         grants,
         network,
-        limits: limits(policy),
+        limits,
         deny_subprocesses: false,
         accept_process_isolation: source.accepts_process_isolation(),
+        options: options(policy, host_run),
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
@@ -348,7 +362,6 @@ async fn plan_with(
     let home = super::local_grants::grant_home(saas, dirs::home_dir);
     let box_plan = BoxPlan::from_artifact(&artifact, home.as_deref())
         .map_err(|error: PlanMappingError| unavailable(error.to_string()))?;
-    ensure_selected(&box_plan, policy)?;
     tracing::debug!(
         executor = ?box_plan.executor,
         grants = artifact.grants.len(),
