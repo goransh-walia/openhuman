@@ -47,7 +47,7 @@ async fn ordinary_text_passes_screening_unchanged() {
 
 /// The screen is on the hot path of every tool output, so a screen that cannot
 /// answer must hold the content, never wave it through.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn content_the_screen_could_not_check_is_held_not_admitted() {
     let gate = OpenHumanSecurityGate::new();
     for scanner in [StubScanner::unavailable(), StubScanner::hanging()] {
