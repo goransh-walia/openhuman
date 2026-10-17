@@ -36,6 +36,12 @@ pub async fn any_protected(paths: &[&Path]) -> bool {
     native::any_protected(paths).await
 }
 
+/// One answer per path, in order, from a single module call. `Err` when the module
+/// cannot answer; callers treat that as every path protected.
+pub async fn protected_paths(paths: &[std::path::PathBuf]) -> Result<Vec<bool>, String> {
+    native::protected_paths(paths).await
+}
+
 /// [`is_protected`] for a synchronous caller. Fails closed.
 pub fn is_protected_blocking(path: &Path) -> bool {
     native::is_protected_blocking(path)
@@ -57,6 +63,10 @@ mod native {
 
     pub(super) async fn any_protected(paths: &[&Path]) -> bool {
         gap::any_protected(paths).await
+    }
+
+    pub(super) async fn protected_paths(paths: &[std::path::PathBuf]) -> Result<Vec<bool>, String> {
+        gap::protected_paths(paths).await
     }
 
     pub(super) fn is_protected_blocking(path: &Path) -> bool {
@@ -84,6 +94,10 @@ mod native {
 
     pub(super) async fn any_protected(_paths: &[&Path]) -> bool {
         true
+    }
+
+    pub(super) async fn protected_paths(_paths: &[std::path::PathBuf]) -> Result<Vec<bool>, String> {
+        Err("TinySecurity is not built into this host".into())
     }
 
     pub(super) fn is_protected_blocking(_path: &Path) -> bool {
