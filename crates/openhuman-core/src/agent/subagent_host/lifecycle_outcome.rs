@@ -84,3 +84,35 @@ pub(super) fn host_outcome_to_neutral(
         ..SubagentOutcome::cancelled(String::new())
     }
 }
+
+pub(super) fn observer_cancelled_outcome(task_key: &SubagentTaskKey, agent_id: &str) -> SubagentRunOutcome {
+    SubagentRunOutcome {
+        task_id: task_key.task_id.clone(),
+        agent_id: agent_id.to_owned(),
+        output: String::new(),
+        iterations: 0,
+        elapsed: std::time::Duration::default(),
+        mode: super::SubagentMode::Typed,
+        status: SubagentRunStatus::Cancelled,
+        final_history: Vec::new(),
+        usage: SubagentUsage::default(),
+        artifact_paths: Vec::new(),
+        persistence_disposition:
+            tinyagents_orchestration::subagent::SubagentPersistenceDisposition::ObserverCancelled,
+    }
+}
+
+pub(super) fn host_observer_outcome(mut outcome: SubagentRunOutcome) -> SubagentRunOutcome {
+    use tinyagents_orchestration::subagent::SubagentPersistenceDisposition as Disposition;
+
+    outcome.persistence_disposition = match outcome.persistence_disposition {
+        Disposition::PauseCommitted | Disposition::PauseReplaced | Disposition::PauseExisting => {
+            Disposition::PauseExisting
+        }
+        Disposition::TerminalInserted | Disposition::TerminalExisting => {
+            Disposition::TerminalExisting
+        }
+        Disposition::ObserverCancelled => Disposition::ObserverCancelled,
+    };
+    outcome
+}
