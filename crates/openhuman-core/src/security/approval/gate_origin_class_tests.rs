@@ -13,12 +13,7 @@ fn trusted(source: TrustedAutomationSource) -> AgentTurnOrigin {
 
 #[test]
 fn every_turn_origin_maps_to_one_engine_class() {
-    let web = AgentTurnOrigin::WebChat {
-        thread_id: "t".into(),
-        client_id: "c".into(),
-        user_authored: true,
-    };
-    assert_eq!(origin_class(&web), CallOrigin::Operator);
+    assert_eq!(origin_class(&web_origin()), CallOrigin::Operator);
     assert_eq!(
         origin_class(&trusted(TrustedAutomationSource::Cron)),
         CallOrigin::Cron
