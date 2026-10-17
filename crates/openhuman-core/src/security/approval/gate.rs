@@ -47,7 +47,6 @@ use super::engine::{
     CallOrigin, CheckInput, Checked, Choice, Delivery, EngineError, Posture, PromptSurface,
     SharedEngine, Variant,
 };
-use super::store;
 use super::types::{
     ApprovalDecision, ApprovalSourceContext, ExecutionOutcome, GateOutcome, PendingApproval,
 };

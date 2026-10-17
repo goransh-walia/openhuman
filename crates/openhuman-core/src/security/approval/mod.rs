@@ -13,9 +13,9 @@
 //! `security-module`): it owns each request's durable lifecycle, its exact
 //! binding to the call, the 10-minute expiry and the audit trail, and the host
 //! serves the module's store, audit sink, prompt and human verification. The
-//! user's "Always allow" allowlist lives in `autonomy.auto_approve` and per-flow
-//! trust in the store; the gate reads both live and hands them to the engine as
-//! the posture of each call.
+//! user's "Always allow" allowlist lives in `autonomy.auto_approve`; the gate reads
+//! it live and hands it to the engine as the posture of each call. Per-flow trust
+//! is the module's own durable state (`GrantFlowTool2`).
 
 pub(crate) mod engine;
 #[cfg(test)]
@@ -29,10 +29,7 @@ pub mod summary;
 pub use registration_scope::ApprovalScope;
 pub mod rpc;
 pub mod schemas;
-pub mod store;
-mod store_documents;
 mod store_import;
-pub(crate) use store_documents::import_source;
 pub mod types;
 
 pub use gate::{
