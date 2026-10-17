@@ -111,28 +111,19 @@ fn docker_module_results_preserve_success_failure_and_timeout_semantics() {
 
 #[test]
 fn shell_tool_name() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
     assert_eq!(tool.name(), "shell");
 }
 
 #[test]
 fn shell_tool_description() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
     assert!(!tool.description().is_empty());
 }
 
 #[test]
 fn shell_tool_schema_has_command() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
     let schema = tool.parameters_schema();
     assert!(schema["properties"]["command"].is_object());
     assert!(schema["required"]
@@ -147,10 +138,7 @@ fn shell_tool_schema_has_command() {
 #[cfg(not(windows))]
 #[tokio::test]
 async fn shell_executes_allowed_command() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
     let result = tool
         .execute(json!({"command": "echo hello"}))
         .await
@@ -245,10 +233,7 @@ async fn shell_pwd_returns_action_dir_not_workspace_dir() {
 
 #[test]
 fn shell_is_unbounded_by_default() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
 
     // No `timeout_secs` ⇒ no deadline. A long script must not be hard-killed.
     assert_eq!(
@@ -266,10 +251,7 @@ fn shell_is_unbounded_by_default() {
 
 #[test]
 fn shell_timeout_honors_explicit_per_call_value() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
 
     // An explicit in-range request is enforced verbatim.
     assert_eq!(
@@ -293,10 +275,7 @@ fn shell_timeout_honors_explicit_per_call_value() {
 #[cfg(not(windows))]
 #[tokio::test]
 async fn shell_per_call_timeout_kills_slow_command() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
 
     // `sleep 30` would survive any sane default, but a per-call 1s budget
     // must kill it and report the per-call value in the error message.
@@ -315,10 +294,7 @@ async fn shell_per_call_timeout_kills_slow_command() {
 
 #[test]
 fn shell_schema_advertises_timeout_secs() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
     let schema = tool.parameters_schema();
     let timeout = &schema["properties"]["timeout_secs"];
     assert_eq!(timeout["type"], "integer");

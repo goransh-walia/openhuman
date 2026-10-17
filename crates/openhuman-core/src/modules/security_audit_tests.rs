@@ -111,7 +111,10 @@ async fn shell_rows_extend_the_subjects_one_ordered_stream_and_are_redacted() {
     }
     let stream = AuditStream::open(&config, who).await.unwrap();
     let next = stream.correlation(1).await.unwrap();
-    assert_eq!(next.expected_tail, 2, "both rows extend one contiguous stream");
+    assert_eq!(
+        next.expected_tail, 2,
+        "both rows extend one contiguous stream"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

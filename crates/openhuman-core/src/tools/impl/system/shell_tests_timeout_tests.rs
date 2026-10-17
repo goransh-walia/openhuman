@@ -9,10 +9,7 @@ use super::*;
 #[cfg(not(windows))]
 #[tokio::test]
 async fn exit_124_is_attributed_to_the_commands_own_timeout() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Full),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Full), test_runtime());
     let result = tool
         .execute(json!({"command": "echo ok; exit 124"}))
         .await
@@ -33,10 +30,7 @@ async fn exit_124_is_attributed_to_the_commands_own_timeout() {
 #[cfg(not(windows))]
 #[tokio::test]
 async fn other_failures_carry_no_timeout_attribution() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Full),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Full), test_runtime());
     let result = tool.execute(json!({"command": "exit 3"})).await.unwrap();
     assert!(!result.output().contains("timeout"), "{}", result.output());
 }
@@ -44,10 +38,7 @@ async fn other_failures_carry_no_timeout_attribution() {
 #[cfg(not(windows))]
 #[tokio::test]
 async fn the_tools_own_deadline_says_it_was_timeout_secs() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Full),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Full), test_runtime());
     let result = tool
         .execute(json!({"command": "sleep 5", "timeout_secs": 1}))
         .await
@@ -70,10 +61,7 @@ async fn the_tools_deadline_kills_the_commands_grandchildren_too() {
     let dir = std::env::temp_dir().join(format!("oh-shell-pgkill-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let pidfile = dir.join("grandchild.pid");
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Full),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Full), test_runtime());
     let result = tool
         .execute(json!({
             "command": format!("sleep 30 & echo $! > {}; wait", pidfile.display()),

@@ -85,7 +85,12 @@ pub(crate) fn committed(
         .receipt
         .as_ref()
         .filter(|_| response.committed)
-        .ok_or_else(|| format!("TinySecurity did not commit the audit row ({:?})", response.health))?;
+        .ok_or_else(|| {
+            format!(
+                "TinySecurity did not commit the audit row ({:?})",
+                response.health
+            )
+        })?;
     let exact = receipt.new_tail == audit.expected_tail.saturating_add(1)
         && receipt.events.len() == 1
         && receipt.events[0].event_id == audit.event_id;

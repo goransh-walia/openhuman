@@ -77,10 +77,7 @@ async fn shell_tool_gates_commands_on_the_released_module() {
     let released = Released::new();
     let ctx = DispatchCtx::ambient();
     let tool = |autonomy, budget| {
-        ShellTool::new(
-            Arc::new(released.policy(autonomy, budget)),
-            test_runtime(),
-        )
+        ShellTool::new(Arc::new(released.policy(autonomy, budget)), test_runtime())
     };
 
     let read_only = tool(AutonomyLevel::ReadOnly, 100);

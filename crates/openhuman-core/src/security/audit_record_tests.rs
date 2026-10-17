@@ -24,7 +24,9 @@ fn a_long_command_is_cut_on_a_char_boundary_and_marked() {
     let command = "é".repeat(MAX_COMMAND_CHARS + 10);
     let event = HostAuditEvent::command_execution("tool:shell", &command, false, true, true, 1);
     assert_eq!(
-        event.arguments["command"].as_str().map(|c| c.chars().count()),
+        event.arguments["command"]
+            .as_str()
+            .map(|c| c.chars().count()),
         Some(MAX_COMMAND_CHARS)
     );
     assert_eq!(event.arguments["command_truncated"], json!(true));

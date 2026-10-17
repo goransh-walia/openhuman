@@ -48,10 +48,7 @@ fn every_description_keeps_the_stdout_only_warning() {
 
 #[test]
 fn the_tool_describes_the_shell_this_host_actually_spawns() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
     assert_eq!(tool.description(), shell_description(host_shell_flavor()));
     let command_desc = tool.parameters_schema()["properties"]["command"]["description"]
         .as_str()
