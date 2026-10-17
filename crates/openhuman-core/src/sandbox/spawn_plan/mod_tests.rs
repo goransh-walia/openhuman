@@ -1,5 +1,4 @@
 use super::*;
-use tinysecurity_bus::SandboxBackend;
 use crate::sandbox::types::DockerOverrides;
 use std::path::PathBuf;
 
