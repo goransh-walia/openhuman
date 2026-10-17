@@ -19,7 +19,7 @@ use tinysecurity_bus::{
     SupersedePolicyRequest, SupersedePolicyResponse, ToolCall, Widening,
 };
 
-use super::{policy_translation as translate, state, VerifiedCaller};
+use super::{policy_translation as translate, state, ClientState, VerifiedCaller};
 use crate::config::Config;
 
 const CACHE_CAPACITY: usize = 4096;
