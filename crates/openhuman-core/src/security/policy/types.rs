@@ -30,8 +30,8 @@ pub enum TrustedAccess {
 /// A directory outside the workspace the agent is explicitly granted access to.
 /// Takes precedence over `workspace_only` and `forbidden_paths` for its subtree,
 /// except for credential stores and workspace-internal application state (see
-/// `SecurityPolicy::is_always_forbidden` and
-/// `SecurityPolicy::is_workspace_internal_path`).
+/// the TinySecurity protected-path floor and
+/// the module's internal-state reservation).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct TrustedRoot {
     /// Absolute path (a leading `~` is expanded to the user's home).
@@ -102,11 +102,11 @@ pub(super) const WORKSPACE_INTERNAL_PREFIXES: &[&str] =
     &["memory-", "memory_tree-", "session_raw-"];
 
 /// The artifact store under `workspace_dir`. Its per-artifact directories are
-/// internal state (see `is_workspace_internal_path`); only
+/// internal state (see the internal-state reservation); only
 /// [`ARTIFACT_TOOL_RESULTS_DIR`] inside it stays agent-readable.
 pub(super) const ARTIFACTS_DIR: &str = "artifacts";
 /// The account config file, stored beside `workspace_dir` (see
-/// `is_workspace_internal_path`).
+/// the internal-state reservation).
 pub(super) const ACCOUNT_CONFIG_FILE: &str = "config.toml";
 /// Where oversized tool outputs are persisted for the agent to read back.
 pub(super) const ARTIFACT_TOOL_RESULTS_DIR: &str = "tool-results";
@@ -118,7 +118,7 @@ pub(super) const ARTIFACT_TOOL_RESULTS_DIR: &str = "tool-results";
 /// directory is often a project the agent is editing, and a tool output saved
 /// there becomes a stray file in that project (picked up by `git add -A`, shown
 /// in the diff). This is the one subdirectory of the internal `artifacts/` store
-/// agent file tools may read (`is_workspace_internal_path`), and `from_config`
+/// agent file tools may read (the internal-state reservation), and `from_config`
 /// grants it as a read-only root so the absolute pointer the store hands out
 /// stays readable when `workspace_only` refuses other absolute paths.
 pub fn tool_result_artifacts_dir(workspace_dir: &std::path::Path) -> PathBuf {
@@ -153,7 +153,7 @@ pub struct SecurityPolicy {
     /// allowlist, the hourly action budget, `workspace_only`, `forbidden_paths`
     /// and the workspace-internal boundary are all skipped.
     ///
-    /// [`Self::is_always_forbidden`] still applies either way: credential
+    /// the TinySecurity protected-path floor still applies either way: credential
     /// stores (`~/.ssh`, `~/.gnupg`, `~/.aws`, …) and system roots stay
     /// unreachable. That is a deliberate floor, not an oversight — it has never
     /// blocked legitimate agent work, and removing it is a one-line change if
@@ -207,7 +207,7 @@ pub struct SecurityPolicy {
     /// without a `pending_approvals` audit row (openhuman#5634, accepted).
     /// Sourced from `autonomy.auto_approve_all`;
     /// observed live via `live_policy`. Does not affect
-    /// `is_always_forbidden`, `is_workspace_internal_path`, or
+    /// the protected-path floor, the internal-state reservation, or
     /// `ToolPolicyMiddleware`, which are independent code paths.
     pub auto_approve_all: bool,
     /// Who answers shell-command questions for this policy. `None` is the

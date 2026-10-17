@@ -36,7 +36,7 @@ impl SecurityPolicy {
         );
         if !autonomy_config.enabled {
             log::info!(
-                "[openhuman:policy] autonomy policy DISABLED ([autonomy] enabled = false) —                  command classification, the approval gate, the command allowlist, the action                  budget and workspace containment are all inert. Credential stores and system                  roots (`is_always_forbidden`) remain blocked."
+                "[openhuman:policy] autonomy policy DISABLED ([autonomy] enabled = false) —                  command classification, the approval gate, the command allowlist, the action                  budget and workspace containment are all inert. Credential stores and system                  roots (the protected-path floor) remain blocked."
             );
         }
 
@@ -82,8 +82,8 @@ impl SecurityPolicy {
         // Guarded: an action dir at or above `workspace_dir` would hand a
         // trusted root to the whole workspace, and
         // the module's path scope lets a trusted root override
-        // `forbidden_paths`. `is_workspace_internal_path` and
-        // `is_always_forbidden` are checked *before* that shortcut and still
+        // `forbidden_paths`. the internal-state reservation and
+        // the protected-path floor are checked *before* that shortcut and still
         // hold, but the `forbidden_paths` bypass is not something a working
         // directory should buy, so skip the grant in that shape.
         let action_path = action_dir.to_string_lossy().to_string();
@@ -107,7 +107,7 @@ impl SecurityPolicy {
         // `workspace_only` an absolute path is refused unless a trusted root
         // covers it, so without this grant every pointer would be unreadable.
         // Read-only: the agent reads its own outputs back; it has no reason to
-        // write there. `is_workspace_internal_path` already exempts this one
+        // write there. the internal-state reservation already exempts this one
         // directory from the internal-state boundary.
         let tool_results = super::types::tool_result_artifacts_dir(workspace_dir)
             .to_string_lossy()
