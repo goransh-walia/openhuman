@@ -139,11 +139,6 @@ impl ScopeEntry {
             posture.require_approval,
             posture.auto_approve_all,
             &grants.tools,
-            grants
-                .flows
-                .iter()
-                .map(|g| (&g.flow_id, &g.tool))
-                .collect::<Vec<_>>(),
         ))
         .map_err(|error| error.to_string())?;
         let mut registered = self.registered.lock().await;
@@ -200,39 +195,31 @@ impl ScopeEntry {
     }
 }
 
-/// The user's configured grants, narrowed to what the module accepts: a name it
-/// refuses (a human-only or native tool) can never be granted, so it is dropped
-/// here rather than failing the whole registration.
+/// The user's configured tool grants, narrowed to what the module accepts: a name
+/// it refuses (a human-only or native tool) can never be granted, so it is dropped
+/// here rather than failing the whole registration. Per-flow trust is not part of
+/// the posture: the module keeps it durably (`GrantFlowTool2`).
 fn grants(posture: &Posture) -> ApprovalGrants2 {
-    let accepted = |tools: &[String], flows: &[FlowToolGrant2]| {
+    let accepted = |tools: &[String]| {
         ApprovalGrants2 {
             tools: tools.to_vec(),
-            flows: flows.to_vec(),
+            flows: Vec::new(),
         }
         .is_valid()
     };
     let mut tools: Vec<String> = posture
         .tool_grants
         .iter()
-        .filter(|tool| accepted(std::slice::from_ref(tool), &[]))
+        .filter(|tool| accepted(std::slice::from_ref(tool)))
         .cloned()
         .collect();
     tools.sort();
     tools.dedup();
     tools.truncate(MAX_TOOL_GRANTS2);
-    let mut flows: Vec<FlowToolGrant2> = posture
-        .flow_grants
-        .iter()
-        .map(|(flow_id, tool)| FlowToolGrant2 {
-            flow_id: flow_id.clone(),
-            tool: tool.clone(),
-        })
-        .filter(|grant| accepted(&[], std::slice::from_ref(grant)))
-        .collect();
-    flows.sort_by(|a, b| (&a.flow_id, &a.tool).cmp(&(&b.flow_id, &b.tool)));
-    flows.dedup_by(|a, b| a.flow_id == b.flow_id && a.tool == b.tool);
-    flows.truncate(MAX_FLOW_GRANTS2);
-    ApprovalGrants2 { tools, flows }
+    ApprovalGrants2 {
+        tools,
+        flows: Vec::new(),
+    }
 }
 
 /// The registered subject for `subject`, registering it or refreshing its
