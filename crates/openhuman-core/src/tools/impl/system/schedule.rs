@@ -170,22 +170,6 @@ fn schedule_args_as_cron_add(args: &serde_json::Value) -> serde_json::Value {
 }
 
 impl ScheduleTool {
-    fn enforce_mutation_allowed(&self, action: &str) -> Option<ToolResult> {
-        if !self.security.can_act() {
-            return Some(ToolResult::error(format!(
-                "[policy-blocked] Security policy: read-only mode, cannot perform '{action}'"
-            )));
-        }
-
-        if !self.security.record_action() {
-            return Some(ToolResult::error(
-                "Rate limit exceeded: action budget exhausted".to_string(),
-            ));
-        }
-
-        None
-    }
-
     fn handle_list(&self) -> Result<ToolResult> {
         let jobs = cron::list_jobs(&self.config)?;
         if jobs.is_empty() {

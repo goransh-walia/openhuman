@@ -169,18 +169,8 @@ impl InstallToolTool {
                  (Full access mode / allow_tool_install) before installing tools.",
             ));
         }
-        // Gate 2: read-only autonomy never installs.
-        if !self.security.can_act() {
-            return Ok(ToolResult::error(
-                "[policy-blocked] Action blocked: autonomy is read-only.",
-            ));
-        }
-        // Gate 3: rate limit.
-        if self.security.is_rate_limited() {
-            return Ok(ToolResult::error(
-                "Rate limit exceeded: too many actions in the last hour",
-            ));
-        }
+        // The tier and the hourly budget are TinySecurity's, enforced once per call by
+        // the tool gate before this runs.
 
         let package = match args.get("package").and_then(|v| v.as_str()) {
             Some(p) => p.trim(),
@@ -213,13 +203,6 @@ impl InstallToolTool {
             return Ok(ToolResult::error(format!(
                 "Package manager '{program}' is not installed on PATH"
             )));
-        }
-
-        // Spend an action against the rate budget.
-        if !self.security.record_action() {
-            return Ok(ToolResult::error(
-                "Rate limit exceeded: action budget exhausted",
-            ));
         }
 
         tracing::warn!(
