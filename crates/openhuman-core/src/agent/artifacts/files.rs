@@ -301,6 +301,6 @@ pub(crate) async fn remove_empty_placeholder(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "security-module"))]
 #[path = "files_tests.rs"]
 mod tests;

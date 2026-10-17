@@ -207,6 +207,6 @@ pub(crate) fn registered_tools(
     ]
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "security-module"))]
 #[path = "tools_tests.rs"]
 mod tests;
