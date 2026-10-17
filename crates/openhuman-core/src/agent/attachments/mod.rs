@@ -188,7 +188,10 @@ pub(crate) async fn resolve_path(
 ) -> anyhow::Result<PathBuf> {
     let root = action_root(config, scope);
     let policy = policy(config, &root);
-    if !policy.is_path_string_allowed(reference) {
+    if !policy
+        .path_allowed(crate::security::PathKind::StringAllowed, Path::new(reference))
+        .await
+    {
         anyhow::bail!("attachment path is not permitted");
     }
     let path = if Path::new(reference).is_absolute() {
@@ -209,7 +212,10 @@ pub(super) async fn is_missing_local_reference(
 ) -> bool {
     let root = action_root(config, scope);
     let path_policy = policy(config, &root);
-    if !path_policy.is_path_string_allowed(reference) {
+    if !path_policy
+        .path_allowed(crate::security::PathKind::StringAllowed, Path::new(reference))
+        .await
+    {
         return false;
     }
     let requested = Path::new(reference);
