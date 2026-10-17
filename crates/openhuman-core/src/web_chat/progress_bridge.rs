@@ -322,6 +322,8 @@ pub(crate) fn spawn_progress_bridge(
         // web-channel event (see `publish_seq_stamped`). Unique per emission so
         // the frontend can dedup by `(request_id, seq)`.
         let mut emit_seq: u64 = 0;
+        let bridge_ctx =
+            || BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
         let mut parent_completed = false;
         let mut parent_tool_count: u64 = 0;
         let mut child_tool_counts: HashMap<String, u64> = HashMap::new();
@@ -685,8 +687,7 @@ pub(crate) fn spawn_progress_bridge(
                     parent_call_id,
                     ..
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_spawned(
                         &ctx,
                         &mut emit_seq,
@@ -715,8 +716,7 @@ pub(crate) fn spawn_progress_bridge(
                     dirty_status,
                     ..
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_completed(
                         &ctx,
                         &mut emit_seq,
@@ -740,8 +740,7 @@ pub(crate) fn spawn_progress_bridge(
                     task_id,
                     error,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_failed(
                         &ctx,
                         &mut emit_seq,
@@ -760,8 +759,7 @@ pub(crate) fn spawn_progress_bridge(
                     worker_thread_id,
                     checkpoint_path,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_awaiting_user(
                         &ctx,
                         &mut emit_seq,
@@ -781,8 +779,7 @@ pub(crate) fn spawn_progress_bridge(
                     max_iterations,
                     extended_policy,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_iteration_started(
                         &ctx,
                         &mut emit_seq,
@@ -804,8 +801,7 @@ pub(crate) fn spawn_progress_bridge(
                     display_label,
                     display_detail,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_tool_call_started(
                         &ctx,
                         &mut emit_seq,
@@ -837,8 +833,7 @@ pub(crate) fn spawn_progress_bridge(
                     display_detail,
                     structured,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_tool_call_completed(
                         &ctx,
                         &mut emit_seq,
@@ -865,8 +860,7 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_text_delta(
                         &ctx,
                         &mut emit_seq,
@@ -883,8 +877,7 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_thinking_delta(
                         &ctx,
                         &mut emit_seq,
@@ -1185,3 +1178,7 @@ pub(crate) fn spawn_progress_bridge(
 #[cfg(test)]
 #[path = "progress_bridge_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "progress_bridge_wire_caps_tests.rs"]
+mod wire_caps_tests;
