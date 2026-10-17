@@ -120,12 +120,18 @@ async fn code_adapter_javascript_runs_when_isolated_and_refuses_when_isolation_i
         .await
     {
         Ok(result) => assert_eq!(result, input),
-        Err(error) => assert!(
-            error
-                .to_string()
-                .contains("TinyBox native jail cannot meet the required isolation floor"),
-            "unexpected JavaScript code-runner failure: {error}"
-        ),
+        // Isolation unavailable fails closed. The refusal is the sandbox plan's
+        // (the module declined it, or could not be asked), or the jail's own
+        // floor; it is never a silent unsandboxed run.
+        Err(error) => {
+            let message = error.to_string();
+            assert!(
+                message.contains("TinyBox native jail cannot meet the required isolation floor")
+                    || message.contains("the sandbox plan was refused")
+                    || message.contains("the sandbox plan is unavailable"),
+                "unexpected JavaScript code-runner failure: {error}"
+            )
+        }
     }
 }
 
