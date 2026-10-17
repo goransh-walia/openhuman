@@ -43,7 +43,7 @@ pub async fn execute_composio_action(
             .map(serde_json::Value::to_string)
             .unwrap_or_default(),
     );
-    if let Err(e) = enforce_egress(&egress) {
+    if let Err(e) = enforce_egress(&egress).await {
         tracing::debug!(tool = %tool, "[composio][dispatch] local-only egress block");
         return Err(e.to_string());
     }

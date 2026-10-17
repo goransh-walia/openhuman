@@ -71,13 +71,13 @@ pub(super) fn backend_egress_for(
 /// connection-management + catalog) stay permitted even under `LocalOnly`; see
 /// [`is_control_plane`](crate::security::egress). A blocked call is neither
 /// disclosed nor sent. Disclosure is fire-and-forget.
-pub(super) fn admit_backend_egress(
+pub(super) async fn admit_backend_egress(
     approval: &ApprovalTurnContext,
     path: &str,
     payload: BackendPayload<'_>,
 ) -> anyhow::Result<()> {
     let descriptor = backend_egress_for(path, payload);
-    crate::security::egress::enforce_egress(&descriptor)?;
+    crate::security::egress::enforce_egress(&descriptor).await?;
     crate::security::egress::emit_external_transfer(approval.chat.as_ref(), descriptor);
     Ok(())
 }

@@ -80,7 +80,7 @@ impl EgressAssessedModel {
             .ok()
             .filter(|text| text.len() <= MAX_ASSESSED_BYTES);
         let assessment = payload.as_deref().map(|text| assess_for_mode(mode, text));
-        match refusal_with(mode, &self.provider, &self.model, assessment) {
+        match refusal_with(mode, &self.provider, &self.model, assessment).await {
             Some(message) => {
                 tracing::warn!(
                     provider = %self.provider,
@@ -98,7 +98,7 @@ impl EgressAssessedModel {
 /// `provider`/`model` under `mode`, or `None` when the call may proceed. Pure, so
 /// the decision is testable without a module; `None` assessment means the module
 /// gave no answer.
-pub(crate) fn refusal_with(
+pub(crate) async fn refusal_with(
     mode: PrivacyMode,
     provider: &str,
     model: &str,
@@ -111,7 +111,7 @@ pub(crate) fn refusal_with(
     if let Some(assessment) = assessment.filter(|a| a.level != IdentificationRisk::Unknown) {
         descriptor = descriptor.with_risk(assessment.level, assessment.categories);
     }
-    egress_blocks_message(mode, &descriptor)
+    egress_blocks_message(mode, &descriptor).await
 }
 
 #[async_trait]

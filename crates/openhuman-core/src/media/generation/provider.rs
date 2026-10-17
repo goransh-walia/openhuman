@@ -190,11 +190,11 @@ impl Guard {
         self.admit_descriptor(descriptor)
     }
 
-    fn admit_descriptor(
+    async fn admit_descriptor(
         &self,
         descriptor: crate::security::egress::EgressDescriptor,
     ) -> ti_image::Result<()> {
-        crate::security::egress::enforce_egress(&descriptor).map_err(|error| {
+        crate::security::egress::enforce_egress(&descriptor).await.map_err(|error| {
             tracing::info!(route = %descriptor.service, %error, "[media_generation] blocked by privacy policy");
             ti_image::Error::Validation(format!("blocked by the privacy policy: {error}"))
         })?;
