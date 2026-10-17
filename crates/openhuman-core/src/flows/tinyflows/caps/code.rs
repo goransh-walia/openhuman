@@ -15,7 +15,7 @@ use tinyflows::error::{EngineError, Result};
 
 use super::*;
 use crate::config::Config;
-use crate::sandbox::{execute_in_sandbox, resolve_sandbox_policy};
+use crate::sandbox::{execute_in_sandbox, spawn_policy};
 use crate::security::SecurityPolicy;
 use tinyagents_definition::SandboxMode;
 use tinybox_bus::CommandClass;

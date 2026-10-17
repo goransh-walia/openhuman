@@ -17,7 +17,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::time::Duration;
 
-use super::types::{SandboxBackendKind, SandboxExecRequest, SandboxExecResult};
+use super::types::{SandboxExecRequest, SandboxExecResult};
 use crate::config::Config;
 
 /// One untrusted shell command, already authorized by the security module.
@@ -65,9 +65,8 @@ fn with_inline_stdin(command: &str, stdin: &[u8]) -> anyhow::Result<String> {
 
 /// Run `spawn` under the isolation floor.
 ///
-/// Errors are refusals, never a fallback: a jail below the floor yields
-/// [`super::ops::IsolationFloor`], a policy that resolves to no sandbox at all
-/// is an error, and so is a Docker backend that is unavailable.
+/// Errors are refusals, never a fallback: a spawn the module will not plan yields
+/// [`super::ops::IsolationFloor`], and so does an executor that is unavailable.
 pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExecResult> {
     use super::ops::Executor;
 
@@ -87,19 +86,13 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
     let operator_off = super::operator::sandbox_off(&ctx, config);
     let policy = super::policy::command_policy(config, cwd, state_dir)
         .map_err(|error| anyhow::anyhow!(error))?;
-    // Inline stdin rides inside the command for a container, which has no stdin channel.
-    // The module binds the text it will actually run, so the wrapped form is planned.
-    let wrapped = match stdin {
-        Some(stdin) if policy.backend == SandboxBackendKind::Docker => {
-            Some(with_inline_stdin(command, stdin)?)
-        }
-        _ => None,
-    };
+    // The module binds the command text and a digest of its stdin. A container has no
+    // stdin channel, so it runs a deterministic wrapper of exactly those two inputs.
     let text = SpawnText {
-        command: wrapped.as_deref().unwrap_or(command),
+        command,
         cwd,
         env,
-        stdin: if wrapped.is_some() { None } else { stdin },
+        stdin,
         preserve_pipeline_status,
     };
     let admitted = admit(config, &policy, &text, operator_off).await?;
@@ -133,14 +126,14 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
             super::native_jail::execute_with_stdin(
                 config,
                 &admitted.policy,
-                text.command,
+                command,
                 cwd,
                 &extra_env,
                 timeout,
                 admitted.jail,
                 preserve_pipeline_status,
                 None,
-                text.stdin.map(<[u8]>::to_vec),
+                stdin.map(<[u8]>::to_vec),
             )
             .await
         }
@@ -180,6 +173,7 @@ async fn admit(
     config: &Config,
     policy: &super::types::SandboxPolicy,
     spawn: &SpawnText<'_>,
+    operator_off: bool,
 ) -> anyhow::Result<super::ops::Admitted> {
     let operation = super::spawn_plan::SpawnOperation {
         command: spawn.command,
@@ -192,14 +186,13 @@ async fn admit(
         stdin: spawn.stdin,
         preserve_pipeline_status: spawn.preserve_pipeline_status,
     };
-    super::ops::admit_planned(super::spawn_plan::SpawnRequest {
+    super::ops::admit_planned(
         config,
         policy,
-        source: super::spawn_plan::SpawnSource::Untrusted,
-        operation: &operation,
-        host_off: false,
-        module: super::spawn_plan::ModuleSource::Production,
-    })
+        super::spawn_plan::SpawnSource::Untrusted,
+        &operation,
+        operator_off,
+    )
     .await
 }
 
@@ -209,6 +202,7 @@ async fn admit(
     _config: &Config,
     _policy: &super::types::SandboxPolicy,
     _spawn: &SpawnText<'_>,
+    _operator_off: bool,
 ) -> anyhow::Result<super::ops::Admitted> {
     anyhow::bail!("the security module is disabled; untrusted spawns are refused")
 }
