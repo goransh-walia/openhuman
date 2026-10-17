@@ -128,3 +128,48 @@ fn a_cached_decision_is_not_served_under_another_module_generation() {
     cache.module_generation = 4;
     assert!(cache.get(&key(1, "a", "s")).is_none());
 }
+
+/// Regression: `approval_proxy` (the approval engine and the sandbox planner)
+/// reached the shared client without the `modules.enabled` check every other
+/// entry point makes first, so one caller whose configuration had modules off
+/// latched the process-wide client and every later caller failed closed with
+/// "client faulted; restart required". The latch is the shared state's, so the
+/// test drives the same function with a state of its own and cannot be
+/// disturbed by (or disturb) the suite's process-global client.
+#[tokio::test]
+async fn a_caller_with_modules_disabled_does_not_fault_the_shared_client() {
+    let state = tokio::sync::Mutex::new(ClientState::default());
+    let mut disabled = Config::default();
+    disabled.modules.enabled = false;
+
+    for _ in 0..3 {
+        let error = module_proxy_in(&state, &disabled).await.unwrap_err();
+        assert_eq!(error, "TinySecurity modules are disabled");
+        let state = state.lock().await;
+        assert!(
+            !state.faulted,
+            "a configuration refusal must not latch the shared client"
+        );
+    }
+}
+
+/// The same refusal under concurrent first use: many callers racing for the
+/// shared client with modules disabled each get the refusal, and none of them
+/// leaves the client faulted for the caller that comes next.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_first_calls_with_modules_disabled_leave_the_client_usable() {
+    let state = std::sync::Arc::new(tokio::sync::Mutex::new(ClientState::default()));
+    let mut disabled = Config::default();
+    disabled.modules.enabled = false;
+    let disabled = std::sync::Arc::new(disabled);
+
+    let mut calls = tokio::task::JoinSet::new();
+    for _ in 0..32 {
+        let (state, config) = (state.clone(), disabled.clone());
+        calls.spawn(async move { module_proxy_in(&state, &config).await.unwrap_err() });
+    }
+    while let Some(error) = calls.join_next().await {
+        assert_eq!(error.unwrap(), "TinySecurity modules are disabled");
+    }
+    assert!(!state.lock().await.faulted);
+}
