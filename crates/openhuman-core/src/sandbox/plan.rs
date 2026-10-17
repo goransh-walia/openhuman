@@ -5,9 +5,9 @@
 //! reach, which bounds, which minimum isolation. This adapter only translates
 //! that decision into TinyBox requests ([`NativeJailConfig`], [`NetworkPolicy`],
 //! [`ResourceLimits`]) and refuses anything TinyBox cannot enforce exactly. It
-//! never widens a plan and never falls back: a `Noop` plan, an egress proxy the
-//! host does not run, and a CPU-time bound (TinyBox has only CPU throughput) are
-//! errors. Live availability and capability checks stay at the launch boundary.
+//! never widens a plan and never falls back: a `Noop` plan that is not the module's
+//! own `host_run` plan, an egress proxy the host does not run, and a CPU-time bound
+//! (TinyBox has only CPU throughput) are errors. Live availability and capability checks stay at the launch boundary.
 //!
 //! The credential-store floor (`deny_read`) is not part of the plan; the host
 //! adds it for jails whose reads are allow-by-default
@@ -32,6 +32,9 @@ pub enum PlannedExecutor {
     NativeJail,
     /// A one-shot container.
     Docker,
+    /// No jail: the operator disabled the sandbox and the module planned a run on the
+    /// host. Only a `host_run` artifact maps here.
+    Host,
 }
 
 /// A plan translated for TinyBox.
@@ -45,6 +48,9 @@ pub struct BoxPlan {
     pub network: NetworkPolicy,
     /// Resource bounds for the box.
     pub resources: ResourceLimits,
+    /// Whether the executor mounts the workspace. `false` for a plan the module made
+    /// with no workspace grant (a container with nothing mounted).
+    pub workspace: bool,
 }
 
 /// Why a plan cannot be mapped onto what TinyBox enforces.
@@ -62,6 +68,8 @@ pub enum PlanMappingError {
     ZeroLimit,
     /// A grant path is not valid UTF-8 text for the bus.
     InvalidGrant,
+    /// A plan marked as a run on the host that also claims a jail, grants or constraints.
+    MalformedHostRun,
 }
 
 impl std::fmt::Display for PlanMappingError {
@@ -77,6 +85,7 @@ impl std::fmt::Display for PlanMappingError {
             }
             Self::ZeroLimit => "the sandbox plan carries a zero resource bound",
             Self::InvalidGrant => "the sandbox plan carries a grant that is not valid text",
+            Self::MalformedHostRun => "the sandbox plan for a run on the host claims a jail",
         })
     }
 }
@@ -90,6 +99,9 @@ impl BoxPlan {
         artifact: &SandboxArtifact2,
         home: Option<&Path>,
     ) -> Result<Self, PlanMappingError> {
+        if artifact.host_run {
+            return Self::host_run(artifact);
+        }
         let executor = match &artifact.backend {
             SandboxBackend::Jail => PlannedExecutor::NativeJail,
             SandboxBackend::Docker => PlannedExecutor::Docker,
@@ -150,6 +162,37 @@ impl BoxPlan {
             jail,
             network,
             resources,
+            workspace: !artifact.no_workspace,
+        })
+    }
+
+    /// The module's plan for a spawn the operator disabled the sandbox for: it runs on
+    /// the host, so there is no jail to configure and nothing to grant. The module only
+    /// issues it for a trusted operator source outside SaaS; anything else that claims
+    /// to be a host run is malformed and refused.
+    fn host_run(artifact: &SandboxArtifact2) -> Result<Self, PlanMappingError> {
+        if artifact.backend != SandboxBackend::Noop
+            || artifact.minimum_isolation != IsolationLevel2::None
+            || !artifact.grants.is_empty()
+            || !artifact.constraints.is_empty()
+            || artifact.no_workspace
+        {
+            return Err(PlanMappingError::MalformedHostRun);
+        }
+        Ok(Self {
+            executor: PlannedExecutor::Host,
+            jail: NativeJailConfig {
+                read_only: Vec::new(),
+                read_write: Vec::new(),
+                allow_net: true,
+                allow_subprocess: true,
+                enforcement: JailEnforcement::Declared,
+                require_process_isolation: false,
+                deny_read: Vec::new(),
+            },
+            network: NetworkPolicy::Open,
+            resources: resources(artifact)?,
+            workspace: true,
         })
     }
 }
