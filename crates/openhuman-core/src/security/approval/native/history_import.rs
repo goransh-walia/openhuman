@@ -26,7 +26,7 @@ use tinysecurity_bus::{
     CallerContext, Origin,
 };
 
-use super::super::engine::{EngineError, Posture, Variant};
+use super::super::engine::{ApprovalEngine, EngineError, Posture, Variant};
 use super::super::store_import::{read_legacy, LegacyApproval, LegacyHistory};
 use super::engine::NativeEngine;
 use super::scopes::{self, ScopeEntry};
