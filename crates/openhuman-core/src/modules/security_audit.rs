@@ -30,9 +30,12 @@ pub(crate) async fn record_for_tenant(
     let subject = super::policy_translation::subject_scope(&tenant, &config.workspace_dir, saas)?;
     let proxy = super::scoped_client::serving_proxy()
         .await
-        .ok_or_else(|| "the TinySecurity module is not serving".to_owned())?;
+        .ok_or_else(|| NOT_SERVING.to_owned())?;
     record_with(&proxy, config, subject, event).await
 }
+
+/// The error a row gets when no module is serving; the row is reported, not kept.
+pub(crate) const NOT_SERVING: &str = "the TinySecurity module is not serving";
 
 /// Record `event` on `subject`'s stream through `proxy`.
 pub(crate) async fn record_with(
