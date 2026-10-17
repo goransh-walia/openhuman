@@ -8,8 +8,9 @@ use tinysecurity_bus::{
     is_host_tool_name2, names, AccessTier, ApprovalActionRequest2, ApprovalChoice2,
     ApprovalLifecycle2, ApprovalRecordRequest2, ApprovalRow2, AuditCorrelation2, CallerContext,
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
-    ExecutionOutcome as ModuleOutcome, Origin, PolicyInfo, RecordExecutionRequest2, SubjectScope,
-    ToolCall, Verdict,
+    ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
+    GrantFlowToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo, RecordExecutionRequest2,
+    RevokeFlowToolRequest2, SubjectScope, ToolCall, Verdict,
 };
 
 use super::super::engine::{
@@ -151,6 +152,30 @@ impl NativeEngine {
         .map_err(EngineError::Unavailable)?;
         subject.agent.push_str(variant.suffix());
         Ok(subject)
+    }
+
+    /// The registered scope a flow's durable trust lives under: the tenant's
+    /// strict-flow subject, registered with the restrictive posture if it is new
+    /// (the next gated call refreshes it to the user's configuration).
+    async fn flow_scope(
+        &self,
+        proxy: &Proxy,
+        tenant: &crate::core::runtime::Tenant,
+    ) -> Result<std::sync::Arc<ScopeEntry>, EngineError> {
+        let subject = self.subject(tenant, Variant::FlowStrict)?;
+        let generation = Self::generation(proxy).await?;
+        scopes::ensure(
+            &self.config,
+            proxy,
+            subject,
+            &super::super::engine::Posture {
+                require_approval: true,
+                ..Default::default()
+            },
+            generation,
+        )
+        .await
+        .map_err(EngineError::Unavailable)
     }
 
     /// The module's current generation, which every correlation carries.
@@ -561,6 +586,90 @@ impl ApprovalEngine for NativeEngine {
         super::view::decided_history(&self.config, limit)
             .await
             .map_err(|error| unavailable(error.to_string()))
+    }
+
+    async fn grant_flow_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<(), EngineError> {
+        let proxy = self.proxy().await?;
+        let scope = self.flow_scope(&proxy, tenant).await?;
+        let _guard = scope.stream.lock().await;
+        let generation = Self::generation(&proxy).await?;
+        let audit = Self::correlation(&scope, generation).await?;
+        let receipt: FlowTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::GRANT_FLOW_TOOL2,
+                (GrantFlowToolRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    flow_id: flow_id.to_owned(),
+                    tool: tool.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = %error, "{LOG} the module refused the flow trust");
+                unavailable(format!("TinySecurity GrantFlowTool2 failed: {error}"))
+            })?;
+        tracing::debug!(outcome = ?receipt.outcome, "{LOG} flow trust granted");
+        Ok(())
+    }
+
+    async fn revoke_flow_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<bool, EngineError> {
+        let proxy = self.proxy().await?;
+        let scope = self.flow_scope(&proxy, tenant).await?;
+        let _guard = scope.stream.lock().await;
+        let generation = Self::generation(&proxy).await?;
+        let audit = Self::correlation(&scope, generation).await?;
+        let receipt: FlowTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::REVOKE_FLOW_TOOL2,
+                (RevokeFlowToolRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    flow_id: flow_id.to_owned(),
+                    tool: tool.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = %error, "{LOG} the module refused to revoke flow trust");
+                unavailable(format!("TinySecurity RevokeFlowTool2 failed: {error}"))
+            })?;
+        Ok(receipt.outcome == FlowTrustOutcome2::Revoked)
+    }
+
+    async fn flow_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        flow_id: &str,
+    ) -> Result<Vec<String>, EngineError> {
+        let proxy = self.proxy().await?;
+        let scope = self.flow_scope(&proxy, tenant).await?;
+        let listed: FlowTrustList2 = proxy
+            .call_confidential(
+                names::methods::LIST_FLOW_TRUST2,
+                (ListFlowTrustRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    flow_id: Some(flow_id.to_owned()),
+                },),
+            )
+            .await
+            .map_err(|error| {
+                unavailable(format!("TinySecurity ListFlowTrust2 failed: {error}"))
+            })?;
+        let mut tools: Vec<String> = listed.entries.into_iter().map(|e| e.tool).collect();
+        tools.sort();
+        tools.dedup();
+        Ok(tools)
     }
 }
 

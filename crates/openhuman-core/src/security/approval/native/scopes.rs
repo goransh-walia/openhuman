@@ -5,16 +5,16 @@
 //! set of subjects (SaaS profiles, embedded agents, the posture variants of
 //! one agent), so each is registered when first seen with
 //! `RegisterApprovalScope2` and refreshed with `ReplaceApprovalScope2` when the
-//! user's configuration changed: the "always allow" tool list, per-flow trust
-//! and the auto-approve setting. The module only converts a required approval
+//! user's configuration changed: the "always allow" tool list and the
+//! auto-approve setting. Per-flow trust is the module's own durable state. The module only converts a required approval
 //! into an audited automatic one as far as those say.
 
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::Instant;
 
 use tinysecurity_bus::{
-    names, AccessTier, ApprovalGrants2, ApprovalScope2, ApprovalScopeReceipt2, FlowToolGrant2,
-    RegisterApprovalScopeRequest2, SubjectScope, MAX_FLOW_GRANTS2, MAX_TOOL_GRANTS2,
+    names, AccessTier, ApprovalGrants2, ApprovalScope2, ApprovalScopeReceipt2,
+    RegisterApprovalScopeRequest2, SubjectScope, MAX_TOOL_GRANTS2,
 };
 
 use super::super::engine::Posture;
