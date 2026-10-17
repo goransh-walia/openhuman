@@ -235,13 +235,14 @@ impl ImageGenerator for GuardedImage {
 
     async fn generate(&self, request: ImageRequest) -> ti_image::Result<ImageResponse> {
         self.guard
-            .admit_prompt("images", &request.prompt, !request.references.is_empty())?;
+            .admit_prompt("images", &request.prompt, !request.references.is_empty())
+            .await?;
         self.guard.budget().await?;
         self.inner.generate(request).await
     }
 
     async fn list_models(&self) -> ti_image::Result<Vec<MediaModel>> {
-        self.guard.admit("images/models")?;
+        self.guard.admit("images/models").await?;
         self.inner.list_models().await
     }
 }
@@ -268,23 +269,24 @@ impl VideoGenerator for GuardedVideo {
             request.first_frame.is_some()
                 || request.last_frame.is_some()
                 || !request.references.is_empty(),
-        )?;
+        )
+        .await?;
         self.guard.budget().await?;
         self.inner.submit(request).await
     }
 
     async fn poll(&self, job_id: &str) -> ti_video::Result<VideoJobStatus> {
-        self.guard.admit("videos/{jobId}")?;
+        self.guard.admit("videos/{jobId}").await?;
         self.inner.poll(job_id).await
     }
 
     async fn content(&self, job_id: &str, index: usize) -> ti_video::Result<GeneratedMedia> {
-        self.guard.admit("videos/{jobId}/content")?;
+        self.guard.admit("videos/{jobId}/content").await?;
         self.inner.content(job_id, index).await
     }
 
     async fn list_models(&self) -> ti_video::Result<Vec<MediaModel>> {
-        self.guard.admit("videos/models")?;
+        self.guard.admit("videos/models").await?;
         self.inner.list_models().await
     }
 }
