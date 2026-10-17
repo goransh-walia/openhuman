@@ -167,7 +167,7 @@ A session is the live conversation an `Agent` instance is running. The `Agent` s
 - The tool registry visible to the model.
 - The `memory` tool (when a memory engine is on), through which the model recalls, fetches, learns and forgets on demand.
 - Per-turn budgets: max tool iterations, max payload size, max USD cost.
-- Local action budget: a rolling hourly cap for side-effecting tool actions, read from `config.autonomy.max_actions_per_hour`.
+- Local action budget: a rolling hourly cap for side-effecting tool actions, read from `config.autonomy.max_actions_per_hour` and enforced by the TinySecurity module (`rate_limited` denial).
 
 `Agent::turn(user_message)` is the hot path. In one turn it:
 
@@ -514,7 +514,7 @@ Stop hooks fire between iterations of the tool-call loop. They're the policy lev
 
 - Budget stop hook: caps cumulative turn cost in USD using the per-iteration cost accumulator.
 - Max-iterations stop hook: caps iteration count from outside the agent's persistent config.
-- Action budget policy: `SecurityPolicy` enforces `config.autonomy.max_actions_per_hour` for side-effecting tool operations. Users can tune it in Settings, Advanced, Agent autonomy, or operators can override it with `OPENHUMAN_MAX_ACTIONS_PER_HOUR`.
+- Action budget policy: the TinySecurity module enforces `config.autonomy.max_actions_per_hour` for side-effecting tool operations, through the policy gate's host-tool admission check. Users can tune it in Settings, Advanced, Agent autonomy, or operators can override it with `OPENHUMAN_MAX_ACTIONS_PER_HOUR`.
 
 A hook returning `Stop` aborts the loop with a clear reason the caller can surface to the user. Stop hooks are distinct from interrupts (next section): they're policy-driven, not user-driven.
 
@@ -622,6 +622,7 @@ The harness shell lives under `crates/openhuman-core/src/agent/`, with the tinya
 | `session_host/runtime_session.rs`        | `Agent::turn`: the lifecycle described above; routes into the tinyagents runner via `tinyagents/turn_exec.rs`. |
 | `tinyagents/mod.rs`                      | `TurnSpec::run`: the shared tinyagents harness assembly (the live loop).                    |
 | `tinyagents/middleware.rs`               | The named OpenHuman middleware stack (approval/security, tool policy, recovery, budgets, circuit breaker).    |
+| `tinyagents/middleware/security_gate.rs` | `install`: puts `ToolPolicyGateMiddleware` first, so every path (turns, sub-agents, flows, live voice) shares one security gate. Verdicts from the TinySecurity module and any channel policy combine as deny > require-approval > allow; a module fault denies. |
 | `harness/graph.rs`                       | The channel/CLI bus turn route into the tinyagents runner.                                                    |
 | `subagent_host/`                         | Direct OpenHuman planner/executor/persistence adapters for `tinyagents-orchestration::subagent`; product prompt/tool/model/security/artifact/progress behavior remains here. |
 | `orchestration/subagent_sessions/`       | Durable reusable sub-agent identity, compatibility matching, persisted status/history.                        |
