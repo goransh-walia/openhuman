@@ -324,18 +324,10 @@ pub(super) async fn admit_planned(
     operation: &super::spawn_plan::SpawnOperation<'_>,
     operator_off: bool,
 ) -> anyhow::Result<Admitted> {
-    use super::spawn_plan::{ModuleSource, PlanError, SpawnRequest};
+    use super::spawn_plan::PlanError;
     use tinysecurity_bus::SandboxDenial2;
 
-    let request = |policy: &'_ SandboxPolicy, host_run: bool| SpawnRequest {
-        config,
-        policy,
-        source,
-        operation,
-        operator_off,
-        host_run,
-        module: ModuleSource::Production,
-    };
+    let request = |policy, host_run| request_for(config, policy, source, operation, operator_off, host_run);
     if operator_off {
         match admit_request(request(policy, true)).await {
             Ok(admitted) => return Ok(admitted),
@@ -369,6 +361,26 @@ pub(super) async fn admit_planned(
             .retain(|mount| policy.read_write_mounts.contains(mount));
     }
     Ok(admitted)
+}
+
+#[cfg(feature = "security-module")]
+fn request_for<'a>(
+    config: &'a crate::config::Config,
+    policy: &'a SandboxPolicy,
+    source: super::spawn_plan::SpawnSource,
+    operation: &'a super::spawn_plan::SpawnOperation<'a>,
+    operator_off: bool,
+    host_run: bool,
+) -> super::spawn_plan::SpawnRequest<'a> {
+    super::spawn_plan::SpawnRequest {
+        config,
+        policy,
+        source,
+        operation,
+        operator_off,
+        host_run,
+        module: super::spawn_plan::ModuleSource::Production,
+    }
 }
 
 /// Plan one request, reserve the plan and map it to the executor the module chose.

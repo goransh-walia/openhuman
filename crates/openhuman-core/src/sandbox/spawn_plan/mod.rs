@@ -29,8 +29,6 @@ mod facts;
 mod operation;
 mod registry;
 
-use std::path::Path;
-
 use tinysecurity_bus::{
     ConsumeSandboxPlanRequest2, NetworkPolicy, PathGrant, ResourceLimits2, SandboxArtifact2,
     SandboxBackend, SandboxDenial2, SandboxExecutor2, SandboxPlanOptions2, SandboxPlanRequest2,
