@@ -21,7 +21,7 @@ use crate::config::Config;
 pub(crate) fn config_in(tmp: &tempfile::TempDir) -> Config {
     let workspace = tmp.path().join("workspace");
     std::fs::create_dir_all(&workspace).expect("workspace dir");
-    std::fs::write(tmp.path().join("config.toml"), "").expect("config file");
+    std::fs::File::create(tmp.path().join("config.toml")).expect("config file");
     Config {
         workspace_dir: workspace.clone(),
         action_dir: workspace,
