@@ -115,7 +115,7 @@ impl OpenHumanCloudEmbeddingModel {
     /// The inputs are the payload: under Sensitive the module assesses them, so
     /// a clean batch is permitted and one with credentials or identifiers is
     /// refused (privacy epic S5).
-    fn guard(&self, texts: &[String]) -> tinyinference_embeddings::Result<()> {
+    async fn guard(&self, texts: &[String]) -> tinyinference_embeddings::Result<()> {
         let egress = crate::security::egress::EgressDescriptor::embedding("cloud", &self.model)
             .assessed_parts(texts.iter().map(String::as_str));
         crate::security::egress::enforce_egress(&egress)
@@ -242,7 +242,7 @@ impl EmbeddingModel for OpenHumanCloudEmbeddingModel {
         // Only a batch that will actually leave is guarded: an empty one
         // answers locally, and a blank input is refused by the transport.
         if !texts.is_empty() && texts.iter().all(|text| !text.trim().is_empty()) {
-            self.guard(texts)?;
+            self.guard(texts).await?;
         }
         self.inner.embed(texts).await
     }

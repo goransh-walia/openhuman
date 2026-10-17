@@ -71,7 +71,7 @@ impl EgressAssessedModel {
         }
     }
 
-    fn check(&self, request: &ModelRequest) -> tinyinference_llm::Result<()> {
+    async fn check(&self, request: &ModelRequest) -> tinyinference_llm::Result<()> {
         let mode = current_privacy_mode();
         if mode != PrivacyMode::Sensitive {
             return Ok(());
@@ -138,7 +138,7 @@ impl ChatModel<()> for EgressAssessedModel {
         state: &(),
         request: ModelRequest,
     ) -> tinyinference_llm::Result<ModelResponse> {
-        self.check(&request)?;
+        self.check(&request).await?;
         self.inner.invoke(state, request).await
     }
 
@@ -147,7 +147,7 @@ impl ChatModel<()> for EgressAssessedModel {
         state: &(),
         request: ModelRequest,
     ) -> tinyinference_llm::Result<ModelStream> {
-        self.check(&request)?;
+        self.check(&request).await?;
         self.inner.stream(state, request).await
     }
 }

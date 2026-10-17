@@ -5,8 +5,6 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use tinytools::ToolRunContext;
 
-use crate::security::SecurityPolicy;
-use tinytools::ToolResult;
 
 pub(super) const FILES_PATH: &str = "/agent-integrations/file-storage/files";
 
