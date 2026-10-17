@@ -283,8 +283,10 @@ With `[autonomy] enabled = true`:
 
 Either way, sandboxed agents use the platform jail or Docker backend. Every
 sandboxed command is planned by the module first (`sandbox/spawn_plan/`) and does
-not run when the module denies or faults. There is no unjailed fallback: Local
-never degrades to host execution, and SaaS ignores `OPENHUMAN_SANDBOX=off`.
+not run when the module denies or faults. The module picks the executor from the ones the host verified (the configured backend is only a
+preference it is sent). The operator's `OPENHUMAN_SANDBOX=off` is declared to the module, which
+plans a run on the host only for the trusted operator outside SaaS; there is no host-side unjailed
+branch, Local never degrades to host execution, and SaaS ignores the switch.
 
 A quoted heredoc body (`<< 'EOF' … EOF`) is **data**, not shell: the module blanks
 it before any structural scan. An unquoted delimiter (`<< EOF`) is still expanded
