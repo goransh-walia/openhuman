@@ -16,8 +16,7 @@ impl ApprovalGate {
             .approval
             .ttl_secs
             .filter(|secs| *secs > 0)
-            .map(Duration::from_secs)
-            .unwrap_or(DEFAULT_APPROVAL_TTL);
+            .map(Duration::from_secs);
         let gate = Arc::new(ApprovalGate::new(config, session_id, ttl));
         let _ = GLOBAL_GATE.set(gate.clone());
         GLOBAL_GATE.get().cloned().unwrap_or(gate)
@@ -44,7 +43,7 @@ impl ApprovalGate {
         }
     }
 
-    fn new(config: Config, session_id: String, ttl: Duration) -> Self {
+    fn new(config: Config, session_id: String, ttl: Option<Duration>) -> Self {
         let engine = Self::engine_for(&config);
         Self::with_engine(config, session_id, ttl, engine)
     }
@@ -54,7 +53,7 @@ impl ApprovalGate {
     pub(crate) fn with_engine(
         config: Config,
         session_id: String,
-        ttl: Duration,
+        ttl: Option<Duration>,
         engine: SharedEngine,
     ) -> Self {
         // Regression guard: the gate's session_id must be the per-launch
@@ -77,17 +76,20 @@ impl ApprovalGate {
         }
     }
 
-    /// TTL for parking an approval. In debug builds `OPENHUMAN_APPROVAL_TTL_SECS`
-    /// overrides the boot-time default per intercept so E2E tests can exercise
-    /// the timeout path without waiting the full `DEFAULT_APPROVAL_TTL`.
+    /// The park window the user asks for, if any. In debug builds
+    /// `OPENHUMAN_APPROVAL_TTL_SECS` overrides the configured value per intercept
+    /// so E2E tests can exercise the timeout path without waiting the module's
+    /// full window.
     ///
     /// The override is compiled out of release builds (`#[cfg(debug_assertions)]`):
     /// the shipped product never reads this env var, so a hostile process
     /// environment cannot shorten the supervised-mode approval window. This
     /// mirrors the host-aware discipline of the `OPENHUMAN_APPROVAL_GATE`
     /// kill-switch — neither override can make the gate fail open; the timeout
-    /// path always denies.
-    fn effective_ttl(&self) -> Duration {
+    /// path always denies. `None` leaves the window to the module, which owns
+    /// the default (ten minutes; three for a copilot or sub-agent) and only ever
+    /// shortens it for a request.
+    fn effective_ttl(&self) -> Option<Duration> {
         #[cfg(debug_assertions)]
         if let Some(ttl) = std::env::var("OPENHUMAN_APPROVAL_TTL_SECS")
             .ok()
@@ -98,26 +100,9 @@ impl ApprovalGate {
                 ttl_secs = ttl.as_secs(),
                 "[approval::gate] TTL env override active (debug build)"
             );
-            return ttl;
+            return Some(ttl);
         }
         self.ttl
-    }
-
-    /// Resolve the actual park duration from the gate's own `effective_ttl`
-    /// plus the `copilot_stream` clamp ([`COPILOT_APPROVAL_TTL`]) and the
-    /// sub-agent clamp ([`SUBAGENT_APPROVAL_TTL`]) when those apply. A clamp only ever *shortens* the park — it can never
-    /// extend `effective_ttl` past what the gate itself allows (e.g. a debug
-    /// env override). Split out (rather than inlined at the call site) so it is
-    /// unit testable without needing to actually park a future.
-    fn resolve_park_ttl(effective_ttl: Duration, copilot_stream: bool, subagent: bool) -> Duration {
-        let mut ttl = effective_ttl;
-        if copilot_stream {
-            ttl = ttl.min(COPILOT_APPROVAL_TTL);
-        }
-        if subagent {
-            ttl = ttl.min(SUBAGENT_APPROVAL_TTL);
-        }
-        ttl
     }
 
     /// The user's "Always allow" tool list. Prefers the agent or process-global
