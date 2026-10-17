@@ -1,4 +1,5 @@
 use super::*;
+use crate::sandbox::types::SandboxBackendKind;
 use std::path::PathBuf;
 use tinysecurity_bus::{
     ConstraintEnforcement2, ConstraintSupport2, IsolationLevel2, SandboxBackend as Backend,
@@ -15,6 +16,7 @@ fn policy(workspace: &str) -> SandboxPolicy {
         allow_network: false,
         env_passthrough: vec![],
         docker_overrides: None,
+        mount_workspace: true,
     }
 }
 
@@ -51,7 +53,7 @@ fn facts(
         source: SpawnSource::Agent,
         subject: subject(),
         saas: false,
-        host_off: false,
+        operator_off: false,
         executors: vec![executor("jail")],
     };
     adjust(&mut input);
@@ -81,7 +83,7 @@ fn equal_facts_share_an_identity_and_any_difference_gets_its_own() {
         facts(&config, &networked, |_| {}),
         facts(&config, &mounted, |_| {}),
         facts(&config, &base, |i| i.saas = true),
-        facts(&config, &base, |i| i.host_off = true),
+        facts(&config, &base, |i| i.operator_off = true),
         facts(&config, &base, |i| i.source = SpawnSource::Untrusted),
         facts(&config, &base, |i| i.executors = vec![executor("other")]),
         facts(&config, &base, |i| i.subject.agent = "other".into()),
@@ -113,17 +115,53 @@ fn deployment_origin_and_switches_follow_the_host_state() {
     assert_eq!(saas.deployment, SandboxDeployment2::Saas);
     assert_eq!(saas.origin, Origin::Saas);
 
-    let off = facts(&config, &base, |i| i.host_off = true);
+    let off = facts(&config, &base, |i| i.operator_off = true);
     assert_eq!(off.environment, SandboxSetting2::Disabled);
+}
 
-    let unsandboxed = SandboxPolicy {
-        backend: SandboxBackendKind::None,
-        ..base
-    };
+#[test]
+fn the_operators_setting_is_declared_even_under_saas_for_the_module_to_ignore() {
+    let config = Config::default();
+    let base = policy("/work/action");
+    let saas_off = facts(&config, &base, |i| {
+        i.saas = true;
+        i.operator_off = true;
+    });
+    assert_eq!(saas_off.deployment, SandboxDeployment2::Saas);
     assert_eq!(
-        facts(&config, &unsandboxed, |_| {}).agent_mode,
-        SandboxSetting2::Disabled
+        saas_off.environment,
+        SandboxSetting2::Disabled,
+        "the host reports the setting; refusing it is the module's job"
     );
+}
+
+#[test]
+fn every_scope_asks_to_be_sandboxed_whichever_executor_the_policy_names() {
+    let config = Config::default();
+    for backend in [
+        SandboxBackendKind::None,
+        SandboxBackendKind::Local,
+        SandboxBackendKind::Docker,
+    ] {
+        let named = SandboxPolicy {
+            backend,
+            ..policy("/work/action")
+        };
+        assert_eq!(
+            facts(&config, &named, |_| {}).agent_mode,
+            SandboxSetting2::Enabled
+        );
+    }
+}
+
+#[test]
+fn the_scope_declares_every_executor_it_is_given() {
+    let config = Config::default();
+    let scope = facts(&config, &policy("/work/action"), |i| {
+        i.executors = vec![executor("jail"), executor("docker")];
+    });
+    let ids: Vec<_> = scope.executors.iter().map(|e| e.executor_id.as_str()).collect();
+    assert_eq!(ids, ["jail", "docker"]);
 }
 
 #[test]
@@ -235,7 +273,7 @@ fn a_path_that_is_not_text_cannot_be_named_to_the_module() {
         source: SpawnSource::Agent,
         subject: subject(),
         saas: false,
-        host_off: false,
+        operator_off: false,
         executors: vec![],
     };
     assert!(scope(&input).is_none());

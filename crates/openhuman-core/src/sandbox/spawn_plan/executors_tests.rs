@@ -144,14 +144,10 @@ fn docker_claims_only_what_a_run_can_apply() {
 }
 
 #[test]
-fn a_backend_kind_selects_its_executor() {
-    assert_eq!(kind_executor_id(SandboxBackendKind::None), None);
-    assert_eq!(
-        kind_executor_id(SandboxBackendKind::Local),
-        Some(JAIL_EXECUTOR)
-    );
-    assert_eq!(
-        kind_executor_id(SandboxBackendKind::Docker),
-        Some(DOCKER_EXECUTOR)
-    );
+fn a_jail_that_could_not_be_verified_is_declared_unavailable() {
+    let executor = jail_unavailable();
+    assert_eq!(executor.executor_id, JAIL_EXECUTOR);
+    assert!(!executor.available);
+    assert_eq!(executor.isolation, IsolationLevel2::None);
+    assert!(executor.constraints.is_empty());
 }

@@ -1,4 +1,5 @@
 use super::*;
+use tinysecurity_bus::SandboxBackend;
 use crate::sandbox::types::DockerOverrides;
 use std::path::PathBuf;
 
@@ -12,6 +13,7 @@ fn policy(backend: SandboxBackendKind) -> SandboxPolicy {
         allow_network: false,
         env_passthrough: vec![],
         docker_overrides: None,
+        mount_workspace: true,
     }
 }
 
@@ -63,49 +65,67 @@ fn bounds_come_from_the_docker_overrides_and_never_loosen() {
 }
 
 #[test]
-fn a_local_jail_asks_for_every_mount_and_a_container_for_none_it_cannot_write() {
-    let local = grants(&policy(SandboxBackendKind::Local)).expect("grants");
-    let described: Vec<_> = local.iter().map(|g| (g.path.as_str(), g.write)).collect();
-    assert_eq!(
-        described,
-        [
-            ("/home/u/.cargo/registry", true),
-            ("/opt", false),
-            ("/work/action", true),
-        ]
-    );
-    let docker = grants(&policy(SandboxBackendKind::Docker)).expect("grants");
-    let described: Vec<_> = docker.iter().map(|g| (g.path.as_str(), g.write)).collect();
-    assert_eq!(described, [("/opt", false), ("/work/action", true)]);
+fn a_spawn_asks_for_its_workspace_and_every_mount_the_policy_names() {
+    for backend in [
+        SandboxBackendKind::None,
+        SandboxBackendKind::Local,
+        SandboxBackendKind::Docker,
+    ] {
+        let asked = grants(&policy(backend)).expect("grants");
+        let described: Vec<_> = asked.iter().map(|g| (g.path.as_str(), g.write)).collect();
+        assert_eq!(
+            described,
+            [
+                ("/home/u/.cargo/registry", true),
+                ("/opt", false),
+                ("/work/action", true),
+            ],
+            "{backend:?}"
+        );
+    }
 }
 
 #[test]
-fn the_plan_must_use_the_executor_the_policy_selected() {
-    let plan = |executor| BoxPlan {
-        executor,
-        jail: crate::modules::tinybox::contract::NativeJailConfig {
-            read_only: vec![],
-            read_write: vec![],
-            allow_net: false,
-            allow_subprocess: true,
-            enforcement: crate::modules::tinybox::contract::JailEnforcement::Enforced,
-            require_process_isolation: true,
-            deny_read: vec![],
-        },
-        network: crate::modules::tinybox::contract::NetworkPolicy::Denied,
-        resources: crate::modules::tinybox::contract::ResourceLimits::default(),
-    };
-    let local = policy(SandboxBackendKind::Local);
-    let docker = policy(SandboxBackendKind::Docker);
-    assert!(ensure_selected(&plan(PlannedExecutor::NativeJail), &local).is_ok());
-    assert!(ensure_selected(&plan(PlannedExecutor::Docker), &docker).is_ok());
-    assert!(ensure_selected(&plan(PlannedExecutor::Docker), &local).is_err());
-    assert!(ensure_selected(&plan(PlannedExecutor::NativeJail), &docker).is_err());
-    assert!(ensure_selected(
-        &plan(PlannedExecutor::NativeJail),
-        &policy(SandboxBackendKind::None)
-    )
-    .is_err());
+fn a_workspace_less_spawn_asks_for_no_writable_root() {
+    let mut container = policy(SandboxBackendKind::Docker);
+    container.mount_workspace = false;
+    container.read_write_mounts.clear();
+    let asked = grants(&container).expect("grants");
+    assert!(asked.iter().all(|grant| !grant.write), "{asked:?}");
+    let options = options(&container, false);
+    assert!(options.no_workspace);
+}
+
+#[test]
+fn a_named_executor_is_required_and_an_unnamed_one_leaves_the_choice_to_the_module() {
+    let named = |backend| options(&policy(backend), false);
+    let none = named(SandboxBackendKind::None);
+    assert_eq!(none.preferred_backend, None);
+    assert!(!none.require_preferred_backend);
+    let local = named(SandboxBackendKind::Local);
+    assert_eq!(local.preferred_backend, Some(SandboxBackend::Jail));
+    assert!(local.require_preferred_backend);
+    let docker = named(SandboxBackendKind::Docker);
+    assert_eq!(docker.preferred_backend, Some(SandboxBackend::Docker));
+    assert!(docker.require_preferred_backend);
+    assert!(!docker.no_workspace && !docker.host_run);
+}
+
+#[test]
+fn a_host_run_request_sets_only_the_host_run_option_for_the_module_to_judge() {
+    assert!(options(&policy(SandboxBackendKind::None), true).host_run);
+}
+
+#[test]
+fn container_bounds_are_requested_only_when_a_container_is_required() {
+    // A bound only a container enforces would make the native jail ineligible for a
+    // spawn that merely allows either.
+    let mut unnamed = with_overrides(Some(2.0), Some(256));
+    unnamed.backend = SandboxBackendKind::None;
+    assert_eq!(limits(&unnamed), ResourceLimits2::default());
+    let mut local = unnamed.clone();
+    local.backend = SandboxBackendKind::Local;
+    assert_eq!(limits(&local), ResourceLimits2::default());
 }
 
 #[test]
