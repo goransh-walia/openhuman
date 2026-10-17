@@ -19,7 +19,7 @@
 //! core vouches for ([`FileRoots`], built by the caller or from config — never
 //! taken from the record), and the file must be absolute, free of `..`,
 //! strictly inside that root (after resolving symlinks when it exists), and never a
-//! path [`SecurityPolicy::is_always_forbidden`] rejects. That last check is the
+//! path the TinySecurity protected-path floor (`security::floor`) rejects. That last check is the
 //! same floor the agent's own file tools keep when the autonomy policy is off,
 //! so a hand-edited record cannot reach further than the agent already could.
 //! (`artifacts/` is deliberately not a workspace-internal dir: the agent reads
@@ -29,7 +29,6 @@ use std::path::{Component, Path, PathBuf};
 
 use super::store::{artifacts_root, get_artifact};
 use super::types::{ArtifactMeta, ArtifactStatus};
-use crate::security::SecurityPolicy;
 
 /// The files folders the core vouches for: where new files go, plus every
 /// folder an existing record may legitimately point into. A record's
