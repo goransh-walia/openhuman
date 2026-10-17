@@ -35,6 +35,8 @@ fn artifact(backend: SandboxBackend) -> SandboxArtifact2 {
         proxy_id: None,
         limits: ResourceLimits2::default(),
         constraints: vec![SandboxConstraint2::Filesystem, SandboxConstraint2::Network],
+        host_run: false,
+        no_workspace: false,
     }
 }
 
