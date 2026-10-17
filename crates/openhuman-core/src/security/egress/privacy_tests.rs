@@ -97,9 +97,11 @@ fn a_metadata_only_transfer_is_metadata_and_anything_more_is_content() {
 async fn standard_mode_never_reaches_the_module() {
     // No port is installed and no module runtime exists: a question would fail
     // closed. Standard registers no restriction, so none is asked.
-    assert!(egress_blocks_message(PrivacyMode::Standard, &external_composio())
-        .await
-        .is_none());
+    assert!(
+        egress_blocks_message(PrivacyMode::Standard, &external_composio())
+            .await
+            .is_none()
+    );
     let _mode = test_privacy_scope(PrivacyMode::Standard);
     enforce_egress(&external_composio())
         .await
@@ -110,10 +112,16 @@ async fn standard_mode_never_reaches_the_module() {
 fn refusal_messages_name_the_service_and_the_mode() {
     let desc = external_composio();
     let local = block_message(PrivacyMode::LocalOnly, &desc, Outcome::Refused);
-    assert!(local.contains("Local-only privacy mode is active"), "{local}");
+    assert!(
+        local.contains("Local-only privacy mode is active"),
+        "{local}"
+    );
     assert!(local.contains("GITHUB_CREATE_ISSUE"), "{local}");
     let sensitive = block_message(PrivacyMode::Sensitive, &desc, Outcome::Refused);
-    assert!(sensitive.contains("Sensitive privacy mode is active"), "{sensitive}");
+    assert!(
+        sensitive.contains("Sensitive privacy mode is active"),
+        "{sensitive}"
+    );
     let unavailable = block_message(PrivacyMode::LocalOnly, &desc, Outcome::Unavailable);
     assert!(unavailable.contains("could not confirm"), "{unavailable}");
 }
@@ -121,11 +129,9 @@ fn refusal_messages_name_the_service_and_the_mode() {
 #[cfg(feature = "security-module")]
 mod with_module {
     use super::*;
-    use crate::modules::security::gap::stub::{Asked, StubPort};
     use crate::modules::security::gap::install_port;
-    use tinysecurity_bus::{
-        PrivacyDataClass2, PrivacyMode as BusMode, PrivacyRiskLevel2, Verdict,
-    };
+    use crate::modules::security::gap::stub::{Asked, StubPort};
+    use tinysecurity_bus::{PrivacyDataClass2, PrivacyMode as BusMode, PrivacyRiskLevel2, Verdict};
 
     fn refusing() -> Arc<StubPort> {
         Arc::new(StubPort::allowing().privacy(|_| Verdict::Deny {
@@ -143,7 +149,10 @@ mod with_module {
         let message = egress_blocks_message(PrivacyMode::Sensitive, &desc)
             .await
             .expect("the module refused");
-        assert!(message.contains("Sensitive privacy mode is active"), "{message}");
+        assert!(
+            message.contains("Sensitive privacy mode is active"),
+            "{message}"
+        );
         let asked = stub.asked();
         let [Asked::Privacy(request)] = asked.as_slice() else {
             panic!("exactly one privacy question, got {asked:?}");
@@ -174,9 +183,13 @@ mod with_module {
         let stub = Arc::new(StubPort::allowing());
         let _port = install_port(stub.clone());
         let pricing = EgressDescriptor::integration("/agent-integrations/pricing");
-        assert!(egress_blocks_message(PrivacyMode::LocalOnly, &pricing).await.is_none());
+        assert!(egress_blocks_message(PrivacyMode::LocalOnly, &pricing)
+            .await
+            .is_none());
         let local = EgressDescriptor::inference("ollama", "llama3", false);
-        assert!(egress_blocks_message(PrivacyMode::LocalOnly, &local).await.is_none());
+        assert!(egress_blocks_message(PrivacyMode::LocalOnly, &local)
+            .await
+            .is_none());
         let asked = stub.asked();
         let classes: Vec<_> = asked
             .iter()

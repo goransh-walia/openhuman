@@ -344,10 +344,8 @@ impl GapPort for ModulePort {
             let proxy = super::proxy(&config, &mut state)
                 .await
                 .map_err(CallError::faulted)?;
-            let command_policy = super::command::register_cached_command_scope(
-                &mut state, &proxy, policy,
-            )
-            .await?;
+            let command_policy =
+                super::command::register_cached_command_scope(&mut state, &proxy, policy).await?;
             let member = match op {
                 BudgetOp::Spend => names::methods::SPEND_ACTION2,
                 BudgetOp::Peek => names::methods::PEEK_BUDGET2,

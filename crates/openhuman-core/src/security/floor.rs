@@ -96,7 +96,9 @@ mod native {
         true
     }
 
-    pub(super) async fn protected_paths(_paths: &[std::path::PathBuf]) -> Result<Vec<bool>, String> {
+    pub(super) async fn protected_paths(
+        _paths: &[std::path::PathBuf],
+    ) -> Result<Vec<bool>, String> {
         Err("TinySecurity is not built into this host".into())
     }
 

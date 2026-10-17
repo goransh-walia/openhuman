@@ -37,8 +37,8 @@ pub use policy::validate_path_within_root;
 pub use policy::AutonomyLevel;
 pub use policy::GateDecision;
 pub use policy::SecurityPolicy;
-pub use policy::{Budget, PathKind};
 pub use policy::{ensure_openhuman_scratch_dir, openhuman_scratch_dir};
+pub use policy::{Budget, PathKind};
 pub use policy::{TrustedAccess, TrustedRoot};
 pub use {
     pairing::ensure_core_rpc_token_for_bind, pairing::is_public_bind, pairing::CoreBindTokenError,

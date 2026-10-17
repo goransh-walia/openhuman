@@ -95,9 +95,9 @@ async fn resolve(
     home: Option<&std::path::Path>,
     jail: &LocalJailConfig,
 ) -> anyhow::Result<JailGrants> {
-    let request = grant_request(home, jail)
-        .await
-        .map_err(|error| anyhow::anyhow!("TinySecurity could not supply the path floor: {error}"))?;
+    let request = grant_request(home, jail).await.map_err(|error| {
+        anyhow::anyhow!("TinySecurity could not supply the path floor: {error}")
+    })?;
     let reply = crate::modules::tinybox::resolve_local_grants(config, request)
         .await
         .map_err(|error| anyhow::anyhow!("TinyBox could not resolve local jail grants: {error}"))?;

@@ -179,7 +179,12 @@ impl Guard {
     /// so under Sensitive the module assesses it. Reference images and frames
     /// are file content the host cannot assess; with any present the call stays
     /// unassessed, which Sensitive refuses.
-    async fn admit_prompt(&self, route: &str, prompt: &str, has_media: bool) -> ti_image::Result<()> {
+    async fn admit_prompt(
+        &self,
+        route: &str,
+        prompt: &str,
+        has_media: bool,
+    ) -> ti_image::Result<()> {
         use crate::security::egress::DataKind;
         let descriptor = Self::descriptor(route).with_data_kind(DataKind::Prompt);
         let descriptor = if has_media {
@@ -263,14 +268,15 @@ impl VideoGenerator for GuardedVideo {
     }
 
     async fn submit(&self, request: VideoRequest) -> ti_video::Result<VideoJob> {
-        self.guard.admit_prompt(
-            "videos",
-            request.prompt.as_deref().unwrap_or_default(),
-            request.first_frame.is_some()
-                || request.last_frame.is_some()
-                || !request.references.is_empty(),
-        )
-        .await?;
+        self.guard
+            .admit_prompt(
+                "videos",
+                request.prompt.as_deref().unwrap_or_default(),
+                request.first_frame.is_some()
+                    || request.last_frame.is_some()
+                    || !request.references.is_empty(),
+            )
+            .await?;
         self.guard.budget().await?;
         self.inner.submit(request).await
     }

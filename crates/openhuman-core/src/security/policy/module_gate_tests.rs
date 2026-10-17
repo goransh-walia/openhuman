@@ -41,7 +41,11 @@ async fn each_path_kind_maps_to_the_module_kind() {
     ] {
         let stub = Arc::new(StubPort::allowing());
         let _port = install_port(stub.clone());
-        assert!(policy().path_allowed(kind, std::path::Path::new("/a/x")).await);
+        assert!(
+            policy()
+                .path_allowed(kind, std::path::Path::new("/a/x"))
+                .await
+        );
         assert_eq!(
             stub.asked(),
             vec![Asked::Paths(bus, vec!["/a/x".into()])],
@@ -54,9 +58,11 @@ async fn each_path_kind_maps_to_the_module_kind() {
 async fn an_unavailable_module_refuses_every_path_and_marks_everything_internal() {
     let _port = install_port(Arc::new(StubPort::unavailable()));
     let policy = policy();
-    assert!(!policy
-        .path_allowed(PathKind::StringAllowed, std::path::Path::new("/a/x"))
-        .await);
+    assert!(
+        !policy
+            .path_allowed(PathKind::StringAllowed, std::path::Path::new("/a/x"))
+            .await
+    );
     assert!(policy.is_internal(std::path::Path::new("/a/x")).await);
     assert!(policy.is_internal_blocking(std::path::Path::new("/a/x")));
     assert!(!policy.path_allowed_blocking(PathKind::StringAllowed, std::path::Path::new("/a/x")));
@@ -83,9 +89,9 @@ fn the_blocking_batch_asks_the_module_once() {
 
 #[tokio::test]
 async fn spending_an_action_asks_the_module_and_refuses_with_the_agent_facing_text() {
-    let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited {
-        max_per_hour: 7,
-    }));
+    let stub = Arc::new(
+        StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited { max_per_hour: 7 }),
+    );
     let _port = install_port(stub.clone());
     let error = policy().spend_action("demo").await.unwrap_err();
     assert!(error.contains("Rate limit exceeded"), "{error}");
@@ -96,7 +102,10 @@ async fn spending_an_action_asks_the_module_and_refuses_with_the_agent_facing_te
         StubPort::allowing().budget(|_, _| BudgetDecision2::ReadOnlyMode),
     ));
     let error = policy().spend_action("demo").await.unwrap_err();
-    assert!(error.contains(tinytools::status::POLICY_BLOCKED_MARKER), "{error}");
+    assert!(
+        error.contains(tinytools::status::POLICY_BLOCKED_MARKER),
+        "{error}"
+    );
     assert!(error.contains("read-only mode"), "{error}");
     assert!(error.contains("'demo'"), "{error}");
 
@@ -108,7 +117,10 @@ async fn spending_an_action_asks_the_module_and_refuses_with_the_agent_facing_te
 async fn a_module_that_cannot_answer_refuses_the_action() {
     let _port = install_port(Arc::new(StubPort::unavailable()));
     let error = policy().spend_action("demo").await.unwrap_err();
-    assert!(error.contains(tinytools::status::POLICY_BLOCKED_MARKER), "{error}");
+    assert!(
+        error.contains(tinytools::status::POLICY_BLOCKED_MARKER),
+        "{error}"
+    );
 }
 
 #[test]
@@ -120,9 +132,9 @@ fn the_tier_reads_the_budget_without_spending_it() {
         assert_eq!(stub.asked(), vec![Asked::Budget(BudgetOp::Peek)]);
     }
     // A spent hourly budget is not a tier refusal.
-    let _port = install_port(Arc::new(StubPort::allowing().budget(|_, _| {
-        BudgetDecision2::RateLimited { max_per_hour: 1 }
-    })));
+    let _port = install_port(Arc::new(
+        StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited { max_per_hour: 1 }),
+    ));
     assert!(policy().tier_allows_acting_blocking());
     let _port = install_port(Arc::new(StubPort::unavailable()));
     assert!(!policy().tier_allows_acting_blocking());

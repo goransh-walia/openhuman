@@ -87,15 +87,18 @@ fn adapter_reports_the_autonomy_tier() {
     assert!(!full.write_needs_approval(), "Full runs writes unprompted");
 
     let _module = install_port(Arc::new(StubPort::unavailable()));
-    assert!(!FsGate::can_act(full.as_ref()), "an unanswered tier refuses");
+    assert!(
+        !FsGate::can_act(full.as_ref()),
+        "an unanswered tier refuses"
+    );
 }
 
 #[test]
 fn the_budget_is_reserved_by_the_tool_gate_not_counted_again_in_the_tool() {
     let dir = tempfile::tempdir().unwrap();
-    let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited {
-        max_per_hour: 2,
-    }));
+    let stub = Arc::new(
+        StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited { max_per_hour: 2 }),
+    );
     let _module = install_port(stub.clone());
     let gate = policy(dir.path(), AutonomyLevel::Supervised, 2);
     assert!(!FsGate::is_rate_limited(gate.as_ref()));
@@ -108,9 +111,8 @@ fn the_budget_is_reserved_by_the_tool_gate_not_counted_again_in_the_tool() {
 #[test]
 fn adapter_exposes_the_action_dir_and_asks_the_module_for_string_checks() {
     let dir = tempfile::tempdir().unwrap();
-    let stub = Arc::new(
-        StubPort::allowing().paths(|_, _, path| !path.to_string_lossy().contains("..")),
-    );
+    let stub =
+        Arc::new(StubPort::allowing().paths(|_, _, path| !path.to_string_lossy().contains("..")));
     let _module = install_port(stub.clone());
     let gate = supervised(dir.path());
     assert_eq!(FsGate::action_dir(gate.as_ref()), dir.path());

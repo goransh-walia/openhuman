@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use tinytools::ToolRunContext;
 
-
 pub(super) const FILES_PATH: &str = "/agent-integrations/file-storage/files";
 
 /// Subdirectory (under `action_dir`) where downloaded files are stored.

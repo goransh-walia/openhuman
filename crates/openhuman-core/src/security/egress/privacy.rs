@@ -142,7 +142,10 @@ pub async fn egress_blocks_message(mode: PrivacyMode, desc: &EgressDescriptor) -
 }
 
 /// [`egress_blocks_message`] for a synchronous caller.
-pub fn egress_blocks_message_blocking(mode: PrivacyMode, desc: &EgressDescriptor) -> Option<String> {
+pub fn egress_blocks_message_blocking(
+    mode: PrivacyMode,
+    desc: &EgressDescriptor,
+) -> Option<String> {
     if mode == PrivacyMode::Standard {
         return None;
     }
@@ -261,7 +264,9 @@ mod native {
 
     pub(super) fn decide_blocking(mode: PrivacyMode, desc: &EgressDescriptor) -> Outcome {
         let request = request(mode, desc);
-        outcome(gap::blocking(async move { gap::privacy_check(request).await }))
+        outcome(gap::blocking(
+            async move { gap::privacy_check(request).await },
+        ))
     }
 }
 

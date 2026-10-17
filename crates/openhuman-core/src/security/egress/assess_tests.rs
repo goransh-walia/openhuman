@@ -75,7 +75,9 @@ fn sensitive_assessment_on_the_released_archive() {
         let _scope = test_privacy_scope(PrivacyMode::Sensitive);
         let clean = EgressDescriptor::composio("TOOL").assessed("summarise the quarterly plan");
         assert_eq!(clean.risk_level, IdentificationRisk::None);
-        assert!(egress_blocks_message(PrivacyMode::Sensitive, &clean).await.is_none());
+        assert!(egress_blocks_message(PrivacyMode::Sensitive, &clean)
+            .await
+            .is_none());
 
         let secret = format!(
             "send Authorization: Bearer {}",
@@ -83,7 +85,9 @@ fn sensitive_assessment_on_the_released_archive() {
         );
         let dirty = EgressDescriptor::composio("TOOL").assessed(&secret);
         assert_eq!(dirty.risk_level, IdentificationRisk::High);
-        assert!(egress_blocks_message(PrivacyMode::Sensitive, &dirty).await.is_some());
+        assert!(egress_blocks_message(PrivacyMode::Sensitive, &dirty)
+            .await
+            .is_some());
 
         let batch = EgressDescriptor::embedding("cloud", "m")
             .assessed_parts(["fine text", secret.as_str()]);

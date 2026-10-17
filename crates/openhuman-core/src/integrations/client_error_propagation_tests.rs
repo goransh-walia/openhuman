@@ -152,7 +152,9 @@ async fn backend_body_makes_the_call_content_bearing_and_opaque_bytes_stay_unass
     let upload = backend_egress_for(path, BackendPayload::Opaque);
     assert!(upload.data_kinds.contains(&DataKind::FileContent));
     assert_eq!(upload.risk_level, IdentificationRisk::Unknown);
-    assert!(crate::security::egress::enforce_egress(&upload).await.is_err());
+    assert!(crate::security::egress::enforce_egress(&upload)
+        .await
+        .is_err());
     // A body-less call is metadata only and stays permitted.
     enforce_backend_egress("/agent-integrations/parallel/research")
         .await

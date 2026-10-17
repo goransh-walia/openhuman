@@ -49,9 +49,7 @@ impl Budget {
         match self {
             Self::Allow => Ok(()),
             Self::ReadOnly => {
-                log::warn!(
-                    "[openhuman:policy] Operation '{operation}' blocked: read-only mode"
-                );
+                log::warn!("[openhuman:policy] Operation '{operation}' blocked: read-only mode");
                 Err(format!(
                     "{POLICY_BLOCKED_MARKER} Security policy: read-only mode, cannot perform \
                      '{operation}'. Do not retry; this tier blocks all write actions."
@@ -138,7 +136,10 @@ impl SecurityPolicy {
     /// `Internal` reservation). Fails closed: a path the module could not be asked
     /// about is internal.
     pub async fn is_internal(&self, path: &Path) -> bool {
-        match self.check_paths(PathKind::Internal, &[path.to_path_buf()]).await {
+        match self
+            .check_paths(PathKind::Internal, &[path.to_path_buf()])
+            .await
+        {
             Ok(answers) => answers.first().copied().unwrap_or(true),
             Err(error) => {
                 log::debug!("[security][path] internal-state check unavailable; treated as internal: {error}");
@@ -152,7 +153,9 @@ impl SecurityPolicy {
         match self.native_check_paths_blocking(PathKind::Internal, &[path.to_path_buf()]) {
             Ok(answers) if answers.len() == 1 => answers[0],
             Ok(_) | Err(_) => {
-                log::debug!("[security][path] internal-state check unavailable; treated as internal");
+                log::debug!(
+                    "[security][path] internal-state check unavailable; treated as internal"
+                );
                 true
             }
         }

@@ -98,12 +98,10 @@ pub(crate) fn tool_middleware(
     #[cfg(not(feature = "security-module"))]
     {
         let _ = channel;
-        Arc::new(
-            tinyagents_harness::middleware::ApprovalGateMiddleware::new(
-                "approval_security",
-                Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
-            ),
-        )
+        Arc::new(tinyagents_harness::middleware::ApprovalGateMiddleware::new(
+            "approval_security",
+            Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
+        ))
     }
 }
 

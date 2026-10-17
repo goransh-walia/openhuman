@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use super::helpers::{
-    action_dir_for_context, extension_for_content_type, file_path,
-    sanitize_filename, validate_file_id, DOWNLOADS_DIR,
+    action_dir_for_context, extension_for_content_type, file_path, sanitize_filename,
+    validate_file_id, DOWNLOADS_DIR,
 };
 use crate::integrations::IntegrationClient;
 use crate::security::SecurityPolicy;

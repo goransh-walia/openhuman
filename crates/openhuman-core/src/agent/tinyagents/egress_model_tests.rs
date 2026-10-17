@@ -55,7 +55,10 @@ async fn sensitive_forwards_the_assessment_and_obeys_the_modules_answer() {
     let [Asked::Privacy(request)] = asked.as_slice() else {
         panic!("one question, got {asked:?}");
     };
-    assert_eq!(request.risk.as_ref().map(|r| r.level), Some(PrivacyRiskLevel2::None));
+    assert_eq!(
+        request.risk.as_ref().map(|r| r.level),
+        Some(PrivacyRiskLevel2::None)
+    );
     assert_eq!(request.destination_label, "openai");
 }
 

@@ -55,19 +55,26 @@ mod with_module {
             grants.read_write,
             [PathBuf::from("/home/op/.cargo/registry")]
         );
-        assert_eq!(stub.asked().len(), 1, "the whole reply is one floor question");
+        assert_eq!(
+            stub.asked().len(),
+            1,
+            "the whole reply is one floor question"
+        );
     }
 
     #[tokio::test]
     async fn proc_is_admitted_only_through_allow_proc() {
-        let _port = install_port(Arc::new(StubPort::allowing().protecting(|path| {
-            path.starts_with("/proc")
-        })));
+        let _port = install_port(Arc::new(
+            StubPort::allowing().protecting(|path| path.starts_with("/proc")),
+        ));
         let reply = || LocalGrants {
             read_only: vec!["/proc".into(), "/proc/1/environ".into()],
             read_write: Vec::new(),
         };
-        assert!(admit_module_grants(reply(), false).await.read_only.is_empty());
+        assert!(admit_module_grants(reply(), false)
+            .await
+            .read_only
+            .is_empty());
         assert_eq!(
             admit_module_grants(reply(), true).await.read_only,
             [PathBuf::from("/proc")]
@@ -118,13 +125,17 @@ mod with_module {
     #[tokio::test]
     async fn no_home_means_no_credential_roots() {
         let _port = install_port(Arc::new(StubPort::allowing()));
-        let request = grant_request(None, &LocalJailConfig::default()).await.unwrap();
+        let request = grant_request(None, &LocalJailConfig::default())
+            .await
+            .unwrap();
         assert!(request.home.is_none() && request.protected.credential_roots.is_empty());
     }
 
     #[tokio::test]
     async fn no_request_is_built_without_the_floor() {
         let _port = install_port(Arc::new(StubPort::unavailable()));
-        assert!(grant_request(None, &LocalJailConfig::default()).await.is_err());
+        assert!(grant_request(None, &LocalJailConfig::default())
+            .await
+            .is_err());
     }
 }

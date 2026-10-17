@@ -2,18 +2,20 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::agent::host_runtime::{NativeRuntime, RuntimeAdapter};
+use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
 use crate::security::SecurityPolicy;
 use crate::tools;
 use crate::tools::native_ops_types::{ExecuteToolOutcome, RuntimeToolSummary};
-use tinybox_bus::CommandClass;
 use tinyagents_harness::context::{RunConfig, RunContext};
-use tinyagents_harness::middleware::{BoxToolFuture, MiddlewareStack, ToolBaseCall, ToolMiddleware};
+use tinyagents_harness::middleware::{
+    BoxToolFuture, MiddlewareStack, ToolBaseCall, ToolMiddleware,
+};
+use tinybox_bus::CommandClass;
 use tinyinference_llm::tool::ToolCall;
 use tinytools::{Tool, ToolCallOptions, ToolResult, ToolScope};
-use crate::agent::tinyagents::host::OpenHumanRunContext;
 use tracing::{debug, trace};
 
 fn tool_scope_label(scope: ToolScope) -> &'static str {
@@ -236,10 +238,7 @@ pub(crate) async fn run_gated(
 
     let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
     stack.push_tool_middleware(gate);
-    let ctx = RunContext::new(
-        RunConfig::new("direct-tool"),
-        OpenHumanRunContext::new(),
-    );
+    let ctx = RunContext::new(RunConfig::new("direct-tool"), OpenHumanRunContext::new());
     let call = ToolCall {
         id: format!("direct-{tool_name}"),
         name: tool_name.to_string(),

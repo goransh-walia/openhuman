@@ -159,7 +159,12 @@ async fn an_exhausted_budget_refuses_a_direct_dangerous_run() {
     )
     .await;
     assert_eq!(run.runs, 0);
-    assert!(run.outcome.unwrap().result.output().contains("3 actions/hour"));
+    assert!(run
+        .outcome
+        .unwrap()
+        .result
+        .output()
+        .contains("3 actions/hour"));
 }
 
 #[tokio::test]

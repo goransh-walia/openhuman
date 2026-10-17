@@ -66,9 +66,9 @@ fn read_only_autonomy_cannot_act() {
 fn the_gate_does_not_count_an_action_the_tool_gate_already_reserved() {
     // The hourly budget is spent once per call by the tool gate before the tool
     // runs; the in-tool questions neither ask the module nor refuse.
-    let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited {
-        max_per_hour: 1,
-    }));
+    let stub = Arc::new(
+        StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited { max_per_hour: 1 }),
+    );
     let _module = install_port(stub.clone());
     let security = policy(AutonomyLevel::Supervised, 1);
     let gate: &dyn NetGate = security.as_ref();
@@ -347,8 +347,8 @@ fn sensitive_mode_permits_a_fetch_assessed_clean_and_refuses_the_rest() {
     use crate::security::live_policy::test_privacy_scope;
     // The module decides from the assessment the gate forwards: clean passes,
     // anything else (identifying, or not assessed) is refused.
-    let _module = install_port(Arc::new(StubPort::allowing().privacy(|request| {
-        match &request.risk {
+    let _module = install_port(Arc::new(StubPort::allowing().privacy(
+        |request| match &request.risk {
             Some(risk)
                 if risk.level == tinysecurity_bus::PrivacyRiskLevel2::None
                     && risk.categories.is_empty() =>
@@ -358,8 +358,8 @@ fn sensitive_mode_permits_a_fetch_assessed_clean_and_refuses_the_rest() {
             _ => Verdict::Deny {
                 reason: DenialReason::Privacy,
             },
-        }
-    })));
+        },
+    )));
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let clean = routed_with(Some(Assessment {
         level: IdentificationRisk::None,

@@ -10,7 +10,8 @@ use tinytools_std::network::{Destination, DestinationFuture, NetGate};
 use crate::config::PrivacyMode;
 use crate::security::egress::assess::{assess_payload, Assessment};
 use crate::security::egress::{
-    emit_external_transfer, local_only_tool_block_blocking, DataKind, EgressDescriptor, IdentificationRisk,
+    emit_external_transfer, local_only_tool_block_blocking, DataKind, EgressDescriptor,
+    IdentificationRisk,
 };
 use crate::security::{GateDecision, SecurityPolicy};
 use tinybox_bus::CommandClass;

@@ -43,9 +43,11 @@ async fn an_unavailable_module_protects_every_path() {
     assert!(is_protected(Path::new("/home/u/project")).await);
     assert!(any_protected(&[Path::new("/a"), Path::new("/b")]).await);
     assert!(is_protected_blocking(Path::new("/home/u/project")));
-    assert!(check_paths(scope(), PathCheckKind::StringAllowed, &["/a".into()])
-        .await
-        .is_err());
+    assert!(
+        check_paths(scope(), PathCheckKind::StringAllowed, &["/a".into()])
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -79,7 +81,10 @@ async fn a_short_answer_is_a_refusal_not_a_partial_allow() {
         async fn privacy(&self, _: PrivacyCheckRequest2) -> Result<Decision, String> {
             Err("n/a".into())
         }
-        async fn host_action_class(&self, _: HostActionClassRequest2) -> Result<CommandClass, String> {
+        async fn host_action_class(
+            &self,
+            _: HostActionClassRequest2,
+        ) -> Result<CommandClass, String> {
             Err("n/a".into())
         }
     }

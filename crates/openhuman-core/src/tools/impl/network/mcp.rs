@@ -383,7 +383,6 @@ impl Tool for McpCallTool {
         args: Value,
         options: ToolCallOptions,
     ) -> anyhow::Result<ToolResult> {
-
         let server = required_string_arg(&args, "server")?;
         let tool = required_string_arg(&args, "tool")?;
         let arguments = args

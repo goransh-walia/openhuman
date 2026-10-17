@@ -17,9 +17,7 @@ use tinybox_bus::CommandClass;
 
 use openhuman_core::{
     config::AutonomyConfig,
-    security::{
-        AutonomyLevel, SecurityPolicy, TrustedAccess, TrustedRoot,
-    },
+    security::{AutonomyLevel, SecurityPolicy, TrustedAccess, TrustedRoot},
 };
 
 #[test]

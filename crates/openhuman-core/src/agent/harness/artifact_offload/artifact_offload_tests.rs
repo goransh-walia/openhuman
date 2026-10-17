@@ -164,8 +164,7 @@ async fn an_action_dir_inside_workspace_dir_is_never_materialized() {
 fn nothing_is_internal() -> crate::modules::security::gap::PortGuard {
     use crate::modules::security::gap::stub::StubPort;
     crate::modules::security::gap::install_port(Arc::new(
-        StubPort::allowing()
-            .paths(|_, kind, _| kind != tinysecurity_bus::PathCheckKind::Internal),
+        StubPort::allowing().paths(|_, kind, _| kind != tinysecurity_bus::PathCheckKind::Internal),
     ))
 }
 

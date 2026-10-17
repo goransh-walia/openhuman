@@ -91,7 +91,10 @@ async fn the_floor_vocabulary_is_itself_protected() {
         .call_confidential(
             names::methods::PROTECTED_PATH2,
             (ProtectedPathRequest2 {
-                paths: vec!["/home/u/project/src/main.rs".into(), "/tmp/openhuman/a".into()],
+                paths: vec![
+                    "/home/u/project/src/main.rs".into(),
+                    "/tmp/openhuman/a".into(),
+                ],
             },),
         )
         .await
@@ -108,12 +111,9 @@ async fn a_path_batch_answers_what_the_single_query_answers() {
     std::fs::create_dir_all(workspace.join("memory")).unwrap();
     std::fs::create_dir_all(&action).unwrap();
     std::fs::write(action.join("a.txt"), "x").unwrap();
-    let id = super::call_register_path_policy(
-        &native.proxy,
-        path_policy(&workspace, &action),
-    )
-    .await
-    .unwrap();
+    let id = super::call_register_path_policy(&native.proxy, path_policy(&workspace, &action))
+        .await
+        .unwrap();
     let paths: Vec<std::path::PathBuf> = vec![
         action.join("a.txt"),
         action.join("new/b.txt"),
@@ -174,17 +174,23 @@ async fn spending_and_peeking_share_the_command_ledger() {
         let command_policy = scope.clone();
         async move {
             proxy
-                .call_confidential::<BudgetDecision2>(
-                    member,
-                    (BudgetRequest2 { command_policy },),
-                )
+                .call_confidential::<BudgetDecision2>(member, (BudgetRequest2 { command_policy },))
                 .await
                 .unwrap()
         }
     };
-    assert_eq!(ask(names::methods::PEEK_BUDGET2).await, BudgetDecision2::Allow);
-    assert_eq!(ask(names::methods::SPEND_ACTION2).await, BudgetDecision2::Allow);
-    assert_eq!(ask(names::methods::SPEND_ACTION2).await, BudgetDecision2::Allow);
+    assert_eq!(
+        ask(names::methods::PEEK_BUDGET2).await,
+        BudgetDecision2::Allow
+    );
+    assert_eq!(
+        ask(names::methods::SPEND_ACTION2).await,
+        BudgetDecision2::Allow
+    );
+    assert_eq!(
+        ask(names::methods::SPEND_ACTION2).await,
+        BudgetDecision2::Allow
+    );
     let spent = BudgetDecision2::RateLimited { max_per_hour: 2 };
     assert_eq!(ask(names::methods::PEEK_BUDGET2).await, spent);
     assert_eq!(ask(names::methods::SPEND_ACTION2).await, spent);
@@ -237,18 +243,57 @@ async fn privacy_and_host_action_class_answer_as_the_host_expects() {
             response.decision
         }
     };
-    assert!(is_allow(&ask(PrivacyMode::Standard, true, PrivacyDataClass2::UserContent, None).await));
-    assert!(is_allow(&ask(PrivacyMode::LocalOnly, true, PrivacyDataClass2::ControlPlane, None).await));
-    assert!(is_allow(&ask(PrivacyMode::LocalOnly, false, PrivacyDataClass2::UserContent, None).await));
-    let denied = ask(PrivacyMode::LocalOnly, true, PrivacyDataClass2::UserContent, None).await;
+    assert!(is_allow(
+        &ask(
+            PrivacyMode::Standard,
+            true,
+            PrivacyDataClass2::UserContent,
+            None
+        )
+        .await
+    ));
+    assert!(is_allow(
+        &ask(
+            PrivacyMode::LocalOnly,
+            true,
+            PrivacyDataClass2::ControlPlane,
+            None
+        )
+        .await
+    ));
+    assert!(is_allow(
+        &ask(
+            PrivacyMode::LocalOnly,
+            false,
+            PrivacyDataClass2::UserContent,
+            None
+        )
+        .await
+    ));
+    let denied = ask(
+        PrivacyMode::LocalOnly,
+        true,
+        PrivacyDataClass2::UserContent,
+        None,
+    )
+    .await;
     assert_eq!(
         denied.verdict,
         Verdict::Deny {
             reason: DenialReason::Privacy
         }
     );
-    let unassessed = ask(PrivacyMode::Sensitive, true, PrivacyDataClass2::UserContent, None).await;
-    assert!(!is_allow(&unassessed), "an unassessed payload is refused under Sensitive");
+    let unassessed = ask(
+        PrivacyMode::Sensitive,
+        true,
+        PrivacyDataClass2::UserContent,
+        None,
+    )
+    .await;
+    assert!(
+        !is_allow(&unassessed),
+        "an unassessed payload is refused under Sensitive"
+    );
 
     for (permission, external_effect, class) in [
         (ToolPermission::ReadOnly, false, CommandClass::Read),
@@ -268,6 +313,9 @@ async fn privacy_and_host_action_class_answer_as_the_host_expects() {
             )
             .await
             .unwrap();
-        assert_eq!(response.class, class, "{permission:?} external={external_effect}");
+        assert_eq!(
+            response.class, class,
+            "{permission:?} external={external_effect}"
+        );
     }
 }
