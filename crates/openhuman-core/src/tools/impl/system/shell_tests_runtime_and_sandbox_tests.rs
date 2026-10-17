@@ -14,7 +14,7 @@ async fn shell_blocks_rate_limited() {
         }
         .with_gateway(StubGateway::allow()),
     );
-    let tool = ShellTool::new(security, test_runtime(), test_audit());
+    let tool = ShellTool::new(security, test_runtime());
     let result = tool.execute(json!({"command": "echo test"})).await.unwrap();
     assert!(result.is_error);
     assert!(result.output().contains("Rate limit"));
@@ -37,7 +37,6 @@ async fn shell_uses_host_node_and_python_from_path() {
         let tool = ShellTool::new(
             test_security(AutonomyLevel::Full),
             test_runtime(),
-            test_audit(),
         );
         let result = tool.execute(json!({"command": command})).await.unwrap();
         assert!(!result.is_error, "{binary} failed: {}", result.output());

@@ -6,7 +6,6 @@ async fn configured_shell_fails_closed_when_the_security_module_cannot_answer() 
     let tool = ShellTool::with_config(
         gated_security(AutonomyLevel::Full, gateway.clone()),
         test_runtime(),
-        test_audit(),
         Arc::new(crate::config::Config::default()),
     );
 
@@ -28,7 +27,6 @@ async fn shell_run_asks_the_module_at_the_execute_stage_with_the_exact_command()
     let tool = ShellTool::new(
         gated_security(AutonomyLevel::Supervised, gateway.clone()),
         test_runtime(),
-        test_audit(),
     );
     let _ = tool.execute(json!({"command": "true"})).await.unwrap();
     let asked = gateway.asked();
@@ -51,7 +49,6 @@ async fn a_refused_shell_command_never_reaches_the_runtime_and_carries_the_reaso
         let tool = ShellTool::new(
             gated_security(AutonomyLevel::Supervised, StubGateway::refuse(reason)),
             test_runtime(),
-            test_audit(),
         );
         let result = tool
             .execute(json!({"command": format!("touch {}", marker.display())}))
@@ -112,66 +109,11 @@ fn docker_module_results_preserve_success_failure_and_timeout_semantics() {
     assert!(timeout.output().contains("before timeout"));
 }
 
-#[cfg(not(windows))]
-#[tokio::test]
-async fn shell_emits_audit_line_on_success() {
-    use crate::security::AuditEvent;
-    let (audit, tmp) = audit_with_tempdir();
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-        audit,
-    );
-    let _ = tool
-        .execute(json!({"command": "echo hello"}))
-        .await
-        .unwrap();
-    let log =
-        std::fs::read_to_string(tmp.path().join("audit.log")).expect("audit log file should exist");
-    assert!(!log.is_empty(), "audit log should not be empty");
-    let parsed: AuditEvent = serde_json::from_str(log.trim()).expect("audit event JSON parses");
-    let action = parsed.action.expect("action present");
-    assert_eq!(action.command, Some("echo hello".to_string()));
-    assert!(action.allowed, "allowed command should set allowed=true");
-    let result = parsed.result.expect("result present");
-    assert!(result.success, "echo hello should succeed");
-    let actor = parsed.actor.expect("actor present");
-    assert_eq!(actor.channel, "tool:shell");
-}
-
-#[tokio::test]
-async fn shell_emits_audit_line_on_denial() {
-    use crate::security::AuditEvent;
-    let (audit, tmp) = audit_with_tempdir();
-    let tool = ShellTool::new(
-        gated_security(
-            AutonomyLevel::ReadOnly,
-            StubGateway::refuse(Refusal::ReadOnly),
-        ),
-        test_runtime(),
-        audit,
-    );
-    // A write command in read-only mode is denied before execution.
-    let _ = tool
-        .execute(json!({"command": "touch denied_file"}))
-        .await
-        .unwrap();
-    let log =
-        std::fs::read_to_string(tmp.path().join("audit.log")).expect("audit log file should exist");
-    let parsed: AuditEvent = serde_json::from_str(log.trim()).expect("audit event JSON parses");
-    let action = parsed.action.expect("action present");
-    assert!(
-        !action.allowed,
-        "denied command should set allowed=false on the audit event"
-    );
-}
-
 #[test]
 fn shell_tool_name() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
     assert_eq!(tool.name(), "shell");
 }
@@ -181,7 +123,6 @@ fn shell_tool_description() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
     assert!(!tool.description().is_empty());
 }
@@ -191,7 +132,6 @@ fn shell_tool_schema_has_command() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
     let schema = tool.parameters_schema();
     assert!(schema["properties"]["command"].is_object());
@@ -210,7 +150,6 @@ async fn shell_executes_allowed_command() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
     let result = tool
         .execute(json!({"command": "echo hello"}))
@@ -228,7 +167,7 @@ async fn shell_destructive_command_is_gated_not_run_inline() {
     // module's answer (pinned by the module-backed command tests); the tool's
     // part is declaring every command an external effect.
     let security = test_security(AutonomyLevel::Supervised);
-    let tool = ShellTool::new(security.clone(), test_runtime(), test_audit());
+    let tool = ShellTool::new(security.clone(), test_runtime());
     assert!(tool.external_effect_with_args(&json!({"command": "rm -rf /"})));
 }
 
@@ -262,7 +201,7 @@ async fn shell_pwd_returns_action_dir_not_workspace_dir() {
         }
         .with_gateway(StubGateway::allow()),
     );
-    let tool = ShellTool::new(security.clone(), test_runtime(), test_audit());
+    let tool = ShellTool::new(security.clone(), test_runtime());
 
     let result = tool
         .execute(json!({"command": "pwd"}))
@@ -309,7 +248,6 @@ fn shell_is_unbounded_by_default() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
 
     // No `timeout_secs` ⇒ no deadline. A long script must not be hard-killed.
@@ -331,7 +269,6 @@ fn shell_timeout_honors_explicit_per_call_value() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
 
     // An explicit in-range request is enforced verbatim.
@@ -359,7 +296,6 @@ async fn shell_per_call_timeout_kills_slow_command() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
 
     // `sleep 30` would survive any sane default, but a per-call 1s budget
@@ -382,7 +318,6 @@ fn shell_schema_advertises_timeout_secs() {
     let tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         test_runtime(),
-        test_audit(),
     );
     let schema = tool.parameters_schema();
     let timeout = &schema["properties"]["timeout_secs"];
