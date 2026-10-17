@@ -108,9 +108,6 @@ async fn fifo_attachment_is_rejected_without_waiting_for_a_writer() {
         std::io::Error::last_os_error()
     );
 
-    let mut config = Config::default();
-    config.action_dir = temp.path().to_path_buf();
-    config.workspace_dir = temp.path().join("internal");
     let model = Arc::new(NeverCalled::default());
     let wrapped = wrap_injected(model.clone(), Arc::new(config));
     let request = ModelRequest::new(vec![Message::User(
@@ -121,6 +118,10 @@ async fn fifo_attachment_is_rejected_without_waiting_for_a_writer() {
             })],
         },
     )]);
+
+    let mut config = Config::default();
+    config.action_dir = temp.path().to_path_buf();
+    config.workspace_dir = temp.path().join("internal");
 
     // The first path validation of a process loads the security module, which
     // can outlast the 2 s window below and has nothing to do with whether the
@@ -134,7 +135,7 @@ async fn fifo_attachment_is_rejected_without_waiting_for_a_writer() {
     };
     let deadline = std::time::Instant::now() + Duration::from_secs(120);
     loop {
-        match crate::agent::attachments::resolve_path(&Config::default_for_warmup(temp.path()), "warm.png", &warm_scope).await {
+        match crate::agent::attachments::resolve_path(&config, "warm.png", &warm_scope).await {
             Ok(_) => break,
             Err(error) if std::time::Instant::now() < deadline => {
                 log::debug!("[attachments][test] module still loading: {error}");
