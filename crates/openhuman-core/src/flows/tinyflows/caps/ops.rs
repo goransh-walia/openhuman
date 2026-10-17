@@ -42,9 +42,9 @@ pub(crate) use crate::integrations::composio::catalog::{
     composio_required_args, fetch_live_toolkit_catalog, probe_tool_output_sample, ToolContract,
 };
 #[cfg(test)]
-pub(crate) use crate::integrations::composio::catalog::{
-    seed_live_catalog_cache, seed_live_catalog_cache_expired, seed_probe_cache,
-};
+pub(crate) use crate::integrations::composio::catalog::{seed_live_catalog_cache, seed_probe_cache};
+#[cfg(test)]
+pub(crate) use crate::integrations::composio::catalog::seed_live_catalog_cache_expired;
 
 use super::*;
 

@@ -10,7 +10,10 @@
 use std::path::PathBuf;
 
 use super::types::SandboxPolicy;
-use crate::config::{Config, LocalJailConfig};
+use crate::config::Config;
+#[cfg(feature = "modules")]
+use crate::config::LocalJailConfig;
+#[cfg(feature = "modules")]
 use crate::security::SecurityPolicy;
 
 /// Credential directories under `$HOME` that no grant may reach or contain.
@@ -58,7 +61,10 @@ pub(crate) async fn with_resolved_grants(
     config: &Config,
     policy: &SandboxPolicy,
 ) -> anyhow::Result<SandboxPolicy> {
+    #[cfg(feature = "modules")]
     let mut policy = policy.clone();
+    #[cfg(not(feature = "modules"))]
+    let policy = policy.clone();
     #[cfg(feature = "modules")]
     {
         let home = grant_home(crate::core::runtime::is_saas(), dirs::home_dir);

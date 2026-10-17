@@ -25,6 +25,7 @@ pub use direct::direct_list_connections;
 pub(crate) use direct::direct_list_tools;
 pub(crate) use factory::create_direct_client_for_api_key;
 pub use factory::{resolve_composio_route, ComposioRoute};
+#[cfg(feature = "modules")]
 pub(crate) use network::module_transport_with_proxy;
 
 // Brought into this module's own namespace (private `use`, not `pub use`)
