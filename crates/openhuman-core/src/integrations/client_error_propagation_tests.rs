@@ -98,12 +98,36 @@ fn backend_egress_descriptor_strips_query_and_targets_backend() {
 }
 
 /// The privacy gate for a body-less round-trip to `path`.
-fn enforce_backend_egress(path: &str) -> anyhow::Result<()> {
-    crate::security::egress::enforce_egress(&backend_egress_for(path, BackendPayload::None))
+async fn enforce_backend_egress(path: &str) -> anyhow::Result<()> {
+    crate::security::egress::enforce_egress(&backend_egress_for(path, BackendPayload::None)).await
 }
 
-#[test]
-fn backend_body_makes_the_call_content_bearing_and_opaque_bytes_stay_unassessed() {
+/// A module enforcing the restrictive modes as they apply to backend traffic: an
+/// external transfer that is not a control-plane round trip is refused, and under
+/// Sensitive an unassessed one too. The module owns that table; this scripts it so
+/// these tests exercise the host's wiring (class mapping, ordering before the
+/// transport, error text) without a module runtime.
+fn restrictive_module() -> std::sync::Arc<crate::modules::security::gap::stub::StubPort> {
+    use tinysecurity_bus::{DenialReason, PrivacyDataClass2, Verdict};
+    std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::allowing().privacy(|request| {
+            if request.external
+                && request.class != PrivacyDataClass2::ControlPlane
+                && !(request.class == PrivacyDataClass2::Metadata
+                    && request.privacy == tinysecurity_bus::PrivacyMode::Sensitive)
+            {
+                Verdict::Deny {
+                    reason: DenialReason::Privacy,
+                }
+            } else {
+                Verdict::Allow
+            }
+        }),
+    )
+}
+
+#[tokio::test]
+async fn backend_body_makes_the_call_content_bearing_and_opaque_bytes_stay_unassessed() {
     use crate::config::PrivacyMode;
     use crate::security::egress::{DataKind, IdentificationRisk};
     use crate::security::live_policy::test_privacy_scope;
@@ -120,27 +144,31 @@ fn backend_body_makes_the_call_content_bearing_and_opaque_bytes_stay_unassessed(
         assert_eq!(bare.data_kinds, vec![DataKind::Metadata]);
     }
 
-    // Sensitive mode with no module answer: a multipart upload carries file
-    // content that cannot be assessed, so it is refused rather than assumed clean.
+    // Sensitive mode: a multipart upload carries file content that cannot be
+    // assessed, so it reaches the module unassessed and is refused rather than
+    // assumed clean.
+    let _port = crate::modules::security::gap::install_port(restrictive_module());
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let upload = backend_egress_for(path, BackendPayload::Opaque);
     assert!(upload.data_kinds.contains(&DataKind::FileContent));
     assert_eq!(upload.risk_level, IdentificationRisk::Unknown);
-    assert!(crate::security::egress::enforce_egress(&upload).is_err());
+    assert!(crate::security::egress::enforce_egress(&upload).await.is_err());
     // A body-less call is metadata only and stays permitted.
     enforce_backend_egress("/agent-integrations/parallel/research")
+        .await
         .expect("metadata-only call is permitted under Sensitive");
 }
 
-#[test]
-fn enforce_backend_egress_blocks_user_data_but_allows_control_plane() {
+#[tokio::test]
+async fn enforce_backend_egress_blocks_user_data_but_allows_control_plane() {
     use crate::config::PrivacyMode;
     use crate::security::live_policy::test_privacy_scope;
+    let _port = crate::modules::security::gap::install_port(restrictive_module());
     {
         // Thread-scoped LocalOnly — no process-global mutation, no cross-test race.
         let _mode = test_privacy_scope(PrivacyMode::LocalOnly);
         // User-data tool path → refused.
-        let blocked = enforce_backend_egress("/agent-integrations/composio/execute");
+        let blocked = enforce_backend_egress("/agent-integrations/composio/execute").await;
         assert!(blocked.is_err());
         assert!(blocked
             .unwrap_err()
@@ -148,19 +176,24 @@ fn enforce_backend_egress_blocks_user_data_but_allows_control_plane() {
             .contains("Local-only privacy mode is active"));
         // Control-plane (connection-management + pricing) → allowed even under LocalOnly.
         enforce_backend_egress("/agent-integrations/composio/connections")
+            .await
             .expect("connections is control-plane");
-        enforce_backend_egress("/agent-integrations/pricing").expect("pricing is control-plane");
+        enforce_backend_egress("/agent-integrations/pricing")
+            .await
+            .expect("pricing is control-plane");
     }
 
     // Standard mode → everything allowed.
     let _mode = test_privacy_scope(PrivacyMode::Standard);
-    enforce_backend_egress("/agent-integrations/composio/execute").expect("Standard allows");
+    enforce_backend_egress("/agent-integrations/composio/execute")
+        .await
+        .expect("Standard allows");
 }
 
 /// Privacy epic S7 (#4441): the LocalOnly gate must fire through the PUBLIC verb
 /// methods, not only via the `enforce_backend_egress` helper. Each of the six
 /// verbs (`post`/`get`/`patch`/`delete`/`upload_multipart`/`get_bytes`) runs the
-/// gate synchronously on first poll — before any `.await` — so a user-data path
+/// gate before the transport is reached — so a user-data path
 /// is refused before the request leaves the device. The client points at an
 /// unreachable address, so a leaked call would surface a transport error, not
 /// the local-only message; asserting the policy string therefore proves the
@@ -170,6 +203,7 @@ async fn verb_methods_block_user_data_egress_under_local_only() {
     use crate::config::PrivacyMode;
     use crate::security::live_policy::test_privacy_scope;
 
+    let _port = crate::modules::security::gap::install_port(restrictive_module());
     let _mode = test_privacy_scope(PrivacyMode::LocalOnly);
     let client = client_for("http://127.0.0.1:0".into());
     let path = "/agent-integrations/composio/execute"; // user-data egress (blocked)
@@ -414,6 +448,7 @@ async fn local_only_rejects_user_data_verb_before_transport() {
     // `#[tokio::test]` runs on a current-thread runtime, so the gate's inline
     // `current_privacy_mode()` read observes this override on the same thread
     // (see `TEST_PRIVACY_MODE`).
+    let _port = crate::modules::security::gap::install_port(restrictive_module());
     let _mode = test_privacy_scope(PrivacyMode::LocalOnly);
 
     // (1) User-data verb call is refused by the gate BEFORE transport — the
