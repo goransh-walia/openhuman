@@ -2,13 +2,18 @@ use super::*;
 
 #[tokio::test]
 async fn shell_blocks_rate_limited() {
-    let security = Arc::new(SecurityPolicy {
-        autonomy: AutonomyLevel::Supervised,
-        max_actions_per_hour: 0,
-        workspace_dir: std::env::temp_dir(),
-        action_dir: std::env::temp_dir(),
-        ..SecurityPolicy::default()
-    });
+    // The module admits the command; the host's own per-policy action budget
+    // (zero here) is what refuses the run.
+    let security = Arc::new(
+        SecurityPolicy {
+            autonomy: AutonomyLevel::Supervised,
+            max_actions_per_hour: 0,
+            workspace_dir: std::env::temp_dir(),
+            action_dir: std::env::temp_dir(),
+            ..SecurityPolicy::default()
+        }
+        .with_gateway(StubGateway::allow()),
+    );
     let tool = ShellTool::new(security, test_runtime(), test_audit());
     let result = tool.execute(json!({"command": "echo test"})).await.unwrap();
     assert!(result.is_error);

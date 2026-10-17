@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(all(feature = "modules", target_os = "linux"))]
 use crate::sandbox::types::SandboxStatus;
 
 fn config_in(root: &Path) -> Config {

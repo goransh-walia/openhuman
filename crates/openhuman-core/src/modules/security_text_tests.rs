@@ -301,7 +301,7 @@ async fn call_secrets_redact_through_the_module_per_call_and_in_chunks() {
     let filler = "plain line of ordinary text\n".repeat(4_000);
     let body = format!("{filler}key={long}\n{filler}");
     assert!(body.len() > 2 * crate::security::redact::CREDENTIAL_CHUNK_BYTES);
-    let out = credentials_with_on(&fx.proxy, &body, &[long.clone()])
+    let out = credentials_with_on(&fx.proxy, &body, std::slice::from_ref(&long))
         .await
         .unwrap();
     assert!(!out.contains(&long));

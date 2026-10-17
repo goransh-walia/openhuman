@@ -37,13 +37,15 @@ use tinybox_bus::CommandClass;
 // way round: the feature-gated seam depends on the always-compiled domain, not
 // the reverse. See that module's docs.
 #[cfg(test)]
+pub(crate) use crate::integrations::composio::catalog::seed_live_catalog_cache_expired;
+#[cfg(test)]
 pub(crate) use crate::integrations::composio::catalog::ProbedOutputSample;
 pub(crate) use crate::integrations::composio::catalog::{
     composio_required_args, fetch_live_toolkit_catalog, probe_tool_output_sample, ToolContract,
 };
 #[cfg(test)]
 pub(crate) use crate::integrations::composio::catalog::{
-    seed_live_catalog_cache, seed_live_catalog_cache_expired, seed_probe_cache,
+    seed_live_catalog_cache, seed_probe_cache,
 };
 
 use super::*;

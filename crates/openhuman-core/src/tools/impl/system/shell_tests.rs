@@ -63,13 +63,16 @@ fn tool_context_with_workspace(
 }
 
 fn test_security_with_env_cmd() -> Arc<SecurityPolicy> {
-    Arc::new(SecurityPolicy {
-        autonomy: AutonomyLevel::Supervised,
-        workspace_dir: std::env::temp_dir(),
-        action_dir: std::env::temp_dir(),
-        allowed_commands: vec!["echo".into(), "mkdir".into()],
-        ..SecurityPolicy::default()
-    })
+    Arc::new(
+        SecurityPolicy {
+            autonomy: AutonomyLevel::Supervised,
+            workspace_dir: std::env::temp_dir(),
+            action_dir: std::env::temp_dir(),
+            allowed_commands: vec!["echo".into(), "mkdir".into()],
+            ..SecurityPolicy::default()
+        }
+        .with_gateway(StubGateway::allow()),
+    )
 }
 
 #[path = "shell_tests_platform_tests.rs"]

@@ -4,7 +4,6 @@
 //! to a failed turn. Called from `start_chat` and `spawn_parallel_turn`
 //! (`ops/start_chat.rs`/`ops/parallel_turn.rs`) once the message has been validated.
 
-use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 use tinyagents_harness::run_queue::RunQueue;
 
@@ -123,7 +122,7 @@ pub(crate) async fn run_chat_task(
     // policy (which grants `action_dir` as a trusted root) and its tools are
     // all built on the thread's folder.
     let thread_dir =
-        crate::threads::ops::thread_working_dir(&ctx, config.workspace_dir.clone(), thread_id)
+        crate::threads::ops::thread_working_dir(ctx, config.workspace_dir.clone(), thread_id)
             .await?;
     if let Some(dir) = &thread_dir {
         log::debug!("[web-channel] thread working folder applied thread_id={thread_id}");

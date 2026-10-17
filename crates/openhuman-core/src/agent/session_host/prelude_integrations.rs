@@ -3,7 +3,6 @@
 //! revokes between turns, and adopting the integration actions the tinyagents
 //! session restored for a resumed thread.
 
-use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 use tinyagents_runtime::ToolSnapshot;

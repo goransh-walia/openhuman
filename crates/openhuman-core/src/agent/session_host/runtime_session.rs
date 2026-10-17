@@ -535,23 +535,6 @@ impl OpenHumanTurnPrelude {
     }
 }
 
-/// Reconcile visible delegate names without reopening a caller's explicit
-/// restriction. Revoked names disappear; a newly connected name is admitted
-/// only for the wildcard belt.
-pub(super) fn reconcile_synthesized_visibility(
-    visible: &mut std::collections::HashSet<String>,
-    previous: &std::collections::HashSet<String>,
-    next: &std::collections::HashSet<String>,
-    auto_include_new: bool,
-) {
-    for name in previous.difference(next) {
-        visible.remove(name);
-    }
-    if auto_include_new {
-        visible.extend(next.iter().cloned());
-    }
-}
-
 #[path = "runtime_session_usage.rs"]
 mod usage;
 pub(super) use usage::{account_committed_turn_against_goal, holistic_last_turn_usage};
@@ -1068,6 +1051,8 @@ impl OpenHumanSessionHost {
 
 #[path = "runtime_session_tool_surface.rs"]
 mod tool_surface;
+#[cfg(test)]
+pub(super) use tool_surface::reconcile_synthesized_visibility;
 
 #[cfg(test)]
 #[path = "runtime_session_juice_tests.rs"]

@@ -28,7 +28,7 @@ fn web_backstop_defaults_to_an_hour_and_keeps_the_override() {
         Some(Duration::from_secs(120))
     );
     assert_eq!(parse_web_backstop(Some("0")), None);
-    let deadline = TurnDeadline::starting_now(hour.unwrap());
+    let deadline = TurnDeadline::starting_now(Duration::from_secs(DEFAULT_WEB_TURN_BACKSTOP_SECS));
     assert_eq!(deadline.wind_down_after(), Duration::from_secs(3_480));
     assert_eq!(deadline.hard_stop_after(), Duration::from_secs(3_540));
 }

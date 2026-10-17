@@ -101,10 +101,7 @@ pub(crate) static USE_FIXTURE: std::sync::atomic::AtomicBool =
 /// Run `run` through the module and collect its output.
 ///
 /// A worker owns cancellation and resource cleanup if the caller drops its wait.
-pub(crate) async fn run(
-    config: &Config,
-    mut run: NativeShellRun,
-) -> anyhow::Result<SandboxExecResult> {
+pub(crate) async fn run(config: &Config, run: NativeShellRun) -> anyhow::Result<SandboxExecResult> {
     #[cfg(test)]
     if !run.is_jailed() && USE_FIXTURE.load(std::sync::atomic::Ordering::SeqCst) {
         let _ = config;
@@ -112,6 +109,7 @@ pub(crate) async fn run(
     }
     #[cfg(feature = "modules")]
     {
+        let mut run = run;
         let config = config.clone();
         // Taken before the spawn: the worker task owns the meter.
         let meter = run.meter.take();

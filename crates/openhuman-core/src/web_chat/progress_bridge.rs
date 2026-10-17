@@ -172,65 +172,11 @@ mod wire_caps;
 use wire_caps::MAX_WIRE_SUBAGENT_OUTPUT;
 use wire_caps::{cap_wire_args, cap_wire_output};
 
-use crate::agent::session_store::ledger_sync;
-
-pub(super) fn ledger_upsert_agent_run(
-    config: &crate::config::Config,
-    upsert: tinyagents_session::run_ledger::AgentRunUpsert,
-) {
-    if let Err(err) = ledger_sync::upsert_agent_run(&config.workspace_dir, upsert) {
-        log::warn!("[run_ledger][web_channel] failed to upsert run: {err}");
-    }
-}
-
-pub(super) fn ledger_append_event(
-    config: &crate::config::Config,
-    event: tinyagents_session::run_ledger::RunEventAppend,
-) {
-    if let Err(err) = ledger_sync::append_run_event(&config.workspace_dir, event) {
-        log::warn!("[run_ledger][web_channel] failed to append event: {err}");
-    }
-}
-
-pub(super) fn ledger_upsert_telemetry(
-    config: &crate::config::Config,
-    telemetry: tinyagents_session::run_ledger::RunTelemetryUpsert,
-) {
-    if let Err(err) = ledger_sync::upsert_run_telemetry(&config.workspace_dir, telemetry) {
-        log::warn!("[run_ledger][web_channel] failed to upsert telemetry: {err}");
-    }
-}
-
-pub(super) fn ledger_get_telemetry(
-    config: &crate::config::Config,
-    run_id: &str,
-) -> Option<tinyagents_session::run_ledger::RunTelemetry> {
-    match ledger_sync::get_agent_run(&config.workspace_dir, run_id) {
-        Ok(Some(run)) => {
-            let telemetry = run.telemetry;
-            log::debug!(
-                "[run_ledger][web_channel] read telemetry run_id={} present={}",
-                run_id,
-                telemetry.is_some()
-            );
-            telemetry
-        }
-        Ok(None) => {
-            log::debug!(
-                "[run_ledger][web_channel] telemetry unavailable; run missing run_id={}",
-                run_id
-            );
-            None
-        }
-        Err(err) => {
-            log::warn!(
-                "[run_ledger][web_channel] failed to read telemetry run_id={} err={err}",
-                run_id
-            );
-            None
-        }
-    }
-}
+#[path = "progress_bridge_ledger.rs"]
+mod ledger;
+pub(super) use ledger::{
+    ledger_append_event, ledger_get_telemetry, ledger_upsert_agent_run, ledger_upsert_telemetry,
+};
 
 /// Build the worktree-isolation slice of a `subagent_completed`
 /// [`SubagentProgressDetail`] (#3376). An empty `changed_files` collapses to
@@ -322,6 +268,8 @@ pub(crate) fn spawn_progress_bridge(
         // web-channel event (see `publish_seq_stamped`). Unique per emission so
         // the frontend can dedup by `(request_id, seq)`.
         let mut emit_seq: u64 = 0;
+        let bridge_ctx =
+            || BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
         let mut parent_completed = false;
         let mut parent_tool_count: u64 = 0;
         let mut child_tool_counts: HashMap<String, u64> = HashMap::new();
@@ -685,8 +633,7 @@ pub(crate) fn spawn_progress_bridge(
                     parent_call_id,
                     ..
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_spawned(
                         &ctx,
                         &mut emit_seq,
@@ -715,8 +662,7 @@ pub(crate) fn spawn_progress_bridge(
                     dirty_status,
                     ..
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_completed(
                         &ctx,
                         &mut emit_seq,
@@ -740,8 +686,7 @@ pub(crate) fn spawn_progress_bridge(
                     task_id,
                     error,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_failed(
                         &ctx,
                         &mut emit_seq,
@@ -760,8 +705,7 @@ pub(crate) fn spawn_progress_bridge(
                     worker_thread_id,
                     checkpoint_path,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_awaiting_user(
                         &ctx,
                         &mut emit_seq,
@@ -781,8 +725,7 @@ pub(crate) fn spawn_progress_bridge(
                     max_iterations,
                     extended_policy,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_iteration_started(
                         &ctx,
                         &mut emit_seq,
@@ -804,8 +747,7 @@ pub(crate) fn spawn_progress_bridge(
                     display_label,
                     display_detail,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_tool_call_started(
                         &ctx,
                         &mut emit_seq,
@@ -837,8 +779,7 @@ pub(crate) fn spawn_progress_bridge(
                     display_detail,
                     structured,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_tool_call_completed(
                         &ctx,
                         &mut emit_seq,
@@ -865,8 +806,7 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_text_delta(
                         &ctx,
                         &mut emit_seq,
@@ -883,8 +823,7 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx =
-                        BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
+                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_thinking_delta(
                         &ctx,
                         &mut emit_seq,
@@ -1185,3 +1124,7 @@ pub(crate) fn spawn_progress_bridge(
 #[cfg(test)]
 #[path = "progress_bridge_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "progress_bridge_wire_caps_tests.rs"]
+mod wire_caps_tests;

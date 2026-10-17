@@ -5,7 +5,6 @@ fn ambient() -> DispatchCtx {
 }
 use crate::memory::scope::MemoryIdentity;
 use crate::memory::test_fixtures::{bind_reference, config_in, stored};
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tinymemory_api::{ItemKind, MetaFilter, Namespace};
 

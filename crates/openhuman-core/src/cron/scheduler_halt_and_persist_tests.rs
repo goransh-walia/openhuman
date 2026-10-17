@@ -1,4 +1,5 @@
 use super::*;
+use crate::security::policy::native_commands_stub::StubGateway;
 
 use tinyflows_schedule::types::JobType;
 use tinyflows_schedule::types::Schedule;
@@ -362,11 +363,10 @@ async fn run_through_scheduler(config: &Config, job_id: &str) {
     )
     .unwrap();
     let job = cron::get_job(config, job_id).unwrap();
-    let security = Arc::new(SecurityPolicy::from_config(
-        &config.autonomy,
-        &config.workspace_dir,
-        &config.action_dir,
-    ));
+    let security = Arc::new(
+        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
+            .with_gateway(StubGateway::allow()),
+    );
     let mut dispatcher = JobDispatcher::new(config, &security);
     dispatcher.dispatch(vec![job]).await.unwrap();
     dispatcher.drain().await;
@@ -422,11 +422,14 @@ async fn scheduler_flow_runs_active_hours_job_and_reschedules_inside_window() {
     .unwrap();
     let job = cron::get_job(&config, &job.id).unwrap();
 
-    let security = Arc::new(SecurityPolicy::from_config(
-        &config.autonomy,
-        &config.workspace_dir,
-        &config.workspace_dir,
-    ));
+    let security = Arc::new(
+        SecurityPolicy::from_config(
+            &config.autonomy,
+            &config.workspace_dir,
+            &config.workspace_dir,
+        )
+        .with_gateway(StubGateway::allow()),
+    );
     let mut dispatcher = JobDispatcher::new(&config, &security);
     dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     dispatcher.drain().await;

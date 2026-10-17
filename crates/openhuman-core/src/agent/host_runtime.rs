@@ -1,7 +1,9 @@
 //! Native and Docker shell runtime adapters (`RuntimeAdapter` implementations).
 
 use crate::config::RuntimeConfig;
-use std::path::{Path, PathBuf};
+#[cfg(feature = "modules")]
+use std::path::Path;
+use std::path::PathBuf;
 pub use tinybox_bus::ShellFlavor;
 
 /// The shell family the TinyBox module selects on this machine.
