@@ -230,7 +230,8 @@ async fn every_sandbox_method_answers_component_disabled_when_sandbox_is_off() {
     let mut set = crate::core::runtime::ComponentSet::all();
     set.sandbox = false;
     let ctx = crate::core::runtime::context::CoreContext::for_test_with_components(set);
-    let handlers: [fn(DispatchCtx, Map<String, Value>) -> ControllerFuture; 4] = [
+    type Handler = fn(DispatchCtx, Map<String, Value>) -> ControllerFuture;
+    let handlers: [Handler; 4] = [
         handle_status,
         handle_resolve_policy,
         handle_cleanup_orphans,

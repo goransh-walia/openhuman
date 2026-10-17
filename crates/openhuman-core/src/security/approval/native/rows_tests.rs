@@ -199,7 +199,9 @@ async fn load_answers_one_subject_newest_first_and_never_more_than_the_limit() {
     written.reverse();
     assert_eq!(loaded, written);
     assert_eq!(store.load(&theirs).await.unwrap().len(), 1);
-    assert!(LOAD_LIMIT <= 1024, "the module refuses a larger answer");
+    const {
+        assert!(LOAD_LIMIT <= 1024, "the module refuses a larger answer");
+    }
 }
 
 fn event(sequence: u64, id: &str) -> AuditEvent2 {

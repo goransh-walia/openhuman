@@ -201,7 +201,6 @@ pub async fn update_settings(
     custom_endpoint: Option<String>,
     rate_limit_per_min: Option<u32>,
 ) -> Result<Outcome<serde_json::Value>, String> {
-    
     use tinyinference_embeddings::format_embedding_signature;
 
     let mut config = ctx.load_config().await?;

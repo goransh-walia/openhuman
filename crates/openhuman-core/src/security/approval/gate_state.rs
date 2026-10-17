@@ -316,7 +316,7 @@ impl ApprovalGate {
             .run_engine(|engine| async move { engine.history(limit).await })?
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         entries.extend(store::list_recorded_decisions(&self.config, limit)?);
-        entries.sort_by(|a, b| b.decided_at.cmp(&a.decided_at));
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.decided_at));
         entries.truncate(limit);
         Ok(entries)
     }

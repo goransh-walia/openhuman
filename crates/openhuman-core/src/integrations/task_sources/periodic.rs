@@ -15,7 +15,6 @@ use std::time::{Duration, Instant};
 
 use tokio::time::interval;
 
-
 use super::pipeline;
 use super::types::{FetchReason, TaskSource};
 
