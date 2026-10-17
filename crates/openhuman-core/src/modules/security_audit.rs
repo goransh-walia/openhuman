@@ -28,7 +28,9 @@ pub(crate) async fn record_for_tenant(
     let tenant = crate::core::runtime::tenant::current_tenant()
         .map_err(|_| "no tenant scope for the audit row".to_owned())?;
     let subject = super::policy_translation::subject_scope(&tenant, &config.workspace_dir, saas)?;
-    let proxy = super::approval_proxy(config).await?;
+    let proxy = super::scoped_client::serving_proxy()
+        .await
+        .ok_or_else(|| "the TinySecurity module is not serving".to_owned())?;
     record_with(&proxy, config, subject, event).await
 }
 
