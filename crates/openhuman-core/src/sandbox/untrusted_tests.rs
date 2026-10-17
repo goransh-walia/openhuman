@@ -87,7 +87,7 @@ async fn saas_refuses_an_untrusted_command_even_when_the_operator_opted_out() {
     let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", &test, "--nocapture", "--test-threads=1"])
         .env(SAAS_CHILD, &test)
-        .env(super::super::ops::SANDBOX_OFF_ENV, "off")
+        .env(super::super::operator::SANDBOX_OFF_ENV, "off")
         .output()
         .expect("run isolated SaaS test");
     assert!(

@@ -75,29 +75,6 @@ pub(crate) async fn status(
     Err("TinyBox module support is disabled; native jail status is unavailable".to_owned())
 }
 
-/// Verify that TinyBox reports a usable provider before an explicitly selected jail is accepted.
-#[cfg(feature = "modules")]
-pub(crate) async fn require_backend(config: &Config, expected: &str) -> anyhow::Result<()> {
-    let status = tinybox::jail_status(config)
-        .await
-        .map_err(|_| anyhow::anyhow!("TinyBox native jail status is unavailable"))?;
-    let isolation = jail_isolation(
-        &status.backend,
-        status.available,
-        status.suitable_for_untrusted_code,
-        true,
-    );
-    if isolation != Some(SandboxIsolation::Isolated) || status.backend != expected {
-        anyhow::bail!("requested native jail backend is unavailable");
-    }
-    Ok(())
-}
-
-#[cfg(not(feature = "modules"))]
-pub(crate) async fn require_backend(_config: &Config, _expected: &str) -> anyhow::Result<()> {
-    anyhow::bail!("TinyBox module support is disabled; native jail execution is unavailable")
-}
-
 /// Run a command inside TinyBox's native jail and keep its resource lifecycle module-owned.
 pub(crate) async fn execute(
     config: &Config,
