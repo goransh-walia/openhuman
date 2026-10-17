@@ -224,7 +224,7 @@ async fn a_best_effort_jail_runs_the_agents_own_commands_but_never_untrusted_tex
         plan(request(&world, &policy, &op, SpawnSource::Untrusted))
             .await
             .unwrap_err(),
-        PlanError::Refused(SandboxDenial2::Floor),
+        PlanError::Refused(SandboxDenial2::Unsupported),
         "hooks, scheduled jobs and registry servers stay refused"
     );
 }
