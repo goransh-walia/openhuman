@@ -7,7 +7,6 @@
 use super::*;
 use crate::agent::host_runtime::{host_shell_flavor, ShellFlavor};
 #[cfg(feature = "modules")]
-use crate::tools::system::shell_support::PYTHON_UTF8_DEFAULTS;
 use std::collections::HashMap;
 use std::ffi::OsString;
 
