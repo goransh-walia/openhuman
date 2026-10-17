@@ -77,7 +77,7 @@ impl Agent {
         );
         let config = &self.inner.config;
         let security = Arc::new(openhuman_core::security::SecurityPolicy::from_full_config(
-            &config,
+            config,
         ));
         occupied.extend(
             openhuman_core::tools::ops::all_tools(

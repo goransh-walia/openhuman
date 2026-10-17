@@ -175,7 +175,7 @@ impl SecurityPolicy {
         //
         // Guarded: an action dir at or above `workspace_dir` would hand a
         // trusted root to the whole workspace, and
-        // `check_resolved_against_forbidden` lets a trusted root override
+        // the module's path scope lets a trusted root override
         // `forbidden_paths`. `is_workspace_internal_path` and
         // `is_always_forbidden` are checked *before* that shortcut and still
         // hold, but the `forbidden_paths` bypass is not something a working

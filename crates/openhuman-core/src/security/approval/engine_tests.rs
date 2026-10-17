@@ -21,7 +21,7 @@ fn input() -> CheckInput {
         thread: None,
         flow: None,
         origin: CallOrigin::Operator,
-        ttl: Duration::from_secs(600),
+        ttl: Some(Duration::from_secs(600)),
         prompt: Arc::new(Nobody),
     }
 }

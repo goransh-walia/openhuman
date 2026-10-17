@@ -106,8 +106,10 @@ pub(crate) struct CheckInput {
     pub flow: Option<String>,
     /// The origin class.
     pub origin: CallOrigin,
-    /// The park window the gate asks for; the module only ever shortens it.
-    pub ttl: Duration,
+    /// A shorter park window than the module's own (ten minutes; three for a
+    /// copilot or sub-agent), when the user configured one. `None` leaves the
+    /// window to the module, which only ever shortens it.
+    pub ttl: Option<Duration>,
     /// Where the engine shows the prompt when a human must decide.
     pub prompt: Arc<dyn PromptSurface>,
 }

@@ -44,7 +44,7 @@ impl in [`types.rs`](./types.rs).
 | File | Purpose |
 | --- | --- |
 | [`types.rs`](./types.rs) | `SecurityPolicy` fields, `AutonomyLevel`, `GateDecision`, `ToolOperation`, `ActionTracker`, `TrustedRoot`/`TrustedAccess`, `WORKSPACE_INTERNAL_DIRS`/`WORKSPACE_INTERNAL_FILES`, the two policy markers |
-| [`path_checks.rs`](./path_checks.rs) | `is_workspace_internal_path`, `is_always_forbidden`, `check_cross_profile`, `is_within_trusted_root`, `is_resolved_path_allowed[_for]`, `check_resolved_against_forbidden` |
+| [`path_checks.rs`](./path_checks.rs) | `is_workspace_internal_path`, `is_always_forbidden`, `check_cross_profile`, `is_within_trusted_root`, `is_resolved_path_allowed[_for]` (synchronous preflights; the authoritative checks run in the module) |
 | [`command_checks.rs`](./command_checks.rs) | `parse_declared_class` |
 | [`native_commands.rs`](./native_commands.rs) | `SecurityPolicy::check_command` / `command_class_gate[_blocking]`, `CommandQuery`, `CommandFlow`, `CommandStage`, `CommandVerdict`, `Refusal`, the `CommandGateway` seam, and the translation to the module's `CommandPolicy` |
 | [`enforcement.rs`](./enforcement.rs) | `can_act`, `enforce_write_tier`, `enforce_tool_operation`, `record_action`/`is_rate_limited`, `from_config`, `with_privacy_mode`, `openhuman_scratch_dir`/`ensure_openhuman_scratch_dir`, `validate_path_within_root` |
@@ -79,7 +79,7 @@ Each of these must not be weakened to make a feature work:
   `workspace_dir` holds core-internal state (memory DBs, sessions, tokens);
   the workspace root itself is a permitted containment root
   (`is_resolved_path_allowed_for`), but its internal-state subtree is refused
-  by `check_resolved_against_forbidden` before any trusted-root grant is
+  by the module's path scope before any trusted-root grant is
   consulted. Kept as two separate fields on `SecurityPolicy` (`types.rs`) so
   the two roots can diverge.
 - `is_workspace_internal_path` ([`path_checks.rs`](./path_checks.rs)) is true for any path

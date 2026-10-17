@@ -5,7 +5,7 @@ use super::types::{
     ACCOUNT_CONFIG_FILE, ARTIFACTS_DIR, ARTIFACT_TOOL_RESULTS_DIR, WORKSPACE_INTERNAL_DIRS,
     WORKSPACE_INTERNAL_FILES, WORKSPACE_INTERNAL_PREFIXES,
 };
-#[cfg(any(test, not(feature = "security-module")))]
+#[cfg(not(feature = "security-module"))]
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 /// Credential-store path segments, matched case-insensitively at any depth.
@@ -238,63 +238,9 @@ impl SecurityPolicy {
         parent.canonicalize().ok().map(|p| p.join(name))
     }
 
-    /// Return the canonical form of `workspace_dir`, hydrating the
-    /// `canonical_workspace` cache on the first call.
-    ///
-    /// `validate_path` / `validate_parent_path` both need the canonical
-    /// workspace root for forbidden-path containment checks. The underlying
-    /// `tokio::fs::canonicalize` is a `stat(2)` + symlink walk and was
-    /// previously invoked on every call with the same input.
-    ///
-    /// Falls back to the raw `workspace_dir` if `canonicalize` fails (e.g.
-    /// during early startup or in tests where the workspace doesn't exist on
-    /// disk), matching the inline behavior the callers used before the cache.
-    #[cfg(any(test, not(feature = "security-module")))]
-    pub(super) async fn workspace_root(&self) -> PathBuf {
-        self.canonical_workspace
-            .get_or_init(|| async {
-                tokio::fs::canonicalize(&self.workspace_dir)
-                    .await
-                    .unwrap_or_else(|_| self.workspace_dir.clone())
-            })
-            .await
-            .clone()
-    }
-
-    /// Synchronous counterpart to the legacy async workspace-root helper, hydrating the **same**
-    /// `canonical_workspace` cache via `OnceCell`'s sync `get`/`set`.
-    ///
-    /// The sync path validators (`is_path_string_allowed`,
-    /// `is_resolved_path_allowed_for`) run on every file tool call and each
-    /// previously re-invoked `self.workspace_dir.canonicalize()` — one
-    /// `stat(2)` + symlink walk on the same immutable input per call. They
-    /// cannot await the legacy async workspace-root helper, so they reach the cache through this
-    /// helper.
-    ///
-    /// # Why one cell can serve both, and why a lost `set` is safe
-    ///
-    /// This is the load-bearing claim, so it is stated here rather than left to
-    /// a commit message. Sharing a cache between two producers is only sound if
-    /// they cannot disagree, and here they *cannot*: `tokio::fs::canonicalize`
-    /// is not a reimplementation, it is
-    /// `asyncify(move || std::fs::canonicalize(path)).await` — literally the
-    /// same `std` call, moved to a blocking thread. The async path and this one
-    /// therefore run identical code over an input that is immutable for the
-    /// life of a policy (`live_policy` rebuilds a fresh policy on reload, and
-    /// `security_for_tool_context` overrides only `action_dir`/`trusted_roots`).
-    ///
-    /// The consequence is that the `get`/`set` race below needs no lock and no
-    /// retry. If the async initializer wins between our `get` and our `set`,
-    /// `set` fails and we return the value we just computed — which is the
-    /// value the winner stored, because both are `std::fs::canonicalize` of the
-    /// same path. A lost race costs one redundant `stat(2)` walk, never a
-    /// divergent workspace root. Were that equivalence ever to break, this
-    /// helper would need `get_or_init`, not a comment.
-    ///
-    /// Fallback to the raw `workspace_dir` on canonicalize failure matches the
-    /// inline behavior these callers used before, and the async
-    /// legacy async workspace-root helper — including under the race, since the fallback is the
-    /// same immutable `workspace_dir` on both sides.
+    /// Canonical form of `workspace_dir`, memoized in `canonical_workspace`
+    /// (immutable for the life of a policy; a config reload builds a new one).
+    /// Falls back to the raw `workspace_dir` when it cannot be canonicalized.
     pub(super) fn workspace_root_sync(&self) -> PathBuf {
         if let Some(cached) = self.canonical_workspace.get() {
             return cached.clone();
@@ -303,9 +249,7 @@ impl SecurityPolicy {
             .workspace_dir
             .canonicalize()
             .unwrap_or_else(|_| self.workspace_dir.clone());
-        // Deliberately ignoring the result: a failed `set` means the async
-        // initializer won the race, and what it stored equals `canonical` —
-        // see the equivalence argument above.
+        // A lost `set` means another caller stored the same value.
         let _ = self.canonical_workspace.set(canonical.clone());
         canonical
     }
@@ -318,37 +262,16 @@ impl SecurityPolicy {
         self.validate_native_path(path, false).await
     }
 
+    /// Without the module there is nothing to ask: file access is denied.
     #[cfg(not(feature = "security-module"))]
     pub async fn validate_path(&self, path: &str) -> Result<PathBuf, String> {
-        if !self.is_path_string_allowed(path) {
-            return Err(format!(
-                "{POLICY_BLOCKED_MARKER} Path not allowed by security policy: {path}. Do not \
-                 retry this path; use an allowed location (the workspace or a granted folder)."
-            ));
-        }
-        let expanded = self.expand_tilde(path);
-        let full_path = if Path::new(&expanded).is_absolute() {
-            PathBuf::from(&expanded)
-        } else {
-            self.action_dir.join(&expanded)
-        };
-        let resolved = tokio::fs::canonicalize(&full_path)
-            .await
-            .map_err(|e| format!("Failed to resolve path '{path}': {e}"))?;
-        if !self.is_resolved_path_allowed_for(&resolved, false) {
-            return Err(format!(
-                "{POLICY_BLOCKED_MARKER} Resolved path escapes workspace: {}",
-                resolved.display()
-            ));
-        }
-        let workspace_root = self.workspace_root().await;
-        self.check_resolved_against_forbidden(&resolved, &workspace_root)?;
         log::debug!(
-            "[security] validate_path: '{}' resolved to '{}'",
-            path,
-            resolved.display()
+            "[security][path] validate_path denied: module feature disabled path_len={}",
+            path.len()
         );
-        Ok(resolved)
+        Err(format!(
+            "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
+        ))
     }
 
     /// Like `validate_path` but canonicalizes the parent directory.
@@ -361,69 +284,16 @@ impl SecurityPolicy {
         self.validate_native_path(path, true).await
     }
 
+    /// Without the module there is nothing to ask: file access is denied.
     #[cfg(not(feature = "security-module"))]
     pub async fn validate_parent_path(&self, path: &str) -> Result<PathBuf, String> {
-        if !self.is_path_string_allowed(path) {
-            return Err(format!(
-                "{POLICY_BLOCKED_MARKER} Path not allowed by security policy: {path}. Do not \
-                 retry this path; use an allowed location (the workspace or a granted folder)."
-            ));
-        }
-        let expanded = self.expand_tilde(path);
-        let full_path = if Path::new(&expanded).is_absolute() {
-            PathBuf::from(&expanded)
-        } else {
-            self.action_dir.join(&expanded)
-        };
-        let parent = full_path
-            .parent()
-            .ok_or_else(|| format!("Invalid path (no parent): {path}"))?;
-        let file_name = full_path
-            .file_name()
-            .ok_or_else(|| format!("Invalid path (no filename): {path}"))?;
-
-        // Walk up to the deepest existing ancestor so we can canonicalize without
-        // requiring the full parent path to exist yet. This catches symlink escapes
-        // in existing path components even when deeper dirs are not created yet.
-        let mut existing_ancestor = parent.to_path_buf();
-        loop {
-            if existing_ancestor.exists() {
-                break;
-            }
-            match existing_ancestor.parent() {
-                Some(p) => existing_ancestor = p.to_path_buf(),
-                None => break,
-            }
-        }
-        let canonical_ancestor = tokio::fs::canonicalize(&existing_ancestor)
-            .await
-            .map_err(|e| format!("Failed to resolve parent of '{path}': {e}"))?;
-        if !self.is_resolved_path_allowed_for(&canonical_ancestor, true) {
-            return Err(format!(
-                "{POLICY_BLOCKED_MARKER} Resolved parent path escapes workspace: {}",
-                canonical_ancestor.display()
-            ));
-        }
-
-        // Build resolved result: canonical_ancestor + suffix from existing_ancestor to parent + filename.
-        // Since is_path_string_allowed blocked "..", all components between the ancestor
-        // and the intended parent are newly created dirs — no symlinks possible there.
-        let relative_suffix = parent
-            .strip_prefix(&existing_ancestor)
-            .unwrap_or(std::path::Path::new(""));
-        let resolved_parent = canonical_ancestor.join(relative_suffix);
-        let result = resolved_parent.join(file_name);
-
-        let workspace_root = self.workspace_root().await;
-        self.check_resolved_against_forbidden(&canonical_ancestor, &workspace_root)?;
-        self.check_resolved_against_forbidden(&result, &workspace_root)?;
-
         log::debug!(
-            "[security] validate_parent_path: '{}' resolved parent to '{}'",
-            path,
-            resolved_parent.display()
+            "[security][path] validate_parent_path denied: module feature disabled path_len={}",
+            path.len()
         );
-        Ok(result)
+        Err(format!(
+            "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
+        ))
     }
 
     /// Returns `true` if `path` falls under one of the internal-state
@@ -571,57 +441,6 @@ impl SecurityPolicy {
         let workspace_root = self.workspace_root_sync();
         resolved.starts_with(&workspace_root)
             || self.is_within_trusted_root(resolved, require_write)
-    }
-
-    /// Check `resolved` against every entry in `forbidden_paths`, resolving relative
-    /// entries against `workspace_root`. Absolute entries whose prefix IS the workspace
-    /// root are skipped — the workspace containment check already covers them.
-    #[cfg(not(feature = "security-module"))]
-    pub(super) fn check_resolved_against_forbidden(
-        &self,
-        resolved: &Path,
-        workspace_root: &Path,
-    ) -> Result<(), String> {
-        // Credential stores are never reachable, even via a trusted-root grant.
-        if Self::is_always_forbidden(resolved) {
-            return Err(format!(
-                "{POLICY_BLOCKED_MARKER} Resolved path is a protected credential store: {}",
-                resolved.display()
-            ));
-        }
-        if !self.enabled {
-            return Ok(());
-        }
-        // Trusted roots may override user-configured forbidden paths, but never
-        // the core-managed workspace-state boundary.
-        if self.is_workspace_internal_path(resolved) {
-            return Err(format!(
-                "{POLICY_BLOCKED_MARKER} Resolved path is workspace-internal application state: {}",
-                resolved.display()
-            ));
-        }
-        // A trusted-root grant takes precedence over forbidden_paths for its subtree.
-        if self.is_within_trusted_root(resolved, false) {
-            return Ok(());
-        }
-        for forbidden in &self.forbidden_paths {
-            let forbidden_path = PathBuf::from(self.expand_tilde(forbidden));
-            let forbidden_resolved = if forbidden_path.is_absolute() {
-                if workspace_root.starts_with(&forbidden_path) {
-                    continue;
-                }
-                forbidden_path
-            } else {
-                workspace_root.join(forbidden_path)
-            };
-            if resolved.starts_with(&forbidden_resolved) {
-                return Err(format!(
-                    "{POLICY_BLOCKED_MARKER} Resolved path is inside a forbidden directory: {}",
-                    forbidden_resolved.display()
-                ));
-            }
-        }
-        Ok(())
     }
 }
 

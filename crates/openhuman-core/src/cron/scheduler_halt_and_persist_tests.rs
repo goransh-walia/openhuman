@@ -622,32 +622,3 @@ async fn deliver_if_configured_publishes_event_for_announce_mode() {
     .await
     .is_ok());
 }
-
-#[test]
-fn is_env_assignment_true() {
-    assert!(is_env_assignment("FOO=bar"));
-    assert!(is_env_assignment("_VAR=1"));
-}
-
-#[test]
-fn is_env_assignment_false() {
-    assert!(!is_env_assignment("echo"));
-    assert!(!is_env_assignment("=bad"));
-    assert!(!is_env_assignment("123=nope"));
-    assert!(!is_env_assignment(""));
-}
-
-#[test]
-fn strip_wrapping_quotes_removes_quotes() {
-    assert_eq!(strip_wrapping_quotes("\"hello\""), "hello");
-    assert_eq!(strip_wrapping_quotes("'world'"), "world");
-    assert_eq!(strip_wrapping_quotes("noquotes"), "noquotes");
-    assert_eq!(strip_wrapping_quotes(""), "");
-}
-
-#[test]
-fn forbidden_path_argument_allows_safe_commands() {
-    let policy = SecurityPolicy::default();
-    assert!(forbidden_path_argument(&policy, "echo hello").is_none());
-    assert!(forbidden_path_argument(&policy, "date").is_none());
-}
