@@ -13,6 +13,31 @@ use {
     crate::cron, tinyflows_schedule::types::ActiveHours, tinyflows_schedule::types::DeliveryConfig,
 };
 
+/// `execute_job_now` with the policy's command gateway scripted, so the
+/// retry loop is exercised without loading the security module. What the module
+/// answers for a command is pinned by `modules/security_command_tests.rs`.
+async fn execute_job_gated(
+    config: &Config,
+    gateway: Arc<StubGateway>,
+    job: &CronJob,
+    run_id: &str,
+) -> (bool, String) {
+    let security = Arc::new(SecurityPolicy::from_full_config(config).with_gateway(gateway));
+    let binding = host::Binding::current(config, security);
+    let ports = host::ports(&binding);
+    match tinyflows_schedule::runtime::execute_with_retry(
+        &ports,
+        &host::scheduler_config(config),
+        job,
+        run_id,
+    )
+    .await
+    {
+        Ok(attempt) => (attempt.success, attempt.output),
+        Err(error) => (false, error.to_string()),
+    }
+}
+
 async fn test_config(tmp: &TempDir) -> Config {
     let ws = tmp.path().join("workspace");
     let config = Config {
@@ -179,7 +204,8 @@ async fn retryable_shell_failure_consumes_the_whole_retry_budget() {
     let counter = tmp.path().join("retryable-attempts.log");
     let job = test_job(&counting_failure_command(&counter));
 
-    let (success, output) = execute_job_now(&config, &job, "test-run").await;
+    let (success, output) =
+        execute_job_gated(&config, StubGateway::allow(), &job, "test-run").await;
 
     assert!(
         !success,
@@ -237,7 +263,13 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     );
 
     let started = std::time::Instant::now();
-    let (success, output) = execute_job_now(&config, &job, "test-run").await;
+    let (success, output) = execute_job_gated(
+        &config,
+        StubGateway::refuse(Refusal::ReadOnly),
+        &job,
+        "test-run",
+    )
+    .await;
     let elapsed = started.elapsed();
 
     assert!(!success, "a blocked job cannot succeed; got {output}");
