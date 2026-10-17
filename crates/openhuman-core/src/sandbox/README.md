@@ -118,7 +118,8 @@ controlled by `[runtime.local_jail]` (`LocalJailConfig`):
 | `/proc` | read-only | only with `allow_proc = true` (default off) |
 
 The credential floor applies to every grant: any path that
-`SecurityPolicy::is_always_forbidden` rejects, or that is a parent of a
+the protected-path floor rejects (`security::floor::protected_paths`, the
+module's `ProtectedPath2`), or that is a parent of a
 credential directory (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`),
 is dropped, because Landlock grants are recursive. `/proc` is reachable only
 through `allow_proc`, since `/proc/<pid>/environ` exposes every process's
@@ -332,7 +333,7 @@ The settings surface (`get_sandbox_settings`, `[security.sandbox]` and
   policy, approved grants, environment allowlist, and fail-closed module calls.
 - Permission to run a command at all, the approval gate and the path checks
   are `security/`. The autonomy policy is off by default there, so for a
-  default install the sandbox and the `is_always_forbidden` floor are what
+  default install the sandbox and the module's protected-path floor are what
   bound an agent.
 - Shell selection and the child environment for each platform are TinyBox's
   (`SelectShell` / `StartNativeShellExec`); `agent::host_runtime::host_shell_flavor`
