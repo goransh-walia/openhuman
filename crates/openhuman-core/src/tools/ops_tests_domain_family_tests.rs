@@ -75,18 +75,27 @@ async fn all_tools_executes_stock_family_against_fake_backend() {
     assert_eq!(requests[2].body["requireGreeks"], serde_json::json!(true));
 }
 
-/// Every acting tool gates on `can_act()` and returns its own read-only refusal
-/// string. Each of those must carry [`POLICY_BLOCKED_MARKER`] so the agent
-/// harness recognizes the block as a hard reject and halts on a verbatim repeat
-/// (see the marker detection in
-/// `tinyagents::middleware::RepeatedToolFailureMiddleware`). This pins every tool's
-/// literal to the marker const — drift between them fails here rather than
-/// silently letting the agent grind on a doomed call. Args are the minimum
-/// needed to reach the `can_act()` check in each tool.
+/// The shared filesystem and network tools ask their gate whether the tier lets
+/// them act (`FsGate::can_act` / `NetGate::can_act`, answered by the TinySecurity
+/// module) and return their own read-only refusal string. Each of those must
+/// carry [`POLICY_BLOCKED_MARKER`] so the agent harness recognizes the block as a
+/// hard reject and halts on a verbatim repeat (see the marker detection in
+/// `tinyagents::middleware::RepeatedToolFailureMiddleware`). This pins every
+/// tool's literal to the marker const, so drift fails here rather than silently
+/// letting the agent grind on a doomed call. Args are the minimum needed to reach
+/// the `can_act()` check in each tool. The module is scripted to answer
+/// "read-only"; the host tools that no longer carry their own check (browser,
+/// schedule, install_tool, ...) are refused by the tool gate instead
+/// (`tools/native_ops_tests.rs`, `middleware/security_gate_tests.rs`).
 #[tokio::test]
 async fn readonly_acting_tools_carry_policy_blocked_marker() {
     use crate::security::AutonomyLevel;
     use tinytools::status::POLICY_BLOCKED_MARKER;
+
+    let _port = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::allowing()
+            .budget(|_| tinysecurity_bus::BudgetDecision2::ReadOnlyMode),
+    ));
 
     let tmp = TempDir::new().unwrap();
     let sec = Arc::new(SecurityPolicy {
@@ -104,19 +113,6 @@ async fn readonly_acting_tools_carry_policy_blocked_marker() {
         (
             Box::new(CsvExportTool::new(sec.clone())),
             serde_json::json!({ "data": "col1\nval1", "filename": "x.csv" }),
-        ),
-        // The `computer`-family tools are compiled out with the
-        // `desktop-automation` feature; gate these two cases per-element so the
-        // rest of the read-only policy assertions still run in the slim build.
-        #[cfg(feature = "modules")]
-        (
-            Box::new(BrowserOpenTool::new(
-                sec.clone(),
-                Arc::new(crate::modules::browser::BrowserClient::new(Arc::new(
-                    crate::config::Config::default(),
-                ))),
-            )),
-            serde_json::json!({ "url": "https://example.com" }),
         ),
         (
             Box::new(http_request_tool(
