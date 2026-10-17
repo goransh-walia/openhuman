@@ -272,6 +272,7 @@ async fn plan_with(
         network,
         limits: limits(policy),
         deny_subprocesses: false,
+        accept_process_isolation: source.accepts_process_isolation(),
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
