@@ -164,17 +164,7 @@ pub async fn approval_preauthorize_flow(
             continue;
         }
         gate.insert_flow_trust(flow_id, &tool_name)?;
-        // Audit row is best-effort: the grant above is what changes behavior,
-        // and failing the whole batch over a bookkeeping row would leave the
-        // user with a half-approved card for no security benefit.
-        if let Err(err) = gate.record_flow_preauthorization(flow_id, &tool_name) {
-            tracing::warn!(
-                flow_id = flow_id,
-                tool = tool_name.as_str(),
-                error = %err,
-                "[rpc:approval_preauthorize_flow] failed to write audit row for grant"
-            );
-        }
+        // The module audits the grant itself (an approval row on the flow's subject).
         granted.push(tool_name);
     }
 

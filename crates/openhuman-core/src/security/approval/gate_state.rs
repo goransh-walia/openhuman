@@ -392,10 +392,10 @@ impl ApprovalGate {
         let tenant = current_route_tenant();
         let mut removed = 0;
         for tool in tools {
-            let (flow, name) = (flow_id.to_owned(), tool);
+            let (flow, name, tenant) = (flow_id.to_owned(), tool, tenant.clone());
             let revoked = self
                 .run_engine(|engine| async move {
-                    engine.revoke_flow_trust(&tenant_for(&tenant), &flow, &name).await
+                    engine.revoke_flow_trust(&tenant, &flow, &name).await
                 })?
                 .map_err(|error| anyhow::anyhow!("could not revoke the flow trust: {error}"))?;
             if revoked {
