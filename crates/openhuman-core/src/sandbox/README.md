@@ -225,17 +225,22 @@ known, not when the policy is resolved: `resolve_sandbox_policy`,
 the agent or the operator asked to sandbox and with which backend), and the module's
 plan bounds what is actually run.
 
-Known gaps the module's rules expose (not host policy):
+Network and Seatbelt, both declared to the module rather than decided here:
 
-- **Host network.** The module plans the host's own network only after an exact human
-  approval, and no sandboxed spawn has a surface to ask for one. A policy that allows
-  the network is planned as asked; when the module answers that it needs the approval,
-  the spawn is planned again with no network (it only narrows) and a `warn` is logged.
-  Sandboxed commands therefore run without network until a mediated egress proxy
-  (`PlanMappingError::EgressProxyUnavailable`) or an approval prompt exists.
-- **Folder-confined jails (macOS Seatbelt)** report best-effort enforcement, which the
-  module never accepts as exact, so the local desktop sandbox on macOS is refused
-  (`Unsupported`) instead of running folder-confined as before.
+- **Host network.** The scope facts carry `operator_host_network` (the policy allowed
+  the network), so the module plans the host's own network for that scope without a
+  per-command human approval, never above the ceiling and never under SaaS. A spawn the
+  policy does not allow the network for stays offline. Where the module still wants an
+  approval (SaaS), the spawn is planned again with no network (it only narrows) and a
+  `warn` is logged. Untrusted sources (`sandbox::untrusted`) follow the same policy
+  flag, as their unjailed host-network runs did before the module; MCP stdio servers
+  are jailed by TinyMCP and do not pass through this gate.
+- **Folder-confined jails (macOS Seatbelt)** report best-effort enforcement. The plan
+  request sets `accept_process_isolation` for the agent's own tools
+  (`SpawnSource::accepts_process_isolation`), and the module then accepts a process-level
+  jail for them (the artifact's `minimum_isolation` is `process`, mapped to `Declared`
+  enforcement). Untrusted sources never set it, so registry MCP servers and hooks stay
+  refused on macOS.
 
 Spawn sites that do not reach the gate today, and why:
 
