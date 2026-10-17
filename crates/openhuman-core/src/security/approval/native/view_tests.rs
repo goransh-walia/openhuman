@@ -144,3 +144,40 @@ async fn an_unstored_request_is_unknown_and_a_stored_one_reports_its_state() {
     assert_eq!(row_decided(&config, "nope").await.unwrap(), None);
     assert!(decided_history(&config, 10).await.unwrap().is_empty());
 }
+
+#[test]
+fn a_standing_flow_trust_reads_as_the_pre_authorization_it_always_was() {
+    let mut trust = row(ApprovalLifecycle2::Approved);
+    trust.attribution = Some("flow-trust-grant".into());
+    trust.choice = Some(ApprovalChoice2::Flow);
+    let shown = entry(&stored(trust), None).unwrap();
+    assert_eq!(shown.decision, ApprovalDecision::ApproveAlwaysForFlow);
+    assert_eq!(shown.tool_name, "gmail_send");
+    assert!(shown.action_summary.starts_with("Pre-authorized for this flow"));
+    assert!(shown.expires_at.is_none() && shown.decided_by.is_none());
+}
+
+#[test]
+fn a_revoked_flow_trust_is_not_a_decision() {
+    let mut trust = row(ApprovalLifecycle2::Cancelled);
+    trust.attribution = Some("flow-trust-grant".into());
+    assert!(entry(&stored(trust), None).is_none());
+}
+
+#[test]
+fn an_imported_legacy_request_reads_by_the_state_it_ended_in() {
+    for (state, expected) in [
+        ("allowed", ApprovalDecision::ApproveOnce),
+        ("executed", ApprovalDecision::ApproveOnce),
+        ("denied", ApprovalDecision::Deny),
+        ("expired", ApprovalDecision::Deny),
+    ] {
+        let mut imported = row(ApprovalLifecycle2::Denied);
+        imported.tool_name = "imported-history".into();
+        imported.choice = None;
+        imported.legacy_history_json = Some(format!(r#"{{"state":"{state}"}}"#));
+        let shown = entry(&stored(imported), None).unwrap();
+        assert_eq!(shown.decision, expected, "{state}");
+        assert_eq!(shown.tool_name, "earlier approval");
+    }
+}
