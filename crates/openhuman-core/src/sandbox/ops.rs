@@ -363,26 +363,22 @@ pub(crate) async fn execute_in_sandbox_metered(
         effective_policy.backend = SandboxBackendKind::None;
     }
     let mut module_config = None;
-    let explicitly_requested = if crate::core::runtime::is_saas() || sandbox_disabled_by_host(ctx) {
-        false
-    } else {
+    if !(crate::core::runtime::is_saas() || sandbox_disabled_by_host(ctx)) {
         let config = ctx
             .load_config()
             .await
             .map_err(|e| anyhow::anyhow!("Cannot read sandbox configuration: {e}"))?;
         module_config = Some(config.clone());
-        if config_disables_sandbox(&config) {
-            false
-        } else {
+        if !config_disables_sandbox(&config) {
             apply_requested_backend(
                 &mut effective_policy,
                 &config.sandbox,
                 &config.runtime,
                 &config,
             )
-            .await?
+            .await?;
         }
-    };
+    }
     let policy = &effective_policy;
     // SaaS never runs a command unisolated: a caller that resolved a policy with
     // no backend (an agent mode of `None`, a stale default) is refused here, at
@@ -564,10 +560,10 @@ pub(crate) async fn apply_requested_backend(
     sandbox: &SandboxConfig,
     runtime: &RuntimeConfig,
     config: &crate::config::Config,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     match &sandbox.backend {
-        SandboxBackend::Auto => Ok(false),
-        SandboxBackend::None => Ok(false),
+        SandboxBackend::Auto => Ok(()),
+        SandboxBackend::None => Ok(()),
         SandboxBackend::Docker => {
             if policy.backend == SandboxBackendKind::Local {
                 policy.read_only_mounts.clear();
@@ -583,13 +579,13 @@ pub(crate) async fn apply_requested_backend(
                 read_only_rootfs: Some(dc.read_only_rootfs),
                 extra_caps_drop: vec![],
             });
-            Ok(true)
+            Ok(())
         }
         SandboxBackend::Landlock => {
             super::native_jail::require_backend(config, "landlock").await?;
             policy.backend = SandboxBackendKind::Local;
             policy.docker_overrides = None;
-            Ok(true)
+            Ok(())
         }
     }
 }
