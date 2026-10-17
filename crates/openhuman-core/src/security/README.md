@@ -29,7 +29,7 @@ recipient, a timeout, or a malformed response denies access without a local
 fallback. Synchronous lexical checks remain host preflights during this phase;
 they do not substitute for the asynchronous I/O authorization.
 
-Production admission pins TinySecurity v0.9.0 and its published archive checksums
+Production admission pins TinySecurity v0.13.0 and its published archive checksums
 in the module registry. `scripts/ci/security-native-fixture.sh` loads those
 released archives and invokes their admission, path, and latency tests. Explicit
 local fixtures remain available for development; their digests never become

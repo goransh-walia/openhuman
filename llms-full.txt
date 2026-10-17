@@ -251,6 +251,8 @@ description: "Access configures turn identity and permission policy; the host ch
 
 `Access` groups permission level, origin, standing grants and trusted roots. Choose an origin and tier together: a trusted local host request and an external channel message are different security contexts. `Access::full()` configures both access fields. A sandbox is an additional execution boundary, configured through `AgentDefinitionSpec`.
 
+Approvals are the TinySecurity module's: it owns each request's durable lifecycle, exact binding, grants, expiry and audit trail, and the core serves the module's store, audit sink and prompt. A runtime therefore needs the module loaded (`security-module`, on by default) to ask a human for anything; without it a gated call is denied rather than waved through. A request an earlier launch left pending cannot be resumed and is not listed.
+
 The core autonomy policy is disabled by default. Set `config.autonomy.enabled` when you require its command classification, approval gate, allowlist and budget enforcement. Platform isolation and the credential/system-root safety floor have separate responsibilities; a tool group filter is not an operating-system sandbox.
 
 ## Runtime and agent scope
@@ -2438,6 +2440,7 @@ Use the typed error and the effective capability report together. A method that 
 | Credential master-key failure | Initialize process master-key state before persisting a runtime API key; check headless key/file setup without printing its value. |
 | Invalid or insecure provider route | Supply a nonblank endpoint/key and use HTTPS for remote bearer routes. Loopback fixtures are separate from remote endpoints. |
 | Stack overflow on a nested turn | Use the documented Tokio worker stack; the default 2 MiB stack is insufficient. Follow the runnable example support setup. |
+| A gated call is denied with "the approval engine could not evaluate" | The TinySecurity module is absent, untrusted or faulted, or the storage scope could not be resolved. Approvals fail closed; check `modules` and the module source. |
 | A write is waiting indefinitely | Poll the same agent's approvals or retain an active callback subscription. Check origin, enabled autonomy and trusted action roots. |
 | Streaming appears stalled | Drain the bounded progress stream while work runs; inspect the final result. Dropping it cancels forwarding and the turn cooperatively. |
 | A skill is absent | Copy a real bundle into the agent's skill directory; symlinked bundles are rejected. New instructions need a new session. |
@@ -2500,6 +2503,24 @@ group, including descendants. Other platforms stop the direct command. Host
 tools that spawn independent tasks or processes must provide their own cleanup;
 MCP server lifecycles remain owned by the agent. Keep polling `send()` while
 awaiting cancellation, for example in a spawned task.
+
+## Steering one turn
+
+Acquire `Turn::steering_handle()` before sending a turn to add messages to it
+while it runs. The handle is cloneable and `Send + Sync`; `steer(text)` queues
+a user message that the agent loop applies at its next safe checkpoint:
+before the first model call, after a tool batch has settled, or when the model
+has just written its final answer. In that last case the draft stays on the
+transcript, the steer follows it, and the model is called once more, so a
+message that arrives during a plain chat turn's only model call still shapes
+that turn's reply. Nothing interrupts a model call or a tool already running.
+The model sees each steer as `[User steering message]: <text>`.
+
+Nothing is dropped silently. Steers the turn ended without applying come back
+on `TurnOutcome::unapplied_steers`, or from `TurnSteering::take_unapplied()`
+when the turn failed or was cancelled. A steer sent after the turn ended is
+refused with `SteerRefused`, which carries its text (`into_text()`). The host
+decides whether to run what came back as the next turn.
 
 ## Scoped worker hooks
 
@@ -2975,6 +2996,7 @@ Generate the complete local Rust API reference with `cargo doc -p openhuman-embe
 - [`Session`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`SessionStoreProvider`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`SkillsPolicy`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
+- [`SteerRefused`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`StorageInfo`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`StreamEvent`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`StreamMode`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
@@ -2997,6 +3019,7 @@ Generate the complete local Rust API reference with `cargo doc -p openhuman-embe
 - [`TurnContext`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`TurnOutcome`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`TurnRequest`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
+- [`TurnSteering`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`TurnStream`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`UnknownKeyedSearchProvider`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`VOICE_COMPILED_IN`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
