@@ -17,7 +17,8 @@ use crate::modules::tinybox::{self, contract};
 pub(crate) type PlannedJail = contract::NativeJailConfig;
 /// Without the module there is no plan to carry.
 #[cfg(not(feature = "modules"))]
-pub(crate) type PlannedJail = ();
+#[derive(Debug)]
+pub(crate) struct PlannedJail;
 
 /// TinyBox's macOS backend: `sandbox-exec` with a write-deny profile.
 #[cfg(any(feature = "modules", test))]
