@@ -217,7 +217,7 @@ fn check_within(root: &Path, file: &Path) -> Result<(), &'static str> {
     if file == root || !file.starts_with(root) {
         return Err("file is outside its files folder");
     }
-    if SecurityPolicy::is_always_forbidden(file) {
+    if crate::security::floor::is_protected_blocking(file) {
         return Err("file is in a protected location");
     }
     // A symlink inside the folder must not lead out of it. Fail closed: when
@@ -235,7 +235,7 @@ fn check_within(root: &Path, file: &Path) -> Result<(), &'static str> {
                 return Err("file could not be resolved");
             };
             if !canon_file.starts_with(&canon_root)
-                || SecurityPolicy::is_always_forbidden(&canon_file)
+                || crate::security::floor::is_protected_blocking(&canon_file)
             {
                 return Err("file resolves outside its files folder");
             }

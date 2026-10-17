@@ -41,7 +41,7 @@ pub(crate) fn validate_working_dir(raw: Option<&str>) -> Result<Option<String>, 
     if !canonical.is_dir() {
         return Err("working folder is not a directory".to_string());
     }
-    if SecurityPolicy::is_always_forbidden(&canonical) {
+    if crate::security::floor::is_protected_blocking(&canonical) {
         return Err("working folder is in a protected location".to_string());
     }
     Ok(Some(canonical.to_string_lossy().into_owned()))
