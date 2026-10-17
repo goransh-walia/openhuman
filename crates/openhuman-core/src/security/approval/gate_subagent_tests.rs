@@ -1,7 +1,7 @@
 //! Sub-agent approval parks: an async-delegated sub-agent's card is routed to
 //! the parent chat thread and marked `detached` (so the client keeps it across
 //! the parent turn's end), every sub-agent park uses the shorter
-//! [`MODULE_SHORT_WINDOW`], and an expiry tells the model nobody answered.
+//! the module's short window, and an expiry tells the model nobody answered.
 //!
 //! Production evidence: every failed `media_generate_image` /
 //! `media_generate_video` / `skill_registry_install` in `image_agent`,

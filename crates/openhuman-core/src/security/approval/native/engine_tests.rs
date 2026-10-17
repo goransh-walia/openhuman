@@ -68,7 +68,7 @@ fn input(tool: &str, surface: &Arc<Shown>) -> CheckInput {
         thread: Some("thread-1".into()),
         flow: None,
         origin: CallOrigin::Operator,
-        ttl: Duration::from_secs(600),
+        ttl: Some(Duration::from_secs(600)),
         prompt: Arc::clone(surface) as Arc<dyn PromptSurface>,
     }
 }
@@ -298,7 +298,7 @@ async fn a_request_nobody_answers_expires_and_is_recorded_as_denied() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
     let mut short = input("gmail_send", &shown);
-    short.ttl = Duration::from_millis(1200);
+    short.ttl = Some(Duration::from_millis(1200));
     let (request_id, expires_at_ms) = pending(world.engine.check(short).await.unwrap());
     assert!(
         world.engine.expire(&request_id).await.is_err(),
