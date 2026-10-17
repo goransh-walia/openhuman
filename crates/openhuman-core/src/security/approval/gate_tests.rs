@@ -16,8 +16,14 @@ const EXPIRY_TEST_TTL: Duration = Duration::from_secs(2);
 /// with [`EXPIRY_TEST_TTL`]) would let them pass against the wrong source.
 const BOOT_TTL_UNDER_TEST: Duration = Duration::from_secs(7);
 
-/// A gate whose park window is the production [`DEFAULT_APPROVAL_TTL`], over a
-/// scripted engine (see `engine_stub.rs`).
+/// The module's park windows, which the scripted engine reproduces (see
+/// `engine_stub.rs`): the gate no longer knows them, it asks for no window of
+/// its own unless the user configured one.
+const MODULE_DEFAULT_WINDOW: Duration = Duration::from_secs(600);
+const MODULE_SHORT_WINDOW: Duration = Duration::from_secs(180);
+
+/// A gate that asks for no park window of its own (the module's default
+/// applies), over a scripted engine (see `engine_stub.rs`).
 ///
 /// Most tests here park a call, poll for the waiter, then decide it; none of
 /// them wait for expiry, so the window only has to outlast the poll. The tests
@@ -25,12 +31,16 @@ const BOOT_TTL_UNDER_TEST: Duration = Duration::from_secs(7);
 /// [`expiry_gate`], so no test depends on how close a shared number sits to
 /// the one it needs.
 fn test_gate() -> (ApprovalGate, TempDir) {
-    test_gate_with_ttl(DEFAULT_APPROVAL_TTL)
+    build_gate(None)
 }
 
 /// Build an approval gate with an explicit park deadline for tests that must
 /// coordinate a decision with a concurrently loaded full-suite executor.
 fn test_gate_with_ttl(ttl: Duration) -> (ApprovalGate, TempDir) {
+    build_gate(Some(ttl))
+}
+
+fn build_gate(ttl: Option<Duration>) -> (ApprovalGate, TempDir) {
     let dir = TempDir::new().unwrap();
     let config = Config {
         workspace_dir: dir.path().to_path_buf(),

@@ -92,7 +92,7 @@ async fn the_users_configuration_reaches_the_engine_as_the_calls_posture() {
     assert!(seen.flow.is_none());
     assert_eq!(seen.call_id.len(), 8, "{}", seen.call_id);
     assert!(seen.call_id.bytes().all(|b| b.is_ascii_hexdigit()));
-    assert_eq!(seen.ttl, DEFAULT_APPROVAL_TTL);
+    assert_eq!(seen.ttl, None, "the module owns the default window");
     assert_eq!(seen.args["k"], "v");
     decide_parked(&gate, &request_id, ApprovalDecision::Deny);
     assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
@@ -216,7 +216,7 @@ async fn copilot_and_sub_agent_parks_name_their_origin_class_and_window() {
     .await;
     let seen = stub_of(&gate).seen().remove(0);
     assert_eq!(seen.origin, CallOrigin::Copilot);
-    assert_eq!(seen.ttl, COPILOT_APPROVAL_TTL);
+    assert_eq!(seen.ttl, None);
     decide_parked(&gate, &request_id, ApprovalDecision::Deny);
     handle.await.unwrap();
 
@@ -230,7 +230,7 @@ async fn copilot_and_sub_agent_parks_name_their_origin_class_and_window() {
     .await;
     let seen = stub_of(&gate).seen().pop().unwrap();
     assert_eq!(seen.origin, CallOrigin::SubAgent);
-    assert_eq!(seen.ttl, SUBAGENT_APPROVAL_TTL);
+    assert_eq!(seen.ttl, None);
     decide_parked(&gate, &request_id, ApprovalDecision::Deny);
     handle.await.unwrap();
 }
