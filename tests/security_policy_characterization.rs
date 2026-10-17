@@ -3,8 +3,10 @@
 //! always-forbidden table are pinned beside the code in
 //! `security/policy/policy_characterization_tests.rs`, because classification
 //! and the allowlist are crate-private outside tests. This file pins what an
-//! embedder or tool can observe: the shipped defaults, the disabled floor, the
-//! autonomy gate matrix, the hourly limiter and trusted-root grants.
+//! embedder or tool can observe: the shipped defaults and the trusted-root
+//! grants. The path floor, the autonomy gate and the hourly budget are the
+//! TinySecurity module's (`CheckPaths2`, `SpendAction2`) and are pinned in its
+//! repository and by the module-backed host tests.
 
 #[path = "support/env_guard.rs"]
 mod env_guard;
@@ -16,8 +18,7 @@ use tinybox_bus::CommandClass;
 use openhuman_core::{
     config::AutonomyConfig,
     security::{
-        policy::GateDecision, AutonomyLevel, SecurityPolicy, ToolOperation, TrustedAccess,
-        TrustedRoot,
+        AutonomyLevel, SecurityPolicy, TrustedAccess, TrustedRoot,
     },
 };
 
