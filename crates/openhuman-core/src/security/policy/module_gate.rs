@@ -250,7 +250,7 @@ mod native {
         }
 
         /// The settings of the scope whose ledger shell runs and acting tools share.
-        fn budget_policy(&self) -> Result<tinysecurity_bus::CommandPolicy, String> {
+        pub(super) fn budget_policy(&self) -> Result<tinysecurity_bus::CommandPolicy, String> {
             self.native_command_policy(CommandFlow::Harness, CommandStage::Execute)
                 .map_err(|refusal| refusal.to_string())
         }

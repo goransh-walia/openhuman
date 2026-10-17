@@ -91,6 +91,13 @@ impl FsGate for SecurityPolicy {
         self.path_allowed_blocking(PathKind::StringAllowed, Path::new(path))
     }
 
+    fn paths_string_allowed(&self, paths: &[String]) -> Vec<bool> {
+        // One module call for the whole batch (a directory walk's hits), not one per
+        // path. A module that cannot answer refuses every path.
+        let paths: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+        self.check_paths_blocking(PathKind::StringAllowed, &paths)
+    }
+
     async fn validate_path(&self, path: &str) -> Result<PathBuf, String> {
         SecurityPolicy::validate_path(self, path).await
     }
