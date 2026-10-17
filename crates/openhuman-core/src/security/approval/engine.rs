@@ -70,9 +70,9 @@ pub(crate) struct Posture {
     pub flow_grants: Vec<(String, String)>,
 }
 
-/// The verified origin class the module sees. `Cron` and SaaS calls never reach
-/// the engine: the gate refuses the first and has no approval surface for the
-/// second.
+/// The verified origin class the module sees. The module, not the host, decides
+/// what each class is allowed (contract 1.22): the gate only maps the turn's
+/// origin to one of these.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CallOrigin {
     /// A live user, a channel peer or a workflow run.
@@ -81,6 +81,17 @@ pub(crate) enum CallOrigin {
     Copilot,
     /// A delegated sub-agent (shorter park window).
     SubAgent,
+    /// A scheduled job: the module denies its external effects.
+    Cron,
+    /// An internal background job or a workflow action the user already
+    /// declared: the module approves it automatically, audited.
+    TrustedAutomation,
+    /// A local operator invoking the core directly (the CLI, a direct chat): the
+    /// module approves it automatically, audited.
+    LocalOperator,
+    /// A call whose origin nobody labelled: the module denies it unless the
+    /// posture's tool grants name the tool.
+    Unlabelled,
 }
 
 /// One gated call, as the gate hands it over.

@@ -181,9 +181,22 @@ impl StubEngine {
     }
 }
 
-/// The automatic approval the user's posture gives, if any.
+/// The automatic approval the user's posture or the call's origin gives, if any.
 fn automatic(input: &CheckInput) -> Option<&'static str> {
     let posture = &input.posture;
+    match input.origin {
+        CallOrigin::TrustedAutomation => return Some("auto:trusted-automation"),
+        CallOrigin::LocalOperator => return Some("auto:local-operator"),
+        // Only a whole-tool grant approves an unlabelled call.
+        CallOrigin::Unlabelled => {
+            return posture
+                .tool_grants
+                .iter()
+                .any(|t| t == &input.tool)
+                .then_some("auto:tool-grant");
+        }
+        _ => {}
+    }
     if posture.auto_approve_all || !posture.require_approval {
         return Some("auto:host-policy");
     }
@@ -219,6 +232,13 @@ impl ApprovalEngine for StubEngine {
         if self.refuse.load(Ordering::SeqCst) {
             return Err(EngineError::Unavailable("the stub engine refuses".into()));
         }
+        // The module refuses a scheduled job's external effect and an unlabelled call
+        // no grant covers, without parking either.
+        if input.origin == CallOrigin::Cron
+            || (input.origin == CallOrigin::Unlabelled && automatic(&input).is_none())
+        {
+            return Err(EngineError::Refused);
+        }
         let now = now_ms();
         let automatic = if self.always_pending.load(Ordering::SeqCst) {
             None
@@ -241,7 +261,7 @@ impl ApprovalEngine for StubEngine {
         // and a caller may only shorten it.
         let window = match input.origin {
             CallOrigin::Copilot | CallOrigin::SubAgent => Duration::from_secs(180),
-            CallOrigin::Operator => Duration::from_secs(600),
+            _ => Duration::from_secs(600),
         };
         let window = input.ttl.map_or(window, |ttl| window.min(ttl));
         let expires_ms = now + u64::try_from(window.as_millis()).unwrap_or(u64::MAX);

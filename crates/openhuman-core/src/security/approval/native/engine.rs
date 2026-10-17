@@ -93,6 +93,10 @@ fn module_origin(origin: CallOrigin) -> Origin {
         CallOrigin::Operator => Origin::Operator,
         CallOrigin::Copilot => Origin::Copilot,
         CallOrigin::SubAgent => Origin::SubAgent,
+        CallOrigin::Cron => Origin::Cron,
+        CallOrigin::TrustedAutomation => Origin::TrustedAutomation,
+        CallOrigin::LocalOperator => Origin::LocalOperator,
+        CallOrigin::Unlabelled => Origin::Unlabelled,
     }
 }
 
