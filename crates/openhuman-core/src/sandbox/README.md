@@ -117,9 +117,9 @@ controlled by `[runtime.local_jail]` (`LocalJailConfig`):
 | `extra_read_only`, `extra_read_write` | as listed | always, subject to the floor |
 | `/proc` | read-only | only with `allow_proc = true` (default off) |
 
-The credential floor applies to every grant: any path that
-the protected-path floor rejects (`security::floor::protected_paths`, the
-module's `ProtectedPath2`), or that is a parent of a
+The credential floor applies to every grant: any path the
+protected-path floor rejects (`security::floor::floor()`, the module's
+`ProtectedFloor2`, applied in `local_grants.rs`), or that is a parent of a
 credential directory (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`),
 is dropped, because Landlock grants are recursive. `/proc` is reachable only
 through `allow_proc`, since `/proc/<pid>/environ` exposes every process's
