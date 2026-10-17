@@ -236,7 +236,9 @@ pub(crate) fn policy_request(policy: &SandboxPolicy) -> contract::DockerPolicyRe
             .docker_overrides
             .as_ref()
             .and_then(|overrides| overrides.network.clone()),
-        workspace: Some(policy.workspace_root.to_string_lossy().into_owned()),
+        workspace: policy
+            .mount_workspace
+            .then(|| policy.workspace_root.to_string_lossy().into_owned()),
         read_only_mounts: policy
             .read_only_mounts
             .iter()

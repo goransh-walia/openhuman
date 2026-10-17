@@ -2,13 +2,13 @@
 //! #7328, phase 5).
 //!
 //! A scheduled shell job is text a model, a flow or an operator typed into a
-//! schedule long before it runs. It reaches the same isolation floor as the
-//! agent's shell tool: the TinyBox native jail (or the configured Docker
-//! container), refused when the jail is missing, inactive (Noop) or not
-//! suitable for untrusted code. The only way around the jail is the operator's
-//! own opt-out (`OPENHUMAN_SANDBOX=off`, `[sandbox] enabled = false` or
-//! `[components] sandbox = false`), and SaaS never honours it: SaaS commands
-//! run in the user's container or not at all.
+//! schedule long before it runs. The security module plans it onto an executor that
+//! meets the isolation floor for untrusted code (the TinyBox native jail or a
+//! container) and refuses it when none does. The operator's switch that turns the
+//! sandbox off never reaches untrusted text: the module plans a run on the host only
+//! for the trusted operator, so an untrusted spawn is planned onto a real executor
+//! whatever the switch says, and under SaaS it runs in the user's container or not at
+//! all.
 //!
 //! `scripts/ci/spawner-inventory.json` names every caller of this gate.
 
@@ -69,6 +69,8 @@ fn with_inline_stdin(command: &str, stdin: &[u8]) -> anyhow::Result<String> {
 /// [`super::ops::IsolationFloor`], a policy that resolves to no sandbox at all
 /// is an error, and so is a Docker backend that is unavailable.
 pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExecResult> {
+    use super::ops::Executor;
+
     let UntrustedShell {
         config,
         command,
@@ -79,104 +81,85 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
         env,
         stdin,
     } = spawn;
-    let saas = crate::core::runtime::is_saas();
     // The scheduler has no dispatch context of its own; the task's ambient one
     // answers the component question (#7801 transitional).
     let ctx = crate::core::runtime::DispatchCtx::ambient();
-    if !saas
-        && (super::ops::sandbox_disabled_by_host(&ctx)
-            || super::ops::config_disables_sandbox(config))
-    {
-        // The operator turned isolation off for this process. This is the only
-        // unjailed path, it is never reachable under SaaS, and it is logged.
-        tracing::warn!("[sandbox:untrusted] operator opt-out: running an untrusted shell unjailed");
-        crate::config::ensure_usable_cwd(cwd)?;
-        std::fs::create_dir_all(state_dir)
-            .map_err(|error| anyhow::anyhow!("Cannot prepare sandbox state directory: {error}"))?;
-        return super::shell_exec::run_host_with_stdin(
-            config,
-            command,
-            cwd,
-            state_dir,
-            env.clone(),
-            timeout,
-            preserve_pipeline_status,
-            None,
-            stdin.map(<[u8]>::to_vec),
-        )
-        .await;
-    }
-
-    let mut policy = super::ops::resolve_command_policy_with_config(&ctx, config, cwd, state_dir)
-        .await
+    let operator_off = super::operator::sandbox_off(&ctx, config);
+    let policy = super::policy::command_policy(config, cwd, state_dir)
         .map_err(|error| anyhow::anyhow!(error))?;
-    match policy.backend {
-        SandboxBackendKind::Local => {
+    // Inline stdin rides inside the command for a container, which has no stdin channel.
+    // The module binds the text it will actually run, so the wrapped form is planned.
+    let wrapped = match stdin {
+        Some(stdin) if policy.backend == SandboxBackendKind::Docker => {
+            Some(with_inline_stdin(command, stdin)?)
+        }
+        _ => None,
+    };
+    let text = SpawnText {
+        command: wrapped.as_deref().unwrap_or(command),
+        cwd,
+        env,
+        stdin: if wrapped.is_some() { None } else { stdin },
+        preserve_pipeline_status,
+    };
+    let admitted = admit(config, &policy, &text, operator_off).await?;
+    let extra_env: HashMap<OsString, OsString> = env
+        .iter()
+        .map(|(name, value)| (name.into(), value.into()))
+        .collect();
+    match admitted.executor {
+        Executor::Host => {
+            tracing::debug!("[sandbox:untrusted] running on the host as the module planned");
             crate::config::ensure_usable_cwd(cwd)?;
-            policy = super::local_grants::with_resolved_grants(config, &policy).await?;
-            let extra_env: HashMap<OsString, OsString> = env
-                .iter()
-                .map(|(name, value)| (name.into(), value.into()))
-                .collect();
-            let admitted = admit(
+            std::fs::create_dir_all(state_dir).map_err(|error| {
+                anyhow::anyhow!("Cannot prepare sandbox state directory: {error}")
+            })?;
+            super::shell_exec::run_host_with_stdin(
                 config,
-                &policy,
-                &SpawnText {
-                    command,
-                    cwd,
-                    env,
-                    stdin,
-                    preserve_pipeline_status,
-                },
-            )
-            .await?;
-            tracing::debug!("[sandbox:untrusted] running under the native jail");
-            super::native_jail::execute_with_stdin(
-                config,
-                &admitted.policy,
                 command,
                 cwd,
-                &extra_env,
+                state_dir,
+                env.clone(),
                 timeout,
-                admitted.jail,
                 preserve_pipeline_status,
                 None,
                 stdin.map(<[u8]>::to_vec),
             )
             .await
         }
-        SandboxBackendKind::Docker => {
-            crate::config::ensure_usable_cwd(&policy.workspace_root)?;
+        Executor::Jail => {
+            crate::config::ensure_usable_cwd(cwd)?;
+            tracing::debug!("[sandbox:untrusted] running under the native jail");
+            super::native_jail::execute_with_stdin(
+                config,
+                &admitted.policy,
+                text.command,
+                cwd,
+                &extra_env,
+                timeout,
+                admitted.jail,
+                preserve_pipeline_status,
+                None,
+                text.stdin.map(<[u8]>::to_vec),
+            )
+            .await
+        }
+        Executor::Docker => {
+            if admitted.policy.mount_workspace {
+                crate::config::ensure_usable_cwd(&admitted.policy.workspace_root)?;
+            }
             tracing::debug!("[sandbox:untrusted] running in the sandbox container");
             let command = match stdin {
                 Some(stdin) => with_inline_stdin(command, stdin)?,
                 None => command.to_owned(),
             };
-            let admitted = admit(
-                config,
-                &policy,
-                &SpawnText {
-                    command: &command,
-                    cwd,
-                    env,
-                    stdin: None,
-                    preserve_pipeline_status,
-                },
-            )
-            .await?;
             let request = SandboxExecRequest {
                 command,
                 working_dir: cwd.to_path_buf(),
-                env: env
-                    .iter()
-                    .map(|(name, value)| (name.into(), value.into()))
-                    .collect(),
+                env: extra_env,
                 timeout,
             };
             super::docker::docker_exec(config, &admitted.policy, &request).await
-        }
-        SandboxBackendKind::None => {
-            anyhow::bail!("an untrusted spawn resolved to no sandbox backend")
         }
     }
 }
