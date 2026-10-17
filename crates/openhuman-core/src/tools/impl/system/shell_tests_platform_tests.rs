@@ -6,7 +6,6 @@
 
 use super::*;
 use crate::agent::host_runtime::{host_shell_flavor, ShellFlavor};
-#[cfg(feature = "modules")]
 use std::collections::HashMap;
 use std::ffi::OsString;
 
