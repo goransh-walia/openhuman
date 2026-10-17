@@ -81,6 +81,7 @@ fn reason_text(tool: &str, reason: &DenialReason) -> String {
              '{tool}' needs a live user action."
         ),
         DenialReason::HighRisk => refusal_message(Refusal::HighRisk),
+        DenialReason::Privacy => "blocked by the privacy policy".into(),
     }
 }
 

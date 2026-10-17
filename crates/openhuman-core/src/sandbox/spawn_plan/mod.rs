@@ -274,6 +274,7 @@ async fn plan_with(
         deny_subprocesses: false,
         // Contract 1.21 field; the sandbox change decides when a process jail may run.
         accept_process_isolation: false,
+        options: Default::default(),
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
