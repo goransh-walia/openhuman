@@ -307,7 +307,8 @@ async fn a_shell_job_runs_on_this_platform() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
+            .with_gateway(StubGateway::allow());
     // Fixture guard: a policy that refused to act would make this pass by
     // never spawning anything.
     assert!(security.can_act(), "the fixture policy must permit acting");
@@ -404,7 +405,8 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
+            .with_gateway(StubGateway::allow());
     // Fixture guard: a policy that refused to act would report failure for a
     // reason that has nothing to do with the pipeline.
     assert!(security.can_act(), "the fixture policy must permit acting");
