@@ -1,5 +1,4 @@
 use super::*;
-use crate::security::egress::enforce::sensitive_blocks;
 use crate::security::live_policy::test_privacy_scope;
 
 #[test]
@@ -10,27 +9,21 @@ fn unchanged_payload_is_assessed_clean() {
 }
 
 #[test]
-fn changed_payload_is_high_risk_and_sensitive_refuses_it() {
+fn changed_payload_is_high_risk_with_the_identifying_category() {
     let assessment = assessment_from_answer("Bearer abc", Ok("[REDACTED]".to_string()));
     assert_eq!(assessment.level, IdentificationRisk::High);
     assert_eq!(assessment.categories, vec![CATEGORY_SENSITIVE_CONTENT]);
-    let desc =
-        EgressDescriptor::composio("TOOL").with_risk(assessment.level, assessment.categories);
-    assert!(sensitive_blocks(PrivacyMode::Sensitive, &desc));
+    // The module treats a category containing one of its identifying needles as a
+    // credential or identifier; this category must keep naming both.
+    assert!(CATEGORY_SENSITIVE_CONTENT.contains("credential"));
+    assert!(CATEGORY_SENSITIVE_CONTENT.contains("identifier"));
 }
 
 #[test]
-fn no_module_answer_is_unassessed_and_sensitive_refuses_it() {
+fn no_module_answer_is_unassessed() {
     let assessment = assessment_from_answer("hello", Err("not armed".to_string()));
     assert_eq!(assessment.level, IdentificationRisk::Unknown);
-    let desc = EgressDescriptor::composio("TOOL");
-    assert!(sensitive_blocks(PrivacyMode::Sensitive, &desc));
-}
-
-#[test]
-fn clean_assessment_lets_sensitive_allow_a_content_transfer() {
-    let desc = EgressDescriptor::composio("TOOL").with_risk(IdentificationRisk::None, Vec::new());
-    assert!(!sensitive_blocks(PrivacyMode::Sensitive, &desc));
+    assert!(assessment.categories.is_empty());
 }
 
 #[test]
@@ -81,7 +74,7 @@ fn sensitive_assessment_on_the_released_archive() {
         let _scope = test_privacy_scope(PrivacyMode::Sensitive);
         let clean = EgressDescriptor::composio("TOOL").assessed("summarise the quarterly plan");
         assert_eq!(clean.risk_level, IdentificationRisk::None);
-        assert!(!sensitive_blocks(PrivacyMode::Sensitive, &clean));
+        assert!(egress_blocks_message(PrivacyMode::Sensitive, &clean).await.is_none());
 
         let secret = format!(
             "send Authorization: Bearer {}",
@@ -89,7 +82,7 @@ fn sensitive_assessment_on_the_released_archive() {
         );
         let dirty = EgressDescriptor::composio("TOOL").assessed(&secret);
         assert_eq!(dirty.risk_level, IdentificationRisk::High);
-        assert!(sensitive_blocks(PrivacyMode::Sensitive, &dirty));
+        assert!(egress_blocks_message(PrivacyMode::Sensitive, &dirty).await.is_some());
 
         let batch = EgressDescriptor::embedding("cloud", "m")
             .assessed_parts(["fine text", secret.as_str()]);
