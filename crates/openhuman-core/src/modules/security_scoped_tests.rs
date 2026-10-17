@@ -173,3 +173,15 @@ async fn concurrent_first_calls_with_modules_disabled_leave_the_client_usable() 
     }
     assert!(!state.lock().await.faulted);
 }
+
+#[tokio::test]
+async fn an_audit_row_never_loads_the_module_or_touches_the_fault_latch() {
+    let state = tokio::sync::Mutex::new(ClientState::default());
+    assert!(serving_proxy_in(&state).await.is_none());
+    {
+        let state = state.lock().await;
+        assert!(!state.faulted && !state.load_failed);
+    }
+    state.lock().await.faulted = true;
+    assert!(serving_proxy_in(&state).await.is_none());
+}

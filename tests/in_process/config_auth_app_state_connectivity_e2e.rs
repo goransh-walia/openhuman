@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 use tempfile::{tempdir, TempDir};
 
 use openhuman_core::config::schema::{
-    AuditConfig, CapabilityProviderConfig, CapabilityProviderTrustState, DashboardConfig,
+    CapabilityProviderConfig, CapabilityProviderTrustState, DashboardConfig,
     DingTalkConfig, DiscordConfig, EventStreamConfig, IrcConfig, LarkConfig, MatrixConfig,
     MemoryConfig, ModelHealthConfig, ProxyConfig, ProxyScope, QQConfig,
     SandboxConfig, SecurityConfig, SlackConfig, TelegramConfig, WebhookConfig, WhatsAppConfig,
@@ -400,11 +400,7 @@ fn config_schema_defaults_cover_dashboard_capability_memory_and_security_shapes(
 
     let sandbox = SandboxConfig::default();
     assert!(sandbox.enabled.is_none());
-    let security = SecurityConfig::default();
-    assert!(security.audit.enabled);
-    let audit = AuditConfig::default();
-    assert_eq!(audit.log_path, "audit.log");
-    assert_eq!(audit.max_size_mb, 100);
+    let _ = SecurityConfig::default();
 
     let observability: openhuman_core::config::schema::ObservabilityConfig =
         serde_json::from_value(json!({})).expect("observability defaults");
@@ -552,7 +548,6 @@ fn config_active_user_and_daemon_public_helpers_cover_path_branches() {
         daemon.workspace_dir,
         tmp.path().join("openhuman").join("workspace")
     );
-    assert!(daemon.audit.enabled);
 }
 
 #[test]

@@ -4,8 +4,9 @@ use crate::agent::host_runtime::RuntimeAdapter;
 use crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool;
 use crate::config::Config;
 use crate::core::runtime::DispatchCtx;
+use crate::security::audit_record::HostAuditEvent;
 use crate::security::policy::{CommandFlow, CommandQuery, CommandStage};
-use crate::security::{AuditLogger, CommandExecutionLog, SecurityPolicy};
+use crate::security::SecurityPolicy;
 use async_trait::async_trait;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -21,20 +22,14 @@ const MAX_OUTPUT_BYTES: usize = 1_048_576;
 pub struct ShellTool {
     security: Arc<SecurityPolicy>,
     runtime: Arc<dyn RuntimeAdapter>,
-    audit: Arc<AuditLogger>,
     module_config: Option<Arc<Config>>,
 }
 
 impl ShellTool {
-    pub fn new(
-        security: Arc<SecurityPolicy>,
-        runtime: Arc<dyn RuntimeAdapter>,
-        audit: Arc<AuditLogger>,
-    ) -> Self {
+    pub fn new(security: Arc<SecurityPolicy>, runtime: Arc<dyn RuntimeAdapter>) -> Self {
         Self {
             security,
             runtime,
-            audit,
             module_config: None,
         }
     }
@@ -45,42 +40,43 @@ impl ShellTool {
     pub fn with_config(
         security: Arc<SecurityPolicy>,
         runtime: Arc<dyn RuntimeAdapter>,
-        audit: Arc<AuditLogger>,
         config: Arc<Config>,
     ) -> Self {
         Self {
             security,
             runtime,
-            audit,
             module_config: Some(config),
         }
     }
 
-    /// Emit a single `CommandExecution` audit event. A write failure is logged
-    /// as a structured warning but not propagated — audit must never block or
-    /// fail a tool call, yet a silently broken audit trail must not go
-    /// unnoticed.
-    fn emit_audit(
+    /// Record the command's execution result on the security module's audit stream
+    /// (the one stream every security row goes to). A row the module cannot record is
+    /// logged at warn level and never turns a finished command into a failure, but it
+    /// is neither dropped silently nor written anywhere else.
+    async fn record_execution(
         &self,
+        ctx: &DispatchCtx,
         command: &str,
         approved: bool,
         allowed: bool,
         success: bool,
         duration_ms: u64,
     ) {
-        if let Err(error) = self.audit.log_command_event(CommandExecutionLog {
-            channel: "tool:shell",
+        let event = HostAuditEvent::command_execution(
+            "tool:shell",
             command,
-            risk_level: "unknown",
             approved,
             allowed,
             success,
             duration_ms,
-        }) {
+        );
+        if let Err(error) =
+            crate::security::audit_record::record(ctx, self.module_config.as_deref(), event).await
+        {
             tracing::warn!(
                 error = %error,
                 channel = "tool:shell",
-                "[shell] failed to persist command execution audit event"
+                "[shell] the command execution audit row was not recorded"
             );
         }
     }
@@ -248,8 +244,15 @@ impl ShellTool {
         // gate's exact yes/no isn't threaded into tools; this is the accurate
         // "required approval" proxy.)
         let approved = self.external_effect_with_args(&args);
-        // emit_audit signature is (command, approved, allowed, …) — keep that order.
-        self.emit_audit(command, approved, allowed, !result.is_error, duration_ms);
+        self.record_execution(
+            ctx,
+            command,
+            approved,
+            allowed,
+            !result.is_error,
+            duration_ms,
+        )
+        .await;
         Ok(result)
     }
 }

@@ -258,7 +258,7 @@ denied instead (`middleware/tinysecurity_channel.rs`). See [approval/README.md](
 | [`prompt_injection/`](prompt_injection/README.md) | Deterministic prompt-injection screening (`Allow`, `Review`, `Block`). |
 | [`live_policy.rs`](./live_policy.rs) | Process-global, hot-swappable current `SecurityPolicy` and privacy mode. |
 | [`scrub.rs`](./scrub.rs) | Secret and PII scrubbing with the host's policy (`Policy::corroborated`) over TinyMemory's scrubbers. |
-| [`audit.rs`](./audit.rs) | Append-only JSON audit log of agent actions (`AuditLogger`). |
+| [`audit_record.rs`](./audit_record.rs) | The host's own security audit rows (`HostAuditEvent`), recorded on the TinySecurity module's audit stream through `RecordAudit2`. |
 | [`pairing.rs`](./pairing.rs) | Non-loopback bind guard for the core RPC token; re-exports channel pairing helpers. |
 | [`core.rs`](./core.rs) | `redact()`, the 4-character-prefix log redaction. |
 | [`ops.rs`](./ops.rs) | `security_policy_info_for_config` and `load_and_get_security_policy_info`. |
@@ -365,7 +365,7 @@ denied instead (`middleware/tinysecurity_channel.rs`). See [approval/README.md](
     (`tinytools`, upstream), and the rpc client / app deep-link
     `redact_url_for_log` copies (they run where no module exists: a remote-core
     client and the deep-link forwarding process).
-- `AuditLogger` and `get_or_create_workspace_audit_logger` ([`audit.rs`](./audit.rs)).
+- `audit_record::{HostAuditEvent, record}` ([`audit_record.rs`](./audit_record.rs)): a host-observed row (today a shell command's execution result) and its append to the calling tenant's subject stream.
 - `is_public_bind` and `ensure_core_rpc_token_for_bind` (`pairing.rs`): refuse
   a non-loopback RPC bind without an `OPENHUMAN_CORE_TOKEN`
   (`CORE_TOKEN_ENV_VAR`). `PairingGuard`, `constant_time_eq` and the token
@@ -450,21 +450,28 @@ Each file has a sibling `<module>_tests.rs`; the policy suites live in
 
 ## Audit ownership
 
-- Approval, judge and approval-engine rows go through the module's ordered
-  `Audit2` stream: the module appends them to the host's `AuditSink2`
-  (`approval/native/callbacks.rs::append`), which commits to the subject's
-  durable rows. Approvals fail closed when a row cannot be committed.
-- `security/audit.rs` remains the host's owner-only (0600) JSONL logger
-  (`[security.audit]`: enabled, path, max size) for the rows the host itself
-  writes: shell command executions and policy decisions that let a call through
-  without a prompt (`policy_decision` = `auto_approve_all`,
-  `approvals_disabled` or `auto_approve_allowlist`), so a bypass is never
-  silent. Sandbox plans and policy-setting changes are not yet re-routed onto
-  the module stream: the audited module methods (`EvaluateAudited2`,
-  `CheckAudited2`) take a subject-bound `AuditedRequest2`, and the command and
-  sandbox seams do not carry that correlation today. This is a recorded
-  follow-up, not a decision to keep two logs; until it lands there are two
-  sinks and `AuditLogger` is the only host-side one.
+There is one security audit trail, and it is the module's: an ordered, contiguous
+`Audit2` stream per subject that the module sanitizes and the host persists behind
+`AuditSink2` (`approval/native/callbacks.rs::append`, `approval/native/rows.rs`).
+
+- Approval, judge, approval-engine and sandbox-plan rows are appended by the module
+  itself. Approvals fail closed when a row cannot be committed.
+- A call the policy lets through without a prompt (`auto_approve_all`, the agent's
+  approvals off, an allowlist or flow-grant match) is an audited automatic approval
+  in the same stream (`auto:host-policy`, `auto:tool-grant`, `auto:flow-grant`), written
+  by the module's approval engine; the host writes no separate row for it.
+- What only the host observes is recorded through the module's `RecordAudit2`
+  (contract 1.21; `audit_record.rs`, `modules/security_audit.rs`): a shell command's
+  execution result (`tool:shell`, kind `execution`). The host reserves the subject's next
+  stream position under the stream lock, the module sanitizes the row with its own
+  redactor and appends it through the same sink, and the answer must carry a committed
+  receipt for exactly that event. `AuditKind2::PolicyDecision` exists in the contract
+  for a host decision that lets a call through unprompted; the host has no such row to
+  write today.
+- A row the module cannot record (no module, no tenant, a refused or uncommitted
+  append) is logged at warn level by the caller and is not retried elsewhere: there is
+  no second sink, and the former owner-only JSONL logger (`[security.audit]`,
+  `AuditLogger`) and its config table are gone.
 - MCP protocol telemetry (`mcp/audit`, the `mcp_audit` stream and `AuditStore`)
   stays tinymcp-owned: see `vendor/tinymcp/docs/adr/0002-mcp-audit-ownership.md`.
   Host policy events go through tinysecurity and are joined with MCP rows at

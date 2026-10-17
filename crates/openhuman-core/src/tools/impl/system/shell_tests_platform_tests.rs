@@ -46,11 +46,7 @@ fn every_description_keeps_the_stdout_only_warning() {
 
 #[test]
 fn the_tool_describes_the_shell_this_host_actually_spawns() {
-    let tool = ShellTool::new(
-        test_security(AutonomyLevel::Supervised),
-        test_runtime(),
-        test_audit(),
-    );
+    let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
     assert_eq!(tool.description(), shell_description(host_shell_flavor()));
     let command_desc = tool.parameters_schema()["properties"]["command"]["description"]
         .as_str()
@@ -101,7 +97,7 @@ fn sandboxed_calls_get_the_same_python_defaults() {
 async fn a_spawned_shell_sees_the_python_utf8_defaults() {
     // A developer's own setting wins, so expect it when present.
     let expected = std::env::var("PYTHONUTF8").unwrap_or_else(|_| "1".to_string());
-    let tool = ShellTool::new(test_security_with_env_cmd(), test_runtime(), test_audit());
+    let tool = ShellTool::new(test_security_with_env_cmd(), test_runtime());
     let command = if cfg!(windows) {
         "echo %PYTHONUTF8%"
     } else {
@@ -145,7 +141,6 @@ fn the_tool_describes_the_shell_its_runtime_spawns() {
     let cmd_tool = ShellTool::new(
         test_security(AutonomyLevel::Supervised),
         Arc::new(CmdRuntime),
-        test_audit(),
     );
     assert_eq!(cmd_tool.description(), shell_description(ShellFlavor::Cmd));
     assert_eq!(

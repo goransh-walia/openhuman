@@ -90,8 +90,8 @@ fn default_tool_descs(config: &Config) -> Vec<(&'static str, &'static str)> {
 }
 
 /// Build the model, tools and prompt of a channel turn from `config`, under
-/// `security`. Side-effect free apart from the workspace's audit logger: it
-/// installs no process-global policy and registers no subscriber.
+/// `security`. Side-effect free: it installs no process-global policy and
+/// registers no subscriber.
 pub(crate) fn build_channel_turn_parts(
     config: &Config,
     security: &Arc<SecurityPolicy>,
@@ -134,13 +134,6 @@ pub(crate) fn build_channel_turn_parts(
         &config.runtime,
         config.shell.hide_window,
     )?);
-    // Phase 1 of #1401: audit logger is wired with defaults so emission paths
-    // are exercised at runtime. The logger is workspace-scoped and shared, so
-    // concurrent sessions append to one `audit.log` without racing on rotation.
-    let audit = crate::security::get_or_create_workspace_audit_logger(
-        config.security.audit.clone(),
-        config.workspace_dir.clone(),
-    )?;
     let workspace = config.workspace_dir.clone();
     let capabilities =
         crate::profiles::capabilities::ProfileCapabilities::in_ctx(&DispatchCtx::ambient());
@@ -153,7 +146,6 @@ pub(crate) fn build_channel_turn_parts(
             Arc::new(config.clone()),
             security,
             runtime,
-            audit,
             // `all_tools_with_runtime` no longer takes a memory handle — the two
             // tools that needed one resolve the guarded driver per call.
             &config.browser,

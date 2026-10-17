@@ -28,25 +28,6 @@ fn test_runtime() -> Arc<dyn RuntimeAdapter> {
     Arc::new(NativeRuntime::new())
 }
 
-fn test_audit() -> Arc<AuditLogger> {
-    AuditLogger::disabled()
-}
-
-fn audit_with_tempdir() -> (Arc<AuditLogger>, tempfile::TempDir) {
-    use crate::config::AuditConfig;
-    let tmp = tempfile::tempdir().expect("create tempdir");
-    let logger = AuditLogger::new(
-        AuditConfig {
-            enabled: true,
-            log_path: "audit.log".into(),
-            max_size_mb: 10,
-        },
-        tmp.path().to_path_buf(),
-    )
-    .expect("create audit logger");
-    (Arc::new(logger), tmp)
-}
-
 /// Build a `ToolExecutionContext` carrying a `WorkspaceDescriptor` rooted
 /// at `root`, mirroring what the tinyagents harness threads into every tool
 /// call of a worktree-isolated worker (`RunContext::with_workspace` →
@@ -96,11 +77,7 @@ async fn shell_tool_gates_commands_on_the_released_module() {
     let released = Released::new();
     let ctx = DispatchCtx::ambient();
     let tool = |autonomy, budget| {
-        ShellTool::new(
-            Arc::new(released.policy(autonomy, budget)),
-            test_runtime(),
-            test_audit(),
-        )
+        ShellTool::new(Arc::new(released.policy(autonomy, budget)), test_runtime())
     };
 
     let read_only = tool(AutonomyLevel::ReadOnly, 100);

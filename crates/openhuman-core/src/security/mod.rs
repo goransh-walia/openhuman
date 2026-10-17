@@ -2,7 +2,7 @@ pub mod ops;
 mod schemas;
 pub mod tools;
 
-pub mod audit;
+pub mod audit_record;
 // Kernel security family (step 7 of the domain reorg). These seven domains are
 // the physical form of `kernel.md` §3.4: `SecurityPolicy`, the approval gate,
 // taint/redaction, credentials and the keychain are exactly the set a future
@@ -22,10 +22,6 @@ pub mod redact;
 pub mod secret_storage;
 
 pub use self::secret_storage::SecretStore;
-pub use audit::{
-    get_or_create_workspace_audit_logger, AuditEvent, AuditEventType, AuditLogger,
-    CommandExecutionLog,
-};
 pub use egress::{
     emit_external_transfer, enforce_egress, local_only_blocks, local_only_tool_block, DataKind,
     EgressDescriptor, EgressReason, IdentificationRisk,

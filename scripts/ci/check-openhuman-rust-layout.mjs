@@ -32,7 +32,7 @@ const LEGACY_LIMIT_ENTRIES = [
   // provider, security, memory, tool and prompt policy.  Generic session
   // state moved to tinyagents-runtime; this remaining composition is split in
   // a follow-up without reintroducing an old harness/session exception.
-  ["crates/openhuman-core/src/agent/session_host/builder/factory.rs", 933],
+  ["crates/openhuman-core/src/agent/session_host/builder/factory.rs", 927],
   ["crates/openhuman-core/src/agent/subagent_host/lifecycle.rs", 1215],
   ["crates/openhuman-core/src/agent/subagent_host/ops/runner.rs", 1043],
   ["crates/openhuman-core/src/web_chat/progress_bridge.rs", 1130],

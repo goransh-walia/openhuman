@@ -196,6 +196,32 @@ fn network_reach_is_none_unless_the_policy_allows_the_host_network() {
     assert_eq!(network_ceiling(&base), NetworkPolicy::Host);
 }
 
+#[test]
+fn the_scope_declares_the_operators_network_allowance_to_the_module() {
+    let config = Config::default();
+    let mut allowed = policy("/work/action");
+    allowed.allow_network = true;
+    let scope = facts(&config, &allowed, |_| {});
+    assert_eq!(scope.network_ceiling, NetworkPolicy::Host);
+    assert!(
+        scope.operator_host_network,
+        "an allowed network is declared, or the module wants a per-command approval"
+    );
+
+    let offline = facts(&config, &policy("/work/action"), |_| {});
+    assert_eq!(offline.network_ceiling, NetworkPolicy::None);
+    assert!(
+        !offline.operator_host_network,
+        "a policy without network declares no allowance"
+    );
+}
+
+#[test]
+fn only_the_agents_own_commands_accept_a_process_level_jail() {
+    assert!(SpawnSource::Agent.accepts_process_isolation());
+    assert!(!SpawnSource::Untrusted.accepts_process_isolation());
+}
+
 #[cfg(unix)]
 #[test]
 fn a_path_that_is_not_text_cannot_be_named_to_the_module() {

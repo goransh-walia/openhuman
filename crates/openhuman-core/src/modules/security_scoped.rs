@@ -207,6 +207,28 @@ pub(super) async fn module_proxy_in(
     result
 }
 
+/// The module's proxy if it is already serving, without loading it and without
+/// touching the fault latch.
+///
+/// A host audit row is the by-product of a call that was already admitted through
+/// the module, so a module that is not serving has nothing to record into; asking it
+/// to load for the sake of a row would start a download or latch the shared client
+/// over a non-essential call.
+pub(super) async fn serving_proxy() -> Option<tinybus::Proxy> {
+    serving_proxy_in(state()).await
+}
+
+/// [`serving_proxy`] against an explicit client state.
+pub(super) async fn serving_proxy_in(
+    state: &tokio::sync::Mutex<ClientState>,
+) -> Option<tinybus::Proxy> {
+    let state = state.lock().await;
+    if state.faulted {
+        return None;
+    }
+    state.proxy.clone()
+}
+
 pub(super) async fn register_command_policy(
     proxy: &tinybus::Proxy,
     policy: CommandPolicy,
