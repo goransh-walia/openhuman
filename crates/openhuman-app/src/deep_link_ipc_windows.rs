@@ -6,6 +6,7 @@
 
 #![cfg(target_os = "windows")]
 
+use openhuman_rpc::redact_url_for_log;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},

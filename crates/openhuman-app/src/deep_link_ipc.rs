@@ -13,6 +13,7 @@
 
 #![cfg(target_os = "linux")]
 
+use openhuman_rpc::redact_url_for_log;
 use std::{
     io::{BufRead, BufReader, Write},
     os::unix::net::{UnixListener, UnixStream},
