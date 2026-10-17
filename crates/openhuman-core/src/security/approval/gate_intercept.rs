@@ -326,7 +326,7 @@ impl ApprovalGate {
             );
         }
         // Any park raised inside a sub-agent run — detached or inline — gets
-        // the shorter `SUBAGENT_APPROVAL_TTL` window.
+        // the module's shorter sub-agent window.
         let subagent_park = !forced
             && (detached
                 || tinyagents_harness::context::current_run_depth()
@@ -341,7 +341,7 @@ impl ApprovalGate {
             .or_else(|| origin_chat_route.as_ref().map(|(_, c)| c.clone()));
 
         // Copilot-streaming flag — set by `flows::ops::flows_build` on the
-        // streaming turn. It clamps the park window to `COPILOT_APPROVAL_TTL`;
+        // streaming turn. The module gives it the shorter copilot window;
         // see `ApprovalTurnContext::copilot_stream`.
         let copilot_stream = !forced && turn.copilot_stream;
 
@@ -489,14 +489,12 @@ impl ApprovalGate {
                     "[approval::gate] tool call parked, waiting for decision"
                 );
                 // The engine's own expiry is the park window.
-                let window = Duration::from_millis(expires_at_ms.saturating_sub(now_ms()))
-                    .min(effective_ttl);
+                let window = Duration::from_millis(expires_at_ms.saturating_sub(now_ms()));
                 if copilot_stream {
                     tracing::debug!(
                         tool = tool_name,
-                        ttl_secs = COPILOT_APPROVAL_TTL.as_secs(),
-                        "[approval::gate] flows_build copilot-streaming park — clamping park window to \
-                         COPILOT_APPROVAL_TTL"
+                        ttl_secs = window.as_secs(),
+                        "[approval::gate] flows_build copilot-streaming park — the module's copilot window"
                     );
                 }
                 if subagent_park {
@@ -504,7 +502,7 @@ impl ApprovalGate {
                         tool = tool_name,
                         detached,
                         ttl_secs = window.as_secs(),
-                        "[approval::gate] sub-agent park — clamping park window to SUBAGENT_APPROVAL_TTL"
+                        "[approval::gate] sub-agent park — the module's sub-agent window"
                     );
                 }
                 // Optional caller-supplied park bound (issue #4756). A caller
