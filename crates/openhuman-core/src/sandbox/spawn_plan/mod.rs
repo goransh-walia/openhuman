@@ -275,6 +275,9 @@ async fn plan_with(
         // Contract 1.21: a best-effort process jail for operator commands is wired
         // by the sandbox migration; this plan does not accept one.
         accept_process_isolation: false,
+        // Contract 1.22 executor preference and host-run options are wired by the
+        // sandbox migration.
+        options: Default::default(),
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
