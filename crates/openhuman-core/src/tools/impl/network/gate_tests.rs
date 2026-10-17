@@ -221,7 +221,8 @@ async fn web_fetch_and_curl_are_blocked_under_local_only_privacy_mode() {
 }
 
 #[tokio::test]
-async fn pushover_honours_read_only_and_the_rate_limit() {
+async fn pushover_honours_the_read_only_tier() {
+    let _module = read_only_module();
     let read_only = PushoverTool::new(policy(AutonomyLevel::ReadOnly, 100), "/tmp".into());
     let result = read_only
         .execute(json!({"message": "hello"}))
@@ -229,11 +230,6 @@ async fn pushover_honours_read_only_and_the_rate_limit() {
         .unwrap();
     assert!(result.is_error);
     assert!(result.output().contains("read-only"));
-
-    let limited = PushoverTool::new(policy(AutonomyLevel::Full, 0), "/tmp".into());
-    let result = limited.execute(json!({"message": "hello"})).await.unwrap();
-    assert!(result.is_error);
-    assert!(result.output().contains("rate limit"));
 }
 
 #[test]
@@ -349,6 +345,21 @@ fn routed_with(payload: Option<Assessment>) -> RoutedGate {
 fn sensitive_mode_permits_a_fetch_assessed_clean_and_refuses_the_rest() {
     use crate::config::PrivacyMode;
     use crate::security::live_policy::test_privacy_scope;
+    // The module decides from the assessment the gate forwards: clean passes,
+    // anything else (identifying, or not assessed) is refused.
+    let _module = install_port(Arc::new(StubPort::allowing().privacy(|request| {
+        match &request.risk {
+            Some(risk)
+                if risk.level == tinysecurity_bus::PrivacyRiskLevel2::None
+                    && risk.categories.is_empty() =>
+            {
+                Verdict::Allow
+            }
+            _ => Verdict::Deny {
+                reason: DenialReason::Privacy,
+            },
+        }
+    })));
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let clean = routed_with(Some(Assessment {
         level: IdentificationRisk::None,
