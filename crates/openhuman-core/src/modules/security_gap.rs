@@ -236,7 +236,7 @@ pub(crate) async fn host_action_class(
 /// Drive `future` from a synchronous caller. A scripted port answers on the calling
 /// thread; the module is reached through the shared sync-to-async seam with the
 /// caller's dispatch scope re-entered on the module runtime.
-fn blocking<T, F>(future: F) -> Result<T, String>
+pub(crate) fn blocking<T, F>(future: F) -> Result<T, String>
 where
     T: Send + 'static,
     F: std::future::Future<Output = Result<T, String>> + Send + 'static,
