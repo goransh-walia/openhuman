@@ -177,7 +177,7 @@ fn write_marker(path: &Path, report: Report) -> std::io::Result<()> {
     )
 }
 
-async fn run(engine: &NativeEngine, proxy: &Proxy) -> Result<Option<Report>, EngineError> {
+pub(super) async fn run(engine: &NativeEngine, proxy: &Proxy) -> Result<Option<Report>, EngineError> {
     let marker = marker_path(engine.config());
     if marker.is_file() {
         return Ok(None);

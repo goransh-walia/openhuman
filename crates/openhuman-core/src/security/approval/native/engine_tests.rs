@@ -512,3 +512,100 @@ async fn only_the_module_may_call_the_hosts_approval_callbacks() {
         );
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn the_legacy_history_and_flow_trust_are_carried_into_the_module_once() {
+    use crate::security::approval::native::history_import;
+    use crate::security::approval::store_import::with_connection;
+    use crate::storage::rusqlite::params;
+
+    let world = world().await;
+    with_connection(&world.config, |conn| {
+        let now = chrono::Utc::now().to_rfc3339();
+        for (id, decision) in [("r1", "approve_once"), ("r2", "deny")] {
+            conn.execute(
+                "INSERT INTO pending_approvals
+                    (request_id, tool_name, action_summary, args_redacted, session_id,
+                     created_at, expires_at, decided_at, decision)
+                 VALUES (?1, 'composio', 'a summary', '{}', 'sess', ?2, ?2, ?2, ?3)",
+                params![id, now, decision],
+            )?;
+        }
+        conn.execute(
+            "INSERT INTO flow_tool_trust (flow_id, tool_name, created_at) VALUES ('flow-1', 'shell', ?1)",
+            params![now],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+
+    let report = history_import::run(&world.engine, &world.fixture.proxy)
+        .await
+        .expect("the module takes the import")
+        .expect("there was a legacy file");
+    assert_eq!((report.history, report.trust, report.skipped), (2, 1, 0));
+
+    // The flow trust is the module's now, and the history reads as what it was.
+    let tenant = crate::core::runtime::Tenant::default();
+    assert_eq!(
+        world.engine.flow_trust(&tenant, "flow-1").await.unwrap(),
+        ["shell"]
+    );
+    let history = world.engine.history(50).await.unwrap();
+    let decided = |decision: ApprovalDecision| {
+        history
+            .iter()
+            .filter(|entry| entry.decision == decision)
+            .count()
+    };
+    assert_eq!(decided(ApprovalDecision::ApproveOnce), 1);
+    assert_eq!(decided(ApprovalDecision::Deny), 1);
+    assert_eq!(decided(ApprovalDecision::ApproveAlwaysForFlow), 1);
+
+    // It records that it ran, so a later start does nothing.
+    assert!(history_import::marker_path(&world.config).is_file());
+    assert_eq!(
+        history_import::run(&world.engine, &world.fixture.proxy)
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_flow_trust_the_module_holds_approves_that_tool_in_that_flow_after_a_restart() {
+    let world = world().await;
+    let tenant = crate::core::runtime::Tenant::default();
+    world
+        .engine
+        .grant_flow_trust(&tenant, "flow-1", "http_request")
+        .await
+        .expect("the module keeps the flow trust");
+    // A fresh engine over the same storage: nothing in memory carries over.
+    let again = NativeEngine::on(world.config.clone(), world.fixture.proxy.clone());
+    assert_eq!(
+        again.flow_trust(&tenant, "flow-1").await.unwrap(),
+        ["http_request"]
+    );
+    let shown = Arc::new(Shown::default());
+    let mut in_flow = input("http_request", &shown);
+    in_flow.variant = Variant::FlowStrict;
+    in_flow.flow = Some("flow-1".into());
+    assert!(matches!(
+        again.check(in_flow).await.unwrap(),
+        Checked::Approved { .. }
+    ));
+    assert!(again
+        .revoke_flow_trust(&tenant, "flow-1", "http_request")
+        .await
+        .unwrap());
+    let mut revoked = input("http_request", &shown);
+    revoked.variant = Variant::FlowStrict;
+    revoked.flow = Some("flow-1".into());
+    assert!(matches!(
+        again.check(revoked).await.unwrap(),
+        Checked::Pending { .. }
+    ));
+}
