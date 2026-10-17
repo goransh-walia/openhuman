@@ -703,6 +703,10 @@ pub(crate) mod native_tests;
 mod production_tests;
 
 #[cfg(test)]
+#[path = "security_gap_native_tests.rs"]
+mod gap_native_tests;
+
+#[cfg(test)]
 #[path = "security_tenant_tests.rs"]
 mod tenant_tests;
 
