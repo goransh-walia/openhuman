@@ -93,7 +93,7 @@ async fn readonly_acting_tools_carry_policy_blocked_marker() {
 
     let _port = crate::modules::security::gap::install_port(std::sync::Arc::new(
         crate::modules::security::gap::stub::StubPort::allowing()
-            .budget(|_| tinysecurity_bus::BudgetDecision2::ReadOnlyMode),
+            .budget(|_, _| tinysecurity_bus::BudgetDecision2::ReadOnlyMode),
     ));
 
     let tmp = TempDir::new().unwrap();

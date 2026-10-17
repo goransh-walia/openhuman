@@ -17,7 +17,7 @@ use super::{BudgetOp, GapPort};
 
 type PathAnswer = Box<dyn Fn(&PathPolicy, PathCheckKind, &PathBuf) -> bool + Send + Sync>;
 type FloorAnswer = Box<dyn Fn(&PathBuf) -> bool + Send + Sync>;
-type BudgetAnswer = Box<dyn Fn(BudgetOp) -> BudgetDecision2 + Send + Sync>;
+type BudgetAnswer = Box<dyn Fn(BudgetOp, &CommandPolicy) -> BudgetDecision2 + Send + Sync>;
 type PrivacyAnswer = Box<dyn Fn(&PrivacyCheckRequest2) -> Verdict + Send + Sync>;
 
 /// One recorded question.
@@ -50,7 +50,7 @@ impl StubPort {
         Self {
             paths: Box::new(|_, _, _| true),
             floor: Box::new(|_| false),
-            budget: Box::new(|_| BudgetDecision2::Allow),
+            budget: Box::new(|_, _| BudgetDecision2::Allow),
             privacy: Box::new(|_| Verdict::Allow),
             asked: Mutex::new(Vec::new()),
             fail: false,
@@ -100,7 +100,7 @@ impl StubPort {
 
     pub(crate) fn budget(
         mut self,
-        answer: impl Fn(BudgetOp) -> BudgetDecision2 + Send + Sync + 'static,
+        answer: impl Fn(BudgetOp, &CommandPolicy) -> BudgetDecision2 + Send + Sync + 'static,
     ) -> Self {
         self.budget = Box::new(answer);
         self
@@ -166,11 +166,11 @@ impl GapPort for StubPort {
     async fn budget(
         &self,
         _workspace_dir: PathBuf,
-        _policy: CommandPolicy,
+        policy: CommandPolicy,
         op: BudgetOp,
     ) -> Result<BudgetDecision2, String> {
         self.record(Asked::Budget(op))?;
-        Ok((self.budget)(op))
+        Ok((self.budget)(op, &policy))
     }
 
     async fn privacy(&self, request: PrivacyCheckRequest2) -> Result<Decision, String> {

@@ -49,7 +49,7 @@ fn refusing_privacy() -> PortGuard {
 /// A module whose autonomy tier is read-only.
 fn read_only_module() -> PortGuard {
     install_port(Arc::new(
-        StubPort::allowing().budget(|_| BudgetDecision2::ReadOnlyMode),
+        StubPort::allowing().budget(|_, _| BudgetDecision2::ReadOnlyMode),
     ))
 }
 
@@ -66,7 +66,7 @@ fn read_only_autonomy_cannot_act() {
 fn the_gate_does_not_count_an_action_the_tool_gate_already_reserved() {
     // The hourly budget is spent once per call by the tool gate before the tool
     // runs; the in-tool questions neither ask the module nor refuse.
-    let stub = Arc::new(StubPort::allowing().budget(|_| BudgetDecision2::RateLimited {
+    let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited {
         max_per_hour: 1,
     }));
     let _module = install_port(stub.clone());

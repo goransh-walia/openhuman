@@ -51,7 +51,7 @@ async fn write_policy_logs_and_returns_denial() {
 
     // The tier and the budget are the module's; here it answers read-only.
     let stub = std::sync::Arc::new(
-        StubPort::allowing().budget(|_| tinysecurity_bus::BudgetDecision2::ReadOnlyMode),
+        StubPort::allowing().budget(|_, _| tinysecurity_bus::BudgetDecision2::ReadOnlyMode),
     );
     let _port = install_port(stub.clone());
     let err = enforce_write_policy_for_config("memory.forget", &config)

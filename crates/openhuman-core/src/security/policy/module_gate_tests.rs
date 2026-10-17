@@ -83,7 +83,7 @@ fn the_blocking_batch_asks_the_module_once() {
 
 #[tokio::test]
 async fn spending_an_action_asks_the_module_and_refuses_with_the_agent_facing_text() {
-    let stub = Arc::new(StubPort::allowing().budget(|_| BudgetDecision2::RateLimited {
+    let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited {
         max_per_hour: 7,
     }));
     let _port = install_port(stub.clone());
@@ -93,7 +93,7 @@ async fn spending_an_action_asks_the_module_and_refuses_with_the_agent_facing_te
     assert_eq!(stub.asked(), vec![Asked::Budget(BudgetOp::Spend)]);
 
     let _port = install_port(Arc::new(
-        StubPort::allowing().budget(|_| BudgetDecision2::ReadOnlyMode),
+        StubPort::allowing().budget(|_, _| BudgetDecision2::ReadOnlyMode),
     ));
     let error = policy().spend_action("demo").await.unwrap_err();
     assert!(error.contains(tinytools::status::POLICY_BLOCKED_MARKER), "{error}");
@@ -113,14 +113,14 @@ async fn a_module_that_cannot_answer_refuses_the_action() {
 
 #[test]
 fn the_tier_reads_the_budget_without_spending_it() {
-    let stub = Arc::new(StubPort::allowing().budget(|_| BudgetDecision2::ReadOnlyMode));
+    let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::ReadOnlyMode));
     {
         let _port = install_port(stub.clone());
         assert!(!policy().tier_allows_acting_blocking());
         assert_eq!(stub.asked(), vec![Asked::Budget(BudgetOp::Peek)]);
     }
     // A spent hourly budget is not a tier refusal.
-    let _port = install_port(Arc::new(StubPort::allowing().budget(|_| {
+    let _port = install_port(Arc::new(StubPort::allowing().budget(|_, _| {
         BudgetDecision2::RateLimited { max_per_hour: 1 }
     })));
     assert!(policy().tier_allows_acting_blocking());

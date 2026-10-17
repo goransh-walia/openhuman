@@ -224,7 +224,7 @@ async fn tool_call_honours_policy_denial() {
     // The tier is the module's; here it answers read-only.
     let _port = crate::modules::security::gap::install_port(std::sync::Arc::new(
         crate::modules::security::gap::stub::StubPort::allowing()
-            .budget(|_| tinysecurity_bus::BudgetDecision2::ReadOnlyMode),
+            .budget(|_, _| tinysecurity_bus::BudgetDecision2::ReadOnlyMode),
     ));
     let port = FakePort::default();
     let policy = SecurityPolicy {

@@ -126,6 +126,17 @@ async fn call_tool_judges_the_policy_of_the_explicit_context_across_scopes() {
     let deny_core = CoreContext::for_test_with_config(DomainSet::full(), denying);
     let allow_core = CoreContext::for_test_with_config(DomainSet::full(), allowing);
 
+    // The tier is the module's, answered for the policy each call registers: a
+    // read-only scope refuses, every other one has room.
+    let _module = crate::modules::security::gap::install_port(Arc::new(
+        crate::modules::security::gap::stub::StubPort::allowing().budget(|_, policy| {
+            if policy.enabled && policy.autonomy == tinysecurity_bus::CommandAutonomy::ReadOnly {
+                tinysecurity_bus::BudgetDecision2::ReadOnlyMode
+            } else {
+                tinysecurity_bus::BudgetDecision2::Allow
+            }
+        }),
+    ));
     let args = json!({ "agent_id": "no-such-agent", "prompt": "hello" });
     // Each call runs scoped to the *other* context, so an ambient read would
     // answer the wrong policy.

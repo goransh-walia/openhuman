@@ -65,7 +65,7 @@ fn adapter_reports_the_autonomy_tier() {
     {
         // The tier is the module's: read-only refuses, and a spent hourly budget
         // is not a tier refusal.
-        let stub = Arc::new(StubPort::allowing().budget(|_| BudgetDecision2::ReadOnlyMode));
+        let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::ReadOnlyMode));
         let _module = install_port(stub.clone());
         assert!(!FsGate::can_act(read_only.as_ref()));
         assert_eq!(stub.asked(), vec![Asked::Budget(BudgetOp::Peek)]);
@@ -93,7 +93,7 @@ fn adapter_reports_the_autonomy_tier() {
 #[test]
 fn the_budget_is_reserved_by_the_tool_gate_not_counted_again_in_the_tool() {
     let dir = tempfile::tempdir().unwrap();
-    let stub = Arc::new(StubPort::allowing().budget(|_| BudgetDecision2::RateLimited {
+    let stub = Arc::new(StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited {
         max_per_hour: 2,
     }));
     let _module = install_port(stub.clone());
