@@ -27,9 +27,10 @@ It does not own the cross-domain `EncryptionEngine` (in `security/encryption/`) 
 
 | Item                                                                                                                          | File         | Purpose                                                                 |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------- |
-| `SecurityPolicy`                                                                                                              | `policy/types.rs` (path checks in `policy/path_checks.rs`, the command gate's host client in `policy/native_commands.rs`, gating in `policy/enforcement.rs`) | Assembles runtime policy from `AutonomyConfig` + workspace dir.         |
+| `SecurityPolicy`                                                                                                              | `policy/types.rs` (module-backed path authorization in `policy/path_checks.rs`, the batched path, budget and tier questions in `policy/module_gate.rs`, the command gate's host client in `policy/native_commands.rs`, construction in `policy/enforcement.rs`) | Assembles runtime policy from `AutonomyConfig` + workspace dir.         |
 | `AutonomyLevel` (`ReadOnly` / `Supervised` / `Full`)                                                                          | `policy/types.rs` | Three-step autonomy ladder.                                             |
-| `ToolOperation`, `ActionTracker`                                                                                              | `policy/types.rs` | Operation kinds and per-session counting.                                 |
+| `PathKind`, `Budget`, `spend_action`                                                                                          | `policy/module_gate.rs` | The host's path and hourly-budget questions to the module.                |
+| `is_protected`, `protected_paths`, `floor`                                                                                    | `floor.rs`   | The unconditional protected-path floor, asked of the module.            |
 | `SecretStore`                                                                                                                 | `secret_storage/encrypted_store.rs` (`secrets.rs` re-exports it) | OS-keychain / encrypted-file secret persistence with round-trip helpers. |
 | `AuditLogger`, `AuditEventType`, `AuditEvent`, `Actor`, `Action`, `ExecutionResult`, `SecurityContext`, `CommandExecutionLog` | `audit.rs`   | Append-only audit trail.                                                |
 | `PairingGuard`, `constant_time_eq`, `is_public_bind`                                                                          | `pairing.rs` (`PairingGuard` and `constant_time_eq` are re-exported from `tinychannels_bus::security`) | Pairing-token check before binding the RPC server publicly.             |
@@ -82,11 +83,11 @@ Both are fixed in [tinysecurity#27](https://github.com/tinyhumansai/tinysecurity
 
 The wire spellings are lowercase (`readonly`, `supervised`, `full`). The user-facing table is in [Approval gate](../../features/approval-gate.md).
 
-`ToolOperation` names the kind of a tool call. `ActionTracker` keeps the per-session counts that the policy compares against its caps. The policy gate asks the module for a decision before every executable tool dispatch.
+The host keeps no operation kinds and no action counters. The module holds one hourly ledger, and the tool gate asks it for a decision before every executable tool dispatch and spends one action per acting call. This covers direct tool runs too (JS and RPC tool calls, workflow `tool_call` nodes), which pass through the same gate. Callers that are not tools (MCP server dispatch, `mcp_ui`, the workflow `http_request` node) spend through `SecurityPolicy::spend_action`.
 
 All of this applies only when the autonomy policy is on. `[autonomy] enabled = false` is the default, and `SecurityPolicy::from_config` carries that flag through every enforcement entry point. With the policy off, command classification, the approval gate, the command allowlist and the hourly action budget do nothing. `workspace_only`, `forbidden_paths` and the workspace-internal boundary are not enforced either.
 
-One check never turns off. `is_always_forbidden` blocks credential stores (`~/.ssh`, `~/.gnupg`, `~/.aws`) and system roots. It also rejects `..` traversal and null bytes in a path. The module keeps this floor whatever the configuration (`DenialReason::Floor`), and the host repeats it as a synchronous preflight.
+One check never turns off. The protected-path floor blocks credential stores (`~/.ssh`, `~/.gnupg`, `~/.aws`) and system roots. It also rejects `..` traversal and null bytes in a path. The module owns the floor and keeps it whatever the configuration (`DenialReason::Floor`, `ProtectedPath2`). The host has no copy of it: it asks through `security/floor.rs` and treats a module that cannot answer as protecting the path.
 
 ## Audit log
 
@@ -108,7 +109,7 @@ One check never turns off. `is_always_forbidden` blocks credential stores (`~/.s
 
 | Path                                                          | Role                                                                      |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `policy/` (`mod.rs`, `types.rs`, `path_checks.rs`, `command_checks.rs`, `enforcement.rs`, `policy_*_tests.rs`, `proptest_tests.rs`) | `SecurityPolicy`, `AutonomyLevel`, risk classification, path and command checks, action tracking. |
+| `policy/` (`mod.rs`, `types.rs`, `path_checks.rs`, `command_checks.rs`, `enforcement.rs`, `module_gate.rs`, `native_paths.rs`, `policy_*_tests.rs`) | `SecurityPolicy`, `AutonomyLevel`, and the host's questions to the module about commands, paths and the hourly budget. |
 | `core.rs`, `core_tests.rs`                                    | `redact()` + small shared helpers.                                        |
 | `audit.rs`                                                    | Append-only audit log types.                                              |
 | `secrets.rs`, `secret_storage/`                                      | `SecretStore` (implemented in `secret_storage/encrypted_store.rs`) + round-trip tests. |
@@ -137,7 +138,7 @@ Local PII detection belongs to [`tinymemory_api::safety`](https://github.com/tin
 
 ## Tests
 
-- Unit: `pairing_tests.rs`, `policy/policy_tests*.rs`, `policy/proptest_tests.rs`, `secret_storage/encrypted_store_tests*.rs`.
+- Unit: `pairing_tests.rs`, `policy/policy_tests*.rs`, `policy/module_gate_tests.rs`, `secret_storage/encrypted_store_tests*.rs`.
 - `core_tests.rs` covers `redact()`.
 
 ## Related
