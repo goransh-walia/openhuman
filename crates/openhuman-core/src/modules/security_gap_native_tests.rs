@@ -3,7 +3,7 @@
 //! explicitly selected local native fixture is available
 //! (`OPENHUMAN_TEST_SECURITY_MODULE`).
 
-use super::super::native_tests::native_fixture;
+use super::native_tests::native_fixture;
 use tinysecurity_bus::{
     names, BudgetDecision2, BudgetRequest2, CommandAutonomy, CommandClass, CommandExecutionMode,
     CommandPolicy, Decision, DenialReason, HostActionClassRequest2, HostActionClassResponse2,
@@ -108,7 +108,7 @@ async fn a_path_batch_answers_what_the_single_query_answers() {
     std::fs::create_dir_all(workspace.join("memory")).unwrap();
     std::fs::create_dir_all(&action).unwrap();
     std::fs::write(action.join("a.txt"), "x").unwrap();
-    let id = super::super::call_register_path_policy(
+    let id = super::call_register_path_policy(
         &native.proxy,
         path_policy(&workspace, &action),
     )
@@ -163,7 +163,7 @@ async fn a_path_batch_answers_what_the_single_query_answers() {
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn spending_and_peeking_share_the_command_ledger() {
     let native = native_fixture().await;
-    let scope = super::super::scoped_client::register_command_policy(
+    let scope = super::scoped_client::register_command_policy(
         &native.proxy,
         command_policy(native.acting.path(), 2),
     )
@@ -196,7 +196,7 @@ async fn a_read_only_scope_refuses_before_spending() {
     let native = native_fixture().await;
     let mut policy = command_policy(native.acting.path(), 5);
     policy.autonomy = CommandAutonomy::ReadOnly;
-    let scope = super::super::scoped_client::register_command_policy(&native.proxy, policy)
+    let scope = super::scoped_client::register_command_policy(&native.proxy, policy)
         .await
         .unwrap();
     for member in [names::methods::SPEND_ACTION2, names::methods::PEEK_BUDGET2] {
