@@ -6,13 +6,17 @@
 //! the host supplies the facts, the concrete operation, the audit correlation, and
 //! executes exactly the plan it gets back:
 //!
-//! 1. [`facts::scope`] turns the policy, the configuration and the executors TinyBox
-//!    verified into immutable scope facts. A scope's id digests its facts, so a spawn
-//!    with other facts gets its own scope.
+//! 1. [`facts::scope`] turns the policy, the configuration and every executor TinyBox
+//!    verified into immutable scope facts, including the operator's own sandbox
+//!    setting. A scope's id digests its facts, so a spawn with other facts gets its own
+//!    scope.
 //! 2. [`registry`] makes the module hold that scope for the subject
 //!    (`RegisterSandboxScope2`) on the subject's own audit stream.
 //! 3. [`plan`] sends `Plan2` for the concrete [`SpawnOperation`] and maps the issued
-//!    artifact through [`BoxPlan::from_artifact`].
+//!    artifact through [`BoxPlan::from_artifact`]. The module picks the executor (the
+//!    configured backend is only a requirement it is sent) and alone decides whether
+//!    the operator's setting may skip the jail: it plans a run on the host for the
+//!    trusted operator outside SaaS and refuses every other source.
 //! 4. [`consume`] reserves the artifact once, immediately before the spawn
 //!    (`ConsumeSandboxPlan2`); a second use, or any change to the operation, is refused.
 //!
@@ -29,13 +33,14 @@ use std::path::Path;
 
 use tinysecurity_bus::{
     ConsumeSandboxPlanRequest2, NetworkPolicy, PathGrant, ResourceLimits2, SandboxArtifact2,
-    SandboxDenial2, SandboxPlanRequest2, SubjectScope, Verdict,
+    SandboxBackend, SandboxDenial2, SandboxExecutor2, SandboxPlanOptions2, SandboxPlanRequest2,
+    SubjectScope, Verdict,
 };
 
 pub(crate) use facts::SpawnSource;
 pub(crate) use operation::SpawnOperation;
 
-use super::plan::{BoxPlan, PlanMappingError, PlannedExecutor};
+use super::plan::{BoxPlan, PlanMappingError};
 use super::types::{SandboxBackendKind, SandboxPolicy};
 use crate::config::Config;
 use crate::modules::security::sandbox as client;
@@ -90,7 +95,7 @@ pub(crate) enum ModuleSource<'a> {
 /// A security module and executor facts supplied by a test.
 pub(crate) struct FixedModule {
     pub(crate) proxy: tinybus::Proxy,
-    pub(crate) executor: tinysecurity_bus::SandboxExecutor2,
+    pub(crate) executors: Vec<SandboxExecutor2>,
 }
 
 impl ModuleSource<'_> {
@@ -110,14 +115,24 @@ pub(crate) struct SpawnRequest<'a> {
     pub(crate) policy: &'a SandboxPolicy,
     pub(crate) source: SpawnSource,
     pub(crate) operation: &'a SpawnOperation<'a>,
-    /// The operator turned the sandbox off for this process (never under SaaS).
-    pub(crate) host_off: bool,
+    /// The operator's own switch turned the sandbox off. It is a setting the scope
+    /// carries; whether it skips the jail is the module's decision.
+    pub(crate) operator_off: bool,
+    /// Ask the module for a run on the host (needs `operator_off`). It plans one only
+    /// for the trusted operator outside SaaS and refuses everything else (`floor`).
+    pub(crate) host_run: bool,
     pub(crate) module: ModuleSource<'a>,
 }
 
-/// The requested resource bounds, from the policy's Docker overrides.
+/// The requested resource bounds, from the policy's Docker overrides. Only a spawn the
+/// policy requires a container for asks for them: a bound only a container enforces would
+/// otherwise make every other executor ineligible.
 fn limits(policy: &SandboxPolicy) -> ResourceLimits2 {
-    let Some(overrides) = &policy.docker_overrides else {
+    let Some(overrides) = policy
+        .docker_overrides
+        .as_ref()
+        .filter(|_| policy.backend == SandboxBackendKind::Docker)
+    else {
         return ResourceLimits2::default();
     };
     ResourceLimits2 {
@@ -137,55 +152,81 @@ fn limits(policy: &SandboxPolicy) -> ResourceLimits2 {
     }
 }
 
-/// The grants one spawn asks for: its workspace read-write plus the mounts the
-/// executor honours (a container ignores read-write mounts, as it always has).
+/// The grants one spawn asks for: its workspace read-write plus the mounts the policy
+/// names. A workspace-less spawn asks for no writable root at all.
 fn grants(policy: &SandboxPolicy) -> Option<Vec<PathGrant>> {
     let mut grants = facts::grant_ceiling(policy)?;
-    if policy.backend == SandboxBackendKind::Docker {
-        let writable: Vec<_> = policy
-            .read_write_mounts
-            .iter()
-            .filter_map(|path| path.to_str())
-            .collect();
-        grants.retain(|grant| {
-            Path::new(&grant.path) == policy.workspace_root
-                || !(grant.write && writable.contains(&grant.path.as_str()))
-        });
+    if !policy.mount_workspace {
+        grants.retain(|grant| !grant.write);
     }
     Some(grants)
 }
 
-fn ensure_selected(plan: &BoxPlan, policy: &SandboxPolicy) -> Result<(), PlanError> {
-    let expected = match policy.backend {
-        SandboxBackendKind::Local => PlannedExecutor::NativeJail,
-        SandboxBackendKind::Docker => PlannedExecutor::Docker,
-        SandboxBackendKind::None => return Err(unavailable("the policy selects no sandbox")),
-    };
-    if plan.executor != expected {
-        return Err(unavailable("the plan selected another executor"));
+/// The executor preference, workspace and host-run options the policy asks for.
+fn options(policy: &SandboxPolicy, host_run: bool) -> SandboxPlanOptions2 {
+    SandboxPlanOptions2 {
+        preferred_backend: match policy.backend {
+            SandboxBackendKind::None => None,
+            SandboxBackendKind::Local => Some(SandboxBackend::Jail),
+            SandboxBackendKind::Docker => Some(SandboxBackend::Docker),
+        },
+        require_preferred_backend: policy.backend != SandboxBackendKind::None,
+        no_workspace: !policy.mount_workspace,
+        host_run,
     }
-    Ok(())
 }
 
-/// The TinyBox facts of the executor `policy` selects.
-async fn probe(
-    config: &Config,
-    policy: &SandboxPolicy,
-) -> Result<tinysecurity_bus::SandboxExecutor2, PlanError> {
-    match policy.backend {
-        SandboxBackendKind::Local => {
-            let status = crate::modules::tinybox::jail_status(config)
-                .await
-                .map_err(|error| unavailable(format!("jail status: {error}")))?;
-            Ok(executors::jail(&status))
+/// Every executor TinyBox verified on this host, in the order the module should prefer
+/// them. A policy that requires one executor probes only that one. An executor whose
+/// probe fails is declared unavailable; when every probe fails the spawn is refused.
+async fn probe(config: &Config, policy: &SandboxPolicy) -> Result<Vec<SandboxExecutor2>, PlanError> {
+    let jail = || async {
+        crate::modules::tinybox::jail_status(config)
+            .await
+            .map(|status| executors::jail(&status))
+            .map_err(|error| format!("jail status: {error}"))
+    };
+    let docker = || async {
+        super::docker::is_docker_available(config)
+            .await
+            .map(executors::docker)
+            .map_err(|error| format!("docker status: {error}"))
+    };
+    let (jail, docker) = match policy.backend {
+        SandboxBackendKind::Local => (Some(jail().await), None),
+        SandboxBackendKind::Docker => (None, Some(docker().await)),
+        SandboxBackendKind::None => {
+            let (jail, docker) = tokio::join!(jail(), docker());
+            (Some(jail), Some(docker))
         }
-        SandboxBackendKind::Docker => {
-            let available = super::docker::is_docker_available(config)
-                .await
-                .map_err(|error| unavailable(format!("docker status: {error}")))?;
-            Ok(executors::docker(available))
+    };
+    let mut declared = Vec::new();
+    let mut failure = None;
+    if let Some(jail) = jail {
+        match jail {
+            Ok(executor) => declared.push(executor),
+            Err(error) => {
+                tracing::warn!(%error, "[sandbox:plan] the native jail could not be verified");
+                declared.push(executors::jail_unavailable());
+                failure.get_or_insert(error);
+            }
         }
-        SandboxBackendKind::None => Err(unavailable("the policy selects no sandbox")),
+    }
+    if let Some(docker) = docker {
+        match docker {
+            Ok(executor) => declared.push(executor),
+            Err(error) => {
+                tracing::debug!(%error, "[sandbox:plan] the container runtime could not be verified");
+                declared.push(executors::docker(false));
+                failure.get_or_insert(error);
+            }
+        }
+    }
+    match failure {
+        Some(error) if declared.iter().all(|executor| !executor.available) => {
+            Err(unavailable(error))
+        }
+        _ => Ok(declared),
     }
 }
 
