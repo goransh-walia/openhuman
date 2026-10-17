@@ -172,65 +172,11 @@ mod wire_caps;
 use wire_caps::MAX_WIRE_SUBAGENT_OUTPUT;
 use wire_caps::{cap_wire_args, cap_wire_output};
 
-use crate::agent::session_store::ledger_sync;
-
-pub(super) fn ledger_upsert_agent_run(
-    config: &crate::config::Config,
-    upsert: tinyagents_session::run_ledger::AgentRunUpsert,
-) {
-    if let Err(err) = ledger_sync::upsert_agent_run(&config.workspace_dir, upsert) {
-        log::warn!("[run_ledger][web_channel] failed to upsert run: {err}");
-    }
-}
-
-pub(super) fn ledger_append_event(
-    config: &crate::config::Config,
-    event: tinyagents_session::run_ledger::RunEventAppend,
-) {
-    if let Err(err) = ledger_sync::append_run_event(&config.workspace_dir, event) {
-        log::warn!("[run_ledger][web_channel] failed to append event: {err}");
-    }
-}
-
-pub(super) fn ledger_upsert_telemetry(
-    config: &crate::config::Config,
-    telemetry: tinyagents_session::run_ledger::RunTelemetryUpsert,
-) {
-    if let Err(err) = ledger_sync::upsert_run_telemetry(&config.workspace_dir, telemetry) {
-        log::warn!("[run_ledger][web_channel] failed to upsert telemetry: {err}");
-    }
-}
-
-pub(super) fn ledger_get_telemetry(
-    config: &crate::config::Config,
-    run_id: &str,
-) -> Option<tinyagents_session::run_ledger::RunTelemetry> {
-    match ledger_sync::get_agent_run(&config.workspace_dir, run_id) {
-        Ok(Some(run)) => {
-            let telemetry = run.telemetry;
-            log::debug!(
-                "[run_ledger][web_channel] read telemetry run_id={} present={}",
-                run_id,
-                telemetry.is_some()
-            );
-            telemetry
-        }
-        Ok(None) => {
-            log::debug!(
-                "[run_ledger][web_channel] telemetry unavailable; run missing run_id={}",
-                run_id
-            );
-            None
-        }
-        Err(err) => {
-            log::warn!(
-                "[run_ledger][web_channel] failed to read telemetry run_id={} err={err}",
-                run_id
-            );
-            None
-        }
-    }
-}
+#[path = "progress_bridge_ledger.rs"]
+mod ledger;
+pub(super) use ledger::{
+    ledger_append_event, ledger_get_telemetry, ledger_upsert_agent_run, ledger_upsert_telemetry,
+};
 
 /// Build the worktree-isolation slice of a `subagent_completed`
 /// [`SubagentProgressDetail`] (#3376). An empty `changed_files` collapses to
