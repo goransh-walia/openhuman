@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use sha2::{Digest, Sha256};
 use tinysecurity_bus::{
     names, RedactRequest, RedactResponse, RedactWithRequest, ScanPromptRequest,
-    ScanToolDefinitionRequest, Secret,
+    ScanPromptScoredRequest2, ScanPromptScoredResponse2, ScanToolDefinitionRequest, Secret,
 };
 pub(crate) use tinysecurity_bus::{RedactMode, ScanResponse, ScanVerdict};
 
@@ -217,6 +217,32 @@ pub(crate) async fn scan_prompt_on(
         )
         .await
         .map_err(|_| "TinySecurity ScanPrompt failed".into())
+}
+
+/// Score a prompt for injection (`ScanPrompt2`): a tier, a score in thousandths
+/// and the rule codes. The tier is context, not authorization.
+pub(crate) async fn scan_prompt_scored(
+    config: &Config,
+    text: &str,
+) -> Result<ScanPromptScoredResponse2, String> {
+    super::require_enabled(config)?;
+    let proxy = super::scoped_client::module_proxy(config).await?;
+    scan_prompt_scored_on(&proxy, text).await
+}
+
+pub(crate) async fn scan_prompt_scored_on(
+    proxy: &tinybus::Proxy,
+    text: &str,
+) -> Result<ScanPromptScoredResponse2, String> {
+    proxy
+        .call_confidential(
+            names::methods::SCAN_PROMPT2,
+            (ScanPromptScoredRequest2 {
+                text: text.to_string(),
+            },),
+        )
+        .await
+        .map_err(|_| "TinySecurity ScanPrompt2 failed".into())
 }
 
 /// Scan a tool definition (name plus JSON schema) for injected instructions.
