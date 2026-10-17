@@ -124,7 +124,7 @@ pub async fn offload_oversized_result(
     if let Some(policy) = policy {
         if let Ok(key) = offload.resolve(ArtifactKind::Output, &offload.default_result_name()) {
             let target = materialize_root.join(&key);
-            if policy.is_workspace_internal_path(&target)
+            if policy.is_internal(&target).await
                 || target.starts_with(&policy.workspace_dir)
             {
                 tracing::warn!(

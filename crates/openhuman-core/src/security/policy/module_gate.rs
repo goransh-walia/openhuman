@@ -123,6 +123,30 @@ impl SecurityPolicy {
             .unwrap_or(false)
     }
 
+    /// Whether `path` is host internal state the agent never reaches (the module's
+    /// `Internal` reservation). Fails closed: a path the module could not be asked
+    /// about is internal.
+    pub async fn is_internal(&self, path: &Path) -> bool {
+        match self.check_paths(PathKind::Internal, &[path.to_path_buf()]).await {
+            Ok(answers) => answers.first().copied().unwrap_or(true),
+            Err(error) => {
+                log::debug!("[security][path] internal-state check unavailable; treated as internal: {error}");
+                true
+            }
+        }
+    }
+
+    /// [`Self::is_internal`] for a synchronous caller.
+    pub fn is_internal_blocking(&self, path: &Path) -> bool {
+        match self.native_check_paths_blocking(PathKind::Internal, &[path.to_path_buf()]) {
+            Ok(answers) if answers.len() == 1 => answers[0],
+            Ok(_) | Err(_) => {
+                log::debug!("[security][path] internal-state check unavailable; treated as internal");
+                true
+            }
+        }
+    }
+
     /// Reserve one action of the hourly budget for `operation`: the tier and the
     /// ledger, both the module's. `Err` is the agent-facing refusal.
     pub async fn spend_action(&self, operation: &str) -> Result<(), String> {
