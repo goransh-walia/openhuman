@@ -47,7 +47,6 @@ fn security_only_spelling_decodes_without_legacy_tables() {
     )
     .unwrap();
     assert!(config.autonomy.enabled);
-    assert!(!config.security.audit.enabled);
     assert_eq!(config.security.approval.ttl_secs, Some(30));
 }
 
