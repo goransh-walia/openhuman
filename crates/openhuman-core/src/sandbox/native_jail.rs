@@ -237,9 +237,6 @@ fn approved_environment(
         .collect()
 }
 
-#[cfg(feature = "modules")]
-use super::shell_exec::path_string;
-
 #[cfg(test)]
 #[path = "native_jail_tests.rs"]
 mod tests;
