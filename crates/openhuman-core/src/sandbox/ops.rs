@@ -68,7 +68,7 @@ pub async fn command_requires_sandbox(
     Ok(matches!(
         config.sandbox.backend,
         SandboxBackend::Landlock | SandboxBackend::Docker
-    ))
+    ) || config.runtime.kind == "docker")
 }
 
 /// Resolve the policy for a command tool before building its command line.
@@ -561,10 +561,20 @@ pub(crate) async fn apply_requested_backend(
     runtime: &RuntimeConfig,
     config: &crate::config::Config,
 ) -> anyhow::Result<()> {
+    // `[runtime] kind = "docker"` is the legacy spelling of an operator-required
+    // container; it selects the same module-planned Docker spawn.
+    let docker_runtime = runtime.kind == "docker";
     match &sandbox.backend {
-        SandboxBackend::Auto => Ok(()),
+        SandboxBackend::Auto if !docker_runtime => Ok(()),
         SandboxBackend::None => Ok(()),
-        SandboxBackend::Docker => {
+        SandboxBackend::Auto | SandboxBackend::Docker => {
+            if docker_runtime && !runtime.docker.mount_workspace {
+                // The module's plan always grants the workspace; honouring a
+                // workspace-less container would need a plan the host cannot ask for.
+                anyhow::bail!(
+                    "[runtime.docker] mount_workspace = false is not supported: sandboxed spawns always grant the workspace"
+                );
+            }
             if policy.backend == SandboxBackendKind::Local {
                 policy.read_only_mounts.clear();
                 policy.read_write_mounts.clear();
