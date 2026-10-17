@@ -357,7 +357,10 @@ async fn persist_channel_turn(
 ) -> Result<(), String> {
     // The fixture exists only where both features compile it (channels/mod.rs).
     #[cfg(all(test, feature = "channels", feature = "modules"))]
-    let client = crate::channels::module_fixture::client().await;
+    let client = {
+        let _ = ctx;
+        crate::channels::module_fixture::client().await
+    };
     #[cfg(not(all(test, feature = "channels", feature = "modules")))]
     let client = {
         let config = ctx.load_config().await?;
