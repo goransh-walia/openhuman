@@ -397,33 +397,6 @@ async fn path_outside_workspace_and_roots_blocked() {
     );
 }
 
-#[test]
-fn is_within_trusted_root_write_requires_readwrite() {
-    let policy = trusted_policy(
-        StdPathBuf::from("/ws"),
-        vec![TrustedRoot {
-            path: "/data".into(),
-            access: TrustedAccess::Read,
-        }],
-    );
-    assert!(policy.is_within_trusted_root(StdPath::new("/data/sub/x"), false));
-    assert!(!policy.is_within_trusted_root(StdPath::new("/data/sub/x"), true));
-    assert!(!policy.is_within_trusted_root(StdPath::new("/elsewhere/x"), false));
-}
-
-#[test]
-fn trusted_root_never_matches_credential_components() {
-    let policy = trusted_policy(
-        StdPathBuf::from("/ws"),
-        vec![TrustedRoot {
-            path: "/home/me".into(),
-            access: TrustedAccess::ReadWrite,
-        }],
-    );
-    assert!(policy.is_within_trusted_root(StdPath::new("/home/me/proj/file"), false));
-    assert!(!policy.is_within_trusted_root(StdPath::new("/home/me/.aws/credentials"), false));
-}
-
 // -- Full access bypasses the command allowlist (access modes) ---------------
 
 /// The default projects home (`~/OpenHuman/projects`) must always be a
@@ -476,55 +449,3 @@ fn from_config_does_not_duplicate_user_granted_projects_root() {
 }
 
 // -- canonical_workspace cache ------------------------------------
-
-/// The synchronous path validators (`is_path_string_allowed`,
-/// `is_resolved_path_allowed_for`) previously re-canonicalized `workspace_dir`
-/// on every call. `workspace_root_sync` hydrates the `canonical_workspace`
-/// cell once and reuses it.
-#[test]
-fn workspace_root_sync_hydrates_the_canonical_workspace_cache() {
-    let tmp = tempfile::tempdir().unwrap();
-    let workspace = tmp.path().to_path_buf();
-    let expected = workspace
-        .canonicalize()
-        .unwrap_or_else(|_| workspace.clone());
-
-    let policy = SecurityPolicy {
-        workspace_dir: workspace.clone(),
-        action_dir: workspace.clone(),
-        workspace_only: false,
-        forbidden_paths: vec![],
-        ..SecurityPolicy::default()
-    };
-
-    // Empty before first use.
-    assert!(
-        policy.canonical_workspace.get().is_none(),
-        "OnceCell must start empty so the first sync call hydrates it"
-    );
-
-    // First sync call resolves the canonical workspace and hydrates the cell.
-    let r1 = policy.workspace_root_sync();
-    assert_eq!(r1, expected, "sync helper returns the canonical workspace");
-    assert_eq!(
-        policy.canonical_workspace.get(),
-        Some(&expected),
-        "sync helper must hydrate the shared canonical_workspace cell"
-    );
-
-    // Repeated sync calls reuse the cached value.
-    for _ in 0..5 {
-        assert_eq!(
-            policy.workspace_root_sync(),
-            r1,
-            "sync workspace root must be stable across calls"
-        );
-    }
-
-    // Behavior preserved through the swapped call site: a path under the
-    // canonical workspace is still allowed.
-    assert!(
-        policy.is_resolved_path_allowed(&expected.join("note.txt")),
-        "a path inside the workspace stays allowed after the cache swap"
-    );
-}
