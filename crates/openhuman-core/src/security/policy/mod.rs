@@ -20,7 +20,7 @@ pub use native_commands::{
     CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, Refusal,
     SharedCommandGateway,
 };
-pub use module_gate::{Budget, PathKind};
+pub use module_gate::{host_action_class, Budget, PathKind};
 pub use types::{
     tool_result_artifacts_dir, AutonomyLevel, GateDecision, SecurityPolicy, TrustedAccess,
     TrustedRoot,

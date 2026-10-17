@@ -44,6 +44,7 @@ impl ToolBackend for NativeToolBackend {
         }
 
         let class = crate::tools::native_ops::classify_tool_call(ctx.config, tool_name, &args)
+            .await
             .map_err(EngineError::Capability)?;
         let tier_decision =
             super::super::enforce_node_tier_gate(ctx.security, class, "tool_call").await?;

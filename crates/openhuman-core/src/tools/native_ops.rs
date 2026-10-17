@@ -9,7 +9,7 @@ use crate::security::SecurityPolicy;
 use crate::tools;
 use crate::tools::native_ops_types::{ExecuteToolOutcome, RuntimeToolSummary};
 use tinybox_bus::CommandClass;
-use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolScope};
+use tinytools::{Tool, ToolCallOptions, ToolScope};
 use tracing::{debug, trace};
 
 fn tool_scope_label(scope: ToolScope) -> &'static str {
@@ -47,29 +47,22 @@ fn classify_shell_tool_call(args: &serde_json::Value) -> CommandClass {
     class
 }
 
-fn command_class_for_tool(tool: &dyn Tool, args: &serde_json::Value) -> CommandClass {
+/// The command class of one tool call. `shell` is classified from its declared
+/// category (the invocation path runs the module's exact command analysis before
+/// approval and execution); every other tool is classified by the module from its
+/// permission level and external effect (`ClassifyHostAction2`).
+async fn command_class_for_tool(
+    tool: &dyn Tool,
+    args: &serde_json::Value,
+) -> Result<CommandClass, String> {
     if tool.name() == "shell" {
-        return classify_shell_tool_call(args);
+        return Ok(classify_shell_tool_call(args));
     }
-
-    let permission = tool.permission_level_with_args(args);
-    match permission {
-        PermissionLevel::None | PermissionLevel::ReadOnly => {
-            if tool.external_effect_with_args(args) {
-                CommandClass::Network
-            } else {
-                CommandClass::Read
-            }
-        }
-        PermissionLevel::Write | PermissionLevel::Execute => {
-            if tool.external_effect_with_args(args) {
-                CommandClass::Network
-            } else {
-                CommandClass::Write
-            }
-        }
-        PermissionLevel::Dangerous => CommandClass::Destructive,
-    }
+    crate::security::policy::host_action_class(
+        tool.permission_level_with_args(args),
+        tool.external_effect_with_args(args),
+    )
+    .await
 }
 
 pub fn build_runtime_tools(config: &Config) -> Result<Vec<Box<dyn Tool>>, String> {
@@ -116,7 +109,7 @@ pub fn list_tools(config: &Config) -> Result<Vec<RuntimeToolSummary>, String> {
     Ok(summaries)
 }
 
-pub fn classify_tool_call(
+pub async fn classify_tool_call(
     config: &Config,
     tool_name: &str,
     args: &serde_json::Value,
@@ -130,7 +123,7 @@ pub fn classify_tool_call(
             debug!(tool_name, "[native_ops] classify_tool_call: tool not found");
             format!("unknown tool `{tool_name}`")
         })?;
-    let class = command_class_for_tool(tool.as_ref(), args);
+    let class = command_class_for_tool(tool.as_ref(), args).await?;
     debug!(
         tool_name,
         ?class,

@@ -74,6 +74,7 @@ pub async fn compute_approval_manifest(config: &Config, graph: &WorkflowGraph) -
                 // unresolved `=` bindings, so a classification error degrades
                 // conservatively to Network: over-asking is safe.
                 let class = crate::tools::native_ops::classify_tool_call(config, tool_name, args)
+                    .await
                     .unwrap_or(CommandClass::Network);
                 gated(class).await
             }

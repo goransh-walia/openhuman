@@ -71,6 +71,17 @@ impl Budget {
     }
 }
 
+/// The command class of a host action, from its permission level and whether it
+/// has an external effect. Informational (the gate decides what may run), and the
+/// module's: the host keeps no mapping of its own. `Err` when the module cannot
+/// answer.
+pub async fn host_action_class(
+    permission: tinytools::PermissionLevel,
+    external_effect: bool,
+) -> Result<tinybox_bus::CommandClass, String> {
+    native::host_action_class(permission, external_effect).await
+}
+
 fn unavailable(error: &str) -> String {
     log::warn!("[security][policy] module unavailable; refused: {error}");
     refusal_message(Refusal::Unavailable)
@@ -198,6 +209,27 @@ mod native {
         }
     }
 
+    pub(super) async fn host_action_class(
+        permission: tinytools::PermissionLevel,
+        external_effect: bool,
+    ) -> Result<tinybox_bus::CommandClass, String> {
+        use tinysecurity_bus::{HostActionClassRequest2, ToolPermission};
+        use tinytools::PermissionLevel as Level;
+        let permission = match permission {
+            Level::None => ToolPermission::None,
+            Level::ReadOnly => ToolPermission::ReadOnly,
+            Level::Write => ToolPermission::Write,
+            Level::Execute => ToolPermission::Execute,
+            Level::Dangerous => ToolPermission::Dangerous,
+        };
+        gap::host_action_class(HostActionClassRequest2 {
+            permission,
+            external_effect,
+        })
+        .await
+        .map(super::super::native_commands::from_bus_class)
+    }
+
     impl SecurityPolicy {
         pub(super) async fn native_check_paths(
             &self,
@@ -250,6 +282,13 @@ mod native {
     use super::*;
 
     const NO_MODULE: &str = "TinySecurity is not built into this host";
+
+    pub(super) async fn host_action_class(
+        _permission: tinytools::PermissionLevel,
+        _external_effect: bool,
+    ) -> Result<tinybox_bus::CommandClass, String> {
+        Err(NO_MODULE.into())
+    }
 
     impl SecurityPolicy {
         pub(super) async fn native_check_paths(
