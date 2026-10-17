@@ -1051,6 +1051,8 @@ impl OpenHumanSessionHost {
 
 #[path = "runtime_session_tool_surface.rs"]
 mod tool_surface;
+#[cfg(test)]
+pub(super) use tool_surface::reconcile_synthesized_visibility;
 
 #[cfg(test)]
 #[path = "runtime_session_juice_tests.rs"]

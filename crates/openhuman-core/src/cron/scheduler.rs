@@ -26,6 +26,8 @@ mod tests;
 
 #[allow(unused_imports)]
 use crate::core::runtime::DispatchCtx;
+#[cfg(test)]
+use agent_run::*;
 #[allow(unused_imports)]
 use delivery::*;
 #[allow(unused_imports)]
