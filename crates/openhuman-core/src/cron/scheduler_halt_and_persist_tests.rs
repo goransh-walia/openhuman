@@ -622,4 +622,3 @@ async fn deliver_if_configured_publishes_event_for_announce_mode() {
     .await
     .is_ok());
 }
-

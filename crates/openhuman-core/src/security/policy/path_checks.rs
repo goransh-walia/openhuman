@@ -265,7 +265,10 @@ impl SecurityPolicy {
     /// Without the module there is nothing to ask: file access is denied.
     #[cfg(not(feature = "security-module"))]
     pub async fn validate_path(&self, path: &str) -> Result<PathBuf, String> {
-        log::debug!("[security][path] validate_path denied: module feature disabled path_len={}", path.len());
+        log::debug!(
+            "[security][path] validate_path denied: module feature disabled path_len={}",
+            path.len()
+        );
         Err(format!(
             "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
         ))
@@ -284,7 +287,10 @@ impl SecurityPolicy {
     /// Without the module there is nothing to ask: file access is denied.
     #[cfg(not(feature = "security-module"))]
     pub async fn validate_parent_path(&self, path: &str) -> Result<PathBuf, String> {
-        log::debug!("[security][path] validate_parent_path denied: module feature disabled path_len={}", path.len());
+        log::debug!(
+            "[security][path] validate_parent_path denied: module feature disabled path_len={}",
+            path.len()
+        );
         Err(format!(
             "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
         ))
