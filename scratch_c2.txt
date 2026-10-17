@@ -1,0 +1,123 @@
+    Checking tracing-core v0.1.36
+    Checking tower v0.5.3
+   Compiling crossbeam-utils v0.8.23
+    Checking axum-core v0.5.6
+    Checking tracing v0.1.44
+    Checking tinywallet-bus v0.23.3 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinywallet/crates/tinywallet-bus)
+    Checking concurrent-queue v2.5.0
+    Checking tower-http v0.6.11
+    Checking h2 v0.4.19
+    Checking tinyagents-definition v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-definition)
+    Checking async-channel v2.5.0
+    Checking tinybus v0.1.6 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinybus/crates/tinybus)
+    Checking wacore v0.7.0
+    Checking async-channel v1.9.0
+    Checking tinyflows v0.8.21 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyflows/crates/tinyflows)
+    Checking hyper v1.11.1
+    Checking hyper-util v0.1.20
+    Checking tinystoragedrivers-bus v0.11.0 (https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54a)
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+    Checking stop-token v0.7.0
+    Checking tinyflows-schedule v0.1.0 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyflows/crates/tinyflows-schedule)
+warning: unused import: `api::run_preflight_with_observer`
+   --> vendor/tinyflows/crates/tinyflows/src/engine.rs:283:16
+    |
+283 | pub(crate) use api::run_preflight_with_observer;
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `run_preflight_with_observer` is never used
+  --> vendor/tinyflows/crates/tinyflows/src/engine/api.rs:58:21
+   |
+58 | pub(crate) async fn run_preflight_with_observer(
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `tinyflows` (lib) generated 2 warnings (run `cargo clippy --fix --lib -p tinyflows -- -D warnings` to apply 1 suggestion)
+    Checking tinyflows-catalog v0.1.0 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyflows/crates/tinyflows-catalog)
+    Checking tinyinference-providers v0.4.1 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-providers)
+    Checking tinyinference-embeddings v0.4.1 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-embeddings)
+    Checking tinytools-std v0.5.0 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/vendor/tinytools/crates/tinytools-std)
+    Checking tinyinference-llm v0.4.1 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm)
+    Checking tinyflows-drivers v0.1.0 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyflows/crates/tinyflows-drivers)
+    Checking async-imap v0.12.0
+    Checking tinystoragedrivers-client v0.11.0 (https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54a)
+    Checking axum v0.8.9
+    Checking tinyagents-harness v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-harness)
+    Checking tinyinference-local v0.4.1 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-local)
+    Checking tinychannels-runtime v0.1.34 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinychannels/crates/tinychannels-runtime)
+   Compiling openhuman v0.64.15 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/crates/openhuman-core)
+    Checking tinywallet-crypto v0.23.3 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinywallet/crates/tinywallet-crypto)
+    Checking tracing-subscriber v0.3.23
+    Checking tinymcp v0.18.7 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinymcp/crates/tinymcp)
+warning: unused import: `resources::enforce_resource_cap`
+  --> vendor/tinymcp/crates/tinymcp/src/transport/mod.rs:25:16
+   |
+25 | pub(crate) use resources::enforce_resource_cap;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+    Checking tinyinference-voice v0.4.1 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-voice)
+    Checking tinystoragedrivers-busproxy v0.11.0 (https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54a)
+    Checking tinyflows-import v0.1.0 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyflows/crates/tinyflows-import)
+warning: function `bound_mcp_tool_result` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:17:15
+   |
+17 | pub(crate) fn bound_mcp_tool_result(mut result: McpToolResult) -> McpToolResult {
+   |               ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `bound_other_content` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:38:4
+   |
+38 | fn bound_other_content(
+   |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `bound_text` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:56:15
+   |
+56 | pub(crate) fn bound_text(text: String) -> String {
+   |               ^^^^^^^^^^
+
+warning: function `bound_json` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:64:15
+   |
+64 | pub(crate) fn bound_json(data: Value) -> Value {
+   |               ^^^^^^^^^^
+
+warning: function `elide_oversized_block` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:73:15
+   |
+73 | pub(crate) fn elide_oversized_block(block: &McpToolContent) -> Value {
+   |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `elision_marker` is never used
+  --> vendor/tinymcp/crates/tinymcp/src/processing/mod.rs:83:4
+   |
+83 | fn elision_marker(bytes: usize) -> String {
+   |    ^^^^^^^^^^^^^^
+
+warning: `tinymcp` (lib) generated 7 warnings (run `cargo clippy --fix --lib -p tinymcp -- -D warnings` to apply 1 suggestion)
+    Checking tinymemory-integrations v1.28.0 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinymemory/crates/tinymemory-integrations)
+    Checking tinybus-module v0.1.6 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinybus/crates/tinybus-module)
+    Checking whatsapp-rust v0.7.0
+    Checking whatsapp-rust-ureq-http-client v0.7.0
+    Checking whatsapp-rust-tokio-transport v0.7.0
+    Checking tinyskills v0.5.1 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyskills/crates/tinyskills)
+    Checking tinywallet v0.23.3 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinywallet)
+    Checking wiremock v0.6.5
+    Checking tinyagents-tasks v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-tasks)
+    Checking tinyagents-registry v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-registry)
+    Checking tinyagents-session v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-session)
+    Checking tinyagents-graph v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-graph)
+    Checking tinychannels v0.1.34 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinychannels)
+    Checking tinyagents-runtime v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-runtime)
+    Checking tinyagents-orchestration v2.1.4 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinyagents/crates/tinyagents-orchestration)
+    Checking tinychannels-module v0.1.34 (/home/enamakel/work/openhuman/worktrees/epic-7328-gaps-approval/vendor/tinychannels/crates/tinychannels-module)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 52s
+DONE2

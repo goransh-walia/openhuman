@@ -46,3 +46,5 @@ warning: function `elision_marker` is never used
    |    ^^^^^^^^^^^^^^
 
 warning: `tinymcp` (lib) generated 7 warnings (run `cargo clippy --fix --lib -p tinymcp -- -D warnings` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4m 25s
+DONE1
