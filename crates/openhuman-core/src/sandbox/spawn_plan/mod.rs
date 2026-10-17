@@ -413,17 +413,6 @@ impl PlannedSpawn {
     }
 }
 
-/// Plan `request`, reserve the plan and return the policy the spawn must run under.
-///
-/// This is the one call a spawn site makes. The plan is reserved here, immediately
-/// before the caller launches it, so it cannot be admitted twice and the audit trail
-/// shows plan and admission for the same operation.
-pub(crate) async fn admit(request: SpawnRequest<'_>) -> Result<SandboxPolicy, PlanError> {
-    let planned = plan(request).await?;
-    consume(&planned).await?;
-    Ok(planned.apply(request.policy))
-}
-
 /// Reserve `planned` once, immediately before launching it.
 pub(crate) async fn consume(planned: &PlannedSpawn) -> Result<(), PlanError> {
     let _ordered = planned.stream.lock().await;

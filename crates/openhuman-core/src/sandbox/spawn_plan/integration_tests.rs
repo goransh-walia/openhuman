@@ -14,6 +14,7 @@ use tinysecurity_bus::{
 };
 
 use super::*;
+use crate::sandbox::plan::PlannedExecutor;
 use crate::modules::security::native_tests::{native_fixture_configured, NativeFixture};
 use crate::modules::tinybox::contract::{JailEnforcement, NetworkPolicy};
 use crate::sandbox::types::DockerOverrides;
@@ -50,6 +51,10 @@ fn executor(isolation: IsolationLevel2, enforcement: ConstraintEnforcement2) -> 
 }
 
 async fn world(executor: SandboxExecutor2) -> World {
+    world_with(vec![executor]).await
+}
+
+async fn world_with(executors: Vec<SandboxExecutor2>) -> World {
     let fixture = native_fixture_configured(true, |config| {
         config.sandbox = Some(crate::modules::security::sandbox_init_config());
     })
@@ -70,7 +75,7 @@ async fn world(executor: SandboxExecutor2) -> World {
     World {
         module: FixedModule {
             proxy: fixture.proxy.clone(),
-            executor,
+            executors,
         },
         _fixture: fixture,
         _dir: dir,
@@ -89,6 +94,7 @@ fn policy(world: &World, network: bool) -> SandboxPolicy {
         allow_network: network,
         env_passthrough: vec![],
         docker_overrides: None,
+        mount_workspace: true,
     }
 }
 
@@ -113,7 +119,8 @@ fn request<'a>(
         policy,
         source,
         operation,
-        host_off: false,
+        operator_off: false,
+        host_run: false,
         module: ModuleSource::Fixed(&world.module),
     }
 }
@@ -289,7 +296,7 @@ async fn container_bounds_come_from_the_plan() {
     });
     let docker = FixedModule {
         proxy: world.module.proxy.clone(),
-        executor: executors::docker(true),
+        executors: vec![executors::docker(true)],
     };
     let op = operation(&world, "echo hello");
     let planned = plan(SpawnRequest {
@@ -351,6 +358,7 @@ async fn a_module_that_cannot_be_reached_refuses_the_spawn() {
         allow_network: false,
         env_passthrough: vec![],
         docker_overrides: None,
+        mount_workspace: true,
     };
     let op = SpawnOperation {
         command: "echo hello",
@@ -359,12 +367,13 @@ async fn a_module_that_cannot_be_reached_refuses_the_spawn() {
         stdin: None,
         preserve_pipeline_status: false,
     };
-    let refused = admit(SpawnRequest {
+    let refused = plan(SpawnRequest {
         config: &config,
         policy: &policy,
         source: SpawnSource::Agent,
         operation: &op,
-        host_off: false,
+        operator_off: false,
+        host_run: false,
         module: ModuleSource::Production,
     })
     .await
@@ -396,8 +405,8 @@ async fn the_host_retires_the_least_recently_used_scope_instead_of_growing_witho
                 agent: "agent".into(),
             },
             saas: false,
-            host_off: false,
-            executors: vec![world.module.executor.clone()],
+            operator_off: false,
+            executors: world.module.executors.clone(),
         })
         .expect("scope facts")
     };
@@ -423,4 +432,164 @@ async fn the_host_retires_the_least_recently_used_scope_instead_of_growing_witho
     .await
     .expect("registration");
     assert_eq!(receipt.outcome, SandboxScopeOutcome2::Created);
+}
+
+fn jail(isolation: IsolationLevel2, enforcement: ConstraintEnforcement2) -> SandboxExecutor2 {
+    executor(isolation, enforcement)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn the_module_chooses_the_jail_when_the_policy_names_no_executor() {
+    let world = world_with(vec![
+        jail(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced),
+        executors::docker(true),
+    ])
+    .await;
+    let mut policy = policy(&world, false);
+    policy.backend = SandboxBackendKind::None;
+    let op = operation(&world, "echo hello");
+    let planned = plan(request(&world, &policy, &op, SpawnSource::Agent))
+        .await
+        .expect("planned");
+    assert_eq!(planned.plan.executor, PlannedExecutor::NativeJail);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn the_module_falls_back_to_the_container_when_the_jail_is_below_the_floor() {
+    // Untrusted text needs kernel isolation: a folder-confined jail cannot run it, so the
+    // module plans the container instead of the host refusing or degrading.
+    let world = world_with(vec![
+        jail(IsolationLevel2::Process, ConstraintEnforcement2::BestEffort),
+        executors::docker(true),
+    ])
+    .await;
+    let mut policy = policy(&world, false);
+    policy.backend = SandboxBackendKind::None;
+    let op = operation(&world, "echo hello");
+    let planned = plan(request(&world, &policy, &op, SpawnSource::Untrusted))
+        .await
+        .expect("planned");
+    assert_eq!(planned.plan.executor, PlannedExecutor::Docker);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_named_container_is_planned_even_when_a_jail_is_declared_first() {
+    let world = world_with(vec![
+        jail(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced),
+        executors::docker(true),
+    ])
+    .await;
+    let mut policy = policy(&world, false);
+    policy.backend = SandboxBackendKind::Docker;
+    let op = operation(&world, "echo hello");
+    let planned = plan(request(&world, &policy, &op, SpawnSource::Agent))
+        .await
+        .expect("planned");
+    assert_eq!(planned.plan.executor, PlannedExecutor::Docker);
+    // A required executor that is not available is a refusal, not another executor.
+    let down = world_with(vec![
+        jail(IsolationLevel2::Kernel, ConstraintEnforcement2::Enforced),
+        executors::docker(false),
+    ])
+    .await;
+    let policy = SandboxPolicy {
+        workspace_root: down.action.clone(),
+        state_dir: down.config.workspace_dir.clone(),
+        ..policy
+    };
+    assert_eq!(
+        plan(request(&down, &policy, &op, SpawnSource::Agent))
+            .await
+            .unwrap_err(),
+        PlanError::Refused(SandboxDenial2::Unsupported)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_workspace_less_container_is_planned_with_no_workspace_grant() {
+    let world = world_with(vec![executors::docker(true)]).await;
+    let mut policy = policy(&world, false);
+    policy.backend = SandboxBackendKind::Docker;
+    policy.mount_workspace = false;
+    let op = operation(&world, "echo hello");
+    let planned = plan(request(&world, &policy, &op, SpawnSource::Agent))
+        .await
+        .expect("the module plans a container with no workspace");
+    assert_eq!(planned.plan.executor, PlannedExecutor::Docker);
+    assert!(!planned.plan.workspace);
+    assert!(planned.plan.jail.read_write.is_empty());
+    consume(&planned).await.expect("admitted once");
+    assert!(!planned.apply(&policy).mount_workspace);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn the_operator_with_the_sandbox_off_gets_a_module_planned_run_on_the_host() {
+    let world = world_with(vec![]).await;
+    let policy = policy(&world, false);
+    let op = operation(&world, "echo hello");
+    let planned = plan(SpawnRequest {
+        operator_off: true,
+        host_run: true,
+        ..request(&world, &policy, &op, SpawnSource::Agent)
+    })
+    .await
+    .expect("the trusted operator's switch is honoured by the module");
+    assert_eq!(planned.plan.executor, PlannedExecutor::Host);
+    consume(&planned)
+        .await
+        .expect("a host run is admitted once, like any plan");
+    assert_eq!(
+        consume(&planned).await.unwrap_err(),
+        PlanError::Refused(SandboxDenial2::InvalidContext),
+        "a host run is single use"
+    );
+    let tail = planned
+        .stream
+        .correlation(1)
+        .await
+        .expect("correlation")
+        .expected_tail;
+    assert!(tail >= 2, "plan and consume were both audited (tail {tail})");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn untrusted_text_never_gets_a_run_on_the_host() {
+    let world = world_with(vec![]).await;
+    let policy = policy(&world, false);
+    let op = operation(&world, "echo hello");
+    assert_eq!(
+        plan(SpawnRequest {
+            operator_off: true,
+            host_run: true,
+            ..request(&world, &policy, &op, SpawnSource::Untrusted)
+        })
+        .await
+        .unwrap_err(),
+        PlanError::Refused(SandboxDenial2::Floor),
+        "a hook, a scheduled job or a registry server is refused, not run unjailed"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_run_on_the_host_needs_the_operators_setting_in_the_scope() {
+    let world = world_with(vec![]).await;
+    let policy = policy(&world, false);
+    let op = operation(&world, "echo hello");
+    assert_eq!(
+        plan(SpawnRequest {
+            operator_off: false,
+            host_run: true,
+            ..request(&world, &policy, &op, SpawnSource::Agent)
+        })
+        .await
+        .unwrap_err(),
+        PlanError::Refused(SandboxDenial2::Floor)
+    );
 }
