@@ -281,7 +281,6 @@ fn memory_tool_is_registered_once_memory_is_on() {
     let tools = all_tools(
         Arc::new(cfg.clone()),
         &security,
-        AuditLogger::disabled(),
         &browser,
         &http,
         tmp.path(),
@@ -318,7 +317,6 @@ fn memory_tool_is_absent_when_the_memory_component_is_off() {
     let tools = all_tools(
         Arc::new(cfg.clone()),
         &security,
-        AuditLogger::disabled(),
         &browser,
         &http,
         tmp.path(),

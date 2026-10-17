@@ -69,7 +69,6 @@ fn integration_tools_for_config(tmp: &TempDir, cfg: &Config) -> Vec<Box<dyn Tool
     all_tools(
         Arc::new(cfg.clone()),
         &security,
-        AuditLogger::disabled(),
         &browser,
         &http,
         tmp.path(),
@@ -109,7 +108,6 @@ fn expansion_tools_for(tmp: &TempDir) -> Vec<Box<dyn Tool>> {
     all_tools(
         Arc::new(cfg.clone()),
         &security,
-        AuditLogger::disabled(),
         &browser,
         &http,
         tmp.path(),

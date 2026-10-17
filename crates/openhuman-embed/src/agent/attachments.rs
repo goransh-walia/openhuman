@@ -83,7 +83,6 @@ impl Agent {
             openhuman_core::tools::ops::all_tools(
                 Arc::new(config.clone()),
                 &security,
-                openhuman_core::security::AuditLogger::disabled(),
                 &config.browser,
                 &config.http_request,
                 &config.action_dir,
