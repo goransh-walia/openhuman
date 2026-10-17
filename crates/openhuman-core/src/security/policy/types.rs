@@ -1,10 +1,8 @@
 use crate::config::PrivacyMode;
-use parking_lot::Mutex;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::OnceCell;
 
 /// How much autonomy the agent has
@@ -58,64 +56,6 @@ pub enum GateDecision {
     /// Refuse outright — no in-tier prompt can authorize it (e.g. any act in
     /// read-only mode).
     Block,
-}
-
-/// Classifies whether a tool operation is read-only or side-effecting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolOperation {
-    Read,
-    Act,
-}
-
-/// Sliding-window action tracker for rate limiting.
-#[derive(Debug)]
-pub struct ActionTracker {
-    /// Timestamps of recent actions (kept within the last hour).
-    actions: Mutex<Vec<Instant>>,
-}
-
-impl Default for ActionTracker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ActionTracker {
-    pub fn new() -> Self {
-        Self {
-            actions: Mutex::new(Vec::new()),
-        }
-    }
-
-    /// Record an action and return the current count within the window.
-    pub fn record(&self) -> usize {
-        let mut actions = self.actions.lock();
-        let cutoff = Instant::now()
-            .checked_sub(std::time::Duration::from_secs(3600))
-            .unwrap_or_else(Instant::now);
-        actions.retain(|t| *t > cutoff);
-        actions.push(Instant::now());
-        actions.len()
-    }
-
-    /// Count of actions in the current window without recording.
-    pub fn count(&self) -> usize {
-        let mut actions = self.actions.lock();
-        let cutoff = Instant::now()
-            .checked_sub(std::time::Duration::from_secs(3600))
-            .unwrap_or_else(Instant::now);
-        actions.retain(|t| *t > cutoff);
-        actions.len()
-    }
-}
-
-impl Clone for ActionTracker {
-    fn clone(&self) -> Self {
-        let actions = self.actions.lock();
-        Self {
-            actions: Mutex::new(actions.clone()),
-        }
-    }
 }
 
 /// Subdirectories under `workspace_dir` that hold internal application state
@@ -272,7 +212,6 @@ pub struct SecurityPolicy {
     /// `is_always_forbidden`, `is_workspace_internal_path`, or
     /// `ToolPolicyMiddleware`, which are independent code paths.
     pub auto_approve_all: bool,
-    pub tracker: ActionTracker,
     /// Lazily-cached canonical form of [`workspace_dir`].
     ///
     /// `validate_path` / `validate_parent_path` use the canonical workspace
@@ -339,7 +278,6 @@ impl Default for SecurityPolicy {
             allow_tool_install: false,
             auto_approve: Vec::new(),
             auto_approve_all: false,
-            tracker: ActionTracker::new(),
             canonical_workspace: Arc::new(OnceCell::new()),
             command_gateway: None,
         }

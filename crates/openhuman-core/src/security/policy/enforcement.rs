@@ -1,102 +1,10 @@
 use std::path::Path;
 
-use super::types::{
-    ActionTracker, AutonomyLevel, SecurityPolicy, ToolOperation, TrustedAccess, TrustedRoot,
-};
+use super::types::{SecurityPolicy, TrustedAccess, TrustedRoot};
 use std::sync::Arc;
-use tinytools::status::POLICY_BLOCKED_MARKER;
 use tokio::sync::OnceCell;
 
 impl SecurityPolicy {
-    /// Check if autonomy level permits any action at all.
-    ///
-    /// Always `true` when the policy is disabled ([`SecurityPolicy::enabled`]).
-    pub fn can_act(&self) -> bool {
-        if !self.enabled {
-            return true;
-        }
-        self.autonomy != AutonomyLevel::ReadOnly
-    }
-
-    /// The **tier** half of an act check, without touching the hourly action
-    /// budget.
-    ///
-    /// [`Self::enforce_tool_operation`]'s `Act` arm is tier *plus* budget, and
-    /// that budget is denominated in agent *tool calls*. Callers that write on
-    /// a caller's behalf at a finer grain than a tool call — the kernel memory
-    /// guard, which sits under `MemoryCore::store` and is hit hundreds of times
-    /// by one bulk ingest — want the tier refusal and nothing else. That is the
-    /// same shape the ~15 acting tools which gate on bare [`Self::can_act`]
-    /// already use (e.g. `tinytools_std::filesystem::FileWriteTool`,
-    /// `cron/scheduler.rs`).
-    pub fn enforce_write_tier(&self, operation_name: &str) -> Result<(), String> {
-        if !self.can_act() {
-            log::warn!(
-                "[openhuman:policy] Operation '{}' blocked: read-only mode",
-                operation_name
-            );
-            return Err(format!(
-                "{POLICY_BLOCKED_MARKER} Security policy: read-only mode, cannot perform \
-                 '{operation_name}'. Do not retry; this tier blocks all write actions."
-            ));
-        }
-        Ok(())
-    }
-
-    /// Enforce policy for a tool operation.
-    ///
-    /// Read operations are always allowed by autonomy/rate gates.
-    /// Act operations require non-readonly autonomy and available action budget.
-    pub fn enforce_tool_operation(
-        &self,
-        operation: ToolOperation,
-        operation_name: &str,
-    ) -> Result<(), String> {
-        match operation {
-            ToolOperation::Read => Ok(()),
-            ToolOperation::Act => {
-                self.enforce_write_tier(operation_name)?;
-
-                if !self.record_action() {
-                    log::warn!(
-                        "[openhuman:policy] Operation '{}' blocked: rate limit exceeded",
-                        operation_name
-                    );
-                    return Err(format!(
-                        "Rate limit exceeded: action budget exhausted ({} actions/hour). Increase the limit in Settings -> Advanced -> Agent autonomy or wait for the rolling one-hour window to refill.",
-                        self.max_actions_per_hour
-                    ));
-                }
-
-                log::debug!(
-                    "[openhuman:policy] Operation '{}' allowed (actions: {}/{})",
-                    operation_name,
-                    self.tracker.count(),
-                    self.max_actions_per_hour
-                );
-                Ok(())
-            }
-        }
-    }
-
-    /// Record an action and check if the rate limit has been exceeded.
-    /// Returns `true` if the action is allowed, `false` if rate-limited.
-    pub fn record_action(&self) -> bool {
-        let count = self.tracker.record();
-        if !self.enabled {
-            return true;
-        }
-        count <= self.max_actions_per_hour as usize
-    }
-
-    /// Check if the rate limit would be exceeded without recording.
-    pub fn is_rate_limited(&self) -> bool {
-        if !self.enabled {
-            return false;
-        }
-        self.tracker.count() >= self.max_actions_per_hour as usize
-    }
-
     /// Build from config sections
     pub fn from_config(
         autonomy_config: &crate::config::AutonomyConfig,
@@ -269,7 +177,6 @@ impl SecurityPolicy {
             allow_tool_install: autonomy_config.allow_tool_install,
             auto_approve: autonomy_config.auto_approve.clone(),
             auto_approve_all: autonomy_config.auto_approve_all,
-            tracker: ActionTracker::new(),
             canonical_workspace: Arc::new(OnceCell::new()),
             command_gateway: None,
         }

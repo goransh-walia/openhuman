@@ -25,7 +25,8 @@ impl SecurityPolicy {
             .trusted_roots
             .iter()
             .map(|root| PathTrustedRoot {
-                path: PathBuf::from(self.expand_tilde(&root.path)),
+                // Policy and config expand `~/` byte-for-byte identically (#3353).
+                path: PathBuf::from(crate::config::expand_tilde(&root.path)),
                 access: match root.access {
                     TrustedAccess::Read => PathAccess::ReadOnly,
                     TrustedAccess::ReadWrite => PathAccess::ReadWrite,

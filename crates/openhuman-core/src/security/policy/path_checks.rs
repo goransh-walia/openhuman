@@ -1,17 +1,11 @@
+use std::path::PathBuf;
+
 #[cfg(not(feature = "security-module"))]
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 use super::types::SecurityPolicy;
 
 impl SecurityPolicy {
-    /// Expand a leading `~/` to the user's home directory. Delegates to
-    /// [`crate::config::expand_tilde`] — the single source of truth —
-    /// so policy and config expand paths byte-for-byte identically (and both
-    /// produce platform-native separators; see issue #3353).
-    pub(super) fn expand_tilde(&self, path: &str) -> String {
-        crate::config::expand_tilde(path)
-    }
-
     /// Validate a path for file I/O: string checks, canonicalize, workspace containment,
     /// and forbidden-path check on the resolved path.
     /// Returns the canonical `PathBuf` on success.
