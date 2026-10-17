@@ -64,18 +64,26 @@ the host library chain. Asynchronous filesystem checks use immutable scopes
 containing host-authorized roots and internal-state reservations. The client
 requires artifact attestation and fails closed if loading or validation fails.
 
-The production registry pins TinySecurity v0.9.0 and its 11 supported host
-archives using digests copied from the published checksum manifest. Native CI
-loads these released archives through digest admission. Explicit local fixtures
-remain available for module development and never replace production pins.
-Today the module owns asynchronous filesystem authorization, shell command
-classification and gating, the network and write tier gates, and password crypt
-(`modules/security_crypto.rs`). The host no longer classifies a command: it
-registers an immutable `CommandPolicy` derived from its configuration and asks
-`CheckCommand` / `ClassifyCommand` (`modules/security_command.rs`), and a module
-that is missing, untrusted or slow refuses the command. The flow nodes' tier
-table, the approval engine, the Jev judge, sandbox planning and the keyring and
-pairing crypto paths still run through their existing host implementations.
+The production registry pins TinySecurity v0.13.0 (contract 1.20) and its 11
+supported host archives using digests copied from the published checksum
+manifest. Native CI loads these released archives through digest admission.
+Explicit local fixtures remain available for module development and never
+replace production pins. The module now owns:
+
+- asynchronous filesystem authorization and shell command classification and
+  gating (`modules/security_command.rs`);
+- the tool policy gate: host-tool admission (`Check::HostAction` and
+  `Check::HostShell`) for every tool call, with the typed denials
+  `read_only_mode`, `rate_limited`, `scheduled_read_only` and `high_risk`;
+- the approval engine, behind `security/approval/native/`;
+- sandbox planning for every sandboxed command (`Plan2` with a single-use plan);
+- password crypt (`modules/security_crypto.rs`).
+
+The host links only `tinysecurity-bus`. It registers immutable scopes derived
+from its configuration and maps the module's answers; a module that is missing,
+untrusted, faulted or slow denies, and there is no host-side fallback decision.
+The keyring and pairing crypto paths still run through their existing host
+implementations.
 Redaction and egress are module calls and fail closed: text and endpoint
 redaction (`Redact`), tool-result credential removal (`CredentialsOnly`, in
 chunks the module accepts), a tenant's exact provider keys for one call

@@ -358,9 +358,16 @@ fn snapshot_config_json_redacts_the_storage_url_credentials() {
     cfg.storage.url = Some("mongodb://app:hunter2@db.internal/openhuman".into());
     let snapshot = snapshot_config_json(&cfg).unwrap();
     assert!(!snapshot.to_string().contains("hunter2"));
-    assert_eq!(
-        snapshot["config"]["storage"]["url"],
-        "mongodb://[REDACTED]@db.internal/openhuman"
+    // Two answers are correct, and which one this process gives depends on
+    // whether another test in the same process has already armed the
+    // TinySecurity log scrubber: the fixed floor marks the credentials
+    // (`[REDACTED]@`), the module's stronger pass drops them. Either way the
+    // user, the password and the secret are gone and the location survives.
+    let url = snapshot["config"]["storage"]["url"].as_str().unwrap();
+    assert!(
+        url == "mongodb://[REDACTED]@db.internal/openhuman"
+            || url == "mongodb://db.internal/openhuman",
+        "{url}"
     );
 }
 

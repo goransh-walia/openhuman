@@ -21,7 +21,7 @@ Three protections do not depend on `[autonomy] enabled`:
 
 - Credential stores and system roots stay unreachable. `~/.ssh`, `~/.gnupg`, `~/.aws` and system roots are always refused, as are `..` traversal and null bytes in a path.
 - Hard blocks inside the tools themselves, including the tool-policy middleware, always run.
-- Path checks that gate file access are answered by the TinySecurity module and fail closed if it is unavailable. Command classification, the tier table and the network and write gates are also answered by the module (a missing, untrusted or slow module refuses the command). The approval prompts, the persisted approval store, the allow-list and the optional Jev auto-approve judge described here still run in the core.
+- Path checks that gate file access are answered by the TinySecurity module and fail closed if it is unavailable. Command classification, the tier table, the network and write gates and host-tool admission are also answered by the module (a missing, untrusted or slow module refuses the call). Approvals are backed by the module too. The prompt surface, the allow-list and the optional Jev auto-approve judge described here run in the core.
 - Sandboxing is separate. The platform jail and the Docker backend are chosen by `[runtime]` and the session's origin, not by the autonomy tier. See [Privacy and security](privacy-and-security.md).
 
 Everything below describes the policy with `[autonomy] enabled = true`.
@@ -49,6 +49,15 @@ You pick the tier in **Settings > Permissions** (`[autonomy].level`):
 A call that lands on Prompt waits at the gate. A call that lands on Block is refused, and no approval can override it.
 
 Classification fails closed. A command that is not provably read-only counts as at least a write. In a piped command the highest class wins, so `ls | curl ...` is Network. A quoted heredoc body (`<< 'EOF' ... EOF`) is treated as data and not scanned. An unquoted one (`<< EOF`) is expanded and scanned.
+
+## Where the gate sits
+
+Every tool call passes one policy gate before it runs, `ToolPolicyGateMiddleware`, installed ahead of all other tool middleware. It asks the module for a verdict. If several sources answer, a denial beats a required approval, and a required approval beats an allow. A module that cannot answer denies the call. Besides the tier table, the module applies these checks to host tools, and each refusal has its own reason:
+
+- `read_only_mode`: the tier is `readonly` and the call would act.
+- `rate_limited`: the hourly action budget is spent.
+- `scheduled_read_only`: a scheduled (cron) turn may use read-only tools only.
+- `high_risk`: the command class is prohibited by the high-risk setting.
 
 ## How a request flows
 

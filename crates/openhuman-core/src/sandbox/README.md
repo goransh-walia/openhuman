@@ -98,14 +98,12 @@ read-write grants, TinyBox's scratch directory, `/private/tmp` and `/dev/null`.
 Network follows `policy.allow_network` (on for a local session, off for a
 remote one), which the jail's `allow_net` enforces.
 
-**Known limitation (`folder_confined`): reads are not confined.** Seatbelt's
-profile is allow-default for reads, so a command can read any file the user
-can, credential stores included (`~/.ssh`, `~/.gnupg`, `~/.aws`, Keychains), and
-with network on could send it out. The pinned TinyBox contract has no way to
-deny reads (`NativeJailConfig` carries no deny list). The capability is
-[tinyhumansai/tinybox#87](https://github.com/tinyhumansai/tinybox/pull/87)
-(`deny_read`, contract 1.20); once it is released and pinned, `folder_confined`
-requests will deny the `is_always_forbidden` credential stores.
+**Credential reads (`folder_confined`).** Seatbelt's profile is allow-default for
+reads, so the host sends the credential-store floor as `deny_read` (TinyBox
+contract 1.20, `local_grants::credential_store_paths`) for a folder-confined jail;
+allow-list jails already deny those paths. The module still refuses a Seatbelt
+jail as an executor (see the plan section below), so on macOS the local sandbox is
+refused until tinysecurity#27 lands.
 
 TinyBox owns the jail provider, child process, pipe capture,
 and kill/reap acknowledgement; OpenHuman reads bounded output batches and

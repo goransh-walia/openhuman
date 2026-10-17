@@ -67,6 +67,12 @@ const LEGACY_READER =
 export const ALLOW = new Map(
   [
     [
+      "memory/test_fixtures.rs",
+      "json-write",
+      'std::fs::File::create(tmp.path().join("config.toml")).expect("config file");',
+      "test-only fixture (compiled under cfg(test)) that creates the empty `config.toml` every real workspace has beside it, so the filesystem gate resolves its settings from the workspace instead of the process-global config; no store reads it back",
+    ],
+    [
       "util/classic_transcript_fixture.rs",
       "json-write",
       'std::fs::write(path, classic_jsonl(messages, meta)).expect("write the classic transcript");',
