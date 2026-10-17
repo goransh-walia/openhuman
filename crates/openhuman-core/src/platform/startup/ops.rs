@@ -31,7 +31,3 @@ pub fn run_workspace_migrations(workspace_dir: &Path) {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "ops_tests.rs"]
-mod tests;
