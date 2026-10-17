@@ -379,6 +379,12 @@ Every lossy compression offloads the original to the CCR (Compress-Cache-Retriev
 
 There is no self-healing archetype. A missing host command is reported back to the user rather than polyfilled.
 
+### The security gate
+
+The first tool middleware on every harness is `ToolPolicyGateMiddleware`, installed by `agent/tinyagents/middleware/security_gate.rs::install`. A call it refuses never reaches another middleware or the tool. The gate takes a verdict from each source (the TinySecurity module through `tinysecurity-bus`, and the channel's tool policy when the session has one) and combines them as deny > require-approval > allow. A module fault denies, with no retry. A required approval settles through the approval resolver and the module-backed approval engine in `security/approval/native/`, with a 10-minute parking TTL.
+
+For a host tool the module is asked a `Check::HostAction` question (tier, permission level, external effect, hourly budget) built from the tool the host will run, never from model arguments. `shell` is asked as `Check::HostShell` and checked through the per-subject command scope. Denials are typed: `read_only_mode`, `rate_limited`, `scheduled_read_only` and `high_risk`. Cron turns run read-only. Commands that pass the gate are planned again by the module at the spawn boundary; see [Security](security.md#sandboxing).
+
 ## Sub-agents: the orchestrator pattern
 
 OpenHuman is multi-agent. The agent the user is chatting with is the Master Agent (stable internal id: `orchestrator`), a capable default agent that answers and completes ordinary work directly, including the inspect → edit → verify coding loop. It spawns specialist sub-agents when parallelism, deeper reasoning, or a specialised capability materially helps.
