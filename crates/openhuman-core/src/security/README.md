@@ -168,8 +168,8 @@ the approval prompt as a `Check::HostShell` admission under the scope that carri
 `max_actions_per_hour` (it reads the budget and never spends it), and the tool
 asks again immediately before it spawns (`CommandStage::Execute`, the same
 scope), so an allowed run spends one action of the module's hourly budget and a
-prompt that is declined spends none. Acting tools spend through the same ledger, once per acting call, at the tool
-gate (`Check::HostAction { spend }`, `ToolPolicyGateMiddleware` in
+prompt that is declined spends none. Acting tools spend through the same
+ledger, once per acting call, at the tool gate (`Check::HostAction { spend }`, `ToolPolicyGateMiddleware` in
 `agent/tinyagents/middleware/security_gate.rs`), so shell runs and acting tools
 share one budget. The in-tool budget checks are gone; callers that are not
 tools (MCP server dispatch, `mcp_ui`, the workflow `http_request` node) spend
