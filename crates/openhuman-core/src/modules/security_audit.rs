@@ -44,7 +44,7 @@ pub(crate) async fn record_with(
     let _ordered = stream.lock().await;
     let generation = super::sandbox::generation(proxy).await?;
     let audit = stream.correlation(generation).await?;
-    let request = request(&stream, subject, event, audit.clone())?;
+    let request = request(stream.stream_id(), subject, event, audit.clone())?;
     let response: AuditResponse2 = proxy
         .call_confidential(names::methods::RECORD_AUDIT2, (request,))
         .await
@@ -56,14 +56,14 @@ pub(crate) async fn record_with(
 }
 
 fn request(
-    stream: &AuditStream,
+    stream_id: &str,
     subject: SubjectScope,
     event: HostAuditEvent,
     audit: AuditCorrelation2,
 ) -> Result<AuditRecordRequest2, String> {
     Ok(AuditRecordRequest2 {
         subject,
-        stream_id: stream.stream_id().to_owned(),
+        stream_id: stream_id.to_owned(),
         kind: match event.kind {
             HostAuditKind::Execution => AuditKind2::Execution,
             HostAuditKind::PolicyDecision => AuditKind2::PolicyDecision,
