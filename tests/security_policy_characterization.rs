@@ -22,14 +22,6 @@ use openhuman_core::{
     },
 };
 
-fn policy(enabled: bool, autonomy: AutonomyLevel) -> SecurityPolicy {
-    SecurityPolicy {
-        enabled,
-        autonomy,
-        ..SecurityPolicy::default()
-    }
-}
-
 #[test]
 fn shipped_defaults_are_pinned() {
     let cfg = AutonomyConfig::default();
