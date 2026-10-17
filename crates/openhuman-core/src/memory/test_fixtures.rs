@@ -11,9 +11,17 @@ use crate::config::Config;
 /// A config whose workspace, action dir and credential store live in `tmp`.
 /// The engine stays `tinyhumans` with no credential, so memory is off until a
 /// test binds an engine.
+///
+/// The config file is written beside the workspace, as every real workspace has
+/// one. The filesystem gate resolves its module settings from that file; without
+/// it the gate falls back to the process-global config, whose directory other
+/// tests create and remove concurrently, and a read here could be refused with
+/// "path authorization unavailable" for a reason that has nothing to do with
+/// memory.
 pub(crate) fn config_in(tmp: &tempfile::TempDir) -> Config {
     let workspace = tmp.path().join("workspace");
     std::fs::create_dir_all(&workspace).expect("workspace dir");
+    std::fs::write(tmp.path().join("config.toml"), "").expect("config file");
     Config {
         workspace_dir: workspace.clone(),
         action_dir: workspace,

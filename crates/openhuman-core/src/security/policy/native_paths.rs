@@ -111,7 +111,9 @@ fn project_native_result(
             PathErrorCategory::InvalidPath => Err(format!("Invalid path: {path}")),
         },
         Err(error) => {
-            eprintln!("DBG-PATH-ERR thread={:?} err={error}", std::thread::current().name());
+            // The cause stays out of the tool error (a model reads that) but is
+            // the first thing needed when a read is refused for no visible reason.
+            log::debug!("[security][path] native path validation unavailable: {error}");
             Err(format!(
                 "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
             ))
