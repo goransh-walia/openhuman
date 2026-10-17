@@ -81,6 +81,20 @@ fn approved_environment_refuses_values_the_bus_cannot_carry() {
     assert!(approved_environment(&extra).is_err());
 }
 
+/// A jail with no extra grants, standing in for the module's plan.
+#[cfg(feature = "modules")]
+fn open_jail() -> contract::NativeJailConfig {
+    contract::NativeJailConfig {
+        read_only: Vec::new(),
+        read_write: Vec::new(),
+        allow_net: true,
+        allow_subprocess: true,
+        enforcement: contract::JailEnforcement::Enforced,
+        require_process_isolation: true,
+        deny_read: Vec::new(),
+    }
+}
+
 #[cfg(feature = "modules")]
 #[tokio::test]
 async fn disabled_tinybox_module_never_falls_back_to_host_execution() -> anyhow::Result<()> {
@@ -107,15 +121,7 @@ async fn disabled_tinybox_module_never_falls_back_to_host_execution() -> anyhow:
         workspace.path(),
         &HashMap::new(),
         Duration::from_secs(5),
-        contract::NativeJailConfig {
-            read_only: Vec::new(),
-            read_write: Vec::new(),
-            allow_net: true,
-            allow_subprocess: true,
-            enforcement: contract::JailEnforcement::Enforced,
-            require_process_isolation: true,
-            deny_read: Vec::new(),
-        },
+        open_jail(),
         false,
         None,
     )
@@ -228,7 +234,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
         workspace.path(),
         &HashMap::new(),
         Duration::from_secs(10),
-        false,
+        open_jail(),
         false,
         None,
     )
@@ -244,7 +250,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
         workspace.path(),
         &HashMap::new(),
         Duration::from_secs(10),
-        false,
+        open_jail(),
         false,
         None,
     )
