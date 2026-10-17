@@ -99,6 +99,9 @@ impl ApprovalGate {
         match self.run_engine(|engine| async move { engine.decide(&id, choice, label).await })? {
             Ok(_) => {}
             Err(EngineError::NotPending) => return Ok(None),
+            Err(EngineError::Refused) => {
+                anyhow::bail!("the approval engine refused the decision")
+            }
             Err(EngineError::Unavailable(message)) => {
                 anyhow::bail!("the approval engine could not apply the decision: {message}")
             }

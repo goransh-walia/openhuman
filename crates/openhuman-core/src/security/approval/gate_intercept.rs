@@ -60,29 +60,6 @@ impl ApprovalGate {
         // overrides.
         let turn_ctx = crate::core::runtime::DispatchCtx::ambient_turn();
         let origin = turn_ctx.turn_origin().unwrap_or(AgentTurnOrigin::Unknown);
-        // Approval of job creation grants the scheduler permission to run the
-        // saved prompt and deliver its answer, not permission for arbitrary
-        // future external effects. Enforce this before global auto-approval,
-        // per-tool allowlists, and per-agent approval bypasses.
-        if let AgentTurnOrigin::TrustedAutomation {
-            source: TrustedAutomationSource::Cron,
-            job_id,
-        } = &origin
-        {
-            tracing::warn!(
-                tool = tool_name,
-                job_id = %job_id,
-                "[approval::gate] scheduled agent external effect denied"
-            );
-            return (
-                GateOutcome::Deny {
-                    reason: format!(
-                        "{POLICY_DENIED_MARKER} Scheduled agent turns cannot use '{tool_name}' for an external effect."
-                    ),
-                },
-                None,
-            );
-        }
         // SaaS has no per-user approval surface: never park, allow only what
         // the deployment's sandboxed tool groups open. What they open is the
         // pre-authorization, and the engine records it as an audited automatic
@@ -99,6 +76,7 @@ impl ApprovalGate {
                         action_summary,
                         args_redacted,
                         mode.track,
+                        origin_class(&origin),
                     )
                     .await;
             }
@@ -132,12 +110,12 @@ impl ApprovalGate {
         // Branch by origin. Web chat parks for an in-app approval; an external
         // channel persists an audit row and parks (no routable approval surface
         // yet, so it TTL-denies); a workflow whose flow requires approval parks
-        // for review; trusted automation (internal background jobs, pre-declared
-        // workflow actions) and the CLI run through unchanged; Unknown fails
-        // closed. Everything that parks goes to the engine, which also applies
-        // the user's allowlist, per-flow trust and auto-approve setting as
-        // audited automatic approvals.
-        let (variant, flow_id, unlabelled) = match &origin {
+        // for review. Everything else is classified and handed to the engine
+        // like any other call: what a scheduled job, an internal background job,
+        // a pre-declared workflow action, the CLI or an unlabelled call is
+        // allowed is the module's decision (`origin_class`), and the engine also
+        // applies the user's allowlist, per-flow trust and auto-approve setting.
+        let (variant, flow_id) = match &origin {
             AgentTurnOrigin::WebChat { .. } => (
                 if forced {
                     Variant::Forced
@@ -145,7 +123,6 @@ impl ApprovalGate {
                     Variant::Standard
                 },
                 None,
-                false,
             ),
             AgentTurnOrigin::ExternalChannel {
                 channel,
@@ -165,46 +142,7 @@ impl ApprovalGate {
                 // We do NOT short-circuit to Allow here — remote inputs are
                 // untrusted. Without a routable surface the park TTL-denies; a
                 // decision can still arrive via the thread card before the TTL.
-                (Variant::Standard, None, false)
-            }
-            AgentTurnOrigin::TrustedAutomation {
-                source: TrustedAutomationSource::Cron,
-                ..
-            } => {
-                return (
-                    GateOutcome::Deny {
-                        reason: format!(
-                            "{POLICY_DENIED_MARKER} Scheduled agent turns cannot use '{tool_name}' for an external effect."
-                        ),
-                    },
-                    None,
-                );
-            }
-            AgentTurnOrigin::TrustedAutomation {
-                source: TrustedAutomationSource::Background,
-                job_id,
-            } => {
-                tracing::debug!(
-                    tool = tool_name,
-                    job_id = %job_id,
-                    "[approval::gate] trusted internal background job — allowing without prompt"
-                );
-                return (GateOutcome::Allow, None);
-            }
-            AgentTurnOrigin::TrustedAutomation {
-                source:
-                    TrustedAutomationSource::Workflow {
-                        require_approval: false,
-                    },
-                job_id,
-            } => {
-                tracing::debug!(
-                    tool = tool_name,
-                    flow_id = %job_id,
-                    "[approval::gate] trusted workflow automation — pre-declared action, \
-                     allowing without prompt"
-                );
-                return (GateOutcome::Allow, None);
+                (Variant::Standard, None)
             }
             AgentTurnOrigin::TrustedAutomation {
                 source:
@@ -222,60 +160,16 @@ impl ApprovalGate {
                 // The engine does not apply the global tool allowlist to this
                 // posture, so a flow the user forced to be reviewed stays
                 // reviewed; per-flow trust and auto-approve still do.
-                (Variant::FlowStrict, Some(job_id.clone()), false)
+                (Variant::FlowStrict, Some(job_id.clone()))
             }
-            // Same trust decision for both: a local operator invoking the core
-            // directly. They differ only in whether the turn's text was written
-            // by a person (`turn_origin::is_user_authored`), which this gate
-            // does not ask. Kept as one arm so the two can never drift apart on
-            // the trust axis, which is the axis this gate owns.
-            AgentTurnOrigin::Cli | AgentTurnOrigin::DirectChat => {
-                tracing::debug!(
-                    tool = tool_name,
-                    origin = %origin.class(),
-                    "[approval::gate] CLI / sub-agent caller — allowing without prompt"
-                );
-                return (GateOutcome::Allow, None);
-            }
-            // The one thing that has always approved a call from an unlabelled
-            // site is the user's own "Always allow" for that exact tool. Nothing
-            // else does: not auto-approve-everything, not an agent's approvals
-            // being off, and nobody is asked.
-            AgentTurnOrigin::Unknown
-                if !forced
-                    && self
-                        .live_auto_approve(&turn_ctx)
-                        .iter()
-                        .any(|allowed| allowed == tool_name) =>
-            {
-                tracing::debug!(
-                    tool = tool_name,
-                    "[approval::gate] unlabelled call to a tool on the user's Always-allow list"
-                );
-                (Variant::Standard, None, true)
-            }
-            AgentTurnOrigin::Unknown => {
-                tracing::warn!(
-                    tool = tool_name,
-                    "[approval::gate] agent turn has no origin label — refusing to execute \
-                     external_effect tool from unlabelled call site"
-                );
-                return (
-                    GateOutcome::Deny {
-                        reason: format!(
-                            "{POLICY_DENIED_MARKER} '{tool_name}' was blocked because this agent \
-                             turn is missing its origin label, so the approval gate cannot decide \
-                             who requested the action. Scheduling and other external-effect tools \
-                             (e.g. cron_add / cron_update) are refused when the turn has no origin. \
-                             This is an internal wiring gap, not something you did — the work most \
-                             likely ran on a background task that did not carry the turn's origin \
-                             forward; retry from a normal chat turn, or report it so the spawn site \
-                             can be fixed."
-                        ),
-                    },
-                    None,
-                );
-            }
+            AgentTurnOrigin::TrustedAutomation {
+                source: TrustedAutomationSource::Workflow { .. },
+                job_id,
+            } => (Variant::Standard, Some(job_id.clone())),
+            AgentTurnOrigin::TrustedAutomation { .. }
+            | AgentTurnOrigin::Cli
+            | AgentTurnOrigin::DirectChat
+            | AgentTurnOrigin::Unknown => (Variant::Standard, None),
         };
 
         // Chat context (thread/client id) for routing the yes/no reply — handed
@@ -414,17 +308,7 @@ impl ApprovalGate {
         let input = CheckInput {
             tenant: route_tenant,
             variant,
-            posture: if unlabelled {
-                // Only the user's tool grant stands; nothing else is configured
-                // for a call nobody labelled, and the grant is what approves it.
-                Posture {
-                    require_approval: true,
-                    tool_grants: vec![tool_name.to_string()],
-                    ..Posture::default()
-                }
-            } else {
-                self.posture(&turn_ctx, variant)
-            },
+            posture: self.posture(&turn_ctx, variant),
             call_id: fresh_call_id(),
             tool: tool_name.to_string(),
             args: object_arguments(args_redacted),
@@ -436,7 +320,7 @@ impl ApprovalGate {
             } else if subagent_park {
                 CallOrigin::SubAgent
             } else {
-                CallOrigin::Operator
+                origin_class(&origin)
             },
             ttl: requested_ttl,
             prompt: Arc::clone(&surface) as Arc<dyn PromptSurface>,
@@ -452,9 +336,7 @@ impl ApprovalGate {
                 );
                 return (
                     GateOutcome::Deny {
-                        reason: format!(
-                            "{POLICY_DENIED_MARKER} The approval engine could not evaluate '{tool_name}' — denying for safety: {error}"
-                        ),
+                        reason: engine_denial(&origin, tool_name, &error),
                     },
                     None,
                 );
@@ -555,6 +437,7 @@ impl ApprovalGate {
         action_summary: &str,
         args_redacted: serde_json::Value,
         track: bool,
+        class: CallOrigin,
     ) -> (GateOutcome, Option<String>) {
         let input = CheckInput {
             tenant: super::gate::current_route_tenant(),
@@ -569,7 +452,13 @@ impl ApprovalGate {
             summary: action_summary.to_string(),
             thread: None,
             flow: None,
-            origin: CallOrigin::Operator,
+            // A scheduled job stays refused in SaaS; every other class is judged by
+            // the deployment's tool groups, which already allowed this call.
+            origin: if class == CallOrigin::Cron {
+                CallOrigin::Cron
+            } else {
+                CallOrigin::Operator
+            },
             ttl: self.effective_ttl(),
             prompt: Arc::new(NoApprovalSurface),
         };
@@ -677,4 +566,60 @@ fn object_arguments(value: serde_json::Value) -> serde_json::Value {
         return serde_json::json!({ "truncated": true, "bytes": bytes });
     }
     object
+}
+
+/// The origin class the engine is told for a turn. The verdict for each class
+/// (a scheduled job's external effect denied, internal automation and the local
+/// operator approved, an unlabelled call refused without a tool grant) is the
+/// module's; the host only labels who is asking.
+fn origin_class(origin: &AgentTurnOrigin) -> CallOrigin {
+    match origin {
+        AgentTurnOrigin::TrustedAutomation {
+            source: TrustedAutomationSource::Cron,
+            ..
+        } => CallOrigin::Cron,
+        AgentTurnOrigin::TrustedAutomation {
+            source: TrustedAutomationSource::Background,
+            ..
+        }
+        | AgentTurnOrigin::TrustedAutomation {
+            source: TrustedAutomationSource::Workflow {
+                require_approval: false,
+            },
+            ..
+        } => CallOrigin::TrustedAutomation,
+        AgentTurnOrigin::Cli | AgentTurnOrigin::DirectChat => CallOrigin::LocalOperator,
+        AgentTurnOrigin::Unknown => CallOrigin::Unlabelled,
+        AgentTurnOrigin::WebChat { .. }
+        | AgentTurnOrigin::ExternalChannel { .. }
+        | AgentTurnOrigin::TrustedAutomation {
+            source: TrustedAutomationSource::Workflow {
+                require_approval: true,
+            },
+            ..
+        } => CallOrigin::Operator,
+    }
+}
+
+/// What the agent is told when the engine did not approve a call. A refusal of a
+/// scheduled job or an unlabelled call keeps its own explanation.
+fn engine_denial(origin: &AgentTurnOrigin, tool_name: &str, error: &EngineError) -> String {
+    match (origin_class(origin), error) {
+        (CallOrigin::Cron, EngineError::Refused) => format!(
+            "{POLICY_DENIED_MARKER} Scheduled agent turns cannot use '{tool_name}' for an external effect."
+        ),
+        (CallOrigin::Unlabelled, EngineError::Refused) => format!(
+            "{POLICY_DENIED_MARKER} '{tool_name}' was blocked because this agent \
+             turn is missing its origin label, so the approval gate cannot decide \
+             who requested the action. Scheduling and other external-effect tools \
+             (e.g. cron_add / cron_update) are refused when the turn has no origin. \
+             This is an internal wiring gap, not something you did — the work most \
+             likely ran on a background task that did not carry the turn's origin \
+             forward; retry from a normal chat turn, or report it so the spawn site \
+             can be fixed."
+        ),
+        _ => format!(
+            "{POLICY_DENIED_MARKER} The approval engine could not evaluate '{tool_name}' — denying for safety: {error}"
+        ),
+    }
 }
