@@ -57,6 +57,23 @@ impl StubPort {
         }
     }
 
+    /// As [`Self::allowing`], with a scripted stand-in for the floor: credential
+    /// stores and the system roots are protected. For tests of a caller that
+    /// refuses protected locations; the module owns the real match and its own
+    /// tests pin it.
+    pub(crate) fn with_credential_floor() -> Self {
+        Self::allowing().protecting(|path| {
+            let text = path.to_string_lossy().to_ascii_lowercase();
+            let credential = text
+                .split(['/', '\\'])
+                .any(|part| matches!(part, ".ssh" | ".gnupg" | ".aws" | ".kube" | ".netrc"));
+            let system = ["/etc", "/root", "/boot", "/proc", "/sys"]
+                .iter()
+                .any(|root| text == *root || text.starts_with(&format!("{root}/")));
+            credential || system
+        })
+    }
+
     /// A port whose every question is an `Err`, as a missing module answers.
     pub(crate) fn unavailable() -> Self {
         Self {
