@@ -22,10 +22,10 @@ pub use tinyconnectors_bus::ComposioToolContract as ToolContract;
 #[cfg(test)]
 #[path = "catalog_seed.rs"]
 mod seed;
-#[cfg(test)]
-pub(crate) use seed::{seed_live_catalog_cache, seed_probe_cache};
 #[cfg(all(test, feature = "flows"))]
 pub(crate) use seed::seed_live_catalog_cache_expired;
+#[cfg(test)]
+pub(crate) use seed::{seed_live_catalog_cache, seed_probe_cache};
 
 #[cfg(test)]
 #[path = "catalog_tests.rs"]

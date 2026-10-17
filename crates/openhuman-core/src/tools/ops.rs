@@ -86,6 +86,8 @@ pub fn all_tools_with_runtime(
     root_config: &crate::config::Config,
     approval_workspace_root: Option<&std::path::Path>,
 ) -> Vec<Box<dyn Tool>> {
+    #[cfg(not(feature = "modules"))]
+    let _ = browser_config;
     let shell: Box<dyn Tool> = Box::new(ShellTool::with_config(
         security.clone(),
         Arc::clone(&runtime),
