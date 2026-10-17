@@ -70,6 +70,8 @@ pub(crate) struct StubEngine {
     refuse: AtomicBool,
     fail_reserve: AtomicBool,
     always_pending: AtomicBool,
+    /// The durable flow trust the module keeps: `(flow, tool)` pairs.
+    trust: Mutex<std::collections::BTreeSet<(String, String)>>,
 }
 
 impl std::fmt::Debug for StubEngine {
@@ -182,7 +184,7 @@ impl StubEngine {
 }
 
 /// The automatic approval the user's posture or the call's origin gives, if any.
-fn automatic(input: &CheckInput) -> Option<&'static str> {
+fn automatic(input: &CheckInput, trusted: bool) -> Option<&'static str> {
     let posture = &input.posture;
     match input.origin {
         CallOrigin::TrustedAutomation => return Some("auto:trusted-automation"),
@@ -203,11 +205,9 @@ fn automatic(input: &CheckInput) -> Option<&'static str> {
     if posture.tool_grants.iter().any(|t| t == &input.tool) {
         return Some("auto:tool-grant");
     }
-    let flow = input.flow.as_deref()?;
-    posture
-        .flow_grants
-        .iter()
-        .any(|(f, t)| f == flow && t == &input.tool)
+    // The module's durable flow trust approves the exact tool in the exact flow, on
+    // the strict-flow subject the trust was granted under.
+    (input.variant == Variant::FlowStrict && trusted)
         .then_some("auto:flow-grant")
 }
 
@@ -235,15 +235,21 @@ impl ApprovalEngine for StubEngine {
         // The module refuses a scheduled job's external effect and an unlabelled call
         // no grant covers, without parking either.
         if input.origin == CallOrigin::Cron
-            || (input.origin == CallOrigin::Unlabelled && automatic(&input).is_none())
+            || (input.origin == CallOrigin::Unlabelled && automatic(&input, false).is_none())
         {
             return Err(EngineError::Refused);
         }
         let now = now_ms();
+        let trusted = input.flow.as_deref().is_some_and(|flow| {
+            self.trust
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .contains(&(flow.to_owned(), input.tool.clone()))
+        });
         let automatic = if self.always_pending.load(Ordering::SeqCst) {
             None
         } else {
-            automatic(&input)
+            automatic(&input, trusted)
         };
         if let Some(attribution) = automatic {
             let request_id = self.insert(Row {
@@ -393,6 +399,46 @@ impl ApprovalEngine for StubEngine {
 
     async fn is_decided(&self, request_id: &str) -> Result<Option<bool>, EngineError> {
         Ok(self.state(request_id).map(|state| state != State::Pending))
+    }
+
+    async fn grant_flow_trust(
+        &self,
+        _tenant: &Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<(), EngineError> {
+        if self.refuse.load(Ordering::SeqCst) {
+            return Err(EngineError::Unavailable("the stub engine refuses".into()));
+        }
+        self.trust
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert((flow_id.to_owned(), tool.to_owned()));
+        Ok(())
+    }
+
+    async fn revoke_flow_trust(
+        &self,
+        _tenant: &Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<bool, EngineError> {
+        Ok(self
+            .trust
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&(flow_id.to_owned(), tool.to_owned())))
+    }
+
+    async fn flow_trust(&self, _tenant: &Tenant, flow_id: &str) -> Result<Vec<String>, EngineError> {
+        Ok(self
+            .trust
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter(|(flow, _)| flow == flow_id)
+            .map(|(_, tool)| tool.clone())
+            .collect())
     }
 
     async fn history(&self, limit: usize) -> Result<Vec<ApprovalAuditEntry>, EngineError> {
