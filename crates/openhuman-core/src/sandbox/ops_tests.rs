@@ -1,7 +1,8 @@
 use super::*;
 use crate::config::{RuntimeConfig, SandboxConfig};
 use crate::core::runtime::DispatchCtx;
-use super::operator::SANDBOX_OFF_ENV;
+use crate::sandbox::operator::SANDBOX_OFF_ENV;
+use crate::sandbox::spawn_policy;
 
 #[test]
 fn is_elevated_op_known_tools() {
