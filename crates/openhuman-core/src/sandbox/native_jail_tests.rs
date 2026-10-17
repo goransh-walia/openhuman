@@ -107,7 +107,15 @@ async fn disabled_tinybox_module_never_falls_back_to_host_execution() -> anyhow:
         workspace.path(),
         &HashMap::new(),
         Duration::from_secs(5),
-        false,
+        contract::NativeJailConfig {
+            read_only: Vec::new(),
+            read_write: Vec::new(),
+            allow_net: true,
+            allow_subprocess: true,
+            enforcement: contract::JailEnforcement::Enforced,
+            require_process_isolation: true,
+            deny_read: Vec::new(),
+        },
         false,
         None,
     )
