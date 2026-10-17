@@ -36,7 +36,7 @@ pub(crate) struct Seen {
     pub(crate) thread: Option<String>,
     pub(crate) flow: Option<String>,
     pub(crate) origin: CallOrigin,
-    pub(crate) ttl: Duration,
+    pub(crate) ttl: Option<Duration>,
 }
 
 /// Where a stubbed request is in its life.
@@ -243,7 +243,8 @@ impl ApprovalEngine for StubEngine {
             CallOrigin::Copilot | CallOrigin::SubAgent => Duration::from_secs(180),
             CallOrigin::Operator => Duration::from_secs(600),
         }
-        .min(input.ttl);
+        };
+        let window = input.ttl.map_or(window, |ttl| window.min(ttl));
         let expires_ms = now + u64::try_from(window.as_millis()).unwrap_or(u64::MAX);
         let request_id = self.insert(Row {
             tool: input.tool.clone(),
