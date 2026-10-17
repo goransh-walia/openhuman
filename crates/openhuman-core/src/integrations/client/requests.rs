@@ -165,7 +165,8 @@ impl IntegrationClient {
             approval,
             path,
             body.map_or(BackendPayload::None, BackendPayload::Json),
-        )?;
+        )
+        .await?;
         self.ensure_budget_available(path).await?;
         let url = crate::util::url::join_url(&self.backend_url, path);
         let method_name = method.as_str().to_ascii_lowercase();
@@ -215,7 +216,7 @@ impl IntegrationClient {
     ) -> anyhow::Result<T> {
         self.validate_credential_endpoint()?;
         reject_privileged_backend_path("POST", path)?;
-        admit_backend_egress(approval, path, BackendPayload::Opaque)?;
+        admit_backend_egress(approval, path, BackendPayload::Opaque).await?;
         self.ensure_budget_available(path).await?;
         let url = crate::util::url::join_url(&self.backend_url, path);
         tracing::debug!("[integrations] POST(multipart) {}", url);

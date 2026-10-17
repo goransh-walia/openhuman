@@ -164,8 +164,8 @@ struct Guard {
 impl Guard {
     /// Local-only enforcement, then the egress disclosure. A blocked call is
     /// neither disclosed nor sent.
-    fn admit(&self, route: &str) -> ti_image::Result<()> {
-        self.admit_descriptor(Self::descriptor(route))
+    async fn admit(&self, route: &str) -> ti_image::Result<()> {
+        self.admit_descriptor(Self::descriptor(route)).await
     }
 
     /// The descriptor for a metadata-only call to `route`.
@@ -179,7 +179,7 @@ impl Guard {
     /// so under Sensitive the module assesses it. Reference images and frames
     /// are file content the host cannot assess; with any present the call stays
     /// unassessed, which Sensitive refuses.
-    fn admit_prompt(&self, route: &str, prompt: &str, has_media: bool) -> ti_image::Result<()> {
+    async fn admit_prompt(&self, route: &str, prompt: &str, has_media: bool) -> ti_image::Result<()> {
         use crate::security::egress::DataKind;
         let descriptor = Self::descriptor(route).with_data_kind(DataKind::Prompt);
         let descriptor = if has_media {
@@ -187,7 +187,7 @@ impl Guard {
         } else {
             descriptor.assessed(prompt)
         };
-        self.admit_descriptor(descriptor)
+        self.admit_descriptor(descriptor).await
     }
 
     async fn admit_descriptor(

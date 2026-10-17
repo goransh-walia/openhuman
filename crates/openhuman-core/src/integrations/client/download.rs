@@ -52,7 +52,7 @@ impl IntegrationClient {
         path: &str,
     ) -> anyhow::Result<(bytes::Bytes, Option<String>, Option<String>)> {
         self.validate_credential_endpoint()?;
-        admit_backend_egress(approval, path, BackendPayload::None)?;
+        admit_backend_egress(approval, path, BackendPayload::None).await?;
         self.ensure_budget_available(path).await?;
         let route = path.split('?').next().unwrap_or(path);
         let segments = route.trim_matches('/').split('/').collect::<Vec<_>>();
