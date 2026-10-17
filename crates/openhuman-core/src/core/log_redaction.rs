@@ -8,6 +8,20 @@
 //! `tracing` log line. This module owns the one redaction pass used by both the
 //! Sentry path (`src/main.rs`) and the always-on log path, so the patterns
 //! cannot drift between them. Always compiled (no feature gate).
+//!
+//! ## Before the module serves (decision, #7328)
+//!
+//! Logging starts before the TinySecurity module loads, and a build without
+//! `security-module` never has one. Nothing can ask the module yet, so the
+//! choice is between passing lines through, masking only what is
+//! recognisable, or dropping them. This module is the **fixed boot floor**
+//! (tinysecurity ADR 7): a line is never emitted raw. The floor patterns
+//! below mask recognisable secrets in place, input over
+//! [`FLOOR_MAX_INPUT_BYTES`] is replaced whole by [`SUPPRESSED`], and once the
+//! module is armed ([`install_module_scrubber`]) its answer replaces the floor
+//! result. A module that is slow or faulted leaves the floor result, never
+//! the original text. This is the only host-owned pattern list; every other
+//! redaction in the host is a call into the module.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
