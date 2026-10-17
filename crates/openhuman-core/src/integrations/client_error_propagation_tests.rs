@@ -102,6 +102,7 @@ async fn enforce_backend_egress(path: &str) -> anyhow::Result<()> {
     crate::security::egress::enforce_egress(&backend_egress_for(path, BackendPayload::None)).await
 }
 
+#[cfg(feature = "security-module")]
 /// A module enforcing the restrictive modes as they apply to backend traffic: an
 /// external transfer that is not a control-plane round trip is refused, and under
 /// Sensitive an unassessed one too. The module owns that table; this scripts it so
@@ -126,6 +127,7 @@ fn restrictive_module() -> std::sync::Arc<crate::modules::security::gap::stub::S
     )
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn backend_body_makes_the_call_content_bearing_and_opaque_bytes_stay_unassessed() {
     use crate::config::PrivacyMode;
@@ -161,6 +163,7 @@ async fn backend_body_makes_the_call_content_bearing_and_opaque_bytes_stay_unass
         .expect("metadata-only call is permitted under Sensitive");
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn enforce_backend_egress_blocks_user_data_but_allows_control_plane() {
     use crate::config::PrivacyMode;
@@ -192,6 +195,7 @@ async fn enforce_backend_egress_blocks_user_data_but_allows_control_plane() {
         .expect("Standard allows");
 }
 
+#[cfg(feature = "security-module")]
 /// Privacy epic S7 (#4441): the LocalOnly gate must fire through the PUBLIC verb
 /// methods, not only via the `enforce_backend_egress` helper. Each of the six
 /// verbs (`post`/`get`/`patch`/`delete`/`upload_multipart`/`get_bytes`) runs the
@@ -412,6 +416,7 @@ async fn post_500_propagates_html_body_truncated() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn local_only_rejects_user_data_verb_before_transport() {
     // End-to-end proof (privacy epic S7, #4441) that a PUBLIC verb

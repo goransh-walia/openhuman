@@ -1,12 +1,16 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
+#[cfg(feature = "security-module")]
 use crate::modules::security::gap::install_port;
+#[cfg(feature = "security-module")]
 use crate::modules::security::gap::stub::{Asked, StubPort};
 use crate::security::live_policy::test_privacy_scope;
 use tinyinference_llm::message::Message;
+#[cfg(feature = "security-module")]
 use tinysecurity_bus::{DenialReason, PrivacyRiskLevel2, Verdict};
 
+#[cfg(feature = "security-module")]
 /// A module that refuses every transfer put to it.
 fn refusing() -> Arc<StubPort> {
     Arc::new(StubPort::allowing().privacy(|_| Verdict::Deny {
@@ -21,6 +25,7 @@ fn assessed(level: IdentificationRisk, categories: &[&str]) -> Option<Assessment
     })
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn non_sensitive_modes_never_refuse_and_never_ask_the_module() {
     let stub = refusing();
@@ -39,6 +44,7 @@ async fn non_sensitive_modes_never_refuse_and_never_ask_the_module() {
     assert!(stub.asked().is_empty());
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn sensitive_forwards_the_assessment_and_obeys_the_modules_answer() {
     let stub = Arc::new(StubPort::allowing());
@@ -62,6 +68,7 @@ async fn sensitive_forwards_the_assessment_and_obeys_the_modules_answer() {
     assert_eq!(request.destination_label, "openai");
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn sensitive_refuses_whatever_the_module_refuses_with_the_mode_message() {
     let stub = refusing();
@@ -127,6 +134,7 @@ async fn an_external_route_passes_straight_through_outside_sensitive_mode() {
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn under_sensitive_an_unassessable_request_is_refused_before_the_route_is_called() {
     // No module is serving in a unit test, so the assessment is "unknown" and the
@@ -163,6 +171,7 @@ async fn a_route_that_stays_on_the_device_is_never_assessed() {
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
+#[cfg(feature = "security-module")]
 /// A local primary with an external fallback: each route is wrapped on its own,
 /// so the fallback hop is assessed even though the primary never leaves.
 #[tokio::test]

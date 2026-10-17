@@ -54,10 +54,14 @@ impl ToolRunContext for Workspace {
     }
 }
 
+#[cfg(feature = "security-module")]
 use crate::modules::security::gap::stub::{Asked, StubPort};
+#[cfg(feature = "security-module")]
 use crate::modules::security::gap::{install_port, BudgetOp};
+#[cfg(feature = "security-module")]
 use tinysecurity_bus::{BudgetDecision2, PathCheckKind};
 
+#[cfg(feature = "security-module")]
 #[test]
 fn adapter_reports_the_autonomy_tier() {
     let dir = tempfile::tempdir().unwrap();
@@ -93,6 +97,7 @@ fn adapter_reports_the_autonomy_tier() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn the_budget_is_reserved_by_the_tool_gate_not_counted_again_in_the_tool() {
     let dir = tempfile::tempdir().unwrap();
@@ -108,6 +113,7 @@ fn the_budget_is_reserved_by_the_tool_gate_not_counted_again_in_the_tool() {
     assert!(stub.asked().is_empty(), "no in-tool budget question");
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn adapter_exposes_the_action_dir_and_asks_the_module_for_string_checks() {
     let dir = tempfile::tempdir().unwrap();

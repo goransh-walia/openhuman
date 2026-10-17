@@ -5,6 +5,7 @@ fn test_config() -> Arc<Config> {
     Arc::new(Config::default())
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn metadata_is_stable() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -28,6 +29,7 @@ fn metadata_is_stable() {
     assert_eq!(ArtifactListTool::new(cfg).scope(), ToolScope::All);
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn read_tools_are_concurrency_safe() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -38,6 +40,7 @@ fn read_tools_are_concurrency_safe() {
     assert!(ArtifactGetTool::new(cfg).is_concurrency_safe(&serde_json::Value::Null));
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn get_requires_artifact_id() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -51,6 +54,7 @@ async fn get_requires_artifact_id() {
     assert!(err.to_string().contains("artifact_id"));
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn delete_requires_artifact_id() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -64,6 +68,7 @@ async fn delete_requires_artifact_id() {
     assert!(err.to_string().contains("artifact_id"));
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn list_returns_artifacts_envelope() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(

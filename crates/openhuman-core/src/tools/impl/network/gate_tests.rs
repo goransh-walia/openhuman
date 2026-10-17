@@ -34,10 +34,14 @@ fn http(security: Arc<SecurityPolicy>) -> HttpRequestTool {
     )
 }
 
+#[cfg(feature = "security-module")]
 use crate::modules::security::gap::stub::StubPort;
+#[cfg(feature = "security-module")]
 use crate::modules::security::gap::{install_port, PortGuard};
+#[cfg(feature = "security-module")]
 use tinysecurity_bus::{BudgetDecision2, DenialReason, Verdict};
 
+#[cfg(feature = "security-module")]
 /// A module that refuses every transfer it is asked about (a restrictive privacy
 /// mode); the module owns the truth table, this scripts one answer.
 fn refusing_privacy() -> PortGuard {
@@ -46,6 +50,7 @@ fn refusing_privacy() -> PortGuard {
     })))
 }
 
+#[cfg(feature = "security-module")]
 /// A module whose autonomy tier is read-only.
 fn read_only_module() -> PortGuard {
     install_port(Arc::new(
@@ -55,6 +60,7 @@ fn read_only_module() -> PortGuard {
 
 // --- the gate answers with the policy's own decisions -----------------------
 
+#[cfg(feature = "security-module")]
 #[test]
 fn read_only_autonomy_cannot_act() {
     let _module = read_only_module();
@@ -62,6 +68,7 @@ fn read_only_autonomy_cannot_act() {
     assert!(!gate.can_act());
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn the_gate_does_not_count_an_action_the_tool_gate_already_reserved() {
     // The hourly budget is spent once per call by the tool gate before the tool
@@ -122,6 +129,7 @@ fn a_blocked_tier_stops_the_call_before_the_network() {
 
 // --- privacy mode ------------------------------------------------------------
 
+#[cfg(feature = "security-module")]
 #[test]
 fn local_only_privacy_mode_refuses_with_the_policy_blocked_marker() {
     let _module = refusing_privacy();
@@ -142,6 +150,7 @@ fn standard_privacy_mode_lets_the_request_through() {
 
 // --- the tools, through the real policy ---------------------------------------
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn http_request_blocks_readonly_mode() {
     let _module = read_only_module();
@@ -154,6 +163,7 @@ async fn http_request_blocks_readonly_mode() {
     assert!(result.output().contains("read-only"));
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn http_request_is_blocked_under_local_only_privacy_mode() {
     // Privacy epic S7 (#4441): under LocalOnly the request is refused with a
@@ -177,6 +187,7 @@ async fn http_request_is_blocked_under_local_only_privacy_mode() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn web_fetch_and_curl_are_blocked_under_local_only_privacy_mode() {
     let _module = refusing_privacy();
@@ -220,6 +231,7 @@ async fn web_fetch_and_curl_are_blocked_under_local_only_privacy_mode() {
     }
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn pushover_honours_the_read_only_tier() {
     let _module = read_only_module();
@@ -341,6 +353,7 @@ fn routed_with(payload: Option<Assessment>) -> RoutedGate {
     }
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn sensitive_mode_permits_a_fetch_assessed_clean_and_refuses_the_rest() {
     use crate::config::PrivacyMode;

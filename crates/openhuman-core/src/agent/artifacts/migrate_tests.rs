@@ -67,6 +67,7 @@ fn partials(files_dir: &Path) -> usize {
         .unwrap_or(0)
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn moves_a_legacy_file_into_the_files_folder() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -118,6 +119,7 @@ async fn moves_a_legacy_file_into_the_files_folder() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn running_twice_changes_nothing() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -139,6 +141,7 @@ async fn running_twice_changes_nothing() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn leaves_pending_and_failed_records_alone() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -158,6 +161,7 @@ async fn leaves_pending_and_failed_records_alone() {
     assert!(visible(&files_dir).is_empty());
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_name_already_in_the_folder_is_never_overwritten() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -193,6 +197,7 @@ async fn a_name_already_in_the_folder_is_never_overwritten() {
     );
 }
 
+#[cfg(feature = "security-module")]
 /// Two accounts migrate a same-named file into the one shared folder: both
 /// survive under distinct names, and each account still lists only its own.
 #[tokio::test]
@@ -239,6 +244,7 @@ async fn two_accounts_migrate_into_the_shared_folder_without_clobbering() {
 
 // ── Crash safety: stop after each step, check nothing is lost, rerun ──────
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_crash_after_the_copy_leaves_the_record_intact_and_is_redone() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -267,6 +273,7 @@ async fn a_crash_after_the_copy_leaves_the_record_intact_and_is_redone() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_crash_after_the_rename_loses_nothing_and_leaves_at_most_one_duplicate() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -295,6 +302,7 @@ async fn a_crash_after_the_rename_loses_nothing_and_leaves_at_most_one_duplicate
     assert!(!legacy_path(&ws, "a1", "deck.pptx").exists());
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_crash_after_the_meta_write_is_finished_by_the_next_run() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -333,6 +341,7 @@ async fn a_crash_after_the_meta_write_is_finished_by_the_next_run() {
     );
 }
 
+#[cfg(feature = "security-module")]
 /// A partial left by an interrupted run whose record has since gone (deleted
 /// between runs) is not overwritten by any later copy; the sweep removes it.
 #[tokio::test]

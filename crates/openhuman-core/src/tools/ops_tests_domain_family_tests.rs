@@ -74,6 +74,7 @@ async fn all_tools_executes_stock_family_against_fake_backend() {
     assert_eq!(requests[2].body["requireGreeks"], serde_json::json!(true));
 }
 
+#[cfg(feature = "security-module")]
 /// The shared filesystem and network tools ask their gate whether the tier lets
 /// them act (`FsGate::can_act` / `NetGate::can_act`, answered by the TinySecurity
 /// module) and return their own read-only refusal string. Each of those must

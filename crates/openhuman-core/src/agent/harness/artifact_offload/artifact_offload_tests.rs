@@ -83,6 +83,7 @@ fn workspace_guard_reports_workspace_dir_as_the_internal_root() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn workspace_guard_forwards_internal_state_to_the_module_and_fails_closed() {
     use crate::modules::security::gap::install_port;
@@ -160,6 +161,7 @@ async fn an_action_dir_inside_workspace_dir_is_never_materialized() {
     );
 }
 
+#[cfg(feature = "security-module")]
 /// The module's answer for an ordinary workspace: nothing here is internal state.
 fn nothing_is_internal() -> crate::modules::security::gap::PortGuard {
     use crate::modules::security::gap::stub::StubPort;
@@ -168,6 +170,7 @@ fn nothing_is_internal() -> crate::modules::security::gap::PortGuard {
     ))
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_wired_writer_redacts_before_the_bytes_reach_disk() {
     let _module = nothing_is_internal();
@@ -207,6 +210,7 @@ async fn a_wired_writer_redacts_before_the_bytes_reach_disk() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn oversized_result_is_offloaded_and_the_parent_gets_a_readable_pointer() {
     let _module = nothing_is_internal();

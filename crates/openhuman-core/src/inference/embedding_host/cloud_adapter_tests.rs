@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(feature = "security-module")]
 /// Privacy epic S7 (#4441): under LocalOnly, `embed` refuses before touching
 /// the inner cloud transport (so no network / no auth is needed to observe
 /// the block). Uses the thread-scoped privacy override so it never mutates
