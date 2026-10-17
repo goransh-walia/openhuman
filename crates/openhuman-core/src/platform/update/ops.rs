@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::config::{self, UpdateConfig, UpdateRestartStrategy};
+use crate::config::{UpdateConfig, UpdateRestartStrategy};
 use crate::core::Outcome;
 use crate::platform::update;
 use crate::platform::update::types::{UpdateApplyResult, UpdateInfo, UpdateRunResult, VersionInfo};

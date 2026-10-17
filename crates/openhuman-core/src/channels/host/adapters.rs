@@ -4,7 +4,6 @@
 //! voice, persistence, allowlist, and event operations. The legacy portable
 //! provider-trait adapters below exist only for unit-test compatibility.
 
-use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 #[cfg(test)]

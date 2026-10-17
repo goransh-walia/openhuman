@@ -15,7 +15,6 @@ use std::time::{Duration, Instant};
 
 use tokio::time::interval;
 
-use crate::config::rpc as config_rpc;
 
 use super::pipeline;
 use super::types::{FetchReason, TaskSource};

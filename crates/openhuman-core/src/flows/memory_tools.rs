@@ -32,7 +32,7 @@ use tinymemory_api::{
 };
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
-use crate::agent::turn_origin::{self, AgentTurnOrigin, TrustedAutomationSource};
+use crate::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::config::Config;
 use crate::memory::types::{LearnParams, RecallParams};
 use crate::memory::{MemoryError, MemoryResult};

@@ -37,7 +37,6 @@ use serde_json::Value;
 use super::contract::ToolScope;
 use super::tools::resolve_action_scope;
 use crate::agent::tinyagents::host::run_context::{dispatch_ctx_for_tool, sandbox_mode_for_tool};
-use crate::config::rpc as config_rpc;
 use crate::config::Config;
 use tinyagents_definition::SandboxMode;
 use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolCategory, ToolResult, ToolRunContext};

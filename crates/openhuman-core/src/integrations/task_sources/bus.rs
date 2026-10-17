@@ -10,7 +10,6 @@ use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
 
-use crate::config::rpc as config_rpc;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
 use tinybus::EventHandler;
