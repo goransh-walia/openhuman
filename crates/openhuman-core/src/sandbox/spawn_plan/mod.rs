@@ -272,6 +272,9 @@ async fn plan_with(
         network,
         limits: limits(policy),
         deny_subprocesses: false,
+        // Contract 1.21: a best-effort process jail for operator commands is wired
+        // by the sandbox migration; this plan does not accept one.
+        accept_process_isolation: false,
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
