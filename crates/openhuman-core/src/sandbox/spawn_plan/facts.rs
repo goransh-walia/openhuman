@@ -124,7 +124,8 @@ pub(crate) fn grant_ceiling(policy: &SandboxPolicy) -> Option<Vec<PathGrant>> {
 }
 
 /// The network reach the policy allows: none, or the host's own network, which the
-/// module only plans after an exact human approval.
+/// module plans for the operator's scope ([`operator_host_network`]) and otherwise only
+/// after an exact human approval.
 pub(crate) fn network_ceiling(policy: &SandboxPolicy) -> NetworkPolicy {
     if policy.allow_network {
         NetworkPolicy::Host
