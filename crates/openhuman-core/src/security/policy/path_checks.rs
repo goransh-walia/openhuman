@@ -8,10 +8,6 @@ use super::types::{
 #[cfg(not(feature = "security-module"))]
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
-/// Agent-facing refusal when the policy module cannot be asked.
-#[cfg(not(feature = "security-module"))]
-const MODULE_UNAVAILABLE: &str =
-    "[policy_blocked] TinySecurity path authorization unavailable; file access denied";
 
 /// Credential-store path segments, matched case-insensitively at any depth.
 pub(crate) const SENSITIVE_COMPONENTS: &[&str] =
@@ -304,7 +300,9 @@ impl SecurityPolicy {
     #[cfg(not(feature = "security-module"))]
     pub async fn validate_path(&self, path: &str) -> Result<PathBuf, String> {
         log::debug!("[security][path] validate_path denied: module feature disabled path_len={}", path.len());
-        Err(MODULE_UNAVAILABLE.to_owned())
+        Err(format!(
+            "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
+        ))
     }
 
     /// Like `validate_path` but canonicalizes the parent directory.
@@ -321,7 +319,9 @@ impl SecurityPolicy {
     #[cfg(not(feature = "security-module"))]
     pub async fn validate_parent_path(&self, path: &str) -> Result<PathBuf, String> {
         log::debug!("[security][path] validate_parent_path denied: module feature disabled path_len={}", path.len());
-        Err(MODULE_UNAVAILABLE.to_owned())
+        Err(format!(
+            "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
+        ))
     }
 
     /// Returns `true` if `path` falls under one of the internal-state
