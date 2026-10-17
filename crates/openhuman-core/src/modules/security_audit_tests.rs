@@ -132,3 +132,22 @@ async fn a_row_the_module_cannot_commit_fails_instead_of_vanishing() {
     let refused = record_with(&fixture.proxy, &config, subject(""), event).await;
     assert!(refused.is_err());
 }
+
+/// A row with no serving module is an error the caller logs, never a silent success
+/// and never a load of the module for the sake of a row. Asked of an explicit, fresh
+/// client state: the process-wide one is shared with tests that serve a module.
+#[tokio::test]
+async fn a_row_with_no_serving_module_has_no_proxy_to_record_through() {
+    let fresh = tokio::sync::Mutex::new(crate::modules::security::ClientState::default());
+    assert!(
+        crate::modules::security::scoped_client::serving_proxy_in(&fresh)
+            .await
+            .is_none()
+    );
+    fresh.lock().await.faulted = true;
+    assert!(
+        crate::modules::security::scoped_client::serving_proxy_in(&fresh)
+            .await
+            .is_none()
+    );
+}

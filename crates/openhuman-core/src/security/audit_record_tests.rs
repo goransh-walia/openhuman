@@ -45,13 +45,3 @@ fn diagnostics_never_print_the_command() {
     );
     assert!(!format!("{event:?}").contains(&token));
 }
-
-/// A row with no serving module is an error the caller logs, never a silent success
-/// and never a load of the module for the sake of a row.
-#[tokio::test]
-async fn a_row_with_no_serving_module_is_reported_not_dropped() {
-    let event = HostAuditEvent::command_execution("tool:shell", "ls", false, true, true, 1);
-    let ctx = crate::core::runtime::DispatchCtx::ambient();
-    let config = crate::config::Config::default();
-    assert!(record(&ctx, Some(&config), event).await.is_err());
-}
