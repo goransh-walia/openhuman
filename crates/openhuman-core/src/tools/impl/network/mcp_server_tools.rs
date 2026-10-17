@@ -145,7 +145,8 @@ impl Tool for ModuleConfiguredMcpServerTool {
                     meta: None,
                 })
                 .collect(),
-        );
+        )
+        .await;
         if !safe
             .iter()
             .any(|tool| tool.name == self.presentation.remote_name)
