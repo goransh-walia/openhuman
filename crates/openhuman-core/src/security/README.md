@@ -449,27 +449,41 @@ Each file has a sibling `<module>_tests.rs`; the policy suites live in
 
 ## Audit ownership
 
-- `security/audit.rs` is the host's JSONL logger (`[audit]` config: enabled,
-  path, max size). Its file is created owner-only (0600) on Unix. The module's
-  single ordered stream (`Audit2`, `EvaluateAudited2`, `CheckAudited2` in
-  tinysecurity v0.6.x) is the target for policy, approval, judge, shell and
-  sandbox rows; routing those through a host `AuditSink` callback lands with
-  the phase 2/4/5/6 migrations. The legacy plain `Audit` method is not served
-  by the module (pinned by a tinysecurity test); use `Audit2`.
-- The approval gate writes a `policy_decision` row (`policy_decision` =
-  `auto_approve_all`, `approvals_disabled` or `auto_approve_allowlist`) for every
-  call it lets through without a prompt, so a bypass is never silent.
+- Approval, judge and approval-engine rows go through the module's ordered
+  `Audit2` stream: the module appends them to the host's `AuditSink2`
+  (`approval/native/callbacks.rs::append`), which commits to the subject's
+  durable rows. Approvals fail closed when a row cannot be committed.
+- `security/audit.rs` remains the host's owner-only (0600) JSONL logger
+  (`[security.audit]`: enabled, path, max size) for the rows the host itself
+  writes: shell command executions and policy decisions that let a call through
+  without a prompt (`policy_decision` = `auto_approve_all`,
+  `approvals_disabled` or `auto_approve_allowlist`), so a bypass is never
+  silent. Sandbox plans and policy-setting changes are not yet re-routed onto
+  the module stream: the audited module methods (`EvaluateAudited2`,
+  `CheckAudited2`) take a subject-bound `AuditedRequest2`, and the command and
+  sandbox seams do not carry that correlation today. This is a recorded
+  follow-up, not a decision to keep two logs; until it lands there are two
+  sinks and `AuditLogger` is the only host-side one.
 - MCP protocol telemetry (`mcp/audit`, the `mcp_audit` stream and `AuditStore`)
   stays tinymcp-owned: see `vendor/tinymcp/docs/adr/0002-mcp-audit-ownership.md`.
   Host policy events go through tinysecurity and are joined with MCP rows at
   read time. `mcp/audit` is not made a facade.
 - `pii::scan` and the `security/secrets.rs` alias no longer exist; the former
-  `security/core.rs` (only `redact`) is now `security/redact.rs`.
-- Tinycomputer consequence/payment gates: tinycomputer v0.14.0 (contract 2.19)
-  asks the host via `ConsequenceHost.Review`; the host adapter serving it
-  through the tinysecurity approval path is pending the phase 4 approval
-  migration. Tinyskills `ScanReport::verdict()` (`Block`/`Warn`/`Pass`) is
-  likewise to be mapped by a host adapter then; no tinyskills change is needed.
+  `security/core.rs` (only `redact`) is now `security/redact.rs`. No
+  `#[allow(unused_imports)]` remains under `security/`.
+- Tinycomputer consequence/payment gates are not wired. tinycomputer v0.14.0
+  (contract 2.19) asks the host through `ConsequenceHost.Review` before an
+  approved irreversible or paying action; a host that does not serve the
+  interface leaves the module's own pause as the only gate
+  (`Verdict::Unreviewed`), and a host that serves it and fails denies. This
+  host does not serve it, so the existing pause plus the approval engine's
+  `ContinueTask` decision are the gate. Serving it means a bus object that maps
+  a `Review` onto an approval request; that is a feature of its own and is
+  left for a follow-up rather than approximated here.
+- Tinyskills `ScanReport::verdict()` (`Block`/`Warn`/`Pass`) is likewise not
+  consumed by the host: skill trust and execution policy stay with the host's
+  approval path, and no tinyskills change is needed to map the verdict when a
+  caller is added.
 
 Production-path coverage: `modules/security_production_tests.rs` (ignored; run by
 `security-native-fixture.sh`) drives `register_path_policy` / `validate_path`
