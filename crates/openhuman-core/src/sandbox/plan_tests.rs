@@ -184,8 +184,7 @@ fn a_noop_plan_that_is_not_a_host_run_is_still_refused() {
 #[test]
 fn a_host_run_plan_that_claims_a_jail_is_malformed() {
     for tweak in [
-        (|a: &mut SandboxArtifact2| a.backend = SandboxBackend::Jail)
-            as fn(&mut SandboxArtifact2),
+        (|a: &mut SandboxArtifact2| a.backend = SandboxBackend::Jail) as fn(&mut SandboxArtifact2),
         |a| a.minimum_isolation = IsolationLevel2::Kernel,
         |a| {
             a.grants = vec![PathGrant {

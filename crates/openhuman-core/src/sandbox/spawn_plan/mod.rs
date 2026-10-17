@@ -177,7 +177,10 @@ fn options(policy: &SandboxPolicy, host_run: bool) -> SandboxPlanOptions2 {
 /// Every executor TinyBox verified on this host, in the order the module should prefer
 /// them. A policy that requires one executor probes only that one. An executor whose
 /// probe fails is declared unavailable; when every probe fails the spawn is refused.
-async fn probe(config: &Config, policy: &SandboxPolicy) -> Result<Vec<SandboxExecutor2>, PlanError> {
+async fn probe(
+    config: &Config,
+    policy: &SandboxPolicy,
+) -> Result<Vec<SandboxExecutor2>, PlanError> {
     let jail = || async {
         crate::modules::tinybox::jail_status(config)
             .await

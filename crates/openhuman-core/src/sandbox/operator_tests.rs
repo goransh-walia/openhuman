@@ -26,9 +26,8 @@ fn the_component_switch_reads_the_context_the_call_runs_under() {
     assert!(!component_off(&DispatchCtx::ambient()));
     let mut set = crate::core::runtime::ComponentSet::all();
     set.sandbox = false;
-    let off = DispatchCtx::new(
-        crate::core::runtime::context::CoreContext::for_test_with_components(set),
-    );
+    let off =
+        DispatchCtx::new(crate::core::runtime::context::CoreContext::for_test_with_components(set));
     assert!(component_off(&off));
     let on = DispatchCtx::new(
         crate::core::runtime::context::CoreContext::for_test_with_components(

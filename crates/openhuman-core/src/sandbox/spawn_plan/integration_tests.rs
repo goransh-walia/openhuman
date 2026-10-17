@@ -14,9 +14,9 @@ use tinysecurity_bus::{
 };
 
 use super::*;
-use crate::sandbox::plan::PlannedExecutor;
 use crate::modules::security::native_tests::{native_fixture_configured, NativeFixture};
 use crate::modules::tinybox::contract::{JailEnforcement, NetworkPolicy};
+use crate::sandbox::plan::PlannedExecutor;
 use crate::sandbox::types::DockerOverrides;
 
 const IGNORE: &str = "requires a released host key or an explicitly selected local native fixture";
@@ -554,7 +554,10 @@ async fn the_operator_with_the_sandbox_off_gets_a_module_planned_run_on_the_host
         .await
         .expect("correlation")
         .expected_tail;
-    assert!(tail >= 2, "plan and consume were both audited (tail {tail})");
+    assert!(
+        tail >= 2,
+        "plan and consume were both audited (tail {tail})"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

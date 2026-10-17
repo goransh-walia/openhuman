@@ -160,7 +160,11 @@ fn the_scope_declares_every_executor_it_is_given() {
     let scope = facts(&config, &policy("/work/action"), |i| {
         i.executors = vec![executor("jail"), executor("docker")];
     });
-    let ids: Vec<_> = scope.executors.iter().map(|e| e.executor_id.as_str()).collect();
+    let ids: Vec<_> = scope
+        .executors
+        .iter()
+        .map(|e| e.executor_id.as_str())
+        .collect();
     assert_eq!(ids, ["jail", "docker"]);
 }
 

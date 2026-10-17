@@ -327,7 +327,8 @@ pub(super) async fn admit_planned(
     use super::spawn_plan::PlanError;
     use tinysecurity_bus::SandboxDenial2;
 
-    let request = |policy, host_run| request_for(config, policy, source, operation, operator_off, host_run);
+    let request =
+        |policy, host_run| request_for(config, policy, source, operation, operator_off, host_run);
     if operator_off {
         match admit_request(request(policy, true)).await {
             Ok(admitted) => return Ok(admitted),
