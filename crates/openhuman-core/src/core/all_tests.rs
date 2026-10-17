@@ -1227,7 +1227,9 @@ fn http_server_compiled_in_when_feature_on() {
 #[test]
 #[cfg(not(feature = "http-server"))]
 fn http_server_compiled_out_when_feature_off() {
-    assert!(!crate::core::http_server_status::HTTP_SERVER_COMPILED_IN);
+    const {
+        assert!(!crate::core::http_server_status::HTTP_SERVER_COMPILED_IN);
+    }
 }
 
 // ---- DomainGroup ↔ family-directory realignment ----------------------------

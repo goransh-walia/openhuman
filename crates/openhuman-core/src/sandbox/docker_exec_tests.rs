@@ -1,5 +1,5 @@
 //! Docker sandbox request mapping. TinyBox owns daemon status and cleanup.
-#![cfg(unix)]
+#![cfg(all(unix, feature = "modules"))]
 
 use super::*;
 #[cfg(feature = "modules")]

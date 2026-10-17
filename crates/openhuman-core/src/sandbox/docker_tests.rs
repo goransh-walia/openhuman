@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(feature = "modules")]
 use crate::sandbox::types::DockerOverrides;
 use std::path::PathBuf;
 
