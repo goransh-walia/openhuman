@@ -393,18 +393,23 @@ impl PlannedSpawn {
         applied.read_only_mounts = paths(&self.plan.jail.read_only);
         applied.read_write_mounts = paths(&self.plan.jail.read_write);
         applied.allow_network = self.plan.jail.allow_net;
+        applied.mount_workspace = self.plan.workspace;
         if let Some(overrides) = applied.docker_overrides.as_mut() {
             if !applied.allow_network {
                 // The container's own network setting must follow the plan too, or a
                 // narrowed plan would still start the container on a network.
                 overrides.network = Some("none".to_owned());
             }
+            // A bound the plan carries wins. A plan that names none (the module chose
+            // the container, so the spawn asked for no bound) keeps the operator's own
+            // configured bound: it can only be tighter than no bound at all.
             let limits = &self.artifact.limits;
-            overrides.memory_limit_mb =
-                limits.memory_bytes.map(|bytes| bytes.div_ceil(1024 * 1024));
-            overrides.cpu_limit = limits
-                .cpu_millicores
-                .map(|millis| f64::from(millis) / 1000.0);
+            if let Some(bytes) = limits.memory_bytes {
+                overrides.memory_limit_mb = Some(bytes.div_ceil(1024 * 1024));
+            }
+            if let Some(millis) = limits.cpu_millicores {
+                overrides.cpu_limit = Some(f64::from(millis) / 1000.0);
+            }
         }
         applied
     }
