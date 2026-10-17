@@ -90,8 +90,8 @@ fn default_tool_descs(config: &Config) -> Vec<(&'static str, &'static str)> {
 }
 
 /// Build the model, tools and prompt of a channel turn from `config`, under
-/// `security`. Side-effect free apart from the workspace's audit logger: it
-/// installs no process-global policy and registers no subscriber.
+/// `security`. Side-effect free: it installs no process-global policy and
+/// registers no subscriber.
 pub(crate) fn build_channel_turn_parts(
     config: &Config,
     security: &Arc<SecurityPolicy>,

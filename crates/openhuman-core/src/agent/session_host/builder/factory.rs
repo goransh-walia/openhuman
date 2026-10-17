@@ -186,7 +186,6 @@ impl OpenHumanSessionHost {
                 Arc::clone(&tool_config),
                 &security,
                 runtime,
-                audit,
                 &tool_config.browser,
                 &tool_config.http_request,
                 &tool_config.action_dir,
