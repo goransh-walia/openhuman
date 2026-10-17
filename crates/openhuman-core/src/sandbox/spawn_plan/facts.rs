@@ -207,6 +207,8 @@ pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
         paths: paths(config, policy),
         grant_ceiling: grant_ceiling(policy)?,
         network_ceiling: network_ceiling(policy),
+        // Contract 1.21 field; host network by configuration is the sandbox change's.
+        operator_host_network: false,
         limits: ResourceLimits2::default(),
         sources: vec![SandboxSource2 {
             source_id: source.source_id().into(),

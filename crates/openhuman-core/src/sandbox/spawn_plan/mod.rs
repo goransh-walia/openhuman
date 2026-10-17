@@ -272,6 +272,8 @@ async fn plan_with(
         network,
         limits: limits(policy),
         deny_subprocesses: false,
+        // Contract 1.21 field; the sandbox change decides when a process jail may run.
+        accept_process_isolation: false,
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
