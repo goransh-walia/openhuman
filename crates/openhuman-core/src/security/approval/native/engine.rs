@@ -325,6 +325,13 @@ impl ApprovalEngine for NativeEngine {
                 .await;
             evaluated.map_err(|error| {
                 tracing::warn!(error = %error, "{LOG} the module refused to evaluate the call");
+                // The module's own `Denied` is an answer; anything else is a failure.
+                if matches!(
+                    &error,
+                    tinybus::Error::MethodFailed { message, .. } if message == "approval denied"
+                ) {
+                    return EngineError::Refused;
+                }
                 unavailable(format!("TinySecurity EvaluateApproval2 failed: {error}"))
             })?
         };

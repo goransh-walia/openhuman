@@ -164,7 +164,12 @@ pub(crate) enum EngineError {
     /// never existed in this process. A benign race for a decision.
     #[error("the approval request is not pending")]
     NotPending,
-    /// The module or its store refused or could not answer. Fail closed.
+    /// The module answered no: a scheduled job's external effect, an unlabelled
+    /// call no grant covers, or any other denial it will not let a person
+    /// override. Nothing was parked.
+    #[error("the approval engine refused the call")]
+    Refused,
+    /// The module or its store could not answer. Fail closed.
     #[error("{0}")]
     Unavailable(String),
 }
