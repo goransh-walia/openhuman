@@ -42,7 +42,7 @@ fn each_posture_variant_is_its_own_subject() {
 fn the_default_posture_requires_approval_for_nothing_it_does_not_name() {
     let posture = Posture::default();
     assert!(!posture.auto_approve_all);
-    assert!(posture.tool_grants.is_empty() && posture.flow_grants.is_empty());
+    assert!(posture.tool_grants.is_empty());
 }
 
 #[tokio::test]

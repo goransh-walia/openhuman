@@ -240,10 +240,14 @@ async fn a_grant_the_user_removes_stops_approving_the_next_call() {
 async fn a_flow_grant_applies_to_that_flow_only() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
+    world
+        .engine
+        .grant_flow_trust(&crate::core::runtime::Tenant::default(), "flow-1", "http_request")
+        .await
+        .expect("the module keeps the flow trust");
     let mut in_flow = input("http_request", &shown);
     in_flow.variant = Variant::FlowStrict;
     in_flow.flow = Some("flow-1".into());
-    in_flow.posture.flow_grants = vec![("flow-1".into(), "http_request".into())];
     // The global tool list never approves a strict flow, only its own trust.
     in_flow.posture.tool_grants = vec!["slack_post".into()];
     assert!(matches!(
@@ -253,7 +257,6 @@ async fn a_flow_grant_applies_to_that_flow_only() {
     let mut other_flow = input("http_request", &shown);
     other_flow.variant = Variant::FlowStrict;
     other_flow.flow = Some("flow-2".into());
-    other_flow.posture.flow_grants = vec![("flow-1".into(), "http_request".into())];
     assert!(matches!(
         world.engine.check(other_flow).await.unwrap(),
         Checked::Pending { .. }
