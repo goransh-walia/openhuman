@@ -36,7 +36,6 @@ use crate::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::config::Config;
 use crate::memory::types::{LearnParams, RecallParams};
 use crate::memory::{MemoryError, MemoryResult};
-use crate::security::policy::ToolOperation;
 use crate::security::SecurityPolicy;
 
 /// Prefix of a flow's own tag (see [`flow_tag`]).
@@ -464,13 +463,6 @@ impl Tool for FlowMemoryRememberTool {
             return Ok(ToolResult::error("Missing 'content' parameter".to_string()));
         };
         let kind = learning_kind_for(args.get("category").and_then(|v| v.as_str()));
-
-        if let Err(error) = self
-            .security
-            .enforce_tool_operation(ToolOperation::Act, "flow_memory_remember")
-        {
-            return Ok(ToolResult::error(error));
-        }
 
         // SECURITY (T-M2): the flow comes from the trusted run origin only;
         // outside a workflow run the write is refused.

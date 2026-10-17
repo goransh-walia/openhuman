@@ -2,7 +2,6 @@ use crate::config::DelegateAgentConfig;
 use crate::inference::provider::{
     OpenHumanBackendModel, ProviderRuntimeOptions, INFERENCE_BACKEND_ID,
 };
-use crate::security::policy::ToolOperation;
 use crate::security::SecurityPolicy;
 use crate::tools::timeout::tool_execution_timeout_secs;
 use async_trait::async_trait;
@@ -234,13 +233,6 @@ impl DelegateTool {
                 depth = self.depth,
                 max = agent_config.max_depth
             )));
-        }
-
-        if let Err(error) = self
-            .security
-            .enforce_tool_operation(ToolOperation::Act, "delegate")
-        {
-            return Ok(ToolResult::error(error));
         }
 
         let model = OpenHumanBackendModel::new(
