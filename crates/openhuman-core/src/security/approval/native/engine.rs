@@ -304,11 +304,9 @@ impl ApprovalEngine for NativeEngine {
             let _guard = scope.stream.lock().await;
             let generation = Self::generation(&proxy).await?;
             let audit = Self::correlation(&scope, generation).await?;
-            let ttl_ms = input.ttl.map(|ttl| {
-                u64::try_from(ttl.as_millis())
-                    .unwrap_or(u64::MAX)
-                    .max(1)
-            });
+            let ttl_ms = input
+                .ttl
+                .map(|ttl| u64::try_from(ttl.as_millis()).unwrap_or(u64::MAX).max(1));
             let evaluated: Result<EvaluateApprovalResponse2, _> = proxy
                 .call_confidential(
                     names::methods::EVALUATE_APPROVAL2,
