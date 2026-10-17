@@ -108,17 +108,6 @@ async fn fifo_attachment_is_rejected_without_waiting_for_a_writer() {
         std::io::Error::last_os_error()
     );
 
-    let model = Arc::new(NeverCalled::default());
-    let wrapped = wrap_injected(model.clone(), Arc::new(config));
-    let request = ModelRequest::new(vec![Message::User(
-        tinyinference_llm::message::UserMessage {
-            content: vec![ContentBlock::Image(ImageRef {
-                url: "attachment.png".into(),
-                mime_type: Some("image/png".into()),
-            })],
-        },
-    )]);
-
     let mut config = Config::default();
     config.action_dir = temp.path().to_path_buf();
     config.workspace_dir = temp.path().join("internal");
@@ -144,6 +133,17 @@ async fn fifo_attachment_is_rejected_without_waiting_for_a_writer() {
             Err(error) => panic!("the security module must answer a path validation: {error}"),
         }
     }
+
+    let model = Arc::new(NeverCalled::default());
+    let wrapped = wrap_injected(model.clone(), Arc::new(config));
+    let request = ModelRequest::new(vec![Message::User(
+        tinyinference_llm::message::UserMessage {
+            content: vec![ContentBlock::Image(ImageRef {
+                url: "attachment.png".into(),
+                mime_type: Some("image/png".into()),
+            })],
+        },
+    )]);
 
     let fifo_for_unblock = fifo.clone();
     let mut handle = tokio::spawn(async move { wrapped.invoke(&(), request).await });
