@@ -16,6 +16,7 @@
 //! | `scopes.rs` | subject registration, posture and grants |
 //! | `audit_stream.rs` | a subject's audit stream, leased by the sandbox planner |
 //! | `rows.rs` | the document-port store behind `Load`, `Cas` and `Append` |
+//! | `history_import.rs` | one-time import of the legacy `approval.db` into the module |
 //! | `callbacks.rs` | what `modules/security_host.rs` serves |
 //! | `state.rs` | calls, requests and human tickets in flight |
 //! | `view.rs` | history read from the stored rows |
@@ -25,6 +26,7 @@ use sha2::{Digest, Sha256};
 pub(crate) mod audit_stream;
 pub(crate) mod callbacks;
 mod engine;
+mod history_import;
 mod rows;
 mod scopes;
 mod state;

@@ -29,6 +29,7 @@ pub mod summary;
 pub use registration_scope::ApprovalScope;
 pub mod rpc;
 pub mod schemas;
+#[cfg(feature = "security-module")]
 mod store_import;
 pub mod types;
 

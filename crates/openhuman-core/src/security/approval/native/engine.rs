@@ -127,19 +127,29 @@ impl NativeEngine {
         }
     }
 
+    pub(super) fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// The module's proxy. The first use in a process also carries the legacy
+    /// approval history into the module (`history_import`).
     async fn proxy(&self) -> Result<Proxy, EngineError> {
-        match &self.source {
-            Source::Fixed(proxy) => Ok(proxy.clone()),
+        let proxy = match &self.source {
+            Source::Fixed(proxy) => proxy.clone(),
             Source::Production => crate::modules::security::approval_proxy(&self.config)
                 .await
                 .map(|proxy| proxy.with_timeout(CALL_DEADLINE))
-                .map_err(EngineError::Unavailable),
+                .map_err(EngineError::Unavailable)?,
+        };
+        if matches!(self.source, Source::Production) {
+            super::history_import::ensure(self, &proxy).await;
         }
+        Ok(proxy)
     }
 
     /// The subject a call runs under: the tenant, the workspace and the agent,
     /// with the variant that selects its posture.
-    fn subject(
+    pub(super) fn subject(
         &self,
         tenant: &crate::core::runtime::Tenant,
         variant: Variant,
@@ -179,7 +189,7 @@ impl NativeEngine {
     }
 
     /// The module's current generation, which every correlation carries.
-    async fn generation(proxy: &Proxy) -> Result<u64, EngineError> {
+    pub(super) async fn generation(proxy: &Proxy) -> Result<u64, EngineError> {
         let info: PolicyInfo = proxy
             .call(names::methods::POLICY_INFO, ())
             .await
@@ -189,7 +199,7 @@ impl NativeEngine {
 
     /// The correlation of the next audit event of a subject. The caller holds the
     /// subject's stream lock, so the tail read here is the tail the module extends.
-    async fn correlation(
+    pub(super) async fn correlation(
         scope: &ScopeEntry,
         generation: u64,
     ) -> Result<AuditCorrelation2, EngineError> {
