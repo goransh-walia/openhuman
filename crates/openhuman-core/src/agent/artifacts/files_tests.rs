@@ -57,7 +57,6 @@ fn names_in(dir: &Path) -> Vec<String> {
     names
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn new_artifact_is_written_to_the_files_folder_not_the_workspace() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -90,7 +89,6 @@ async fn new_artifact_is_written_to_the_files_folder_not_the_workspace() {
     assert!(!workspace.join("artifacts").join(&meta.id).exists());
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn files_folder_is_created_on_first_use() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -111,7 +109,6 @@ async fn files_folder_is_created_on_first_use() {
     assert!(files_dir.is_dir());
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_repeated_title_gets_a_numbered_name_instead_of_overwriting() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -138,7 +135,6 @@ async fn a_repeated_title_gets_a_numbered_name_instead_of_overwriting() {
     );
 }
 
-#[cfg(feature = "security-module")]
 /// The files folder is shared by every account on the OS user; metadata is
 /// not. Two accounts saving the same title must get distinct files, and each
 /// account's listing must show only its own records.
@@ -174,7 +170,6 @@ async fn two_accounts_share_the_files_folder_without_clobbering_or_leaking() {
     );
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn regenerate_overwrites_the_file_it_owns() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -203,7 +198,6 @@ async fn regenerate_overwrites_the_file_it_owns() {
     assert_eq!(names_in(&files_dir), vec!["deck.txt"]);
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_failed_generation_leaves_no_empty_file_behind() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -230,7 +224,6 @@ async fn a_failed_generation_leaves_no_empty_file_behind() {
     assert!(!path.exists(), "the zero-byte placeholder is removed");
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn delete_removes_the_file_and_the_record() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -249,7 +242,6 @@ async fn delete_removes_the_file_and_the_record() {
     assert!(!tmp.path().join("artifacts").join(&meta.id).exists());
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_file_removed_outside_openhuman_is_reported_missing() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -283,7 +275,6 @@ async fn tampered(workspace: &Path, file: &Path, file_root: &Path) -> String {
         .unwrap_err()
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn the_escape_guard_rejects_a_file_outside_its_folder() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -303,7 +294,6 @@ async fn the_escape_guard_rejects_a_file_outside_its_folder() {
     assert!(err.contains("escape guard"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn the_escape_guard_keeps_the_credential_store_floor() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -320,7 +310,6 @@ async fn the_escape_guard_keeps_the_credential_store_floor() {
     assert!(err.contains("escape guard"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 #[cfg(unix)]
 #[tokio::test]
 async fn the_escape_guard_rejects_a_symlink_out_of_the_folder() {
@@ -339,7 +328,6 @@ async fn the_escape_guard_rejects_a_symlink_out_of_the_folder() {
     assert!(err.contains("escape guard"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn a_legacy_record_still_resolves_under_the_workspace() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -359,7 +347,6 @@ async fn a_legacy_record_still_resolves_under_the_workspace() {
     );
 }
 
-#[cfg(feature = "security-module")]
 /// `root.join("../x").starts_with(root)` is true lexically, so the legacy
 /// guard must reject `..` components rather than rely on `starts_with`.
 #[tokio::test]
@@ -379,7 +366,6 @@ async fn a_legacy_path_with_parent_components_is_rejected() {
     assert!(err.contains("escapes artifacts root"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 /// A dangling symlink must be refused by the guard, not skipped: if its target
 /// appears later, an unchecked read would follow it out of the folder.
 #[cfg(unix)]
@@ -398,7 +384,6 @@ async fn the_escape_guard_rejects_a_dangling_symlink() {
     assert!(err.contains("could not be resolved"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 #[cfg(unix)]
 #[tokio::test]
 async fn the_escape_guard_rejects_a_symlink_loop() {
@@ -417,7 +402,6 @@ async fn the_escape_guard_rejects_a_symlink_loop() {
     assert!(err.contains("could not be resolved"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 /// A files folder that cannot be resolved (here, itself a symlink loop) must
 /// not let the check through either.
 #[cfg(unix)]
@@ -436,7 +420,6 @@ async fn the_escape_guard_rejects_an_unresolvable_folder() {
     assert!(err.contains("could not be resolved"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 /// A path with nothing at it passes the guard and is reported as missing.
 #[tokio::test]
 async fn a_recorded_file_that_does_not_exist_reads_as_missing() {
@@ -451,7 +434,6 @@ async fn a_recorded_file_that_does_not_exist_reads_as_missing() {
     assert!(err.contains("file missing"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 /// The record's `file_root` is not trusted on its own say-so: a record that
 /// claims a home-directory root and points at a private file inside it passes
 /// every within-root check, and is still refused because that root is not one
@@ -484,7 +466,6 @@ async fn a_record_pointing_outside_the_files_folders_is_refused() {
     assert!(err.contains("not a files folder"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 /// A folder the user moved away from stays trusted for the records made there.
 #[tokio::test]
 async fn a_previously_trusted_folder_still_resolves() {

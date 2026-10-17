@@ -13,7 +13,6 @@ fn test_config(tmp: &TempDir) -> Config {
 
 // ── ai_list_artifacts ──────────────────────────────────────────────────────
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn list_empty() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -29,7 +28,6 @@ async fn list_empty() {
     assert_eq!(value["limit"], DEFAULT_LIMIT as u64);
 }
 
-#[cfg(feature = "security-module")]
 /// #3226: when no `thread_id` filter is supplied the listing surfaces
 /// artifacts from every thread (and the legacy ones without a thread).
 #[tokio::test]
@@ -73,7 +71,6 @@ async fn list_without_thread_filter_returns_all_threads() {
     assert_eq!(value["total"], 3, "unfiltered list returns every artifact");
 }
 
-#[cfg(feature = "security-module")]
 /// #3226: `thread_id = Some(_)` returns ONLY artifacts whose persisted
 /// meta matches that thread. Legacy entries (thread_id absent) are
 /// deliberately excluded — they have no addressable owning thread.
@@ -137,7 +134,6 @@ async fn list_with_thread_filter_returns_only_matching_thread() {
     );
 }
 
-#[cfg(feature = "security-module")]
 /// #3226: when the filtered thread has no artifacts, `total` is 0
 /// (per-thread, not per-workspace) so the UI's "showing N of M" line
 /// stays meaningful.
@@ -179,7 +175,6 @@ async fn list_with_thread_filter_unknown_thread_returns_zero() {
 
 // ── ai_get_artifact ────────────────────────────────────────────────────────
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn get_missing_id_error() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -193,7 +188,6 @@ async fn get_missing_id_error() {
 
 // ── ai_delete_artifact ─────────────────────────────────────────────────────
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn delete_missing_id_error() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -207,7 +201,6 @@ async fn delete_missing_id_error() {
 
 // ── ai_regenerate (#3162) ──────────────────────────────────────────────────
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn regenerate_rejects_empty_id() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -226,7 +219,6 @@ async fn regenerate_rejects_empty_id() {
     .is_err());
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn regenerate_requires_thread_and_client() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -254,7 +246,6 @@ async fn regenerate_requires_thread_and_client() {
     .is_err());
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn regenerate_rejects_non_presentation_kind() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -307,7 +298,6 @@ async fn regenerate_rejects_non_presentation_kind() {
 // behind that lives under the `documents` gate — with it off, `ai_regenerate`
 // short-circuits with "built without the `documents` feature" before it can
 // reach either behaviour these tests are about.
-#[cfg(feature = "security-module")]
 #[cfg(feature = "documents")]
 #[tokio::test]
 async fn regenerate_errors_when_args_missing() {
@@ -343,7 +333,6 @@ async fn regenerate_errors_when_args_missing() {
     assert!(err.contains("not regenerable"), "unexpected error: {err}");
 }
 
-#[cfg(feature = "security-module")]
 #[cfg(feature = "documents")]
 #[tokio::test]
 async fn regenerate_reruns_producer_and_reuses_id() {
@@ -440,7 +429,6 @@ impl Drop for DefaultFilesDir {
     }
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn get_returns_the_files_folder_path() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -479,7 +467,6 @@ async fn get_returns_the_files_folder_path() {
     );
 }
 
-#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn get_reports_a_ready_file_removed_outside_openhuman() {
     let _floor = crate::modules::security::gap::install_port(std::sync::Arc::new(
@@ -510,7 +497,6 @@ async fn get_reports_a_ready_file_removed_outside_openhuman() {
     assert!(err.contains("file missing"), "{err}");
 }
 
-#[cfg(feature = "security-module")]
 /// A record whose `file_root` is not a files folder the core vouches for is
 /// refused by get, and delete leaves the file it names alone.
 #[tokio::test]

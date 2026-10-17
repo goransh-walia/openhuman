@@ -320,6 +320,6 @@ mod native {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "security-module"))]
 #[path = "module_gate_tests.rs"]
 mod tests;
