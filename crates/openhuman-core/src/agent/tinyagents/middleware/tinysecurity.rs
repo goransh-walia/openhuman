@@ -81,6 +81,10 @@ fn reason_text(tool: &str, reason: &DenialReason) -> String {
              '{tool}' needs a live user action."
         ),
         DenialReason::HighRisk => refusal_message(Refusal::HighRisk),
+        DenialReason::Privacy => format!(
+            "{POLICY_BLOCKED_MARKER} The registered privacy mode does not allow '{tool}' to send \
+             this data off the device."
+        ),
     }
 }
 

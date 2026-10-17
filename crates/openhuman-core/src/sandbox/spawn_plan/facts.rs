@@ -188,6 +188,9 @@ pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
     let mut facts = SandboxScope2 {
         approval_scope_id: None,
         scope_id: String::new(),
+        // Contract 1.21: the operator's host-network grant is wired by the sandbox
+        // migration; until then no scope claims it.
+        operator_host_network: false,
         subject: subject.clone(),
         origin: if *saas {
             Origin::Saas
