@@ -1,8 +1,18 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
+use crate::modules::security::gap::install_port;
+use crate::modules::security::gap::stub::{Asked, StubPort};
 use crate::security::live_policy::test_privacy_scope;
 use tinyinference_llm::message::Message;
+use tinysecurity_bus::{DenialReason, PrivacyRiskLevel2, Verdict};
+
+/// A module that refuses every transfer put to it.
+fn refusing() -> Arc<StubPort> {
+    Arc::new(StubPort::allowing().privacy(|_| Verdict::Deny {
+        reason: DenialReason::Privacy,
+    }))
+}
 
 fn assessed(level: IdentificationRisk, categories: &[&str]) -> Option<Assessment> {
     Some(Assessment {
@@ -11,8 +21,10 @@ fn assessed(level: IdentificationRisk, categories: &[&str]) -> Option<Assessment
     })
 }
 
-#[test]
-fn non_sensitive_modes_never_refuse() {
+#[tokio::test]
+async fn non_sensitive_modes_never_refuse_and_never_ask_the_module() {
+    let stub = refusing();
+    let _port = install_port(stub.clone());
     for mode in [PrivacyMode::Standard, PrivacyMode::LocalOnly] {
         assert!(refusal_with(
             mode,
@@ -20,33 +32,57 @@ fn non_sensitive_modes_never_refuse() {
             "gpt",
             assessed(IdentificationRisk::High, &["credential_or_identifier"])
         )
+        .await
         .is_none());
-        assert!(refusal_with(mode, "openai", "gpt", None).is_none());
+        assert!(refusal_with(mode, "openai", "gpt", None).await.is_none());
     }
+    assert!(stub.asked().is_empty());
 }
 
-#[test]
-fn sensitive_permits_a_request_assessed_clean() {
+#[tokio::test]
+async fn sensitive_forwards_the_assessment_and_obeys_the_modules_answer() {
+    let stub = Arc::new(StubPort::allowing());
+    let _port = install_port(stub.clone());
     assert!(refusal_with(
         PrivacyMode::Sensitive,
         "openai",
         "gpt",
         assessed(IdentificationRisk::None, &[])
     )
+    .await
     .is_none());
+    let asked = stub.asked();
+    let [Asked::Privacy(request)] = asked.as_slice() else {
+        panic!("one question, got {asked:?}");
+    };
+    assert_eq!(request.risk.as_ref().map(|r| r.level), Some(PrivacyRiskLevel2::None));
+    assert_eq!(request.destination_label, "openai");
 }
 
-#[test]
-fn sensitive_refuses_identifying_unassessed_and_missing_assessments() {
+#[tokio::test]
+async fn sensitive_refuses_whatever_the_module_refuses_with_the_mode_message() {
+    let stub = refusing();
+    let _port = install_port(stub.clone());
     for assessment in [
         assessed(IdentificationRisk::High, &["credential_or_identifier"]),
         assessed(IdentificationRisk::Unknown, &[]),
         None,
     ] {
-        let message =
-            refusal_with(PrivacyMode::Sensitive, "openai", "gpt", assessment).expect("refused");
+        let message = refusal_with(PrivacyMode::Sensitive, "openai", "gpt", assessment)
+            .await
+            .expect("refused");
         assert!(message.contains("Sensitive privacy mode"), "{message}");
     }
+    // An unassessed request (Unknown or missing) is forwarded as "no assessment".
+    let asked = stub.asked();
+    let risks: Vec<_> = asked
+        .iter()
+        .map(|asked| match asked {
+            Asked::Privacy(request) => request.risk.is_some(),
+            other => panic!("unexpected {other:?}"),
+        })
+        .collect();
+    assert_eq!(risks, vec![true, false, false]);
 }
 
 struct Counting {
@@ -90,8 +126,9 @@ async fn an_external_route_passes_straight_through_outside_sensitive_mode() {
 
 #[tokio::test]
 async fn under_sensitive_an_unassessable_request_is_refused_before_the_route_is_called() {
-    // No module is serving in a unit test, so the assessment is "unknown" and
-    // Sensitive refuses it: the safe answer when the module cannot say.
+    // No module is serving in a unit test, so the assessment is "unknown" and the
+    // module (scripted here) refuses it: the safe answer when it cannot say.
+    let _port = install_port(refusing());
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let (model, calls) = route(false);
     let error = model.invoke(&(), request()).await.expect_err("refused");
@@ -127,6 +164,7 @@ async fn a_route_that_stays_on_the_device_is_never_assessed() {
 /// so the fallback hop is assessed even though the primary never leaves.
 #[tokio::test]
 async fn a_local_primary_does_not_exempt_an_external_fallback_route() {
+    let _port = install_port(refusing());
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let (primary, primary_calls) = route(true);
     let (fallback, fallback_calls) = route(false);

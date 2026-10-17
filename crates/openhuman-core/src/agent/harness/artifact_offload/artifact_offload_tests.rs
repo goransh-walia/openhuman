@@ -84,24 +84,39 @@ fn workspace_guard_reports_workspace_dir_as_the_internal_root() {
 }
 
 #[test]
-fn workspace_guard_defers_to_the_security_policy_for_internal_state() {
-    // The adapter must not re-implement the rule, only forward it — a
-    // divergent copy here would drift from the policy the rest of the core
-    // enforces, and the two would disagree about the same path.
+fn workspace_guard_forwards_internal_state_to_the_module_and_fails_closed() {
+    use crate::modules::security::gap::install_port;
+    use crate::modules::security::gap::stub::{Asked, StubPort};
+    use tinysecurity_bus::PathCheckKind;
+    // The adapter must not re-implement the rule, only forward it: the module is
+    // the one authority on which locations are internal state.
     let policy = policy_with(PathBuf::from("/action"), PathBuf::from("/state/workspace"));
     let guard = WorkspaceGuard::new(Arc::clone(&policy));
-    for candidate in [
-        "/state/workspace/session_raw/a.jsonl",
-        "/action/outputs/report.md",
-        "/tmp/unrelated",
+    let stub = Arc::new(StubPort::allowing().paths(|_, kind, path| {
+        assert_eq!(kind, PathCheckKind::Internal);
+        path.starts_with("/state/workspace/session_raw")
+    }));
+    let _port = install_port(stub.clone());
+    for (candidate, internal) in [
+        ("/state/workspace/session_raw/a.jsonl", true),
+        ("/action/outputs/report.md", false),
+        ("/tmp/unrelated", false),
     ] {
-        let path = std::path::Path::new(candidate);
         assert_eq!(
-            guard.is_internal_state(path),
-            policy.is_workspace_internal_path(path),
-            "adapter disagreed with SecurityPolicy about {candidate}"
+            guard.is_internal_state(std::path::Path::new(candidate)),
+            internal,
+            "the module's answer for {candidate}"
         );
     }
+    assert_eq!(stub.asked().len(), 3);
+    assert!(matches!(
+        stub.asked()[0],
+        Asked::Paths(PathCheckKind::Internal, _)
+    ));
+
+    // A module that cannot answer makes everything internal: nothing is offloaded.
+    let _port = install_port(Arc::new(StubPort::unavailable()));
+    assert!(guard.is_internal_state(std::path::Path::new("/action/outputs/report.md")));
 }
 
 fn memory_blobs() -> Arc<dyn tinystoragedrivers::BlobStore> {
