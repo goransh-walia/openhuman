@@ -27,9 +27,13 @@ The host links only `tinysecurity-bus`. The engine canonicalizes paths and
 checks read/write grants in the native module. A missing module, an untrusted
 recipient, a timeout, or a malformed response denies access without a local
 fallback; with the feature off `validate_path` and `validate_parent_path` deny.
-Synchronous lexical checks remain host preflights (the module has no batch or
-scope-free query yet); they do not substitute for the asynchronous I/O
-authorization.
+The host has no lexical path preflight of its own: the batched
+`SecurityPolicy::check_paths` (module `CheckPaths2`, one call per batch) and the
+scope-free `floor.rs` queries (`ProtectedPath2`) both go to the module, and
+the `*_blocking` variants cross the shared sync-to-async seam for tool traits
+that cannot be `async`. Unit tests install a scripted `GapPort`
+(`modules/security/gap`, `StubPort`) for the current thread; there is no local
+policy to fall back on.
 
 Production admission pins TinySecurity v0.13.0 and its published archive checksums
 in the module registry. `scripts/ci/security-native-fixture.sh` loads those
@@ -97,20 +101,23 @@ answer when it is off:
 | Function | File | Disabled result |
 | --- | --- | --- |
 | `check_command` | [`policy/native_commands.rs`](./policy/native_commands.rs) | the module answers with the policy disabled: `Allow`, no structural guard, no allowlist; the protected-path floor still refuses |
-| `can_act` | `policy/enforcement.rs` | `true` |
-| `record_action`, `is_rate_limited` | `policy/enforcement.rs` | never limited |
-| `is_path_string_allowed` | [`policy/path_checks.rs`](./policy/path_checks.rs) | `true` after the floor checks |
-| `is_resolved_path_allowed_for` | `policy/path_checks.rs` | `true` after the floor check |
+| `spend_action`, `tier_allows_acting_blocking` | [`policy/module_gate.rs`](./policy/module_gate.rs) | the module answers with the policy disabled: no tier refusal, no budget |
+| `check_paths`, `path_allowed`, `validate_path` | `policy/module_gate.rs`, [`policy/path_checks.rs`](./policy/path_checks.rs) | the module answers with the policy disabled: allowed after the floor check |
 
 So with the policy disabled, command classification still runs in the security
 module (callers get a `CommandClass` back) but nothing is gated on it: no approval prompt, no
 command allowlist, no hourly action budget, and no `workspace_only`,
 `forbidden_paths`, trusted-root or workspace-internal containment.
 
-A floor survives the off switch. These checks run before the `enabled` test
-and hold in every configuration:
+A floor survives the off switch. The module applies it before the `enabled`
+test and it holds in every configuration. The host asks it through
+[`floor.rs`](./floor.rs) (`is_protected`, `any_protected`, `protected_paths`,
+`is_protected_blocking`; module `ProtectedPath2`), which needs no
+`SecurityPolicy` and answers "protected" when the module cannot be asked.
+`floor()` (`ProtectedFloor2`) returns the vocabulary for components that apply
+it themselves; `sandbox/local_grants.rs` uses it to filter TinyBox jail grants.
 
-- `is_always_forbidden` (`policy/path_checks.rs`). Credential stores are
+- The protected-path floor. Credential stores are
   matched by path segment, case-insensitively: `.ssh`, `.gnupg`, `.aws`,
   `.azure`, `.kube`, `keychains`, and the Windows pairs
   `Microsoft\{Protect,Credentials,Crypto,Vault}`. System roots are matched by
@@ -118,10 +125,11 @@ and hold in every configuration:
   `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`,
   `C:\ProgramData`. A trusted-root grant cannot reach these either, and the
   per-turn workspace grant is checked after this test, so it cannot either.
-- In `is_path_string_allowed`: a null byte, a `..` path component, and
-  URL-encoded traversal (`..%2f`, `%2f..`) are rejected. A bare relative name
-  that matches one of the reserved workspace files (`WORKSPACE_INTERNAL_FILES`
-  in `policy/types.rs`, such as `.env`) is also rejected.
+- In the module's string path check (`PathKind::StringAllowed`): a null byte, a
+  `..` path component, and URL-encoded traversal (`..%2f`, `%2f..`) are
+  rejected. A bare relative name that matches one of the reserved workspace
+  files (`WORKSPACE_INTERNAL_FILES` in `policy/types.rs`, such as `.env`) is
+  also rejected.
 
 `SecurityPolicy::default()` is the opposite of the shipped default: it sets
 `enabled: true`. It is the fallback for a policy built with no config at all
@@ -160,8 +168,14 @@ the approval prompt as a `Check::HostShell` admission under the scope that carri
 `max_actions_per_hour` (it reads the budget and never spends it), and the tool
 asks again immediately before it spawns (`CommandStage::Execute`, the same
 scope), so an allowed run spends one action of the module's hourly budget and a
-prompt that is declined spends none. Acting tools spend through the same ledger
-(`Check::HostAction`), so shell runs and acting tools share one budget. The
+prompt that is declined spends none. Acting tools spend through the same ledger, once per acting call, at the tool
+gate (`Check::HostAction { spend }`, `ToolPolicyGateMiddleware` in
+`agent/tinyagents/middleware/security_gate.rs`), so shell runs and acting tools
+share one budget. The in-tool budget checks are gone; callers that are not
+tools (MCP server dispatch, `mcp_ui`, the workflow `http_request` node) spend
+through `SecurityPolicy::spend_action` (`SpendAction2`). Direct tool runs
+(`tools::native_ops::execute_tool`: JS and RPC tool calls, workflow `tool_call`
+nodes) go through the same gate, so a refused call never executes. The
 scheduler asks under the legacy rule (`CommandFlow::Scheduled`: the curated
 allowlist plus the configured risk restrictions) when a job is created or
 edited, and again when it runs. A module that is missing, untrusted, faulted
@@ -169,10 +183,9 @@ or slow refuses the command (`Refusal::Unavailable`); there is no host
 classifier to fall back on. The `CommandGateway` seam on the policy is sealed to
 this crate and exists for unit tests of what a caller does with an answer.
 
-Two budgets apply to a shell run: the module's hourly command budget (keyed by
-the policy value, so sessions with identical settings share it), spent by the
-`Execute`-stage check, and the host `ActionTracker` (this policy instance's
-count across all acting tools).
+One budget applies to a shell run or an acting tool: the module's hourly ledger
+(keyed by the policy value, so sessions with identical settings share it),
+spent by the `Execute`-stage check. The host keeps no counter of its own.
 
 The tier matrix (the module's; flow nodes, the approval manifest and the
 network and filesystem gates all ask it through `command_class_gate`, and a
@@ -190,7 +203,8 @@ The invariants that hold with the policy enabled:
   `workspace_dir`, because a trusted root overrides `forbidden_paths` and a
   working directory should not buy that over the whole workspace.
 - `workspace_dir` stores internal state and is never an acting-tool target.
-  `is_workspace_internal_path` covers `WORKSPACE_INTERNAL_DIRS`,
+  The module's internal-state check (`is_internal`, which fails closed) covers
+  `WORKSPACE_INTERNAL_DIRS`,
   `WORKSPACE_INTERNAL_FILES`, the `memory-`, `memory_tree-` and `session_raw-`
   prefixes, per-artifact directories under `artifacts/` (but not
   `artifacts/tool-results/`), and the account `config.toml` beside the
@@ -246,11 +260,12 @@ denied instead (`middleware/tinysecurity_channel.rs`). See [approval/README.md](
 
 | Path | What it does |
 | --- | --- |
-| [`policy/`](policy/README.md) | `SecurityPolicy`, autonomy tiers, command classification and path checks. |
+| [`policy/`](policy/README.md) | `SecurityPolicy`, autonomy tiers, and the host's questions to the module about commands, paths and the hourly budget. |
+| [`floor.rs`](./floor.rs) | The unconditional protected-path floor, asked of the module without a policy. |
 | [`approval/`](approval/README.md) | The approval gate, the module-backed approval engine and its host callbacks, argument redaction and the `approval_*` RPCs. |
 | [`credentials/`](credentials/README.md) | The backend credential slots, auth profiles, provider OAuth and the `auth.*` RPC namespace. |
 | [`devices/`](devices/README.md) | Mobile device pairing and the end-to-end encrypted tunnel to iOS clients. |
-| [`egress/`](egress/README.md) | Descriptors for every external data transfer and the `LocalOnly` enforcement chokepoint. |
+| [`egress/`](egress/README.md) | Descriptors for every external data transfer and the privacy-mode enforcement chokepoint, decided by the module. |
 | [`encryption/`](encryption/README.md) | AES-256-GCM at-rest encryption for memory storage and the encrypt/decrypt RPCs. |
 | [`keyring/`](keyring/README.md) | OS keychain backend with an encrypted-file fallback, and the `SecretStore` config-field codec. |
 | [`keyring_consent/`](keyring_consent/README.md) | Consent gate for falling back from the OS keychain to local encrypted storage. |
@@ -270,8 +285,10 @@ denied instead (`middleware/tinysecurity_channel.rs`). See [approval/README.md](
 
 - `SecurityPolicy` ([`policy/types.rs`](./policy/types.rs)): the policy value. Build it with
   `SecurityPolicy::from_config`. Its methods are the enforcement entry points
-  listed above, plus `enforce_tool_operation` (tier plus hourly budget for an
-  acting tool) and `validate_path`-style helpers in [`policy/path_checks.rs`](./policy/path_checks.rs).
+  listed above, plus `spend_action` (tier plus hourly budget, for callers that
+  are not tools), `check_paths` and `is_internal` in
+  [`policy/module_gate.rs`](./policy/module_gate.rs), and `validate_path` in
+  [`policy/path_checks.rs`](./policy/path_checks.rs).
 - `AutonomyLevel` (`ReadOnly`, `Supervised`, `Full`), `CommandClass` (`Read`,
   `Write`, `Network`, `Install`, `Destructive`) and `GateDecision` (`Allow`,
   `Prompt`, `Block`), all in `policy/types.rs`.
@@ -372,9 +389,9 @@ denied instead (`middleware/tinysecurity_channel.rs`). See [approval/README.md](
   helpers are re-exported from `tinychannels_bus::security`.
 - `SecretStore` (re-exported from [`keyring/`](./keyring/)): encrypted-on-disk secrets whose
   master key lives in keychain-backed storage.
-- The [`egress`](./egress) re-exports at the crate root: `enforce_egress`,
-  `emit_external_transfer`, `local_only_blocks`, `local_only_tool_block`,
-  `EgressDescriptor`. OpenHuman's agent stop-summary code directly consumes
+- The [`egress`](./egress) re-exports at the crate root: `enforce_egress`
+  (async), `emit_external_transfer`, `local_only_tool_block[_blocking]`,
+  `egress_blocks_message[_blocking]`, `EgressDescriptor`. OpenHuman's agent stop-summary code directly consumes
   `tinymemory_api::safety::redact_identifiers`; this security module does not
   re-export the safety API.
 
@@ -428,8 +445,10 @@ The subfolders register their own namespaces: `approval.*` ([`approval/`](./appr
   the part a future edit is most likely to take with it.
 - `SecurityPolicy::default()` is enabled, `AutonomyConfig::default()` is not.
   Code that builds a policy without `from_config` gets the strict one.
-- `enforce_tool_operation` records an action as a side effect. The harness
-  gate reads `is_rate_limited` instead, so a call is not counted twice.
+- The tool gate reserves the hourly action once per acting call. Tools must not
+  spend again: `FsGate` and `NetGate` report `is_rate_limited` as false and
+  `record_action` as true because the gate already reserved it, and their
+  `can_act` asks the module for the tier only.
 - A user's "Always allow" entry only suppresses the human prompt. The tier,
   the class and the floor still run before the gate.
 
@@ -437,8 +456,7 @@ The subfolders register their own namespaces: `approval.*` ([`approval/`](./appr
 
 Each file has a sibling `<module>_tests.rs`; the policy suites live in
 [`policy/`](./policy/) (`policy_tests.rs`, `policy_disabled_tests.rs`,
-`policy_trusted_roots_tests.rs`, `policy_workspace_internal_tests.rs`,
-`proptest_tests.rs` and others). Run them with
+`policy_trusted_roots_tests.rs`, `module_gate_tests.rs` and others). Run them with
 `cargo test -p openhuman security::` or `pnpm debug rust security`.
 
 ## Further reading
