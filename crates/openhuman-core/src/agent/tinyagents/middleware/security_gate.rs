@@ -67,15 +67,16 @@ pub(crate) fn gate(
         }))
 }
 
-/// Installs the security gate on `harness`. Call it before any other tool
-/// middleware so a refused call never reaches them.
+/// The security gate as a tool middleware over `tool_sets`: the one construction
+/// every path that runs a tool shares, so a harness turn ([`install`]) and a direct
+/// run (`tools::native_ops::execute_tool`, the JS, RPC and workflow tool calls)
+/// are judged by the same policy and settle approvals through the same resolver.
 ///
 /// `channel` is the session's channel tool policy, for a session that has one.
-pub(crate) fn install(
-    harness: &mut AgentHarness<(), OpenHumanRunContext>,
+pub(crate) fn tool_middleware(
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
     channel: Option<tinytools::ToolPolicySession>,
-) {
+) -> Arc<dyn tinyagents_harness::middleware::ToolMiddleware<(), OpenHumanRunContext>> {
     #[cfg(feature = "security-module")]
     {
         use super::tinysecurity::{TinySecurityPolicy, VerdictSource};
@@ -92,18 +93,30 @@ pub(crate) fn install(
         }
         let policy = TinySecurityPolicy::with_sources(sources);
         let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets));
-        harness.push_tool_middleware(Arc::new(gate(Arc::new(policy), resolver)));
+        Arc::new(gate(Arc::new(policy), resolver))
     }
     #[cfg(not(feature = "security-module"))]
     {
         let _ = channel;
-        harness.push_tool_middleware(Arc::new(
+        Arc::new(
             tinyagents_harness::middleware::ApprovalGateMiddleware::new(
                 "approval_security",
                 Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
             ),
-        ));
+        )
     }
+}
+
+/// Installs the security gate on `harness`. Call it before any other tool
+/// middleware so a refused call never reaches them.
+///
+/// `channel` is the session's channel tool policy, for a session that has one.
+pub(crate) fn install(
+    harness: &mut AgentHarness<(), OpenHumanRunContext>,
+    tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+    channel: Option<tinytools::ToolPolicySession>,
+) {
+    harness.push_tool_middleware(tool_middleware(tool_sets, channel));
 }
 
 #[cfg(all(test, feature = "security-module"))]

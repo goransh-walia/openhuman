@@ -9,7 +9,11 @@ use crate::security::SecurityPolicy;
 use crate::tools;
 use crate::tools::native_ops_types::{ExecuteToolOutcome, RuntimeToolSummary};
 use tinybox_bus::CommandClass;
-use tinytools::{Tool, ToolCallOptions, ToolScope};
+use tinyagents_harness::context::{RunConfig, RunContext};
+use tinyagents_harness::middleware::{BoxToolFuture, MiddlewareStack, ToolBaseCall, ToolMiddleware};
+use tinyinference_llm::tool::ToolCall;
+use tinytools::{Tool, ToolCallOptions, ToolResult, ToolScope};
+use crate::agent::tinyagents::host::OpenHumanRunContext;
 use tracing::{debug, trace};
 
 fn tool_scope_label(scope: ToolScope) -> &'static str {
@@ -134,6 +138,11 @@ pub async fn classify_tool_call(
     Ok(class)
 }
 
+/// Run one registered tool on behalf of a direct caller (the JS and RPC tool
+/// runs, workflow `tool_call` nodes). The call passes the same security gate a
+/// harness turn installs (`middleware::security_gate`), so a tool the policy
+/// refuses never runs here either, and a call that needs a human settles through
+/// the same approval resolver.
 pub async fn execute_tool(
     config: &Config,
     tool_name: &str,
@@ -144,14 +153,71 @@ pub async fn execute_tool(
         tool_name,
         prefer_markdown, "[native_ops] execute_tool: start"
     );
-    let tools = build_runtime_tools(config)?;
+    let tools: Arc<Vec<Box<dyn Tool>>> = Arc::new(build_runtime_tools(config)?);
     trace!(
         tool_count = tools.len(),
         tool_name,
         "[native_ops] execute_tool: runtime tools built"
     );
+    let gate = crate::agent::tinyagents::middleware::security_gate::tool_middleware(
+        vec![Arc::clone(&tools)],
+        None,
+    );
+    run_gated(&tools, gate, tool_name, args, prefer_markdown).await
+}
+
+/// The tool, run once the middleware has judged the call. The base of the
+/// middleware stack: reached only when the gate allowed the call.
+struct DirectTool<'a> {
+    tool: &'a dyn Tool,
+    prefer_markdown: bool,
+    /// The tool's own error, kept whole for the caller: the harness result type
+    /// carries text only.
+    failure: std::sync::Mutex<Option<String>>,
+}
+
+impl ToolBaseCall<(), OpenHumanRunContext> for DirectTool<'_> {
+    fn call<'a>(
+        &'a self,
+        _ctx: &'a RunContext<OpenHumanRunContext>,
+        _state: &'a (),
+        call: ToolCall,
+    ) -> BoxToolFuture<'a> {
+        Box::pin(async move {
+            match self
+                .tool
+                .execute_with_options(
+                    call.arguments,
+                    ToolCallOptions {
+                        prefer_markdown: self.prefer_markdown,
+                    },
+                )
+                .await
+            {
+                Ok(result) => Ok(result),
+                Err(error) => {
+                    let message = format!("{error:#}");
+                    if let Ok(mut failure) = self.failure.lock() {
+                        *failure = Some(message.clone());
+                    }
+                    Ok(ToolResult::error(message))
+                }
+            }
+        })
+    }
+}
+
+/// [`execute_tool`] over an explicit gate, so the gating is testable without a
+/// loaded security module.
+pub(crate) async fn run_gated(
+    tools: &[Box<dyn Tool>],
+    gate: Arc<dyn ToolMiddleware<(), OpenHumanRunContext>>,
+    tool_name: &str,
+    args: serde_json::Value,
+    prefer_markdown: bool,
+) -> Result<ExecuteToolOutcome, String> {
     let tool = tools
-        .into_iter()
+        .iter()
         .find(|tool| tool.name() == tool_name)
         .ok_or_else(|| {
             debug!(tool_name, "[native_ops] execute_tool: tool not found");
@@ -168,20 +234,38 @@ pub async fn execute_tool(
         session_id: "javascript".to_string(),
     });
 
+    let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
+    stack.push_tool_middleware(gate);
+    let ctx = RunContext::new(
+        RunConfig::new("direct-tool"),
+        OpenHumanRunContext::new(),
+    );
+    let call = ToolCall {
+        id: format!("direct-{tool_name}"),
+        name: tool_name.to_string(),
+        arguments: args,
+        invalid: None,
+    };
+    let base = DirectTool {
+        tool: tool.as_ref(),
+        prefer_markdown,
+        failure: std::sync::Mutex::new(None),
+    };
     trace!(
         tool_name,
-        "[native_ops] execute_tool: dispatch execute_with_options"
+        "[native_ops] execute_tool: dispatch through the security gate"
     );
-    let execution = tool
-        .execute_with_options(args, ToolCallOptions { prefer_markdown })
+    let execution = stack
+        .run_wrapped_tool(&ctx, &(), call, &base)
         .await
-        .map_err(|error| {
-            debug!(
-                tool_name,
-                error = %error,
-                "[native_ops] execute_tool: tool execution failed"
-            );
-            format!("tool `{tool_name}` failed: {error:#}")
+        .map(|outcome| outcome.into_result())
+        .map_err(|error| format!("tool `{tool_name}` failed: {error}"))
+        .and_then(|result| match base.failure.lock().ok().and_then(|f| f.clone()) {
+            Some(error) => {
+                debug!(tool_name, error = %error, "[native_ops] execute_tool: tool execution failed");
+                Err(format!("tool `{tool_name}` failed: {error}"))
+            }
+            None => Ok(result),
         });
 
     let elapsed_ms = started.elapsed().as_millis() as u64;
@@ -213,3 +297,7 @@ pub async fn execute_tool(
         result,
     })
 }
+
+#[cfg(test)]
+#[path = "native_ops_tests.rs"]
+mod tests;
