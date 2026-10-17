@@ -135,7 +135,7 @@ impl SessionExpiredSubscriber {
                 //     we've at least pinned the scheduler gate so background work
                 //     can't make things worse.
                 if let Err(err) =
-                    crate::security::credentials::rpc::clear_session(&ctx, &config).await
+                    crate::security::credentials::rpc::clear_session(ctx, &config).await
                 {
                     tracing::warn!(
                         source = %source,

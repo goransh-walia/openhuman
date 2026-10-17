@@ -94,7 +94,7 @@ async fn under_sensitive_an_unassessable_request_is_refused_before_the_route_is_
     // Sensitive refuses it: the safe answer when the module cannot say.
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let (model, calls) = route(false);
-    let error = model.invoke(&(), request()).await.err().expect("refused");
+    let error = model.invoke(&(), request()).await.expect_err("refused");
     assert!(
         error.to_string().contains("Sensitive privacy mode"),
         "{error}"
@@ -104,7 +104,7 @@ async fn under_sensitive_an_unassessable_request_is_refused_before_the_route_is_
         0,
         "the route must not be called"
     );
-    let streamed = model.stream(&(), request()).await.err().expect("refused");
+    let streamed = model.stream(&(), request()).await.expect_err("refused");
     assert!(
         streamed.to_string().contains("Sensitive privacy mode"),
         "{streamed}"

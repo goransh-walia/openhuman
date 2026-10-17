@@ -314,7 +314,7 @@ impl ComposioActionTool {
         // fresh routing. Anchored to this tool's original config path rather than
         // re-resolving process-global `OPENHUMAN_WORKSPACE` (the tool is scoped to
         // the user/workspace it was created for).
-        let live_config = match self.live_config(&ctx).await {
+        let live_config = match self.live_config(ctx).await {
             Ok(c) => Box::new(c),
             Err(e) => {
                 tracing::warn!(
