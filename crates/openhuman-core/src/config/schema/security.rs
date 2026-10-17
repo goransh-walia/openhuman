@@ -1,4 +1,4 @@
-//! The single `[security]` table: audit, approval and the overlay that carries
+//! The single `[security]` table: approval, auto-approve and the overlay that carries
 //! the sandbox, autonomy and privacy policy.
 //!
 //! Policy settings historically lived in three top-level tables (`[autonomy]`,
@@ -16,8 +16,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(default)]
 pub struct SecurityConfig {
-    /// `[security.audit]`: append-only audit log of policy decisions.
-    pub audit: AuditConfig,
     /// `[security.approval]`: interactive approval timing.
     pub approval: ApprovalSettings,
     /// `[security.auto_approve]`: automatic approval beyond the per-tool list.
@@ -108,39 +106,6 @@ pub enum SandboxBackend {
     Landlock,
     Docker,
     None,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct AuditConfig {
-    #[serde(default = "default_audit_enabled")]
-    pub enabled: bool,
-    #[serde(default = "default_audit_log_path")]
-    pub log_path: String,
-    #[serde(default = "default_audit_max_size_mb")]
-    pub max_size_mb: u32,
-}
-
-fn default_audit_enabled() -> bool {
-    true
-}
-
-fn default_audit_log_path() -> String {
-    "audit.log".to_string()
-}
-
-fn default_audit_max_size_mb() -> u32 {
-    100
-}
-
-impl Default for AuditConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_audit_enabled(),
-            log_path: default_audit_log_path(),
-            max_size_mb: default_audit_max_size_mb(),
-        }
-    }
 }
 
 #[cfg(test)]
