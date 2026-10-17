@@ -4,6 +4,7 @@
 
 mod command_checks;
 mod enforcement;
+mod module_gate;
 pub(crate) mod native_commands;
 #[cfg(test)]
 pub(crate) mod native_commands_stub;
@@ -19,13 +20,10 @@ pub use native_commands::{
     CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, Refusal,
     SharedCommandGateway,
 };
-#[cfg(feature = "modules")]
-pub(crate) use path_checks::{
-    ALWAYS_FORBIDDEN_PREFIXES, SENSITIVE_COMPONENTS, SENSITIVE_FILES, SENSITIVE_PAIRS,
-};
+pub use module_gate::{Budget, PathKind};
 pub use types::{
-    tool_result_artifacts_dir, ActionTracker, AutonomyLevel, GateDecision, SecurityPolicy,
-    ToolOperation, TrustedAccess, TrustedRoot,
+    tool_result_artifacts_dir, AutonomyLevel, GateDecision, SecurityPolicy, TrustedAccess,
+    TrustedRoot,
 };
 
 #[cfg(test)]

@@ -13,6 +13,7 @@ pub mod credentials;
 pub mod devices;
 pub mod egress;
 pub mod encryption;
+pub mod floor;
 pub mod keyring_consent;
 pub mod live_policy;
 pub mod pairing;
@@ -27,8 +28,8 @@ pub use audit::{
     CommandExecutionLog,
 };
 pub use egress::{
-    emit_external_transfer, enforce_egress, local_only_blocks, local_only_tool_block, DataKind,
-    EgressDescriptor, EgressReason, IdentificationRisk,
+    emit_external_transfer, enforce_egress, local_only_tool_block, DataKind, EgressDescriptor,
+    EgressReason, IdentificationRisk,
 };
 pub use ops as rpc;
 pub use ops::*;
@@ -36,7 +37,7 @@ pub use policy::validate_path_within_root;
 pub use policy::AutonomyLevel;
 pub use policy::GateDecision;
 pub use policy::SecurityPolicy;
-pub use policy::ToolOperation;
+pub use policy::{Budget, PathKind};
 pub use policy::{ensure_openhuman_scratch_dir, openhuman_scratch_dir};
 pub use policy::{TrustedAccess, TrustedRoot};
 pub use {
