@@ -344,7 +344,7 @@ impl GapPort for ModulePort {
             let proxy = super::proxy(&config, &mut state)
                 .await
                 .map_err(CallError::faulted)?;
-            let command_policy = super::security_command::register_cached_scope(
+            let command_policy = super::command::register_cached_command_scope(
                 &mut state, &proxy, policy,
             )
             .await?;

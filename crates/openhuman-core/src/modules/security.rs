@@ -733,6 +733,9 @@ pub(crate) mod egress;
 #[path = "security_command.rs"]
 pub(crate) mod command;
 
+#[path = "security_gap.rs"]
+pub(crate) mod gap;
+
 #[path = "security_crypto.rs"]
 pub(crate) mod crypto;
 

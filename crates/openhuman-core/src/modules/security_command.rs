@@ -128,7 +128,7 @@ pub(super) async fn command_on(
     call_command(proxy, policy_id, command, declared_class, op).await
 }
 
-async fn register_cached_command_scope(
+pub(super) async fn register_cached_command_scope(
     state: &mut ClientState,
     proxy: &tinybus::Proxy,
     policy: CommandPolicy,
