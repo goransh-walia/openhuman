@@ -2,6 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn call_tool_records_write_argument_rejection() {
+    let _module = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::allowing(),
+    ));
     let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let tmp = tempfile::tempdir().expect("tempdir");
     unsafe {
@@ -72,6 +75,9 @@ async fn call_tool_rejects_v1_memory_tools_as_unknown() {
 
 #[tokio::test]
 async fn call_tool_validates_memory_arguments_before_dispatch() {
+    let _module = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::allowing(),
+    ));
     // A rejected write is audited against the ambient workspace. Without its
     // own workspace under the env lock this test wrote its `memory.forget` row
     // into whichever workspace a concurrent audit test had just pointed
