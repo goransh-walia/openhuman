@@ -473,6 +473,7 @@ pub(crate) async fn execute_in_sandbox_metered(
 
 /// One spawn the TinySecurity module planned and admitted: the policy narrowed to
 /// the plan, and the jail the plan describes for TinyBox.
+#[derive(Debug)]
 pub(crate) struct Admitted {
     /// The caller's policy with mounts, network and container bounds from the plan.
     pub(crate) policy: SandboxPolicy,
