@@ -13,6 +13,7 @@ fn test_policy() -> SandboxPolicy {
         allow_network: false,
         env_passthrough: vec!["PATH".into(), "HOME".into()],
         docker_overrides: None,
+        mount_workspace: true,
     }
 }
 

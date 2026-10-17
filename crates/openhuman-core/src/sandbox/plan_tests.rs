@@ -34,6 +34,8 @@ fn artifact(backend: SandboxBackend) -> SandboxArtifact2 {
         network: PlannedNetwork::None,
         proxy_id: None,
         limits: ResourceLimits2::default(),
+        host_run: false,
+        no_workspace: false,
         constraints: vec![SandboxConstraint2::Filesystem, SandboxConstraint2::Network],
     }
 }
@@ -145,4 +147,68 @@ fn plans_tinybox_cannot_enforce_exactly_are_refused() {
         BoxPlan::from_artifact(&empty, None),
         Err(PlanMappingError::InvalidGrant)
     );
+}
+
+fn host_run_artifact() -> SandboxArtifact2 {
+    SandboxArtifact2 {
+        minimum_isolation: IsolationLevel2::None,
+        executor_id: "host".into(),
+        capability_id: "host".into(),
+        backend: SandboxBackend::Noop,
+        grants: vec![],
+        network: PlannedNetwork::Host,
+        constraints: vec![],
+        host_run: true,
+        ..artifact(SandboxBackend::Noop)
+    }
+}
+
+#[test]
+fn the_modules_host_run_plan_maps_to_a_spawn_on_the_host() {
+    let plan = BoxPlan::from_artifact(&host_run_artifact(), None).expect("maps");
+    assert_eq!(plan.executor, PlannedExecutor::Host);
+    assert!(plan.jail.read_only.is_empty() && plan.jail.read_write.is_empty());
+    assert!(!plan.jail.require_process_isolation);
+}
+
+#[test]
+fn a_noop_plan_that_is_not_a_host_run_is_still_refused() {
+    let mut artifact = host_run_artifact();
+    artifact.host_run = false;
+    assert_eq!(
+        BoxPlan::from_artifact(&artifact, None).unwrap_err(),
+        PlanMappingError::NoopBackend
+    );
+}
+
+#[test]
+fn a_host_run_plan_that_claims_a_jail_is_malformed() {
+    for tweak in [
+        (|a: &mut SandboxArtifact2| a.backend = SandboxBackend::Jail)
+            as fn(&mut SandboxArtifact2),
+        |a| a.minimum_isolation = IsolationLevel2::Kernel,
+        |a| {
+            a.grants = vec![PathGrant {
+                path: "/work".into(),
+                write: true,
+            }]
+        },
+        |a| a.constraints = vec![SandboxConstraint2::Filesystem],
+        |a| a.no_workspace = true,
+    ] {
+        let mut artifact = host_run_artifact();
+        tweak(&mut artifact);
+        assert_eq!(
+            BoxPlan::from_artifact(&artifact, None).unwrap_err(),
+            PlanMappingError::MalformedHostRun
+        );
+    }
+}
+
+#[test]
+fn a_plan_with_no_workspace_grant_does_not_mount_one() {
+    let mut artifact = artifact(SandboxBackend::Docker);
+    assert!(BoxPlan::from_artifact(&artifact, None).unwrap().workspace);
+    artifact.no_workspace = true;
+    assert!(!BoxPlan::from_artifact(&artifact, None).unwrap().workspace);
 }
