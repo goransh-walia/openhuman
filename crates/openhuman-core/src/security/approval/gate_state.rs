@@ -318,7 +318,6 @@ impl ApprovalGate {
         let mut entries = self
             .run_engine(|engine| async move { engine.history(limit).await })?
             .map_err(|error| anyhow::anyhow!("{error}"))?;
-        entries.extend(store::list_recorded_decisions(&self.config, limit)?);
         entries.sort_by_key(|entry| std::cmp::Reverse(entry.decided_at));
         entries.truncate(limit);
         Ok(entries)
@@ -350,45 +349,60 @@ impl ApprovalGate {
     /// Called by the `approval_decide` RPC handler after an
     /// [`ApprovalDecision::ApproveAlwaysForFlow`] decides a flow-origin row —
     /// mirrors the RPC-owns-persistence split documented on
-    /// [`Self::decide`] for `ApproveAlwaysForTool`. The grant reaches the engine
-    /// as the posture of the flow's next call.
+    /// [`Self::decide`] for `ApproveAlwaysForTool`. The engine keeps the grant
+    /// durably and approves that exact tool in that exact flow from then on.
     pub fn insert_flow_trust(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<()> {
-        store::insert_flow_trust(&self.config, flow_id, tool_name)
+        let tenant = current_route_tenant();
+        let (flow, tool) = (flow_id.to_owned(), tool_name.to_owned());
+        self.run_engine(|engine| async move { engine.grant_flow_trust(&tenant, &flow, &tool).await })?
+            .map_err(|error| anyhow::anyhow!("could not save the flow trust: {error}"))
     }
 
     /// Whether `(flow_id, tool_name)` currently holds "approve always for
     /// this flow" trust. Exposed for tests and diagnostics.
     pub fn is_flow_tool_trusted(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<bool> {
-        store::is_flow_tool_trusted(&self.config, flow_id, tool_name)
+        Ok(self
+            .list_flow_trust(flow_id)?
+            .iter()
+            .any(|tool| tool == tool_name))
     }
 
     /// Every `tool_name` currently trusted for `flow_id`, sorted. Consumed by
     /// `flows_approval_manifest` to diff the graph's required permissions
     /// against grants that already exist (re-save asks only for what's new).
     pub fn list_flow_trust(&self, flow_id: &str) -> anyhow::Result<Vec<String>> {
-        store::list_flow_trust(&self.config, flow_id)
+        let tenant = current_route_tenant();
+        let flow = flow_id.to_owned();
+        self.run_engine(|engine| async move { engine.flow_trust(&tenant, &flow).await })?
+            .map_err(|error| anyhow::anyhow!("could not read the flow trust: {error}"))
     }
 
     /// Revoke flow trust: all grants for `flow_id` when `tool_names` is
     /// `None` (flow deletion cleanup), or only the named grants. Returns the
-    /// number of rows removed.
+    /// number of grants removed.
     pub fn delete_flow_trust(
         &self,
         flow_id: &str,
         tool_names: Option<&[String]>,
     ) -> anyhow::Result<usize> {
-        store::delete_flow_trust(&self.config, flow_id, tool_names)
-    }
-
-    /// Write the durable audit record for one save-time pre-authorization
-    /// grant (a born-decided `approve_always_for_flow` row) so blanket
-    /// grants stay inspectable in Settings → Approval history.
-    pub fn record_flow_preauthorization(
-        &self,
-        flow_id: &str,
-        tool_name: &str,
-    ) -> anyhow::Result<()> {
-        store::record_flow_preauthorization(&self.config, flow_id, tool_name, &self.session_id)
+        let tools = match tool_names {
+            Some(names) => names.to_vec(),
+            None => self.list_flow_trust(flow_id)?,
+        };
+        let tenant = current_route_tenant();
+        let mut removed = 0;
+        for tool in tools {
+            let (flow, name) = (flow_id.to_owned(), tool);
+            let revoked = self
+                .run_engine(|engine| async move {
+                    engine.revoke_flow_trust(&tenant_for(&tenant), &flow, &name).await
+                })?
+                .map_err(|error| anyhow::anyhow!("could not revoke the flow trust: {error}"))?;
+            if revoked {
+                removed += 1;
+            }
+        }
+        Ok(removed)
     }
 
     /// Return the session id this gate was installed with (used by
