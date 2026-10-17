@@ -152,7 +152,7 @@ impl CodeRunner for OpenHumanCode {
                 "[flows] code: running sandboxed script"
             );
 
-            execute_in_sandbox(&dispatch, 
+            execute_in_sandbox(&dispatch,
                 &policy,
                 &command,
                 &self.config.action_dir,
