@@ -31,7 +31,7 @@ It does not own the cross-domain `EncryptionEngine` (in `security/encryption/`) 
 | `AutonomyLevel` (`ReadOnly` / `Supervised` / `Full`)                                                                          | `policy/types.rs` | Three-step autonomy ladder.                                             |
 | `ToolOperation`, `ActionTracker`                                                                                              | `policy/types.rs` | Operation kinds and per-session counting.                                 |
 | `SecretStore`                                                                                                                 | `secret_storage/encrypted_store.rs` (`secrets.rs` re-exports it) | OS-keychain / encrypted-file secret persistence with round-trip helpers. |
-| `AuditLogger`, `AuditEventType`, `AuditEvent`, `Actor`, `Action`, `ExecutionResult`, `SecurityContext`, `CommandExecutionLog` | `audit.rs`   | Append-only audit trail.                                                |
+| `HostAuditEvent`, `HostAuditKind`, `record`                                                                                   | `audit_record.rs` | Host-observed rows (a shell command's result) appended to the module's audit stream. |
 | `PairingGuard`, `constant_time_eq`, `is_public_bind`                                                                          | `pairing.rs` (`PairingGuard` and `constant_time_eq` are re-exported from `tinychannels_bus::security`) | Pairing-token check before binding the RPC server publicly.             |
 | `redact(value: &str) -> String`                                                                                               | `core.rs`    | Uniform 4-char-prefix redaction for logs.                               |
 | `security_policy_info_for_config(&Config) -> Outcome<serde_json::Value>`                                                    | `ops.rs`     | RPC handler for the doctor / settings UI.                               |
@@ -90,7 +90,7 @@ One check never turns off. `is_always_forbidden` blocks credential stores (`~/.s
 
 ## Audit log
 
-`audit.rs` writes an append-only stream of `AuditEvent`s under the workspace dir. Every executable tool call lands here with its `Actor` (agent or user), `Action`, `ExecutionResult` and the `SecurityContext` (autonomy level, sandbox backend and so on) it ran under. The log tells you afterwards what the agent did and why it was allowed.
+There is one security audit trail, and it is the TinySecurity module's: an ordered, contiguous stream per subject that the module sanitizes and the host persists. Approvals, automatic approvals, judge verdicts and sandbox plans are appended by the module. What only the host observes, a shell command's execution result, is recorded through the module's `RecordAudit2` (`audit_record.rs`). A row the module cannot record is logged at warn level; there is no second log file.
 
 ## Pairing guard
 
@@ -110,7 +110,7 @@ One check never turns off. `is_always_forbidden` blocks credential stores (`~/.s
 | ------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `policy/` (`mod.rs`, `types.rs`, `path_checks.rs`, `command_checks.rs`, `enforcement.rs`, `policy_*_tests.rs`, `proptest_tests.rs`) | `SecurityPolicy`, `AutonomyLevel`, risk classification, path and command checks, action tracking. |
 | `core.rs`, `core_tests.rs`                                    | `redact()` + small shared helpers.                                        |
-| `audit.rs`                                                    | Append-only audit log types.                                              |
+| `audit_record.rs`                                             | Host rows for the module's audit stream.                                  |
 | `secrets.rs`, `secret_storage/`                                      | `SecretStore` (implemented in `secret_storage/encrypted_store.rs`) + round-trip tests. |
 | `pairing.rs`, `pairing_tests.rs`                              | `PairingGuard` + constant-time helpers.                                   |
 | `ops.rs`                                                      | RPC handler (`security_policy_info_for_config`).                          |
@@ -124,7 +124,7 @@ Local PII detection belongs to [`tinymemory_api::safety`](https://github.com/tin
 ## Calls into
 
 - `crates/openhuman-core/src/config/`: `SecurityConfig`, `AutonomyConfig` for policy + sandbox selection.
-- Workspace filesystem, for the audit log and secret store.
+- Workspace filesystem, for the audit stream's storage and the secret store.
 
 ## Called by
 

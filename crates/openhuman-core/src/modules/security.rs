@@ -738,3 +738,6 @@ pub(crate) mod crypto;
 
 #[path = "security_sandbox.rs"]
 pub(crate) mod sandbox;
+
+#[path = "security_audit.rs"]
+pub(crate) mod audit;

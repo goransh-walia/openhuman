@@ -49,6 +49,13 @@ impl SpawnSource {
         }
     }
 
+    /// Whether a best-effort process-level jail (macOS Seatbelt) may run this source's
+    /// commands: the operator's own agent tools, never text the host did not author.
+    /// The module enforces it again from the source's trust and the deployment.
+    pub(crate) const fn accepts_process_isolation(self) -> bool {
+        matches!(self, Self::Agent)
+    }
+
     const fn trust(self) -> SourceTrust {
         match self {
             Self::Agent => SourceTrust::TrustedHost,
@@ -117,13 +124,22 @@ pub(crate) fn grant_ceiling(policy: &SandboxPolicy) -> Option<Vec<PathGrant>> {
 }
 
 /// The network reach the policy allows: none, or the host's own network, which the
-/// module only plans after an exact human approval.
+/// module plans for the operator's scope ([`operator_host_network`]) and otherwise only
+/// after an exact human approval.
 pub(crate) fn network_ceiling(policy: &SandboxPolicy) -> NetworkPolicy {
     if policy.allow_network {
         NetworkPolicy::Host
     } else {
         NetworkPolicy::None
     }
+}
+
+/// Whether the operator's own configuration grants the host network the policy allows,
+/// so the module plans it without asking a human about each command. The policy is
+/// the grant: this is true exactly when [`network_ceiling`] is the host network, and
+/// the module still refuses it under SaaS and above the ceiling.
+pub(crate) fn operator_host_network(policy: &SandboxPolicy) -> bool {
+    network_ceiling(policy) == NetworkPolicy::Host
 }
 
 /// Whether the operator's configuration asks for a specific isolation backend.
@@ -207,6 +223,7 @@ pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
         paths: paths(config, policy),
         grant_ceiling: grant_ceiling(policy)?,
         network_ceiling: network_ceiling(policy),
+        operator_host_network: operator_host_network(policy),
         limits: ResourceLimits2::default(),
         sources: vec![SandboxSource2 {
             source_id: source.source_id().into(),

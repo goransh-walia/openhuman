@@ -27,7 +27,8 @@ use crate::modules::tinybox::contract::{
 /// The TinyBox executor a plan selects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlannedExecutor {
-    /// The native path jail (Landlock, AppContainer; Seatbelt never qualifies).
+    /// The native path jail (Landlock, AppContainer; Seatbelt only for a plan whose
+    /// request accepted process isolation).
     NativeJail,
     /// A one-shot container.
     Docker,
@@ -127,9 +128,16 @@ impl BoxPlan {
             allow_subprocess: !artifact
                 .constraints
                 .contains(&SandboxConstraint2::Subprocesses),
-            // The module only issues a plan whose constraints the executor
-            // enforces exactly; TinyBox refuses what it cannot apply.
-            enforcement: JailEnforcement::Enforced,
+            // A kernel plan only exists for constraints the executor enforces
+            // exactly. A process-level plan (macOS Seatbelt, for an ordinary tool
+            // command the request accepted it for) carries best-effort constraints,
+            // which TinyBox applies as declared; it still refuses what it cannot
+            // apply at all.
+            enforcement: if isolated {
+                JailEnforcement::Enforced
+            } else {
+                JailEnforcement::Declared
+            },
             require_process_isolation: isolated,
             deny_read: if isolated {
                 Vec::new()

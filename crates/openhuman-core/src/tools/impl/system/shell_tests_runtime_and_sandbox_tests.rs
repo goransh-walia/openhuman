@@ -14,11 +14,7 @@ async fn shell_uses_host_node_and_python_from_path() {
             continue;
         }
 
-        let tool = ShellTool::new(
-            test_security(AutonomyLevel::Full),
-            test_runtime(),
-            test_audit(),
-        );
+        let tool = ShellTool::new(test_security(AutonomyLevel::Full), test_runtime());
         let result = tool.execute(json!({"command": command})).await.unwrap();
         assert!(!result.is_error, "{binary} failed: {}", result.output());
         assert!(

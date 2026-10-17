@@ -191,13 +191,13 @@ async fn probe(
 
 /// Plan one spawn through the module.
 ///
-/// The module plans the host's own network only after an exact human approval, which
-/// no sandboxed spawn has a surface to ask for yet. A spawn whose policy allows the
-/// network is therefore planned as asked first; if the module answers that it needs
-/// that approval, the spawn is planned again with no network. The module only ever
-/// narrows what the host asked for: the command never gets more than the policy
-/// allowed, and one that needs the network fails inside the sandbox instead of
-/// running with it.
+/// A spawn whose policy allows the network declares that allowance in its scope
+/// (`operator_host_network`), so the module plans the host's own network without a
+/// per-command human approval, up to the ceiling the policy set. Where the module still
+/// wants an exact human approval (a SaaS scope, which no sandboxed spawn has a surface
+/// to ask), the spawn is planned again with no network. The module only ever narrows
+/// what the host asked for: the command never gets more than the policy allowed, and
+/// one that needs the network fails inside the sandbox instead of running with it.
 pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, PlanError> {
     let asked = facts::network_ceiling(request.policy);
     match plan_with(&request, asked.clone()).await {
@@ -272,6 +272,7 @@ async fn plan_with(
         network,
         limits: limits(policy),
         deny_subprocesses: false,
+        accept_process_isolation: source.accepts_process_isolation(),
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,

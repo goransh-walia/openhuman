@@ -15,6 +15,7 @@ use tinysecurity_bus::{
 
 use super::*;
 use crate::modules::security::native_tests::{native_fixture_configured, NativeFixture};
+use crate::modules::tinybox::contract::{JailEnforcement, NetworkPolicy};
 use crate::sandbox::types::DockerOverrides;
 
 const IGNORE: &str = "requires a released host key or an explicitly selected local native fixture";
@@ -179,7 +180,7 @@ async fn a_changed_operation_never_reuses_a_plan() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn host_network_is_narrowed_to_none_when_the_module_wants_a_human_approval() {
+async fn a_policy_that_allows_the_network_gets_it_without_a_per_command_approval() {
     let world = world(executor(
         IsolationLevel2::Kernel,
         ConstraintEnforcement2::Enforced,
@@ -189,18 +190,26 @@ async fn host_network_is_narrowed_to_none_when_the_module_wants_a_human_approval
     let op = operation(&world, "curl example.com");
     let planned = plan(request(&world, &asked, &op, SpawnSource::Agent))
         .await
-        .expect("planned without the network");
-    assert!(!planned.plan.jail.allow_net);
-    let applied = planned.apply(&asked);
+        .expect("planned with the network");
     assert!(
-        !applied.allow_network,
-        "the run policy follows the plan, not the request"
+        planned.plan.jail.allow_net,
+        "the allowance reaches the plan"
     );
+    assert_eq!(planned.plan.network, NetworkPolicy::Open);
+    assert!(planned.apply(&asked).allow_network);
+
+    // A policy without network still runs offline.
+    let offline = policy(&world, false);
+    let planned = plan(request(&world, &offline, &op, SpawnSource::Agent))
+        .await
+        .expect("planned offline");
+    assert!(!planned.plan.jail.allow_net);
+    assert!(!planned.apply(&offline).allow_network);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn a_best_effort_jail_is_refused_because_it_enforces_nothing_exactly() {
+async fn a_best_effort_jail_runs_the_agents_own_commands_but_never_untrusted_text() {
     let world = world(executor(
         IsolationLevel2::Process,
         ConstraintEnforcement2::BestEffort,
@@ -208,11 +217,18 @@ async fn a_best_effort_jail_is_refused_because_it_enforces_nothing_exactly() {
     .await;
     let policy = policy(&world, false);
     let op = operation(&world, "echo hello");
+    let planned = plan(request(&world, &policy, &op, SpawnSource::Agent))
+        .await
+        .expect("the agent's own command may run folder-confined (macOS Seatbelt)");
+    assert!(!planned.plan.jail.require_process_isolation);
+    assert_eq!(planned.plan.jail.enforcement, JailEnforcement::Declared);
+    consume(&planned).await.expect("admitted once");
     assert_eq!(
-        plan(request(&world, &policy, &op, SpawnSource::Agent))
+        plan(request(&world, &policy, &op, SpawnSource::Untrusted))
             .await
             .unwrap_err(),
-        PlanError::Refused(SandboxDenial2::Unsupported)
+        PlanError::Refused(SandboxDenial2::Unsupported),
+        "hooks, scheduled jobs and registry servers stay refused"
     );
 }
 
@@ -226,8 +242,8 @@ async fn text_the_host_did_not_write_needs_kernel_isolation_whatever_the_switche
     .await;
     let policy = policy(&world, false);
     let op = operation(&world, "echo hello");
-    // A process-level jail is fine for the agent's own shell under the operator's
-    // switches only when isolation is not required; a scheduled job never gets it.
+    // A scheduled job or hook never gets a process-level jail, however exactly it
+    // enforces its constraints.
     assert_eq!(
         plan(request(&world, &policy, &op, SpawnSource::Untrusted))
             .await
