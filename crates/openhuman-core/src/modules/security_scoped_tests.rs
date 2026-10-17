@@ -152,3 +152,24 @@ async fn a_caller_with_modules_disabled_does_not_fault_the_shared_client() {
         );
     }
 }
+
+/// The same refusal under concurrent first use: many callers racing for the
+/// shared client with modules disabled each get the refusal, and none of them
+/// leaves the client faulted for the caller that comes next.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_first_calls_with_modules_disabled_leave_the_client_usable() {
+    let state = std::sync::Arc::new(tokio::sync::Mutex::new(ClientState::default()));
+    let mut disabled = Config::default();
+    disabled.modules.enabled = false;
+    let disabled = std::sync::Arc::new(disabled);
+
+    let mut calls = tokio::task::JoinSet::new();
+    for _ in 0..32 {
+        let (state, config) = (state.clone(), disabled.clone());
+        calls.spawn(async move { module_proxy_in(&state, &config).await.unwrap_err() });
+    }
+    while let Some(error) = calls.join_next().await {
+        assert_eq!(error.unwrap(), "TinySecurity modules are disabled");
+    }
+    assert!(!state.lock().await.faulted);
+}
