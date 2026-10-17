@@ -160,8 +160,18 @@ async fn an_action_dir_inside_workspace_dir_is_never_materialized() {
     );
 }
 
+/// The module's answer for an ordinary workspace: nothing here is internal state.
+fn nothing_is_internal() -> crate::modules::security::gap::PortGuard {
+    use crate::modules::security::gap::stub::StubPort;
+    crate::modules::security::gap::install_port(Arc::new(
+        StubPort::allowing()
+            .paths(|_, kind, _| kind != tinysecurity_bus::PathCheckKind::Internal),
+    ))
+}
+
 #[tokio::test]
 async fn a_wired_writer_redacts_before_the_bytes_reach_disk() {
+    let _module = nothing_is_internal();
     // `new_artifact_offload` always installs the redactor, so no call site can
     // produce an unredacted writer by omission.
     let dir = tempfile::tempdir().expect("tempdir");
@@ -200,6 +210,7 @@ async fn a_wired_writer_redacts_before_the_bytes_reach_disk() {
 
 #[tokio::test]
 async fn oversized_result_is_offloaded_and_the_parent_gets_a_readable_pointer() {
+    let _module = nothing_is_internal();
     let dir = tempfile::tempdir().expect("tempdir");
     let action_dir = dir.path().join("action");
     let workspace_dir = dir.path().join("state");
