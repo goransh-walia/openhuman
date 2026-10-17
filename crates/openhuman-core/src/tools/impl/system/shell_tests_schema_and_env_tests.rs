@@ -253,12 +253,15 @@ async fn shell_destructive_command_is_gated_not_run_inline() {
 async fn shell_pwd_returns_action_dir_not_workspace_dir() {
     let action_tmp = tempfile::tempdir().expect("create action tempdir");
     let workspace_tmp = tempfile::tempdir().expect("create workspace tempdir");
-    let security = Arc::new(SecurityPolicy {
-        autonomy: AutonomyLevel::Supervised,
-        workspace_dir: workspace_tmp.path().to_path_buf(),
-        action_dir: action_tmp.path().to_path_buf(),
-        ..SecurityPolicy::default()
-    });
+    let security = Arc::new(
+        SecurityPolicy {
+            autonomy: AutonomyLevel::Supervised,
+            workspace_dir: workspace_tmp.path().to_path_buf(),
+            action_dir: action_tmp.path().to_path_buf(),
+            ..SecurityPolicy::default()
+        }
+        .with_gateway(StubGateway::allow()),
+    );
     let tool = ShellTool::new(security.clone(), test_runtime(), test_audit());
 
     let result = tool
