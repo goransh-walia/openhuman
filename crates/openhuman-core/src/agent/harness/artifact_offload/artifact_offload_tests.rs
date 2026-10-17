@@ -16,10 +16,11 @@ use std::sync::Arc;
 
 use super::*;
 use crate::security::{AutonomyLevel, SecurityPolicy, TrustedAccess, TrustedRoot};
+#[cfg(feature = "security-module")]
 use tinyagents_harness::artifacts::{
-    extract_artifact_paths, ArtifactKind, ArtifactPathPolicy, ARTIFACT_POINTER_PREFIX,
-    DEFAULT_OFFLOAD_THRESHOLD_BYTES,
+    extract_artifact_paths, ArtifactKind, ARTIFACT_POINTER_PREFIX,
 };
+use tinyagents_harness::artifacts::{ArtifactPathPolicy, DEFAULT_OFFLOAD_THRESHOLD_BYTES};
 
 /// Policy with disjoint action/workspace roots, the shipped default layout
 /// (`~/OpenHuman/projects` vs `~/.openhuman/users/<id>/workspace`).

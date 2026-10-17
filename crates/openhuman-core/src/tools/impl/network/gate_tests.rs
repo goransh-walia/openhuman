@@ -5,7 +5,9 @@ use crate::security::{AutonomyLevel, SecurityPolicy};
 use serde_json::json;
 use std::sync::Arc;
 use tinytools::{PermissionLevel, Tool};
-use tinytools_std::network::{CurlTool, HttpRequestTool, PushoverTool, WebFetchTool};
+#[cfg(feature = "security-module")]
+use tinytools_std::network::{CurlTool, PushoverTool};
+use tinytools_std::network::{HttpRequestTool, WebFetchTool};
 
 /// A policy whose command gateway answers class questions with the tier table,
 /// so these tests need not load the security module.
