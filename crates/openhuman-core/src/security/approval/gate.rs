@@ -94,35 +94,6 @@ pub(crate) fn current_route_tenant() -> crate::core::runtime::Tenant {
     crate::core::runtime::tenant::current_tenant_or_isolated("approval_gate")
 }
 
-/// How long the gate will park a future before timing out and
-/// returning `Deny`. 10 minutes matches the default `expires_at`
-/// written into the persisted row.
-const DEFAULT_APPROVAL_TTL: Duration = Duration::from_secs(60 * 10);
-
-/// Shorter park window for approvals raised by the Flow Canvas copilot's
-/// live-run path — `flows_build` streaming into the copilot pane calling
-/// `run_flow` / `resume_flow_run` (PR #5090). A stale ten-minute park on a
-/// copilot pane the user may have already navigated away from is a long time
-/// to leave a live Slack/Gmail/HTTP node waiting; if nobody approves within
-/// three minutes, deny and let the authoring turn continue (the user can
-/// still re-trigger the run from the Runs rail). Scoped by
-/// [`ApprovalTurnContext::copilot_stream`]. Deliberately NOT applied to
-/// main-chat `WebChat` parks — only `flows::ops::flows_build`'s streaming
-/// branch sets the flag.
-const COPILOT_APPROVAL_TTL: Duration = Duration::from_secs(180);
-
-/// Shorter park window for approvals raised inside a sub-agent run — a
-/// delegated worker (`image_agent`, `video_agent`, `skill_setup`, …) calling
-/// an external-effect tool. Same three-minute window and the same rationale
-/// as [`COPILOT_APPROVAL_TTL`]: the prompt is one level removed from what the
-/// user is looking at (an async sub-agent's card lands on a parent turn that
-/// may already have finished), and a ten-minute park left every failed
-/// `media_generate_image` / `media_generate_video` / `skill_registry_install`
-/// blocking for exactly 600s with the result never delivered. If nobody answers
-/// in three minutes the call is denied with an "approval wasn't answered"
-/// result so the parent agent can tell the user and they can ask again.
-const SUBAGENT_APPROVAL_TTL: Duration = Duration::from_secs(180);
-
 /// Phrase every TTL-expiry denial carries, so a caller that renders its own
 /// refusal (the approval resolver, `middleware::approval`) can tell "nobody answered" from
 /// "the user said no" without parsing the rest of the reason. See
@@ -194,9 +165,8 @@ pub struct ApprovalTurnContext {
     /// callers (CLI, cron, background, detached sub-agents).
     pub chat: Option<ApprovalChatContext>,
     /// The turn is the Flow Canvas copilot's streaming `flows_build` path: the
-    /// park window is clamped to [`COPILOT_APPROVAL_TTL`] instead of the gate's
-    /// own (possibly env-overridden) TTL. Plain main-chat `WebChat` turns leave
-    /// it `false` and keep the full [`DEFAULT_APPROVAL_TTL`].
+    /// module gives the park its shorter copilot window. Plain main-chat
+    /// `WebChat` turns leave it `false` and keep the module's full window.
     pub copilot_stream: bool,
     /// The flow run the turn belongs to, so a park stamps its
     /// `PendingApproval::source_context` with the exact flow and run. `None`
@@ -348,7 +318,9 @@ pub(crate) struct Parked {
 pub struct ApprovalGate {
     config: Config,
     session_id: String,
-    ttl: Duration,
+    /// A park window shorter than the module's own, when configured
+    /// (`security.approval.ttl_secs`). The module owns the default window.
+    ttl: Option<Duration>,
     engine: SharedEngine,
     parked: Arc<Parked>,
 }

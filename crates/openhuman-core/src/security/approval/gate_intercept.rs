@@ -352,12 +352,10 @@ impl ApprovalGate {
         let thread_key = chat_thread_id
             .as_deref()
             .map(|thread_id| thread_route_key(&route_tenant, thread_id));
-        // Resolve the clamped park TTL up front and hand it to the engine, so
-        // the stored expiry and the actual wait use the same value — see
-        // `Self::resolve_park_ttl` and the COPILOT_APPROVAL_TTL clamp. The engine
-        // only ever shortens it.
-        let effective_ttl =
-            Self::resolve_park_ttl(self.effective_ttl(), copilot_stream, subagent_park);
+        // Only the user's configured window goes to the engine; the module owns
+        // the default and the shorter copilot and sub-agent windows, and only
+        // ever shortens what it is asked for.
+        let requested_ttl = self.effective_ttl();
 
         // Correlation context (flow-approval-surface, PR2): a Workflow-origin
         // park carries the flow id on the origin itself, but not the run id —
@@ -440,7 +438,7 @@ impl ApprovalGate {
             } else {
                 CallOrigin::Operator
             },
-            ttl: effective_ttl,
+            ttl: requested_ttl,
             prompt: Arc::clone(&surface) as Arc<dyn PromptSurface>,
         };
         let checked = match self.engine.check(input).await {

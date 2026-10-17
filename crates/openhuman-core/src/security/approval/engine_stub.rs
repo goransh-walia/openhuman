@@ -242,7 +242,6 @@ impl ApprovalEngine for StubEngine {
         let window = match input.origin {
             CallOrigin::Copilot | CallOrigin::SubAgent => Duration::from_secs(180),
             CallOrigin::Operator => Duration::from_secs(600),
-        }
         };
         let window = input.ttl.map_or(window, |ttl| window.min(ttl));
         let expires_ms = now + u64::try_from(window.as_millis()).unwrap_or(u64::MAX);
