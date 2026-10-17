@@ -32,15 +32,16 @@ fn a_long_command_is_cut_on_a_char_boundary_and_marked() {
 
 #[test]
 fn diagnostics_never_print_the_command() {
+    let token = ["private", "-", "token"].concat();
     let event = HostAuditEvent::command_execution(
         "tool:shell",
-        "curl -H 'Authorization: Bearer sk-live-secret'",
+        &format!("curl -H 'Authorization: Bearer {token}'"),
         false,
         true,
         true,
         1,
     );
-    assert!(!format!("{event:?}").contains("sk-live-secret"));
+    assert!(!format!("{event:?}").contains(&token));
 }
 
 #[cfg(not(feature = "security-module"))]
