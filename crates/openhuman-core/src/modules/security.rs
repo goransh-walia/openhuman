@@ -160,7 +160,6 @@ impl ClientState {
             log::warn!("[security][client] module not loaded yet; client stays retryable");
             return;
         }
-        eprintln!("DBG-LATCH thread={:?}", std::thread::current().name());
         self.faulted = true;
     }
 }
@@ -234,17 +233,6 @@ fn pinned(record: &super::ModuleRecord, digest: &str) -> bool {
 }
 
 async fn proxy(config: &Config, state: &mut ClientState) -> Result<tinybus::Proxy, String> {
-    let t0 = std::time::Instant::now();
-    let r = proxy_dbg(config, state).await;
-    if let Err(e) = &r {
-        eprintln!("DBG-PROXY-ERR thread={:?} after={:?} err={e} load_failed={} faulted={}", std::thread::current().name(), t0.elapsed(), state.load_failed, state.faulted);
-    } else if t0.elapsed() > std::time::Duration::from_millis(500) {
-        eprintln!("DBG-PROXY-SLOW thread={:?} after={:?}", std::thread::current().name(), t0.elapsed());
-    }
-    r
-}
-
-async fn proxy_dbg(config: &Config, state: &mut ClientState) -> Result<tinybus::Proxy, String> {
     require_enabled(config)?;
     if state.faulted {
         return Err("TinySecurity client faulted; restart required".into());
