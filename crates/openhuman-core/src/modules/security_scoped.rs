@@ -181,7 +181,22 @@ fn validate_scoped(
 }
 
 pub(super) async fn module_proxy(config: &Config) -> Result<tinybus::Proxy, String> {
-    let mut state = state().lock().await;
+    module_proxy_in(state(), config).await
+}
+
+/// [`module_proxy`] against an explicit client state.
+///
+/// Whether the caller's configuration enables modules is checked before the
+/// shared state is touched, as at every other entry point: a refusal of this
+/// one caller's configuration says nothing about the channel to the module, so
+/// it must never latch the process-wide client (one tenant or agent running
+/// with modules off would otherwise fail every other caller closed until
+/// restart).
+pub(super) async fn module_proxy_in(
+    state: &tokio::sync::Mutex<ClientState>,
+    config: &Config,
+) -> Result<tinybus::Proxy, String> {
+    let mut state = state.lock().await;
     let result = super::proxy(config, &mut state).await;
     if result.is_err() {
         state.latch();
