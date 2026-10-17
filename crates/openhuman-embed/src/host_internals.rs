@@ -249,6 +249,7 @@ pub mod security {
 pub mod util {
     pub mod log_redaction {
         pub use openhuman_core::core::log_redaction::scrub_secrets;
+        pub use openhuman_core::security::redact::endpoint_origin;
     }
     pub mod tls {
         pub use openhuman_core::util::tls::tls_client_builder;
