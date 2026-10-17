@@ -110,9 +110,12 @@ fn project_native_result(
             PathErrorCategory::Resolution => Err(format!("Failed to resolve path '{path}'")),
             PathErrorCategory::InvalidPath => Err(format!("Invalid path: {path}")),
         },
-        Err(_) => Err(format!(
-            "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
-        )),
+        Err(error) => {
+            eprintln!("DBG-PATH-ERR thread={:?} err={error}", std::thread::current().name());
+            Err(format!(
+                "{POLICY_BLOCKED_MARKER} TinySecurity path authorization unavailable; file access denied"
+            ))
+        }
     }
 }
 
