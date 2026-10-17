@@ -298,6 +298,6 @@ pub(crate) async fn run_gated(
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "security-module"))]
 #[path = "native_ops_tests.rs"]
 mod tests;
