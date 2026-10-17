@@ -13,8 +13,6 @@ use super::types::SandboxPolicy;
 use crate::config::Config;
 #[cfg(feature = "modules")]
 use crate::config::LocalJailConfig;
-#[cfg(feature = "modules")]
-use crate::security::SecurityPolicy;
 
 /// Credential directories under `$HOME` that no grant may reach or contain.
 const HOME_CREDENTIAL_DIRS: &[&str] = &[".ssh", ".gnupg", ".aws", ".azure", ".kube"];
