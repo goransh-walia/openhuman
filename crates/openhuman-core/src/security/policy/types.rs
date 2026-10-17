@@ -309,6 +309,7 @@ pub struct SecurityPolicy {
 
 impl Default for SecurityPolicy {
     fn default() -> Self {
+        let shipped = crate::config::AutonomyConfig::default();
         Self {
             // Deliberately the opposite of `AutonomyConfig::default()`, which is
             // `false`. That one is the *shipped* default, chosen once, from
@@ -324,83 +325,10 @@ impl Default for SecurityPolicy {
             workspace_dir: PathBuf::from("."),
             action_dir: PathBuf::from("."),
             workspace_only: true,
-            // When adding a new entry to this allowlist, re-audit
-            // `DANGEROUS_ENV_PREFIXES` (see below). Every newly-allowed binary
-            // may introduce its own env-driven subprocess hooks (pager, editor,
-            // loader override, SSH/diff helper, preprocessor) — those names
-            // must be added to the prefix denylist so that the
-            // `KEY=cmd <allowed-binary>` shape cannot bypass allowlisting via
-            // `skip_env_assignments` in the module's legacy allowlist. Cross-ref #2636.
-            allowed_commands: vec![
-                // Version control
-                "git".into(),
-                // Package managers / build systems
-                "npm".into(),
-                "pnpm".into(),
-                "yarn".into(),
-                "cargo".into(),
-                "make".into(),
-                "cmake".into(),
-                // Directory / file inspection (read-only, low-risk)
-                "ls".into(),
-                "cat".into(),
-                "grep".into(),
-                "find".into(),
-                "echo".into(),
-                "pwd".into(),
-                "wc".into(),
-                "head".into(),
-                "tail".into(),
-                "date".into(),
-                "sort".into(),
-                "uniq".into(),
-                "diff".into(),
-                "which".into(),
-                "uname".into(),
-                "basename".into(),
-                "dirname".into(),
-                "tr".into(),
-                "cut".into(),
-                "realpath".into(),
-                "readlink".into(),
-                "stat".into(),
-                "file".into(),
-                // Filesystem mutations (medium-risk — require approval in Supervised mode)
-                "mkdir".into(),
-                "touch".into(),
-                "cp".into(),
-                "mv".into(),
-                "ln".into(),
-                // Windows read-only equivalents for the same basic
-                // inspection workflows as ls/cat/grep/which.
-                "dir".into(),
-                "type".into(),
-                "where".into(),
-                "findstr".into(),
-                "more".into(),
-            ],
-            forbidden_paths: vec![
-                // System directories (blocked even when workspace_only=false)
-                "/etc".into(),
-                "/root".into(),
-                "/home".into(),
-                "/usr".into(),
-                "/bin".into(),
-                "/sbin".into(),
-                "/lib".into(),
-                "/opt".into(),
-                "/boot".into(),
-                "/dev".into(),
-                "/proc".into(),
-                "/sys".into(),
-                "/var".into(),
-                "/tmp".into(),
-                // Sensitive dotfiles
-                "~/.ssh".into(),
-                "~/.gnupg".into(),
-                "~/.aws".into(),
-                "~/.config".into(),
-            ],
+            // The shipped lists, so the two defaults cannot drift. The module
+            // enforces them; the host only carries them.
+            allowed_commands: shipped.allowed_commands,
+            forbidden_paths: shipped.forbidden_paths,
             // Effectively unlimited — matches AutonomyConfig::default_max_actions_per_hour().
             // The rate-limiter check is `count <= max`, so u32::MAX is functionally
             // infinite without requiring an Option sentinel on the field type.
