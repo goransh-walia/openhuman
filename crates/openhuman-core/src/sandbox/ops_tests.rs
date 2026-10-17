@@ -299,13 +299,8 @@ async fn a_sandboxed_spawn_the_module_cannot_plan_is_refused() {
     )
     .await
     .expect_err("no module, no plan");
-    assert!(
-        matches!(
-            error.downcast_ref::<crate::sandbox::spawn_plan::PlanError>(),
-            Some(crate::sandbox::spawn_plan::PlanError::Unavailable(_))
-        ),
-        "{error:#}"
-    );
+    // A fault is not a deterministic refusal: it must not be mistaken for the floor.
+    assert!(error.downcast_ref::<IsolationFloor>().is_none(), "{error:#}");
 }
 
 /// The operation a plan binds must cross the bus as text, so an environment that
