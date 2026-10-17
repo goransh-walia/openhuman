@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use super::helpers::{file_path, readonly_autonomy_block, validate_file_id, validate_visibility};
+use super::helpers::{file_path, validate_file_id, validate_visibility};
 use crate::integrations::IntegrationClient;
 use crate::security::SecurityPolicy;
 use tinytools::{PermissionLevel, Tool, ToolCategory, ToolResult};
@@ -87,10 +87,6 @@ impl StorageSetVisibilityTool {
         args: Value,
         approval: &crate::security::approval::ApprovalTurnContext,
     ) -> anyhow::Result<ToolResult> {
-        if let Some(blocked) = readonly_autonomy_block(&self.security) {
-            return Ok(blocked);
-        }
-
         let file_id = match validate_file_id(&args) {
             Ok(id) => id,
             Err(e) => return Ok(ToolResult::error(e)),

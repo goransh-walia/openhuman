@@ -190,13 +190,3 @@ pub(super) fn action_dir_for_context(
 pub(super) fn file_path(file_id: &str, suffix: &str) -> String {
     format!("{FILES_PATH}/{file_id}{suffix}")
 }
-
-pub(super) fn readonly_autonomy_block(security: &SecurityPolicy) -> Option<ToolResult> {
-    if security.can_act() {
-        None
-    } else {
-        Some(ToolResult::error(
-            "[policy-blocked] Action blocked: autonomy is read-only",
-        ))
-    }
-}

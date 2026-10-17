@@ -39,20 +39,6 @@ impl UpdateApplyTool {
         Self { security }
     }
 
-    /// Delegate to the shared `SecurityPolicy::enforce_tool_operation`
-    /// path so this tool stays in lock-step with every other act-level
-    /// tool's autonomy + rate-limit handling. Hand-rolling
-    /// `can_act` + `record_action` here used to drift from the canonical
-    /// `[openhuman:policy]` log format and would silently miss any
-    /// future gate the enforcer grows (token budget, supervised
-    /// approval, etc.).
-    fn require_write_access(&self) -> Option<ToolResult> {
-        self.security
-            .enforce_tool_operation(ToolOperation::Act, "update_apply")
-            .err()
-            .map(ToolResult::error)
-    }
-
     fn require_consent(args: &Value) -> Option<ToolResult> {
         let confirmed = args
             .get("user_confirmed")
@@ -126,10 +112,6 @@ impl UpdateApplyTool {
 
         if let Some(blocked) = Self::require_consent(&args) {
             tracing::warn!("[update_apply] blocked: missing user_confirmed");
-            return Ok(blocked);
-        }
-        if let Some(blocked) = self.require_write_access() {
-            tracing::warn!("[update_apply] blocked: autonomy gate");
             return Ok(blocked);
         }
 

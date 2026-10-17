@@ -322,10 +322,6 @@ impl Tool for ProxyConfigTool {
             "get" => self.handle_get(),
             "list_services" => self.handle_list_services(),
             "set" | "disable" | "apply_env" | "clear_env" => {
-                if let Some(blocked) = self.require_write_access() {
-                    return Ok(blocked);
-                }
-
                 match action.as_str() {
                     "set" => self.handle_set(&args).await,
                     "disable" => self.handle_disable(&args).await,
