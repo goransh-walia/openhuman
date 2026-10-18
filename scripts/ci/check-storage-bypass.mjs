@@ -85,6 +85,12 @@ export const ALLOW = new Map(
       LEGACY_READER,
     ],
     [
+      "security/approval/native/history_import.rs",
+      "json-write",
+      "std::fs::write(",
+      "one-time migration marker in the local config tree; imported approval and flow-trust records are stored by TinySecurity, while this install-local marker prevents replaying the legacy import at every launch",
+    ],
+    [
       "security/devices/store_import.rs",
       "sqlite-open",
       "let conn = Connection::open(&db_path)",
