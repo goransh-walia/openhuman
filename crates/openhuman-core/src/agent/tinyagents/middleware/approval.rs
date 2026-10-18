@@ -152,6 +152,14 @@ impl ApprovalSecurityMiddleware {
             GateOutcome::Allow => ApprovalResolution::Allow { ticket: request_id },
         }
     }
+
+    fn resolve_without_gate(tool_name: &str) -> ApprovalResolution {
+        tracing::warn!(
+            tool = %tool_name,
+            "[tinyagents::mw] approval gate unavailable; external-effect tool will run without interactive approval"
+        );
+        ApprovalResolution::Allow { ticket: None }
+    }
 }
 
 /// What the model is told when the approval prompt for `tool_name` expired
@@ -228,11 +236,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
         call: &TaToolCall,
     ) -> ApprovalResolution {
         let Some(gate) = ApprovalGate::try_global() else {
-            tracing::warn!(
-                tool = %call.name,
-                "[tinyagents::mw] approval gate unavailable; external-effect tool will run without interactive approval"
-            );
-            return ApprovalResolution::Allow { ticket: None };
+            return Self::resolve_without_gate(&call.name);
         };
         self.resolve_on(&gate, ctx, call).await
     }

@@ -435,3 +435,7 @@ pub(crate) fn project(
 #[cfg(test)]
 #[path = "native_commands_tests.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "security-module"))]
+#[path = "native_commands_property_tests.rs"]
+mod property_tests;
