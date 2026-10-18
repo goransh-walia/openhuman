@@ -73,8 +73,11 @@ fn a_required_approval_is_not_allowed_to_run_without_a_gate() {
     let resolution = ApprovalSecurityMiddleware::resolve_without_gate("composio_execute");
     match resolution {
         ApprovalResolution::Deny { reason } => {
-            assert!(reason.contains("approval gate unavailable"), "{reason}");
+            assert!(reason.contains("This action was refused"), "{reason}");
             assert!(reason.contains("must not be performed"), "{reason}");
+            assert!(reason.contains("do not retry"), "{reason}");
+            assert!(reason.contains("another way"), "{reason}");
+            assert!(!reason.to_lowercase().contains("human"), "{reason}");
         }
         ApprovalResolution::Allow { .. } => {
             panic!("a missing human approval gate must not authorize an external effect")
