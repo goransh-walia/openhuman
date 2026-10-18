@@ -4,10 +4,11 @@
 every invariant AGENTS.md lists for the autonomy policy is asked for:
 `action_dir` vs `workspace_dir`, workspace-internal path protection,
 always-forbidden system/credential paths, trusted roots, and the per-hour
-action budget. The decisions are the TinySecurity module's. This folder holds
-the settings the module is given and the host's projection of its answers; it
-decides nothing and has no local fallback (see `native_commands.rs`,
-`native_paths.rs` and `module_gate.rs`).
+action budget. TinySecurity answers path and protected-floor questions; TinyBox
+answers command-policy questions. This folder holds the settings those modules
+are given and the host's projection of their answers; it decides nothing and
+has no local fallback (see `native_commands.rs`, `native_paths.rs` and
+`module_gate.rs`).
 
 ## Autonomy is off by default
 
@@ -30,7 +31,7 @@ impl in [`types.rs`](./types.rs).
 ## Responsibilities
 
 - Build a `SecurityPolicy` from `AutonomyConfig` (`SecurityPolicy::from_config`).
-- Ask the security module about a shell command (`check_command`) and project
+- Ask TinyBox about a shell command (`check_command`) and project
   its answer into a `GateDecision`, a `CommandClass` and the host's
   policy-blocked messages (`Refusal`). The autonomy tier table is the module's;
   every caller asks it (`command_class_gate`).
@@ -47,9 +48,8 @@ impl in [`types.rs`](./types.rs).
   `mcp_ui`, the workflow `http_request` node).
 - Ask the module to class a host action (`host_action_class(permission,
   external)`, module `ClassifyHostAction2`).
-- Own the two stable string markers (`POLICY_BLOCKED_MARKER`,
-  `POLICY_DENIED_MARKER`) that the agent harness's repeated-failure
-  middleware keys on to stop retrying a provably futile call.
+- Use TinyTools' stable policy markers for tool-facing refusals; the markers
+  are defined by `tinytools::status`, not re-exported by this module.
 
 ## Key files
 
@@ -60,18 +60,18 @@ impl in [`types.rs`](./types.rs).
 | [`native_paths.rs`](./native_paths.rs) | Translation of trusted roots, the acting directory and the internal-state reservations into the module's immutable path scope |
 | [`module_gate.rs`](./module_gate.rs) | `check_paths[_blocking]`, `path_allowed[_blocking]`, `is_internal[_blocking]`, `spend_action`, `tier_allows_acting_blocking`, `host_action_class`, and the `PathKind` and `Budget` types |
 | [`command_checks.rs`](./command_checks.rs) | `parse_declared_class` |
-| [`native_commands.rs`](./native_commands.rs) | `SecurityPolicy::check_command` / `command_class_gate[_blocking]`, `CommandQuery`, `CommandFlow`, `CommandStage`, `CommandVerdict`, `Refusal`, the `CommandGateway` seam, and the translation to the module's `CommandPolicy` |
+| [`native_commands.rs`](./native_commands.rs) | `SecurityPolicy::check_command` / `command_class_gate[_blocking]`, `CommandQuery`, `CommandFlow`, `CommandStage`, `CommandVerdict`, `Refusal`, the `CommandGateway` seam, and the translation to TinyBox's command policy |
 | [`enforcement.rs`](./enforcement.rs) | `from_config`, `with_privacy_mode`, `openhuman_scratch_dir`/`ensure_openhuman_scratch_dir`, `validate_path_within_root` |
-| TinySecurity module `CheckCommand` / `ClassifyCommand` (`tinysecurity-bus`) | Command class, gate, risk and refusal category for one command under the host-registered `CommandPolicy` |
+| TinyBox command-policy contract (`tinybox-bus`) | Command class, gate, risk and refusal category for one command under the host-registered policy |
 
 ## Public surface
 
-Re-exported through `policy/mod.rs` and then through `security/mod.rs`:
-`SecurityPolicy`, `AutonomyLevel`, `CommandClass`,
-`GateDecision`, `PathKind`, `Budget`, `host_action_class`,
-`TrustedRoot`, `TrustedAccess`, `POLICY_BLOCKED_MARKER`,
-`POLICY_DENIED_MARKER`, `validate_path_within_root`,
-`ensure_openhuman_scratch_dir`, `openhuman_scratch_dir`.
+`crate::security::policy` re-exports `SecurityPolicy`, `AutonomyLevel`,
+`GateDecision`, `PathKind`, `Budget`, `host_action_class`, `TrustedRoot`,
+`TrustedAccess`, the command gateway/query types, and path/scratch helpers.
+`CommandClass` comes from `tinybox_bus`; policy markers come from
+`tinytools::status`. `crate::security` re-exports the commonly used policy
+types and path/scratch helpers, but not the command gateway/query types.
 
 `security/live_policy.rs` (a sibling of this directory) holds the current
 `SecurityPolicy` in a process-global cell: new sessions `install` the latest
