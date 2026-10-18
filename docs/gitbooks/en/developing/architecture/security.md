@@ -63,7 +63,7 @@ This module carries no sandbox backends. Per-session sandbox selection lives in 
 - **Native jail floor.** The native jail keeps a deny-read floor over the credential stores (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`, and Keychains on macOS). Grants that reach or contain a credential directory are dropped.
 - **Untrusted text.** Text the host did not author reaches a shell only through `sandbox::untrusted::run`, which refuses a jail that is missing or not suitable for untrusted code. Scheduled shell jobs and hook commands run through it. `sandbox.status` reports `suitable_for_untrusted_code`, true only for a ready container or a ready kernel-isolated jail.
 - **MCP stdio servers** start inside the TinyBox native jail through TinyMCP's `JailedSpawner`. Only servers the operator declares in `[mcp_client.servers]` carry `operator_trusted` and start as ordinary child processes; registry installs, and every server under SaaS, are jailed.
-- **SaaS** ignores `OPENHUMAN_SANDBOX=off`, and `execute_in_sandbox` refuses a SaaS spawn that resolved to no backend. Elsewhere the variable is the operator's own opt-out.
+- **SaaS** ignores `OPENHUMAN_SANDBOX=off`. The host reports the switch to the security module, and the module plans a run on the host only for the trusted operator outside SaaS; it refuses hooks, scheduled jobs and registry MCP servers, which are planned onto a jail or container instead. The configured backend is a preference sent to the module, which picks the executor.
 
 Current limitations, documented in `crates/openhuman-core/src/sandbox/README.md`:
 

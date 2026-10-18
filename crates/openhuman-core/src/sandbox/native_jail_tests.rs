@@ -110,6 +110,7 @@ async fn disabled_tinybox_module_never_falls_back_to_host_execution() -> anyhow:
         allow_network: true,
         env_passthrough: Vec::new(),
         docker_overrides: None,
+        mount_workspace: true,
     };
     let mut config = crate::config::Config::default();
     config.modules.enabled = false;
@@ -226,6 +227,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
         allow_network: true,
         env_passthrough: Vec::new(),
         docker_overrides: None,
+        mount_workspace: true,
     };
     let output = execute(
         &config,

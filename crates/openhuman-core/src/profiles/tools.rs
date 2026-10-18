@@ -304,6 +304,7 @@ pub fn sandbox_policy_with(
             read_only_rootfs: Some(true),
             extra_caps_drop: Vec::new(),
         }),
+        mount_workspace: true,
     })
 }
 

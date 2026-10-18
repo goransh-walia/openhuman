@@ -15,7 +15,7 @@ use tinyflows::error::{EngineError, Result};
 
 use super::*;
 use crate::config::Config;
-use crate::sandbox::{execute_in_sandbox, resolve_sandbox_policy};
+use crate::sandbox::{execute_in_sandbox, spawn_policy};
 use crate::security::SecurityPolicy;
 use tinyagents_definition::SandboxMode;
 use tinybox_bus::CommandClass;
@@ -87,11 +87,10 @@ impl CodeRunner for OpenHumanCode {
         // Transitional (#7801): the flow caps carry no context yet.
         let dispatch = DispatchCtx::ambient();
         let outcome: Result<Value> = async {
-        let policy = resolve_sandbox_policy(
-            &dispatch,
-            SandboxMode::Sandboxed,
+        let policy = spawn_policy(
             &self.config.action_dir,
             &self.config.workspace_dir,
+            &self.config.sandbox,
             &self.config.runtime,
             false,
         );

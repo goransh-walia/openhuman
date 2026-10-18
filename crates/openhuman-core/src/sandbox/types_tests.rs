@@ -47,6 +47,7 @@ fn sandbox_policy_serializes_roundtrip() {
             memory_limit_mb: Some(256),
             ..DockerOverrides::default()
         }),
+        mount_workspace: true,
     };
     let json = serde_json::to_string(&policy).unwrap();
     let back: SandboxPolicy = serde_json::from_str(&json).unwrap();

@@ -21,6 +21,7 @@ fn policy(workspace: &Path) -> SandboxPolicy {
         allow_network: false,
         env_passthrough: vec![],
         docker_overrides: None,
+        mount_workspace: true,
     }
 }
 

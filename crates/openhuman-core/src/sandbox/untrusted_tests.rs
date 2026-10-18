@@ -46,17 +46,20 @@ async fn an_untrusted_command_never_runs_when_the_jail_is_unreachable() {
     );
 }
 
-/// The operator's own opt-out is the only unjailed path in a single-user host.
+/// The operator's opt-out is only a setting declared to the module. Untrusted text never
+/// runs on the host on the host's own say-so: without a module plan it is refused.
 #[tokio::test]
-async fn the_operator_opt_out_runs_the_command_unjailed() {
+async fn the_operator_opt_out_never_runs_untrusted_text_without_a_module_plan() {
     let tmp = tempfile::tempdir().unwrap();
     let mut config = config_in(tmp.path());
     config.sandbox.enabled = Some(false);
+    let marker = tmp.path().join("ran");
+    let command = format!("touch '{}'", marker.display());
 
-    let output = run(shell(&config, "echo opted-out")).await.unwrap();
+    let result = run(shell(&config, &command)).await;
 
-    assert!(output.success());
-    assert!(output.stdout.contains("opted-out"), "{}", output.stdout);
+    assert!(result.is_err(), "no plan, no run: {result:?}");
+    assert!(!marker.exists(), "the command ran on the host unplanned");
 }
 
 const SAAS_CHILD: &str = "OPENHUMAN_UNTRUSTED_SAAS_TEST_CHILD";
@@ -87,7 +90,7 @@ async fn saas_refuses_an_untrusted_command_even_when_the_operator_opted_out() {
     let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", &test, "--nocapture", "--test-threads=1"])
         .env(SAAS_CHILD, &test)
-        .env(super::super::ops::SANDBOX_OFF_ENV, "off")
+        .env(super::super::operator::SANDBOX_OFF_ENV, "off")
         .output()
         .expect("run isolated SaaS test");
     assert!(

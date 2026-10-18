@@ -6,13 +6,17 @@
 //! the host supplies the facts, the concrete operation, the audit correlation, and
 //! executes exactly the plan it gets back:
 //!
-//! 1. [`facts::scope`] turns the policy, the configuration and the executors TinyBox
-//!    verified into immutable scope facts. A scope's id digests its facts, so a spawn
-//!    with other facts gets its own scope.
+//! 1. [`facts::scope`] turns the policy, the configuration and every executor TinyBox
+//!    verified into immutable scope facts, including the operator's own sandbox
+//!    setting. A scope's id digests its facts, so a spawn with other facts gets its own
+//!    scope.
 //! 2. [`registry`] makes the module hold that scope for the subject
 //!    (`RegisterSandboxScope2`) on the subject's own audit stream.
 //! 3. [`plan`] sends `Plan2` for the concrete [`SpawnOperation`] and maps the issued
-//!    artifact through [`BoxPlan::from_artifact`].
+//!    artifact through [`BoxPlan::from_artifact`]. The module picks the executor (the
+//!    configured backend is only a requirement it is sent) and alone decides whether
+//!    the operator's setting may skip the jail: it plans a run on the host for the
+//!    trusted operator outside SaaS and refuses every other source.
 //! 4. [`consume`] reserves the artifact once, immediately before the spawn
 //!    (`ConsumeSandboxPlan2`); a second use, or any change to the operation, is refused.
 //!
@@ -25,17 +29,16 @@ mod facts;
 mod operation;
 mod registry;
 
-use std::path::Path;
-
 use tinysecurity_bus::{
     ConsumeSandboxPlanRequest2, NetworkPolicy, PathGrant, ResourceLimits2, SandboxArtifact2,
-    SandboxDenial2, SandboxPlanRequest2, SubjectScope, Verdict,
+    SandboxBackend, SandboxDenial2, SandboxExecutor2, SandboxPlanOptions2, SandboxPlanRequest2,
+    SubjectScope, Verdict,
 };
 
 pub(crate) use facts::SpawnSource;
 pub(crate) use operation::SpawnOperation;
 
-use super::plan::{BoxPlan, PlanMappingError, PlannedExecutor};
+use super::plan::{BoxPlan, PlanMappingError};
 use super::types::{SandboxBackendKind, SandboxPolicy};
 use crate::config::Config;
 use crate::modules::security::sandbox as client;
@@ -90,7 +93,7 @@ pub(crate) enum ModuleSource<'a> {
 /// A security module and executor facts supplied by a test.
 pub(crate) struct FixedModule {
     pub(crate) proxy: tinybus::Proxy,
-    pub(crate) executor: tinysecurity_bus::SandboxExecutor2,
+    pub(crate) executors: Vec<SandboxExecutor2>,
 }
 
 impl ModuleSource<'_> {
@@ -110,14 +113,24 @@ pub(crate) struct SpawnRequest<'a> {
     pub(crate) policy: &'a SandboxPolicy,
     pub(crate) source: SpawnSource,
     pub(crate) operation: &'a SpawnOperation<'a>,
-    /// The operator turned the sandbox off for this process (never under SaaS).
-    pub(crate) host_off: bool,
+    /// The operator's own switch turned the sandbox off. It is a setting the scope
+    /// carries; whether it skips the jail is the module's decision.
+    pub(crate) operator_off: bool,
+    /// Ask the module for a run on the host (needs `operator_off`). It plans one only
+    /// for the trusted operator outside SaaS and refuses everything else (`floor`).
+    pub(crate) host_run: bool,
     pub(crate) module: ModuleSource<'a>,
 }
 
-/// The requested resource bounds, from the policy's Docker overrides.
+/// The requested resource bounds, from the policy's Docker overrides. Only a spawn the
+/// policy requires a container for asks for them: a bound only a container enforces would
+/// otherwise make every other executor ineligible.
 fn limits(policy: &SandboxPolicy) -> ResourceLimits2 {
-    let Some(overrides) = &policy.docker_overrides else {
+    let Some(overrides) = policy
+        .docker_overrides
+        .as_ref()
+        .filter(|_| policy.backend == SandboxBackendKind::Docker)
+    else {
         return ResourceLimits2::default();
     };
     ResourceLimits2 {
@@ -137,55 +150,84 @@ fn limits(policy: &SandboxPolicy) -> ResourceLimits2 {
     }
 }
 
-/// The grants one spawn asks for: its workspace read-write plus the mounts the
-/// executor honours (a container ignores read-write mounts, as it always has).
+/// The grants one spawn asks for: its workspace read-write plus the mounts the policy
+/// names. A workspace-less spawn asks for no writable root at all.
 fn grants(policy: &SandboxPolicy) -> Option<Vec<PathGrant>> {
     let mut grants = facts::grant_ceiling(policy)?;
-    if policy.backend == SandboxBackendKind::Docker {
-        let writable: Vec<_> = policy
-            .read_write_mounts
-            .iter()
-            .filter_map(|path| path.to_str())
-            .collect();
-        grants.retain(|grant| {
-            Path::new(&grant.path) == policy.workspace_root
-                || !(grant.write && writable.contains(&grant.path.as_str()))
-        });
+    if !policy.mount_workspace {
+        grants.retain(|grant| !grant.write);
     }
     Some(grants)
 }
 
-fn ensure_selected(plan: &BoxPlan, policy: &SandboxPolicy) -> Result<(), PlanError> {
-    let expected = match policy.backend {
-        SandboxBackendKind::Local => PlannedExecutor::NativeJail,
-        SandboxBackendKind::Docker => PlannedExecutor::Docker,
-        SandboxBackendKind::None => return Err(unavailable("the policy selects no sandbox")),
-    };
-    if plan.executor != expected {
-        return Err(unavailable("the plan selected another executor"));
+/// The executor preference, workspace and host-run options the policy asks for.
+fn options(policy: &SandboxPolicy, host_run: bool) -> SandboxPlanOptions2 {
+    SandboxPlanOptions2 {
+        preferred_backend: match policy.backend {
+            SandboxBackendKind::None => None,
+            SandboxBackendKind::Local => Some(SandboxBackend::Jail),
+            SandboxBackendKind::Docker => Some(SandboxBackend::Docker),
+        },
+        require_preferred_backend: policy.backend != SandboxBackendKind::None,
+        no_workspace: !policy.mount_workspace,
+        host_run,
     }
-    Ok(())
 }
 
-/// The TinyBox facts of the executor `policy` selects.
+/// Every executor TinyBox verified on this host, in the order the module should prefer
+/// them. A policy that requires one executor probes only that one. An executor whose
+/// probe fails is declared unavailable; when every probe fails the spawn is refused.
 async fn probe(
     config: &Config,
     policy: &SandboxPolicy,
-) -> Result<tinysecurity_bus::SandboxExecutor2, PlanError> {
-    match policy.backend {
-        SandboxBackendKind::Local => {
-            let status = crate::modules::tinybox::jail_status(config)
-                .await
-                .map_err(|error| unavailable(format!("jail status: {error}")))?;
-            Ok(executors::jail(&status))
+) -> Result<Vec<SandboxExecutor2>, PlanError> {
+    let jail = || async {
+        crate::modules::tinybox::jail_status(config)
+            .await
+            .map(|status| executors::jail(&status))
+            .map_err(|error| format!("jail status: {error}"))
+    };
+    let docker = || async {
+        super::docker::is_docker_available(config)
+            .await
+            .map(executors::docker)
+            .map_err(|error| format!("docker status: {error}"))
+    };
+    let (jail, docker) = match policy.backend {
+        SandboxBackendKind::Local => (Some(jail().await), None),
+        SandboxBackendKind::Docker => (None, Some(docker().await)),
+        SandboxBackendKind::None => {
+            let (jail, docker) = tokio::join!(jail(), docker());
+            (Some(jail), Some(docker))
         }
-        SandboxBackendKind::Docker => {
-            let available = super::docker::is_docker_available(config)
-                .await
-                .map_err(|error| unavailable(format!("docker status: {error}")))?;
-            Ok(executors::docker(available))
+    };
+    let mut declared = Vec::new();
+    let mut failure = None;
+    if let Some(jail) = jail {
+        match jail {
+            Ok(executor) => declared.push(executor),
+            Err(error) => {
+                tracing::warn!(%error, "[sandbox:plan] the native jail could not be verified");
+                declared.push(executors::jail_unavailable());
+                failure.get_or_insert(error);
+            }
         }
-        SandboxBackendKind::None => Err(unavailable("the policy selects no sandbox")),
+    }
+    if let Some(docker) = docker {
+        match docker {
+            Ok(executor) => declared.push(executor),
+            Err(error) => {
+                tracing::debug!(%error, "[sandbox:plan] the container runtime could not be verified");
+                declared.push(executors::docker(false));
+                failure.get_or_insert(error);
+            }
+        }
+    }
+    match failure {
+        Some(error) if declared.iter().all(|executor| !executor.available) => {
+            Err(unavailable(error))
+        }
+        _ => Ok(declared),
     }
 }
 
@@ -199,6 +241,9 @@ async fn probe(
 /// what the host asked for: the command never gets more than the policy allowed, and
 /// one that needs the network fails inside the sandbox instead of running with it.
 pub(crate) async fn plan(request: SpawnRequest<'_>) -> Result<PlannedSpawn, PlanError> {
+    if request.host_run {
+        return plan_with(&request, NetworkPolicy::Host).await;
+    }
     let asked = facts::network_ceiling(request.policy);
     match plan_with(&request, asked.clone()).await {
         Err(PlanError::Refused(SandboxDenial2::Approval)) if asked == NetworkPolicy::Host => {
@@ -220,7 +265,8 @@ async fn plan_with(
         policy,
         source,
         operation,
-        host_off,
+        operator_off,
+        host_run,
         module,
     } = *request;
     let saas = crate::core::runtime::is_saas();
@@ -233,9 +279,11 @@ async fn plan_with(
     )
     .map_err(unavailable)?;
     let proxy = module.proxy(config).await?;
-    let executor = match module {
+    // A run on the host confines nothing, so no executor is verified for it.
+    let executors = match module {
+        _ if host_run => Vec::new(),
         ModuleSource::Production => probe(config, policy).await?,
-        ModuleSource::Fixed(fixed) => fixed.executor.clone(),
+        ModuleSource::Fixed(fixed) => fixed.executors.clone(),
     };
     let scope = facts::scope(&facts::FactsInput {
         config,
@@ -243,8 +291,8 @@ async fn plan_with(
         source,
         subject: subject.clone(),
         saas,
-        host_off,
-        executors: vec![executor],
+        operator_off,
+        executors,
     })
     .ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
     let stream = AuditStream::open(config, subject.clone())
@@ -255,7 +303,14 @@ async fn plan_with(
     let operation_json = operation
         .canonical()
         .ok_or_else(|| unavailable("the working directory is not valid text"))?;
-    let grants = grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
+    // A run on the host claims no confinement: no grants and no bounds.
+    let (grants, limits) = if host_run {
+        (Vec::new(), ResourceLimits2::default())
+    } else {
+        let grants =
+            grants(policy).ok_or_else(|| unavailable("a sandbox path is not valid text"))?;
+        (grants, limits(policy))
+    };
     let ordered = stream.lock().await;
     let generation = client::generation(&proxy).await.map_err(unavailable)?;
     let audit = stream.correlation(generation).await.map_err(unavailable)?;
@@ -270,9 +325,10 @@ async fn plan_with(
         operation_json,
         grants,
         network,
-        limits: limits(policy),
+        limits,
         deny_subprocesses: false,
         accept_process_isolation: source.accepts_process_isolation(),
+        options: options(policy, host_run),
         generation,
         ttl_ms: facts::PLAN_TTL_MS,
         audit,
@@ -307,7 +363,6 @@ async fn plan_with(
     let home = super::local_grants::grant_home(saas, dirs::home_dir);
     let box_plan = BoxPlan::from_artifact(&artifact, home.as_deref())
         .map_err(|error: PlanMappingError| unavailable(error.to_string()))?;
-    ensure_selected(&box_plan, policy)?;
     tracing::debug!(
         executor = ?box_plan.executor,
         grants = artifact.grants.len(),
@@ -339,32 +394,26 @@ impl PlannedSpawn {
         applied.read_only_mounts = paths(&self.plan.jail.read_only);
         applied.read_write_mounts = paths(&self.plan.jail.read_write);
         applied.allow_network = self.plan.jail.allow_net;
+        applied.mount_workspace = self.plan.workspace;
         if let Some(overrides) = applied.docker_overrides.as_mut() {
             if !applied.allow_network {
                 // The container's own network setting must follow the plan too, or a
                 // narrowed plan would still start the container on a network.
                 overrides.network = Some("none".to_owned());
             }
+            // A bound the plan carries wins. A plan that names none (the module chose
+            // the container, so the spawn asked for no bound) keeps the operator's own
+            // configured bound: it can only be tighter than no bound at all.
             let limits = &self.artifact.limits;
-            overrides.memory_limit_mb =
-                limits.memory_bytes.map(|bytes| bytes.div_ceil(1024 * 1024));
-            overrides.cpu_limit = limits
-                .cpu_millicores
-                .map(|millis| f64::from(millis) / 1000.0);
+            if let Some(bytes) = limits.memory_bytes {
+                overrides.memory_limit_mb = Some(bytes.div_ceil(1024 * 1024));
+            }
+            if let Some(millis) = limits.cpu_millicores {
+                overrides.cpu_limit = Some(f64::from(millis) / 1000.0);
+            }
         }
         applied
     }
-}
-
-/// Plan `request`, reserve the plan and return the policy the spawn must run under.
-///
-/// This is the one call a spawn site makes. The plan is reserved here, immediately
-/// before the caller launches it, so it cannot be admitted twice and the audit trail
-/// shows plan and admission for the same operation.
-pub(crate) async fn admit(request: SpawnRequest<'_>) -> Result<SandboxPolicy, PlanError> {
-    let planned = plan(request).await?;
-    consume(&planned).await?;
-    Ok(planned.apply(request.policy))
 }
 
 /// Reserve `planned` once, immediately before launching it.

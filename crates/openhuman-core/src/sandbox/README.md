@@ -21,54 +21,54 @@ A call goes through three steps: resolve a policy, optionally probe the
 backend, execute.
 
 ```text
- agent SandboxMode        action_dir, workspace_dir     RuntimeConfig
- (None|ReadOnly|Sandboxed)          |                   ([runtime] kind,
-         |                          |                    [runtime.docker],
-         +------------+-------------+                    [runtime.local_jail])
-                      v                                       |
-             resolve_sandbox_policy  <------------------------+
-                      |
-                      v
-                SandboxPolicy { backend, workspace_root, state_dir,
-                                mounts, allow_network, env, docker }
-                      |
-                      v
-             execute_in_sandbox(policy, command, cwd, env, timeout)
-                      |
-       +--------------+------------------+
-       v              v                  v
-  None           Local                 Docker
-  TinyBox        TinyBox               TinyBox RunDocker
-  StartNative-   StartNativeShellExec  action_dir mounted at /workspace
-  ShellExec      with explicit jail
-  (no jail)
+ action_dir, workspace_dir     Config ([sandbox] backend,
+         |                      [runtime] kind, [runtime.docker],
+         |                      [runtime.local_jail])
+         +-----------+--------------+
+                     v
+               spawn_policy (policy.rs)
+                     |
+                     v
+          SandboxPolicy { backend = the executor the config names, or none,
+                          workspace_root, state_dir, mounts, allow_network,
+                          env, docker, mount_workspace }
+                     |
+                     v
+        execute_in_sandbox -> spawn_plan (facts, Plan2, ConsumeSandboxPlan2)
+                     |
+          the module's plan names the executor
+       +-------------+------------------+
+       v             v                  v
+  Host run        Jail                Docker
+  (operator       StartNativeShell-   RunDocker or
+  switch, plan    Exec with the       RunDockerWithoutWorkspace
+  `host_run`)     planned jail
 ```
 
-### Resolving a policy
+### Building the request
 
-`resolve_sandbox_policy` ([`ops.rs`](./ops.rs)) maps the agent's declared
-`SandboxMode` (`tinyagents_definition::SandboxMode`) to a `SandboxBackendKind`:
+`spawn_policy` ([`policy.rs`](./policy.rs)) builds the request side from the
+configuration; it chooses nothing. `SandboxPolicy::backend` is the executor the
+configuration names (`[sandbox] backend = "landlock"` is the jail, `"docker"`, a
+remote session and `[runtime] kind = "docker"` are the container) or `None`. It travels to
+the module as a required preference (`SandboxPlanOptions2`); with none, the module
+picks the first verified executor that meets the spawn's isolation floor, so a host
+without a usable jail but with Docker runs in a container. `workspace_root` is the
+action dir, `state_dir` is the core's `workspace_dir`, `docker_overrides` always carries
+`[runtime.docker]`, and `mount_workspace = false` (`[runtime.docker]` under the Docker
+runtime) asks for a plan with no workspace grant. `with_configured_backend` fills in the
+loaded configuration's backend when a caller named none.
 
-- `None` and `ReadOnly` resolve to `SandboxBackendKind::None`.
-- `Sandboxed` resolves to `Docker` when `runtime_config.kind == "docker"` or
-  the session is remote, and to `Local` otherwise.
-- `Sandboxed` resolves to `None` for the whole process when the host sets
-  `OPENHUMAN_SANDBOX` (`SANDBOX_OFF_ENV`) to `off`, `none`, `0`, `false` or
-  `disabled`, case-insensitive. This is for hosts that already isolate the
-  core (a container, a CI or benchmark image, a VM), where the outer isolation
-  permits work such as package installs or `/etc` edits that the action-dir
-  jail would refuse.
+### The operator's switch and the run on the host
 
-The rest of the policy follows from that. `workspace_root` is the action dir
-and `state_dir` is the core's internal `workspace_dir`. `allow_network` is
-`!is_remote_session` for `Sandboxed` and `true` for the other modes.
-`env_passthrough` is `SANDBOX_ENV_PASSTHROUGH`. `docker_overrides` is filled
-from `[runtime.docker]` only for the Docker backend, and the mount lists come
-from [`local_grants.rs`](./local_grants.rs) only for the Local backend.
-
-### The None backend
-
-`execute_unsandboxed` maps the command onto TinyBox's `StartNativeShellExec`
+`OPENHUMAN_SANDBOX=off`, `[sandbox] enabled = false` and `[components] sandbox = false`
+are read by [`operator.rs`](./operator.rs) and declared to the module as the scope's
+`environment` setting; the host decides nothing from them. A spawn with the switch set
+first asks for a run on the host (`host_run`). The module issues that plan only for the
+trusted operator source outside SaaS; it refuses (`floor`) hooks, scheduled jobs, registry
+MCP servers and every SaaS scope, and the spawn is then planned onto a real executor.
+`BoxPlan::from_artifact` maps the plan to `PlannedExecutor::Host`, and
+`run_on_host` maps the command onto TinyBox's `StartNativeShellExec`
 through [`shell_exec.rs`](./shell_exec.rs): a module-owned `passthrough` resource
 rooted at the working directory, the host's own network, no jail. TinyBox
 selects the shell (`cmd.exe` on Windows, bash with `pipefail` or `sh` elsewhere),
@@ -76,7 +76,7 @@ starts the child from its safe environment snapshot (`SANDBOX_ENV_PASSTHROUGH`
 plus the Windows process-bootstrap variables, an empty value being an error),
 applies the caller's UTF-8 overrides, owns the per-call scratch directory and
 enforces the runtime budget. The host never spawns the shell itself, and without
-the `modules` feature the run is refused.
+the `modules` feature the run is refused. The host-run plan is audited and single use.
 
 ### The Local backend
 
@@ -89,7 +89,7 @@ spawn and hands `BoxPlan.jail` (grants, `allow_net`, subprocess rule, enforcemen
 The host no longer picks a posture or rebuilds the request; TinyBox refuses an
 executor that cannot meet the plan's isolation requirement, and a module refusal
 is the typed `IsolationFloor` (never retried). `native_jail::jail_isolation` only
-feeds the status report (`sandbox.status`, `require_backend`).
+feeds the status report (`sandbox.status`).
 
 | Posture reported | Backend | Meaning |
 | --- | --- | --- |
@@ -153,13 +153,12 @@ execution refuses to run without the required provider.
 ### Untrusted spawns (issue #7328, phase 5)
 
 Text the host did not author reaches a shell through exactly one gate,
-`untrusted::run`: it resolves the jail policy, refuses a jail that is missing,
-inactive (Noop) or not suitable for untrusted code (the module's plan refusal,
-surfaced as `IsolationFloor`), and runs
-the command in the native jail or the Docker container. The only unjailed path is
-the operator's own opt-out (`OPENHUMAN_SANDBOX=off`, `[sandbox] enabled = false`,
-`[components] sandbox = false`), which SaaS never honours: `execute_in_sandbox`
-also refuses a SaaS spawn whose policy resolved to no backend. Scheduled shell
+`untrusted::run`: it builds the request, has the module plan it onto an executor that
+is suitable for untrusted code (a refusal surfaces as `IsolationFloor`), and runs the
+command in the native jail or the Docker container. There is no unjailed path: the
+operator's switch (`OPENHUMAN_SANDBOX=off`, `[sandbox] enabled = false`,
+`[components] sandbox = false`) is declared to the module, which never plans a run on
+the host for untrusted text or under SaaS. Scheduled shell
 jobs use it today. `scripts/ci/spawner-inventory.json` (checked by
 `node scripts/ci/check-spawner-inventory.mjs`, part of `pnpm rust:layout`) lists
 every process spawn site with its source trust; the rows still `direct` are the
@@ -210,10 +209,10 @@ the facts, the concrete operation and the execution:
 A module fault, a denial, an unusable answer and a plan the host cannot map all mean
 the command does not run; nothing falls back to a host-side decision. Plan binds the
 exact operation, so planning happens at the spawn boundary, where the command is
-known, not when the policy is resolved: `resolve_sandbox_policy`,
-`resolve_command_policy*` and `command_requires_sandbox` stay the request side (what
-the agent or the operator asked to sandbox and with which backend), and the module's
-plan bounds what is actually run.
+known, not when the policy is built: `spawn_policy` and `command_requires_sandbox`
+stay the request side (what the agent or the operator asked to sandbox and which
+executor the configuration names), and the module's plan bounds what is actually run
+and which executor runs it.
 
 Network and Seatbelt, both declared to the module rather than decided here:
 
@@ -295,15 +294,15 @@ the spawn sites live in the module rather than in this repository's sources.
 - `SandboxPolicy` ([`types.rs`](./types.rs)): the resolved per-call policy. It is
   serializable so `sandbox.resolve_policy` can return it.
 - `SandboxBackendKind` (`types.rs`): `None`, `Local`, `Docker`.
-- `resolve_sandbox_policy(mode, action_dir, state_dir, runtime_config,
-  is_remote_session)` (`ops.rs`).
+- `spawn_policy(action_dir, state_dir, sandbox_config, runtime_config,
+  is_remote_session)` (`policy.rs`).
 - `execute_in_sandbox(policy, command, working_dir, extra_env, timeout)`
   (`ops.rs`): validates the working directory with `config::ensure_usable_cwd`
-  (the host path for None and Local, `policy.workspace_root` for Docker) and
-  routes to the backend. Returns `SandboxExecResult { exit_code, stdout,
+  (the host path for a host run and the jail, `policy.workspace_root` for Docker) and
+  runs the executor the module planned. Returns `SandboxExecResult { exit_code, stdout,
   stderr, timed_out }`.
 - `create_sandbox_backend(policy)` (`ops.rs`): probe and status.
-- `SANDBOX_ENV_PASSTHROUGH` and `SANDBOX_OFF_ENV` (`ops.rs`).
+- `SANDBOX_ENV_PASSTHROUGH` (`ops.rs`) and `SANDBOX_OFF_ENV` (`operator.rs`).
 - `ELEVATED_TOOLS`, `is_elevated_op`, `build_elevated_op` (`types.rs`,
   `ops.rs`): `git_operations`, `install_tool`, `docker_management` and
   `process_management` always need host access, and `build_elevated_op`
@@ -348,9 +347,9 @@ The settings surface (`get_sandbox_settings`, `[security.sandbox]` and
 
 ## Gotchas
 
-- A resolved `SandboxBackendKind` is not a security boundary on its own. The
-  `security` path checks still apply when the backend is None by mode or
-  `OPENHUMAN_SANDBOX=off`. Local never degrades to host execution when TinyBox
+- A `SandboxBackendKind` is a request, not a security boundary. The
+  `security` path checks still apply when the module plans a run on the host
+  (`OPENHUMAN_SANDBOX=off`). Local never degrades to host execution when TinyBox
   cannot provide the requested jail; check the handle status and surface the
   refusal.
 - `ShellTool::run_sandboxed` (`tools/impl/system/shell.rs`) passes

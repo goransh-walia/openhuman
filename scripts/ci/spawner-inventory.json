@@ -144,7 +144,7 @@
       "plan": "operator-authorized scheduled shell job and hook commands (hooks/spawner.rs) -> jail policy resolved by sandbox::ops (native jail or Docker), refused below the isolation floor",
       "executor": "jailed",
       "test": "crates/openhuman-core/src/sandbox/untrusted_tests.rs",
-      "note": "the one gate, with callers cron scheduler shell jobs and command hooks (hooks/spawner_tests.rs) (sandbox::untrusted::run); its only direct spawn is the operator opt-out (OPENHUMAN_SANDBOX=off, [sandbox] enabled=false), never reachable under SaaS"
+      "note": "the one gate, with callers cron scheduler shell jobs and command hooks (hooks/spawner_tests.rs) (sandbox::untrusted::run); it has no unjailed branch: the operator's switch is declared to the module, which plans a run on the host only for the trusted operator, never for this untrusted source or under SaaS"
     },
     {
       "file": "crates/openhuman-core/src/security/secret_storage/encrypted_store.rs",

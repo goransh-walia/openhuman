@@ -11,7 +11,6 @@ use tinysecurity_bus::{
     SandboxConstraint2, SandboxExecutor2,
 };
 
-use super::super::types::SandboxBackendKind;
 use crate::modules::tinybox::contract::JailStatus;
 
 /// The jail executor's identity on the bus.
@@ -97,13 +96,16 @@ pub(crate) fn docker(available: bool) -> SandboxExecutor2 {
     }
 }
 
-/// The executor a policy's backend selects, or `None` when the policy runs nothing
-/// in a sandbox.
-pub(crate) fn kind_executor_id(kind: SandboxBackendKind) -> Option<&'static str> {
-    match kind {
-        SandboxBackendKind::None => None,
-        SandboxBackendKind::Local => Some(JAIL_EXECUTOR),
-        SandboxBackendKind::Docker => Some(DOCKER_EXECUTOR),
+/// The native jail when TinyBox could not report on it: declared unavailable, so the
+/// module never plans onto it.
+pub(crate) fn jail_unavailable() -> SandboxExecutor2 {
+    SandboxExecutor2 {
+        executor_id: JAIL_EXECUTOR.into(),
+        capability_id: "tinybox-jail|unavailable".into(),
+        backend: SandboxBackend::Jail,
+        available: false,
+        isolation: IsolationLevel2::None,
+        constraints: Vec::new(),
     }
 }
 

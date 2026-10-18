@@ -464,13 +464,12 @@ impl ShellTool {
         action_dir: &Path,
         meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
-        let config = crate::config::RuntimeConfig::default();
-        let policy = crate::sandbox::resolve_sandbox_policy(
-            ctx,
-            tinyagents_definition::SandboxMode::Sandboxed,
+        // The operator's configured backend is filled in at the spawn boundary.
+        let policy = crate::sandbox::spawn_policy(
             action_dir,
             &self.security.workspace_dir,
-            &config,
+            &crate::config::SandboxConfig::default(),
+            &crate::config::RuntimeConfig::default(),
             false,
         );
         self.run_in_policy(ctx, policy, command, requested_timeout, action_dir, meter)

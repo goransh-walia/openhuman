@@ -16,7 +16,7 @@ use tinysecurity_bus::{
     SandboxSource2, SourceTrust, SubjectScope,
 };
 
-use super::super::types::{SandboxBackendKind, SandboxPolicy};
+use super::super::types::SandboxPolicy;
 use crate::config::{Config, SandboxBackend};
 
 /// The longest a plan stays valid: enough for one spawn, far below the module's
@@ -71,9 +71,10 @@ pub(crate) struct FactsInput<'a> {
     pub(crate) source: SpawnSource,
     pub(crate) subject: SubjectScope,
     pub(crate) saas: bool,
-    /// The operator turned the sandbox off for this process (never true under SaaS).
-    pub(crate) host_off: bool,
-    /// Executors the host verified, in the order they should be preferred.
+    /// The operator turned the sandbox off (environment, component or configuration).
+    /// Sent whatever the deployment: the module ignores it under SaaS.
+    pub(crate) operator_off: bool,
+    /// Every executor the host verified, in the order the module should prefer them.
     pub(crate) executors: Vec<SandboxExecutor2>,
 }
 
@@ -198,7 +199,7 @@ pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
         source,
         subject,
         saas,
-        host_off,
+        operator_off,
         executors,
     } = input;
     let mut facts = SandboxScope2 {
@@ -216,9 +217,9 @@ pub(crate) fn scope(input: &FactsInput<'_>) -> Option<SandboxScope2> {
         } else {
             SandboxDeployment2::Local
         },
-        environment: setting(!host_off),
+        environment: setting(!operator_off),
         // A scope is only planned for a spawn the agent or operator asked to sandbox.
-        agent_mode: setting(policy.backend != SandboxBackendKind::None),
+        agent_mode: SandboxSetting2::Enabled,
         configured: setting(configured(config)),
         paths: paths(config, policy),
         grant_ceiling: grant_ceiling(policy)?,
