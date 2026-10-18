@@ -136,6 +136,17 @@ async fn an_external_route_passes_straight_through_outside_sensitive_mode() {
 
 #[cfg(feature = "security-module")]
 #[tokio::test]
+async fn standard_mode_refuses_an_external_route_when_the_module_cannot_answer() {
+    let _port = install_port(Arc::new(StubPort::unavailable()));
+    let _mode = test_privacy_scope(PrivacyMode::Standard);
+    let (model, calls) = route(false);
+    let error = model.invoke(&(), request()).await.expect_err("fails closed");
+    assert!(error.to_string().contains("could not confirm"), "{error}");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "the route must not run");
+}
+
+#[cfg(feature = "security-module")]
+#[tokio::test]
 async fn under_sensitive_an_unassessable_request_is_refused_before_the_route_is_called() {
     // No module is serving in a unit test, so the assessment is "unknown" and the
     // module (scripted here) refuses it: the safe answer when it cannot say.
