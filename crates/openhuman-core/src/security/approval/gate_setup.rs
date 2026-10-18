@@ -141,34 +141,17 @@ impl ApprovalGate {
                 ..Posture::default()
             };
         }
-        // Per-flow trust only ever applies to a workflow's own calls.
-        let flow_grants = if variant == Variant::FlowStrict {
-            match store::list_all_flow_trust(&self.config) {
-                Ok(grants) => grants,
-                Err(error) => {
-                    // Fail-safe: without the grants the call is still gated,
-                    // never silently allowed.
-                    tracing::warn!(
-                        error = %error,
-                        "[approval::gate] flow trust lookup failed — falling through to normal gating"
-                    );
-                    Vec::new()
-                }
-            }
-        } else {
-            Vec::new()
-        };
         Posture {
             require_approval: !ctx.approvals_disabled(),
             auto_approve_all: self.is_auto_approve_all_enabled(ctx),
             // A workflow whose flow requires approval is never auto-allowed by
-            // the global tool list; the per-flow trust still applies.
+            // the global tool list. Its per-flow trust is the module's own
+            // durable state, so it is not part of the posture.
             tool_grants: if variant == Variant::Standard {
                 self.live_auto_approve(ctx)
             } else {
                 Vec::new()
             },
-            flow_grants,
         }
     }
 

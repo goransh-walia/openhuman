@@ -1,10 +1,7 @@
 use super::*;
-use crate::security::approval::store as live;
-use crate::security::approval::types::{ApprovalDecision, ApprovalSourceContext};
-use crate::storage::import::{run_with, Outcome};
+use crate::security::approval::types::ApprovalSourceContext;
 use crate::storage::rusqlite;
 use chrono::{Duration, Utc};
-use serde_json::Value;
 use tempfile::TempDir;
 
 fn workspace() -> (TempDir, Config) {
@@ -69,29 +66,8 @@ fn seed_trust(config: &Config, flow: &str, tool: &str) {
     .unwrap();
 }
 
-/// The stored document of `id` in the `approvals` collection, as the importer wrote it.
-fn stored(config: &Config, id: &str) -> Option<Value> {
-    let docs = crate::storage::local::open("approval::import-test", &config.workspace_dir)
-        .unwrap()
-        .scoped()
-        .unwrap();
-    let docs = std::sync::Arc::clone(docs.documents());
-    let id = id.to_string();
-    crate::storage::block_on(async move { docs.get("approvals", &id).await })
-        .unwrap()
-        .map(|found| found.doc)
-}
-
-fn import(config: &Config) -> Outcome {
-    let backend = crate::storage::local::backend_for(&config.workspace_dir).unwrap();
-    run_with(&backend, config, &[super::super::import_source()])
-        .remove(0)
-        .outcome
-        .unwrap()
-}
-
 #[test]
-fn legacy_rows_are_imported_once_and_the_file_is_left_alone() {
+fn legacy_rows_are_read_in_order_from_a_scratch_copy_and_the_file_is_left_alone() {
     let (_dir, config) = workspace();
     seed_request(&config, "pending-1", 10, None, false);
     seed_request(&config, "approved-1", 10, Some("approve_once"), true);
@@ -102,86 +78,47 @@ fn legacy_rows_are_imported_once_and_the_file_is_left_alone() {
     let db = db_path(&config);
     let before = std::fs::read(&db).unwrap();
 
-    assert!(matches!(
-        import(&config),
-        Outcome::Imported {
-            found: 6,
-            written: 6
-        }
-    ));
+    let history = read_legacy(&config).unwrap().expect("a legacy file");
 
-    // A request an earlier launch left pending stays a pending document: the
-    // module's engine cannot resume it, so it is never listed or decided again.
-    let first = stored(&config, "pending-1").expect("imported");
-    assert_eq!(first["pending"], true);
-    assert_eq!(first["tool_name"], "composio");
-    assert_eq!(first["action_summary"], "summary pending-1");
-    assert_eq!(first["tool_call_id"], "call-pending-1");
-    assert_eq!(first["agent_id"], "agent-7");
-    assert!(first["expires_ts"].is_i64(), "the expiry key was imported");
-    let context: ApprovalSourceContext =
-        serde_json::from_str(first["source_context"].as_str().unwrap()).unwrap();
-    assert!(matches!(
-        context,
-        ApprovalSourceContext::Flow { ref flow_id, .. } if flow_id == "flow-1"
-    ));
-    assert_eq!(stored(&config, "stale-1").unwrap()["pending"], true);
-
-    // What was decided is history.
-    let recorded = live::list_recorded_decisions(&config, 10).unwrap();
-    let mut decided: Vec<(&str, ApprovalDecision)> = recorded
+    let ids: Vec<&str> = history
+        .approvals
         .iter()
-        .map(|entry| (entry.request_id.as_str(), entry.decision))
+        .map(|row| row.request_id.as_str())
         .collect();
-    decided.sort_unstable_by_key(|(id, _)| *id);
+    assert_eq!(ids, ["pending-1", "approved-1", "denied-1", "stale-1"]);
+    let approved = &history.approvals[1];
+    assert_eq!(approved.tool_name, "composio");
+    assert_eq!(approved.agent_id.as_deref(), Some("agent-7"));
+    assert_eq!(approved.decision.as_deref(), Some("approve_once"));
+    assert!(approved.executed && approved.decided_at.is_some());
+    let pending = &history.approvals[0];
+    assert!(pending.decision.is_none() && !pending.executed && pending.expires_at.is_some());
+    assert!(history.approvals[3].expires_at.unwrap() < Utc::now());
     assert_eq!(
-        decided,
+        history.trust,
         [
-            ("approved-1", ApprovalDecision::ApproveOnce),
-            ("denied-1", ApprovalDecision::Deny)
+            LegacyTrust {
+                flow_id: "flow-1".into(),
+                tool_name: "shell".into()
+            },
+            LegacyTrust {
+                flow_id: "flow-1".into(),
+                tool_name: "http".into()
+            }
         ]
     );
-    assert!(live::is_flow_tool_trusted(&config, "flow-1", "shell").unwrap());
-    assert!(live::is_flow_tool_trusted(&config, "flow-1", "http").unwrap());
-    assert!(!live::is_flow_tool_trusted(&config, "flow-2", "http").unwrap());
     assert_eq!(std::fs::read(&db).unwrap(), before, "approval.db untouched");
-
-    // A second run does not import again: a change made since stays made.
-    let docs = crate::storage::local::open("approval::import-test", &config.workspace_dir)
-        .unwrap()
-        .scoped()
-        .unwrap();
-    let docs = std::sync::Arc::clone(docs.documents());
-    crate::storage::block_on(async move {
-        let mut changed = docs.get("approvals", "pending-1").await?.unwrap();
-        changed.doc["pending"] = Value::Bool(false);
-        changed.doc["decision"] = Value::String("deny".into());
-        changed.doc["decided_at"] = Value::String(Utc::now().to_rfc3339());
-        docs.put(
-            "approvals",
-            "pending-1",
-            changed.doc,
-            tinystoragedrivers::Precondition::None,
-        )
-        .await
-        .map(|_| ())
-    })
-    .unwrap();
-    assert!(matches!(import(&config), Outcome::AlreadyDone));
-    assert_eq!(stored(&config, "pending-1").unwrap()["decision"], "deny");
 }
 
 #[test]
-fn a_workspace_with_no_legacy_file_starts_empty() {
+fn a_workspace_with_no_legacy_file_reads_as_none_and_creates_nothing() {
     let (_dir, config) = workspace();
-    assert!(matches!(import(&config), Outcome::NoSource));
-    assert!(live::list_recorded_decisions(&config, 10)
-        .unwrap()
-        .is_empty());
+    assert!(read_legacy(&config).unwrap().is_none());
+    assert!(!db_path(&config).exists());
 }
 
 #[test]
-fn an_old_schema_is_brought_forward_and_its_session_ids_scrubbed() {
+fn an_old_schema_is_brought_forward_on_the_copy_only() {
     let (_dir, config) = workspace();
     let db = db_path(&config);
     std::fs::create_dir_all(db.parent().unwrap()).unwrap();
@@ -206,22 +143,13 @@ fn an_old_schema_is_brought_forward_and_its_session_ids_scrubbed() {
     }
     let before = std::fs::read(&db).unwrap();
 
-    assert!(matches!(import(&config), Outcome::Imported { .. }));
-    let old = stored(&config, "old").expect("imported");
+    let history = read_legacy(&config).unwrap().expect("a legacy file");
+    assert_eq!(history.approvals.len(), 1);
     assert!(
-        old.get("agent_id").is_none(),
+        history.approvals[0].agent_id.is_none(),
         "an old row is the process's own"
     );
-    // The credential-shaped session id was scrubbed before it was read.
-    let docs = crate::storage::local::open("test", &config.workspace_dir)
-        .unwrap()
-        .scoped()
-        .unwrap();
-    let docs = std::sync::Arc::clone(docs.documents());
-    let stored = crate::storage::block_on(async move { docs.get("approvals", "old").await })
-        .unwrap()
-        .unwrap();
-    assert_eq!(stored.doc["session_id"], PRE_MIGRATION_SESSION_ID);
+    assert!(history.trust.is_empty());
     assert_eq!(std::fs::read(&db).unwrap(), before, "approval.db untouched");
 }
 

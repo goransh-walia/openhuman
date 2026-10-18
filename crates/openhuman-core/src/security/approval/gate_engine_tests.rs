@@ -113,7 +113,7 @@ async fn an_agent_whose_approvals_are_off_reaches_the_engine_as_no_requirement()
     let forced = gate.posture(&ctx, Variant::Forced);
     assert!(forced.require_approval);
     assert!(!forced.auto_approve_all);
-    assert!(forced.tool_grants.is_empty() && forced.flow_grants.is_empty());
+    assert!(forced.tool_grants.is_empty());
 }
 
 #[tokio::test]
@@ -194,10 +194,10 @@ async fn a_workflow_that_requires_approval_is_never_approved_by_the_global_tool_
         "the global list is withheld"
     );
     assert_eq!(seen.flow.as_deref(), Some("flow-strict"));
+    // The flow's own trust is the engine's durable state, not the posture's.
     assert_eq!(
-        seen.posture.flow_grants,
-        [("flow-strict".to_string(), "other_trusted_tool".to_string())],
-        "the flow's own trust is handed over"
+        gate.list_flow_trust("flow-strict").unwrap(),
+        ["other_trusted_tool"]
     );
     decide_parked(&gate, &request_id, ApprovalDecision::Deny);
     assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
@@ -264,8 +264,10 @@ async fn an_unlabelled_call_is_approved_only_by_the_users_grant_of_that_exact_to
         Some("auto:tool-grant"),
         "the grant approved it, not auto-approve-everything"
     );
+    // The gate labels the call and hands over the user's posture as it is; that
+    // only a whole-tool grant approves an unlabelled call is the module's rule.
     let seen = stub.seen().remove(0);
-    assert!(!seen.posture.auto_approve_all);
+    assert_eq!(seen.origin, CallOrigin::Unlabelled);
     assert_eq!(seen.posture.tool_grants, [tool]);
 
     // Auto-approve-everything does not approve an unlabelled call to any other tool.
@@ -277,9 +279,19 @@ async fn an_unlabelled_call_is_approved_only_by_the_users_grant_of_that_exact_to
             serde_json::json!({}),
         )
         .await;
-    assert!(matches!(outcome, GateOutcome::Deny { .. }));
+    assert!(
+        matches!(&outcome, GateOutcome::Deny { reason } if reason.contains("missing its origin label")),
+        "{outcome:?}"
+    );
     assert!(id.is_none());
-    assert_eq!(stub.seen().len(), 1, "the engine was not asked");
+    let asked = stub.seen();
+    assert_eq!(asked.len(), 2, "the engine decides, not the gate");
+    assert_eq!(asked[1].origin, CallOrigin::Unlabelled);
+    assert!(!asked[1]
+        .posture
+        .tool_grants
+        .iter()
+        .any(|t| t == "some_other_tool"));
 }
 
 #[tokio::test]
@@ -546,7 +558,13 @@ async fn a_saas_call_the_deployment_allows_is_recorded_as_an_automatic_approval(
     let (gate, _dir) = test_gate();
     let stub = stub_of(&gate);
     let (outcome, id) = gate
-        .saas_approved("shell", "run ls", serde_json::json!({"cmd": "ls"}), true)
+        .saas_approved(
+            "shell",
+            "run ls",
+            serde_json::json!({"cmd": "ls"}),
+            true,
+            CallOrigin::Operator,
+        )
         .await;
     assert!(matches!(outcome, GateOutcome::Allow), "{outcome:?}");
     let id = id.expect("a tracked SaaS call hands back its request id");
@@ -562,7 +580,13 @@ async fn a_saas_call_the_deployment_allows_is_recorded_as_an_automatic_approval(
 
     // An untracked caller gets the same approval without a reservation.
     let (outcome, id) = gate
-        .saas_approved("shell", "run ls", serde_json::json!({}), false)
+        .saas_approved(
+            "shell",
+            "run ls",
+            serde_json::json!({}),
+            false,
+            CallOrigin::Operator,
+        )
         .await;
     assert!(matches!(outcome, GateOutcome::Allow));
     assert!(id.is_none());
@@ -575,7 +599,13 @@ async fn a_saas_call_that_would_need_a_person_is_refused_not_parked() {
     // An engine that insists on a person gets a surface that refuses to ask one.
     stub.always_pending(true);
     let (outcome, id) = gate
-        .saas_approved("shell", "run ls", serde_json::json!({}), true)
+        .saas_approved(
+            "shell",
+            "run ls",
+            serde_json::json!({}),
+            true,
+            CallOrigin::Operator,
+        )
         .await;
     assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
     assert!(id.is_none());
@@ -584,10 +614,56 @@ async fn a_saas_call_that_would_need_a_person_is_refused_not_parked() {
     stub.always_pending(false);
     stub.refuse_checks(true);
     let (outcome, _) = gate
-        .saas_approved("shell", "run ls", serde_json::json!({}), true)
+        .saas_approved(
+            "shell",
+            "run ls",
+            serde_json::json!({}),
+            true,
+            CallOrigin::Operator,
+        )
         .await;
     assert!(
         matches!(&outcome, GateOutcome::Deny { reason } if reason.contains("could not record")),
         "{outcome:?}"
     );
+}
+
+#[tokio::test]
+async fn a_scheduled_job_stays_refused_in_saas_whatever_the_tool_groups_allow() {
+    let (gate, _dir) = test_gate();
+    let stub = stub_of(&gate);
+    let (outcome, id) = gate
+        .saas_approved(
+            "shell",
+            "run ls",
+            serde_json::json!({}),
+            true,
+            CallOrigin::Cron,
+        )
+        .await;
+    assert!(matches!(outcome, GateOutcome::Deny { .. }), "{outcome:?}");
+    assert!(id.is_none());
+    assert_eq!(stub.seen().remove(0).origin, CallOrigin::Cron);
+}
+
+#[tokio::test]
+async fn flow_trust_granted_through_the_gate_is_the_engines_and_revocable() {
+    let (gate, _dir) = test_gate();
+    gate.insert_flow_trust("flow-1", "shell").unwrap();
+    gate.insert_flow_trust("flow-1", "http_request").unwrap();
+    gate.insert_flow_trust("flow-2", "shell").unwrap();
+    assert!(gate.is_flow_tool_trusted("flow-1", "shell").unwrap());
+    assert!(!gate.is_flow_tool_trusted("flow-2", "http_request").unwrap());
+    assert_eq!(
+        gate.list_flow_trust("flow-1").unwrap(),
+        ["http_request", "shell"]
+    );
+    assert_eq!(
+        gate.delete_flow_trust("flow-1", Some(&["shell".to_string(), "nope".to_string()]))
+            .unwrap(),
+        1
+    );
+    assert_eq!(gate.delete_flow_trust("flow-1", None).unwrap(), 1);
+    assert!(gate.list_flow_trust("flow-1").unwrap().is_empty());
+    assert_eq!(gate.list_flow_trust("flow-2").unwrap(), ["shell"]);
 }

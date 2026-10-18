@@ -49,9 +49,58 @@ fn decided_by(row: &ApprovalRow2) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// Attribution of a durable flow-trust row (`GrantFlowTool2`).
+const FLOW_TRUST: &str = "flow-trust-grant";
+
+/// The summary a flow pre-authorization has always shown in the history.
+const FLOW_TRUST_SUMMARY: &str = "Pre-authorized for this flow when it was saved and enabled";
+
+/// What an imported legacy request was decided as, from the record the module
+/// kept (`legacy_history_json`).
+fn imported_decision(row: &ApprovalRow2) -> Option<ApprovalDecision> {
+    let json = row.legacy_history_json.as_deref()?;
+    let record: Value = serde_json::from_str(json).ok()?;
+    Some(match record.get("state").and_then(Value::as_str) {
+        Some("allowed" | "executed") => ApprovalDecision::ApproveOnce,
+        _ => ApprovalDecision::Deny,
+    })
+}
+
 fn entry(stored: &StoredRow, label: Option<&str>) -> Option<ApprovalAuditEntry> {
     let row = &stored.row;
     let decided_at = instant(stored.decided_ms?);
+    if row.attribution.as_deref() == Some(FLOW_TRUST) {
+        // A grant is history while it stands; a revoked one is not a decision.
+        if row.state != ApprovalLifecycle2::Approved {
+            return None;
+        }
+        return Some(ApprovalAuditEntry {
+            request_id: row.request_id.clone(),
+            tool_name: row.tool_name.clone(),
+            action_summary: FLOW_TRUST_SUMMARY.to_owned(),
+            args_redacted: Value::Null,
+            created_at: instant(i64::try_from(row.created_at_ms).unwrap_or(i64::MAX)),
+            expires_at: None,
+            decided_at,
+            decision: ApprovalDecision::ApproveAlwaysForFlow,
+            decided_by: None,
+            judge: None,
+        });
+    }
+    if let Some(decision) = imported_decision(row) {
+        return Some(ApprovalAuditEntry {
+            request_id: row.request_id.clone(),
+            tool_name: "earlier approval".to_owned(),
+            action_summary: "Recorded by an earlier version".to_owned(),
+            args_redacted: Value::Null,
+            created_at: instant(i64::try_from(row.created_at_ms).unwrap_or(i64::MAX)),
+            expires_at: None,
+            decided_at,
+            decision,
+            decided_by: None,
+            judge: None,
+        });
+    }
     Some(ApprovalAuditEntry {
         request_id: row.request_id.clone(),
         tool_name: row.tool_name.clone(),

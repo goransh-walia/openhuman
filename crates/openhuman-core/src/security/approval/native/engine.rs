@@ -8,8 +8,9 @@ use tinysecurity_bus::{
     is_host_tool_name2, names, AccessTier, ApprovalActionRequest2, ApprovalChoice2,
     ApprovalLifecycle2, ApprovalRecordRequest2, ApprovalRow2, AuditCorrelation2, CallerContext,
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
-    ExecutionOutcome as ModuleOutcome, Origin, PolicyInfo, RecordExecutionRequest2, SubjectScope,
-    ToolCall, Verdict,
+    ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
+    GrantFlowToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo, RecordExecutionRequest2,
+    RevokeFlowToolRequest2, SubjectScope, ToolCall, Verdict,
 };
 
 use super::super::engine::{
@@ -93,6 +94,10 @@ fn module_origin(origin: CallOrigin) -> Origin {
         CallOrigin::Operator => Origin::Operator,
         CallOrigin::Copilot => Origin::Copilot,
         CallOrigin::SubAgent => Origin::SubAgent,
+        CallOrigin::Cron => Origin::Cron,
+        CallOrigin::TrustedAutomation => Origin::TrustedAutomation,
+        CallOrigin::LocalOperator => Origin::LocalOperator,
+        CallOrigin::Unlabelled => Origin::Unlabelled,
     }
 }
 
@@ -122,19 +127,29 @@ impl NativeEngine {
         }
     }
 
+    pub(super) fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// The module's proxy. The first use in a process also carries the legacy
+    /// approval history into the module (`history_import`).
     async fn proxy(&self) -> Result<Proxy, EngineError> {
-        match &self.source {
-            Source::Fixed(proxy) => Ok(proxy.clone()),
+        let proxy = match &self.source {
+            Source::Fixed(proxy) => proxy.clone(),
             Source::Production => crate::modules::security::approval_proxy(&self.config)
                 .await
                 .map(|proxy| proxy.with_timeout(CALL_DEADLINE))
-                .map_err(EngineError::Unavailable),
+                .map_err(EngineError::Unavailable)?,
+        };
+        if matches!(self.source, Source::Production) {
+            super::history_import::ensure(self, &proxy).await;
         }
+        Ok(proxy)
     }
 
     /// The subject a call runs under: the tenant, the workspace and the agent,
     /// with the variant that selects its posture.
-    fn subject(
+    pub(super) fn subject(
         &self,
         tenant: &crate::core::runtime::Tenant,
         variant: Variant,
@@ -149,8 +164,32 @@ impl NativeEngine {
         Ok(subject)
     }
 
+    /// The registered scope a flow's durable trust lives under: the tenant's
+    /// strict-flow subject, registered with the restrictive posture if it is new
+    /// (the next gated call refreshes it to the user's configuration).
+    async fn flow_scope(
+        &self,
+        proxy: &Proxy,
+        tenant: &crate::core::runtime::Tenant,
+    ) -> Result<std::sync::Arc<ScopeEntry>, EngineError> {
+        let subject = self.subject(tenant, Variant::FlowStrict)?;
+        let generation = Self::generation(proxy).await?;
+        scopes::ensure(
+            &self.config,
+            proxy,
+            subject,
+            &super::super::engine::Posture {
+                require_approval: true,
+                ..Default::default()
+            },
+            generation,
+        )
+        .await
+        .map_err(EngineError::Unavailable)
+    }
+
     /// The module's current generation, which every correlation carries.
-    async fn generation(proxy: &Proxy) -> Result<u64, EngineError> {
+    pub(super) async fn generation(proxy: &Proxy) -> Result<u64, EngineError> {
         let info: PolicyInfo = proxy
             .call(names::methods::POLICY_INFO, ())
             .await
@@ -160,7 +199,7 @@ impl NativeEngine {
 
     /// The correlation of the next audit event of a subject. The caller holds the
     /// subject's stream lock, so the tail read here is the tail the module extends.
-    async fn correlation(
+    pub(super) async fn correlation(
         scope: &ScopeEntry,
         generation: u64,
     ) -> Result<AuditCorrelation2, EngineError> {
@@ -321,6 +360,13 @@ impl ApprovalEngine for NativeEngine {
                 .await;
             evaluated.map_err(|error| {
                 tracing::warn!(error = %error, "{LOG} the module refused to evaluate the call");
+                // The module's own `Denied` is an answer; anything else is a failure.
+                if matches!(
+                    &error,
+                    tinybus::Error::MethodFailed { message, .. } if message == "approval denied"
+                ) {
+                    return EngineError::Refused;
+                }
                 unavailable(format!("TinySecurity EvaluateApproval2 failed: {error}"))
             })?
         };
@@ -550,6 +596,88 @@ impl ApprovalEngine for NativeEngine {
         super::view::decided_history(&self.config, limit)
             .await
             .map_err(|error| unavailable(error.to_string()))
+    }
+
+    async fn grant_flow_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<(), EngineError> {
+        let proxy = self.proxy().await?;
+        let scope = self.flow_scope(&proxy, tenant).await?;
+        let _guard = scope.stream.lock().await;
+        let generation = Self::generation(&proxy).await?;
+        let audit = Self::correlation(&scope, generation).await?;
+        let receipt: FlowTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::GRANT_FLOW_TOOL2,
+                (GrantFlowToolRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    flow_id: flow_id.to_owned(),
+                    tool: tool.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = %error, "{LOG} the module refused the flow trust");
+                unavailable(format!("TinySecurity GrantFlowTool2 failed: {error}"))
+            })?;
+        tracing::debug!(outcome = ?receipt.outcome, "{LOG} flow trust granted");
+        Ok(())
+    }
+
+    async fn revoke_flow_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<bool, EngineError> {
+        let proxy = self.proxy().await?;
+        let scope = self.flow_scope(&proxy, tenant).await?;
+        let _guard = scope.stream.lock().await;
+        let generation = Self::generation(&proxy).await?;
+        let audit = Self::correlation(&scope, generation).await?;
+        let receipt: FlowTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::REVOKE_FLOW_TOOL2,
+                (RevokeFlowToolRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    flow_id: flow_id.to_owned(),
+                    tool: tool.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = %error, "{LOG} the module refused to revoke flow trust");
+                unavailable(format!("TinySecurity RevokeFlowTool2 failed: {error}"))
+            })?;
+        Ok(receipt.outcome == FlowTrustOutcome2::Revoked)
+    }
+
+    async fn flow_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        flow_id: &str,
+    ) -> Result<Vec<String>, EngineError> {
+        let proxy = self.proxy().await?;
+        let scope = self.flow_scope(&proxy, tenant).await?;
+        let listed: FlowTrustList2 = proxy
+            .call_confidential(
+                names::methods::LIST_FLOW_TRUST2,
+                (ListFlowTrustRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    flow_id: Some(flow_id.to_owned()),
+                },),
+            )
+            .await
+            .map_err(|error| unavailable(format!("TinySecurity ListFlowTrust2 failed: {error}")))?;
+        let mut tools: Vec<String> = listed.entries.into_iter().map(|e| e.tool).collect();
+        tools.sort();
+        tools.dedup();
+        Ok(tools)
     }
 }
 

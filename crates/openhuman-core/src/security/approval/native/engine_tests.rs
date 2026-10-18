@@ -240,10 +240,18 @@ async fn a_grant_the_user_removes_stops_approving_the_next_call() {
 async fn a_flow_grant_applies_to_that_flow_only() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
+    world
+        .engine
+        .grant_flow_trust(
+            &crate::core::runtime::Tenant::default(),
+            "flow-1",
+            "http_request",
+        )
+        .await
+        .expect("the module keeps the flow trust");
     let mut in_flow = input("http_request", &shown);
     in_flow.variant = Variant::FlowStrict;
     in_flow.flow = Some("flow-1".into());
-    in_flow.posture.flow_grants = vec![("flow-1".into(), "http_request".into())];
     // The global tool list never approves a strict flow, only its own trust.
     in_flow.posture.tool_grants = vec!["slack_post".into()];
     assert!(matches!(
@@ -253,7 +261,6 @@ async fn a_flow_grant_applies_to_that_flow_only() {
     let mut other_flow = input("http_request", &shown);
     other_flow.variant = Variant::FlowStrict;
     other_flow.flow = Some("flow-2".into());
-    other_flow.posture.flow_grants = vec![("flow-1".into(), "http_request".into())];
     assert!(matches!(
         world.engine.check(other_flow).await.unwrap(),
         Checked::Pending { .. }
@@ -339,7 +346,7 @@ async fn a_cancelled_request_cannot_be_decided() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn a_cron_origin_never_reaches_the_engine_and_a_reserved_name_is_refused() {
+async fn a_reserved_tool_name_is_refused_as_a_host_tool() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
     // The module's own effect classes and human-only tools are not host tools.
@@ -508,4 +515,145 @@ async fn only_the_module_may_call_the_hosts_approval_callbacks() {
             "{interface}.{member} answered a stranger"
         );
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn the_legacy_history_and_flow_trust_are_carried_into_the_module_once() {
+    use crate::security::approval::native::history_import;
+    use crate::security::approval::store_import::with_connection;
+    use crate::storage::rusqlite::params;
+
+    let world = world().await;
+    with_connection(&world.config, |conn| {
+        let now = chrono::Utc::now().to_rfc3339();
+        for (id, decision) in [("r1", "approve_once"), ("r2", "deny")] {
+            conn.execute(
+                "INSERT INTO pending_approvals
+                    (request_id, tool_name, action_summary, args_redacted, session_id,
+                     created_at, expires_at, decided_at, decision)
+                 VALUES (?1, 'composio', 'a summary', '{}', 'sess', ?2, ?2, ?2, ?3)",
+                params![id, now, decision],
+            )?;
+        }
+        conn.execute(
+            "INSERT INTO flow_tool_trust (flow_id, tool_name, created_at) VALUES ('flow-1', 'shell', ?1)",
+            params![now],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+
+    let report = history_import::run(&world.engine, &world.fixture.proxy)
+        .await
+        .expect("the module takes the import")
+        .expect("there was a legacy file");
+    assert_eq!((report.history, report.trust, report.skipped), (2, 1, 0));
+
+    // The flow trust is the module's now, and the history reads as what it was.
+    let tenant = crate::core::runtime::Tenant::default();
+    assert_eq!(
+        world.engine.flow_trust(&tenant, "flow-1").await.unwrap(),
+        ["shell"]
+    );
+    let history = world.engine.history(50).await.unwrap();
+    let decided = |decision: ApprovalDecision| {
+        history
+            .iter()
+            .filter(|entry| entry.decision == decision)
+            .count()
+    };
+    assert_eq!(decided(ApprovalDecision::ApproveOnce), 1);
+    assert_eq!(decided(ApprovalDecision::Deny), 1);
+    assert_eq!(decided(ApprovalDecision::ApproveAlwaysForFlow), 1);
+
+    // It records that it ran, so a later start does nothing.
+    assert!(history_import::marker_path(&world.config).is_file());
+    assert_eq!(
+        history_import::run(&world.engine, &world.fixture.proxy)
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_flow_trust_the_module_holds_approves_that_tool_in_that_flow_after_a_restart() {
+    let world = world().await;
+    let tenant = crate::core::runtime::Tenant::default();
+    world
+        .engine
+        .grant_flow_trust(&tenant, "flow-1", "http_request")
+        .await
+        .expect("the module keeps the flow trust");
+    // A fresh engine over the same storage: nothing in memory carries over.
+    let again = NativeEngine::on(world.config.clone(), world.fixture.proxy.clone());
+    assert_eq!(
+        again.flow_trust(&tenant, "flow-1").await.unwrap(),
+        ["http_request"]
+    );
+    let shown = Arc::new(Shown::default());
+    let mut in_flow = input("http_request", &shown);
+    in_flow.variant = Variant::FlowStrict;
+    in_flow.flow = Some("flow-1".into());
+    assert!(matches!(
+        again.check(in_flow).await.unwrap(),
+        Checked::Approved { .. }
+    ));
+    assert!(again
+        .revoke_flow_trust(&tenant, "flow-1", "http_request")
+        .await
+        .unwrap());
+    let mut revoked = input("http_request", &shown);
+    revoked.variant = Variant::FlowStrict;
+    revoked.flow = Some("flow-1".into());
+    assert!(matches!(
+        again.check(revoked).await.unwrap(),
+        Checked::Pending { .. }
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn the_module_decides_what_each_origin_class_is_allowed() {
+    let world = world().await;
+    let shown = Arc::new(Shown::default());
+    for origin in [CallOrigin::LocalOperator, CallOrigin::TrustedAutomation] {
+        let mut call = input("gmail_send", &shown);
+        call.origin = origin;
+        assert!(
+            matches!(
+                world.engine.check(call).await.unwrap(),
+                Checked::Approved { .. }
+            ),
+            "{origin:?} is an audited automatic approval"
+        );
+    }
+    assert!(
+        shown.deliveries.lock().unwrap().is_empty(),
+        "nobody was asked"
+    );
+
+    let mut cron = input("gmail_send", &shown);
+    cron.origin = CallOrigin::Cron;
+    assert_eq!(
+        world.engine.check(cron).await.unwrap_err(),
+        EngineError::Refused
+    );
+
+    let mut unlabelled = input("gmail_send", &shown);
+    unlabelled.origin = CallOrigin::Unlabelled;
+    assert_eq!(
+        world.engine.check(unlabelled).await.unwrap_err(),
+        EngineError::Refused
+    );
+    let mut granted = input("gmail_send", &shown);
+    granted.origin = CallOrigin::Unlabelled;
+    granted.posture.tool_grants = vec!["gmail_send".into()];
+    assert!(matches!(
+        world.engine.check(granted).await.unwrap(),
+        Checked::Approved { .. }
+    ));
+    assert!(shown.deliveries.lock().unwrap().is_empty());
 }

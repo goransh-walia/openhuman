@@ -434,104 +434,61 @@ pub mod oauth {
 /// Applies this application's prompt-injection policy to remote tool
 /// definitions.
 ///
-/// `tinymcp` returns definitions verbatim: the detector, its rules, and what a
-/// hit means are this application's, and a module dropping tools by criteria of
-/// its own would be making a decision it cannot explain to anyone.
-///
-/// A tool whose description trips a rule is dropped, and the drop is
-/// logged and published with the *rule code* only — the offending text is never
-/// re-emitted, because the payload is the thing that was dangerous.
+/// `tinymcp` returns definitions verbatim: what trips the scan and what a hit
+/// means is this application's policy, and the rules are the security module's
+/// (`ScanToolDefinition`, asked through the prompt scanner port). A tool whose
+/// definition the module flags, `Suspicious` or `Blocked`, is dropped. A tool the
+/// scan could not be run for is dropped too: a remote definition nobody checked is
+/// never admitted. Each drop is logged and published with the *rule code* only,
+/// because the payload is the thing that was dangerous.
 #[cfg(feature = "mcp")]
-pub(crate) fn tools_safe_for_agent(
+pub(crate) async fn tools_safe_for_agent(
     server: &str,
     tools: Vec<tinymcp_bus::McpTool>,
 ) -> Vec<tinymcp_bus::McpTool> {
     use crate::core::bus::BUS;
     use crate::core::events::DomainEvent;
-    use crate::security::prompt_injection::scan_tool_definition;
+    use crate::security::prompt_injection::{screen_tool_definition, DefinitionVerdict};
 
-    tools
-        .into_iter()
-        .filter(|tool| {
-            let hit = tool
-                .description
-                .as_deref()
-                .and_then(|text| scan_tool_definition("description", text));
-
-            match hit {
-                Some(hit) => {
-                    tracing::warn!(
-                        server,
-                        tool = %tool.name,
-                        reason = %hit.code,
-                        "[mcp] dropped a remote tool that tripped the input-validation scan"
-                    );
-                    BUS.publish(DomainEvent::McpToolRejected {
-                        server: server.to_string(),
-                        tool: tool.name.clone(),
-                        reason: hit.code.clone(),
-                    });
-                    false
-                }
-                None => true,
-            }
-        })
-        .collect()
-}
-
-/// [`tools_safe_for_agent`] plus the security module's `ScanToolDefinition`.
-///
-/// The module verdict is context: a `Blocked` tool is dropped (with the rule ids
-/// only, never the text), `Suspicious` and an unavailable module change nothing
-/// beyond the host scan. It never re-admits a tool the host dropped.
-#[cfg(feature = "mcp")]
-pub(crate) async fn tools_safe_for_agent_scanned(
-    server: &str,
-    tools: Vec<tinymcp_bus::McpTool>,
-) -> Vec<tinymcp_bus::McpTool> {
-    let tools = tools_safe_for_agent(server, tools);
-    module_scan_tools(server, tools).await
-}
-
-#[cfg(all(feature = "mcp", feature = "security-module"))]
-async fn module_scan_tools(
-    server: &str,
-    tools: Vec<tinymcp_bus::McpTool>,
-) -> Vec<tinymcp_bus::McpTool> {
-    use crate::modules::security::text::{scan_tool_definition, ScanVerdict};
-    let Some(config) = crate::core::runtime::CoreContext::current_embedder_config() else {
-        return tools;
-    };
-    if !config.modules.enabled {
-        return tools;
-    }
     let mut kept = Vec::with_capacity(tools.len());
     for tool in tools {
         let definition = serde_json::json!({
             "description": tool.description,
             "input_schema": tool.input_schema,
         });
-        match scan_tool_definition(&config, &tool.name, &definition).await {
-            Ok(scan) if scan.verdict == ScanVerdict::Blocked => {
+        let reason = match screen_tool_definition(&tool.name, &definition).await {
+            Ok(scan) if scan.verdict == DefinitionVerdict::Clean => {
+                kept.push(tool);
+                continue;
+            }
+            Ok(scan) => scan
+                .rule_ids
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "tool_definition.flagged".to_string()),
+            Err(error) => {
                 tracing::warn!(
                     server,
                     tool = %tool.name,
-                    rules = %scan.rule_ids.join(","),
-                    "[mcp] dropped a remote tool blocked by the security module scan"
+                    error = %error,
+                    "[mcp] the tool definition scan could not run"
                 );
+                "scan.unavailable".to_string()
             }
-            _ => kept.push(tool),
-        }
+        };
+        tracing::warn!(
+            server,
+            tool = %tool.name,
+            reason = %reason,
+            "[mcp] dropped a remote tool that tripped the input-validation scan"
+        );
+        BUS.publish(DomainEvent::McpToolRejected {
+            server: server.to_string(),
+            tool: tool.name.clone(),
+            reason,
+        });
     }
     kept
-}
-
-#[cfg(all(feature = "mcp", not(feature = "security-module")))]
-async fn module_scan_tools(
-    _server: &str,
-    tools: Vec<tinymcp_bus::McpTool>,
-) -> Vec<tinymcp_bus::McpTool> {
-    tools
 }
 
 // ---------------------------------------------------------------------------

@@ -404,7 +404,7 @@ pub async fn agent_chat_reply_for(
                 "[inference] agent_chat untrusted input on a host-only agent; guard skipped"
             );
         }
-        _ => enforce_user_prompt_or_reject(message, "local_ai.ops.agent_chat")?,
+        _ => enforce_user_prompt_or_reject(message, "local_ai.ops.agent_chat").await?,
     }
 
     // TAURI-RUST-RS: an upstream caller (frontend, JSON-RPC client) can pass
@@ -634,7 +634,7 @@ pub async fn agent_chat_simple(
     temperature: Option<f64>,
     thread_id: Option<String>,
 ) -> Result<Outcome<String>, String> {
-    enforce_user_prompt_or_reject(message, "local_ai.ops.agent_chat_simple")?;
+    enforce_user_prompt_or_reject(message, "local_ai.ops.agent_chat_simple").await?;
 
     let mut effective = config.clone();
     // TAURI-RUST-RS: see `normalize_model_override` for the rationale.

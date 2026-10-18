@@ -15,8 +15,10 @@
 //!   can never be parked for a human, and the middleware stack is the model's
 //!   path. Nested calls are off (`RunLimits::max_nested_depth = 0`) and stay
 //!   refused here, failing closed, until the host decides how to authorize them.
-//! - **Untrusted text is screened.** [`SecurityGate::screen_input`] runs the
-//!   prompt-injection detector over text before it enters the model context.
+//! - **Untrusted text is screened.** [`SecurityGate::screen_input`] asks the
+//!   security module's prompt screen (through the scanner port) about text before
+//!   it enters the model context. A screen that cannot answer in time holds the
+//!   text for review, so the hot path blocks rather than waves content through.
 //!
 //! No `Redacted` outcome is ever produced. OpenHuman can *detect* PII
 //! ([`tinymemory_api::safety::scan`]) and has a module-backed free-text redactor
@@ -90,7 +92,7 @@ impl SecurityGate for OpenHumanSecurityGate {
         Ok(GateDecision::Allow)
     }
 
-    /// Runs OpenHuman's prompt-injection detector over `text`.
+    /// Screens `text` with the security module's prompt scan.
     ///
     /// Every origin is screened, `User` included — the detector's primary
     /// production caller is the user-prompt path, and provenance is not trust.
@@ -126,7 +128,8 @@ impl SecurityGate for OpenHumanSecurityGate {
                 user_id: None,
                 session_id: None,
             },
-        );
+        )
+        .await;
 
         match decision.action {
             PromptEnforcementAction::Allow => Ok(ScreenOutcome::Pass),

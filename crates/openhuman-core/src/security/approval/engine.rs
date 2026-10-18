@@ -66,13 +66,11 @@ pub(crate) struct Posture {
     pub auto_approve_all: bool,
     /// Tool names the user chose to always allow.
     pub tool_grants: Vec<String>,
-    /// `(flow_id, tool)` pairs the user trusts for one workflow.
-    pub flow_grants: Vec<(String, String)>,
 }
 
-/// The verified origin class the module sees. `Cron` and SaaS calls never reach
-/// the engine: the gate refuses the first and has no approval surface for the
-/// second.
+/// The verified origin class the module sees. The module, not the host, decides
+/// what each class is allowed (contract 1.22): the gate only maps the turn's
+/// origin to one of these.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CallOrigin {
     /// A live user, a channel peer or a workflow run.
@@ -81,6 +79,17 @@ pub(crate) enum CallOrigin {
     Copilot,
     /// A delegated sub-agent (shorter park window).
     SubAgent,
+    /// A scheduled job: the module denies its external effects.
+    Cron,
+    /// An internal background job or a workflow action the user already
+    /// declared: the module approves it automatically, audited.
+    TrustedAutomation,
+    /// A local operator invoking the core directly (the CLI, a direct chat): the
+    /// module approves it automatically, audited.
+    LocalOperator,
+    /// A call whose origin nobody labelled: the module denies it unless the
+    /// posture's tool grants name the tool.
+    Unlabelled,
 }
 
 /// One gated call, as the gate hands it over.
@@ -153,7 +162,12 @@ pub(crate) enum EngineError {
     /// never existed in this process. A benign race for a decision.
     #[error("the approval request is not pending")]
     NotPending,
-    /// The module or its store refused or could not answer. Fail closed.
+    /// The module answered no: a scheduled job's external effect, an unlabelled
+    /// call no grant covers, or any other denial it will not let a person
+    /// override. Nothing was parked.
+    #[error("the approval engine refused the call")]
+    Refused,
+    /// The module or its store could not answer. Fail closed.
     #[error("{0}")]
     Unavailable(String),
 }
@@ -207,6 +221,28 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
         &self,
         limit: usize,
     ) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError>;
+
+    /// Durably trust `tool` inside `flow_id` for the tenant: the engine keeps the
+    /// grant across restarts and approves that exact tool in that exact flow
+    /// without a prompt. Granting a live pair changes nothing.
+    async fn grant_flow_trust(
+        &self,
+        tenant: &Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<(), EngineError>;
+
+    /// Withdraw the trust of `tool` inside `flow_id`; `Ok(false)` when there was
+    /// none.
+    async fn revoke_flow_trust(
+        &self,
+        tenant: &Tenant,
+        flow_id: &str,
+        tool: &str,
+    ) -> Result<bool, EngineError>;
+
+    /// The tools currently trusted inside `flow_id`, sorted.
+    async fn flow_trust(&self, tenant: &Tenant, flow_id: &str) -> Result<Vec<String>, EngineError>;
 }
 
 /// The shared engine handle a gate holds.
@@ -286,6 +322,29 @@ impl ApprovalEngine for UnavailableEngine {
         &self,
         _limit: usize,
     ) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError> {
+        Ok(Vec::new())
+    }
+    async fn grant_flow_trust(
+        &self,
+        _tenant: &Tenant,
+        _flow_id: &str,
+        _tool: &str,
+    ) -> Result<(), EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
+    async fn revoke_flow_trust(
+        &self,
+        _tenant: &Tenant,
+        _flow_id: &str,
+        _tool: &str,
+    ) -> Result<bool, EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
+    async fn flow_trust(
+        &self,
+        _tenant: &Tenant,
+        _flow_id: &str,
+    ) -> Result<Vec<String>, EngineError> {
         Ok(Vec::new())
     }
 }

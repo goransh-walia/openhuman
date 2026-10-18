@@ -19,31 +19,20 @@ fn entry(agent: &str) -> Arc<ScopeEntry> {
     ))
 }
 
-fn posture(tools: &[&str], flows: &[(&str, &str)]) -> Posture {
+fn posture(tools: &[&str]) -> Posture {
     Posture {
         require_approval: true,
         auto_approve_all: false,
         tool_grants: tools.iter().map(|t| (*t).to_owned()).collect(),
-        flow_grants: flows
-            .iter()
-            .map(|(flow, tool)| ((*flow).to_owned(), (*tool).to_owned()))
-            .collect(),
     }
 }
 
 #[test]
 fn grants_are_sorted_deduplicated_and_exact() {
-    let granted = grants(&posture(
-        &["slack_post", "gmail_send", "slack_post"],
-        &[("flow-b", "http"), ("flow-a", "http"), ("flow-a", "http")],
-    ));
+    let granted = grants(&posture(&["slack_post", "gmail_send", "slack_post"]));
     assert_eq!(granted.tools, ["gmail_send", "slack_post"]);
-    let flows: Vec<_> = granted
-        .flows
-        .iter()
-        .map(|g| (g.flow_id.as_str(), g.tool.as_str()))
-        .collect();
-    assert_eq!(flows, [("flow-a", "http"), ("flow-b", "http")]);
+    // Per-flow trust is the module's durable state, never part of the posture.
+    assert!(granted.flows.is_empty());
     assert!(granted.is_valid());
 }
 
@@ -51,19 +40,14 @@ fn grants_are_sorted_deduplicated_and_exact() {
 fn a_name_the_module_never_grants_is_dropped_not_fatal() {
     // A human-only or native tool in the user's list must not fail every
     // registration of the subject; it simply is never auto-approved.
-    let granted = grants(&posture(
-        &[
-            "device_crypto",
-            "native_secret_grant",
-            "policy_change",
-            "gmail_send",
-            "  ",
-        ],
-        &[("flow", "sandbox_host_network"), ("flow", "http")],
-    ));
+    let granted = grants(&posture(&[
+        "device_crypto",
+        "native_secret_grant",
+        "policy_change",
+        "gmail_send",
+        "  ",
+    ]));
     assert_eq!(granted.tools, ["gmail_send"]);
-    assert_eq!(granted.flows.len(), 1);
-    assert_eq!(granted.flows[0].tool, "http");
     assert!(granted.is_valid());
 }
 

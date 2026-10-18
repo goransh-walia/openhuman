@@ -407,7 +407,7 @@ async fn flow_tool_trust_auto_allows_before_parking() {
     // short window even though it never inspects the "timed out" reason.
     let (gate, _dir, env) = expiry_gate().await;
     let gate = Arc::new(gate);
-    store::insert_flow_trust(&gate.config, "flow-trusted", "composio").unwrap();
+    gate.insert_flow_trust("flow-trusted", "composio").unwrap();
 
     let outcome = turn_origin::with_origin(
         flow_origin("flow-trusted", true),
