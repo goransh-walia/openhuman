@@ -6,11 +6,9 @@
 //! translates the descriptor into the module's question and the answer into the
 //! host's refusal text. It owns no truth table.
 //!
-//! * `Standard` registers no restriction, so there is nothing to ask: the module is
-//!   not called and a module round trip stays off every inference, embedding and
-//!   backend call in the default mode. This mirrors [`super::assess`].
-//! * Under a restrictive mode a module that is missing, faulted or slow **refuses**
-//!   the transfer. Nothing is ever assumed permitted.
+//! * Every mode asks the module. `Standard` adds no privacy restriction, but a
+//!   missing, faulted or slow module still **refuses** the transfer; the host
+//!   never assumes an external effect is permitted.
 //! * What the host contributes is the one thing only it knows: whether a backend
 //!   route is a control-plane round trip (session, auth, team, billing and the
 //!   read-only connection-management routes) or carries user content
@@ -19,7 +17,7 @@
 //! The mode is the live session policy's
 //! ([`current_privacy_mode`](crate::security::live_policy::current_privacy_mode));
 //! it defaults to `Standard` when no session policy is installed (CLI, cron,
-//! background), which makes enforcement a correct no-op there.
+//! background); the module still owns the decision for those external effects.
 
 use super::types::{DataKind, EgressDescriptor, EgressReason, IdentificationRisk};
 use crate::config::PrivacyMode;
@@ -134,9 +132,6 @@ fn block_message(mode: PrivacyMode, desc: &EgressDescriptor, outcome: Outcome) -
 
 /// The refusal for `desc` under `mode`, or `None` when permitted.
 pub async fn egress_blocks_message(mode: PrivacyMode, desc: &EgressDescriptor) -> Option<String> {
-    if mode == PrivacyMode::Standard {
-        return None;
-    }
     let outcome = native::decide(mode, desc).await;
     refusal(mode, desc, outcome)
 }
@@ -146,9 +141,6 @@ pub fn egress_blocks_message_blocking(
     mode: PrivacyMode,
     desc: &EgressDescriptor,
 ) -> Option<String> {
-    if mode == PrivacyMode::Standard {
-        return None;
-    }
     let outcome = native::decide_blocking(mode, desc);
     refusal(mode, desc, outcome)
 }

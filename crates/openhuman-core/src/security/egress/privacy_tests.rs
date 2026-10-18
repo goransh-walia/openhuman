@@ -91,22 +91,7 @@ fn a_metadata_only_transfer_is_metadata_and_anything_more_is_content() {
     assert_eq!(data_class(&upload), PrivacyClass::UserContent);
 }
 
-// ── Standard asks nothing; refusal rendering ───────────────────────────────
-
-#[tokio::test]
-async fn standard_mode_never_reaches_the_module() {
-    // No port is installed and no module runtime exists: a question would fail
-    // closed. Standard registers no restriction, so none is asked.
-    assert!(
-        egress_blocks_message(PrivacyMode::Standard, &external_composio())
-            .await
-            .is_none()
-    );
-    let _mode = test_privacy_scope(PrivacyMode::Standard);
-    enforce_egress(&external_composio())
-        .await
-        .expect("Standard mode must allow");
-}
+// ── Refusal rendering ──────────────────────────────────────────────────────
 
 #[test]
 fn refusal_messages_name_the_service_and_the_mode() {
@@ -140,6 +125,22 @@ mod with_module {
     }
 
     use std::sync::Arc;
+
+    #[tokio::test]
+    async fn standard_mode_uses_the_module_permission() {
+        let stub = Arc::new(StubPort::allowing());
+        let _port = install_port(stub.clone());
+        assert!(
+            egress_blocks_message(PrivacyMode::Standard, &external_composio())
+                .await
+                .is_none()
+        );
+        let asked = stub.asked();
+        let [Asked::Privacy(request)] = asked.as_slice() else {
+            panic!("Standard mode must ask the privacy module exactly once");
+        };
+        assert_eq!(request.privacy, BusMode::Standard);
+    }
 
     #[tokio::test]
     async fn a_restrictive_mode_asks_the_module_with_the_descriptor_facts() {
