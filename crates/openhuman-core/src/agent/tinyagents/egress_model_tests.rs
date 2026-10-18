@@ -8,7 +8,7 @@ use crate::modules::security::gap::stub::{Asked, StubPort};
 use crate::security::live_policy::test_privacy_scope;
 use tinyinference_llm::message::Message;
 #[cfg(feature = "security-module")]
-use tinysecurity_bus::{DenialReason, PrivacyRiskLevel2, Verdict};
+use tinysecurity_bus::{DenialReason, PrivacyMode as BusMode, PrivacyRiskLevel2, Verdict};
 
 #[cfg(feature = "security-module")]
 /// A module that refuses every transfer put to it.
@@ -27,10 +27,13 @@ fn assessed(level: IdentificationRisk, categories: &[&str]) -> Option<Assessment
 
 #[cfg(feature = "security-module")]
 #[tokio::test]
-async fn non_sensitive_modes_never_refuse_and_never_ask_the_module() {
-    let stub = refusing();
-    let _port = install_port(stub.clone());
-    for mode in [PrivacyMode::Standard, PrivacyMode::LocalOnly] {
+async fn non_sensitive_modes_ask_the_module_without_payload_assessment() {
+    for (mode, expected) in [
+        (PrivacyMode::Standard, BusMode::Standard),
+        (PrivacyMode::LocalOnly, BusMode::LocalOnly),
+    ] {
+        let stub = Arc::new(StubPort::allowing());
+        let _port = install_port(stub.clone());
         assert!(refusal_with(
             mode,
             "openai",
@@ -39,9 +42,13 @@ async fn non_sensitive_modes_never_refuse_and_never_ask_the_module() {
         )
         .await
         .is_none());
-        assert!(refusal_with(mode, "openai", "gpt", None).await.is_none());
+        let asked = stub.asked();
+        let [Asked::Privacy(request)] = asked.as_slice() else {
+            panic!("one module question expected");
+        };
+        assert_eq!(request.privacy, expected);
+        assert_eq!(request.risk, None);
     }
-    assert!(stub.asked().is_empty());
 }
 
 #[cfg(feature = "security-module")]
@@ -127,11 +134,24 @@ fn route(local: bool) -> (Arc<dyn ChatModel<()>>, Arc<AtomicUsize>) {
 }
 
 #[tokio::test]
+#[cfg(feature = "security-module")]
 async fn an_external_route_passes_straight_through_outside_sensitive_mode() {
+    let stub = Arc::new(StubPort::allowing());
+    let _port = install_port(stub.clone());
     let _mode = test_privacy_scope(PrivacyMode::Standard);
     let (model, calls) = route(false);
     model.invoke(&(), request()).await.expect("allowed");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(stub.asked().len(), 1);
+}
+
+#[tokio::test]
+#[cfg(not(feature = "security-module"))]
+async fn an_external_route_fails_closed_without_the_security_module() {
+    let _mode = test_privacy_scope(PrivacyMode::Standard);
+    let (model, calls) = route(false);
+    assert!(model.invoke(&(), request()).await.is_err());
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
 #[cfg(feature = "security-module")]
@@ -140,7 +160,10 @@ async fn standard_mode_refuses_an_external_route_when_the_module_cannot_answer()
     let _port = install_port(Arc::new(StubPort::unavailable()));
     let _mode = test_privacy_scope(PrivacyMode::Standard);
     let (model, calls) = route(false);
-    let error = model.invoke(&(), request()).await.expect_err("fails closed");
+    let error = model
+        .invoke(&(), request())
+        .await
+        .expect_err("fails closed");
     assert!(error.to_string().contains("could not confirm"), "{error}");
     assert_eq!(calls.load(Ordering::SeqCst), 0, "the route must not run");
 }
@@ -151,7 +174,10 @@ async fn local_only_refuses_an_external_route_when_the_module_cannot_answer() {
     let _port = install_port(Arc::new(StubPort::unavailable()));
     let _mode = test_privacy_scope(PrivacyMode::LocalOnly);
     let (model, calls) = route(false);
-    let error = model.invoke(&(), request()).await.expect_err("fails closed");
+    let error = model
+        .invoke(&(), request())
+        .await
+        .expect_err("fails closed");
     assert!(error.to_string().contains("could not confirm"), "{error}");
     assert_eq!(calls.load(Ordering::SeqCst), 0, "the route must not run");
 }

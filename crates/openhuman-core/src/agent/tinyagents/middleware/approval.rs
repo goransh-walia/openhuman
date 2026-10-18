@@ -156,9 +156,11 @@ impl ApprovalSecurityMiddleware {
     fn resolve_without_gate(tool_name: &str) -> ApprovalResolution {
         tracing::warn!(
             tool = %tool_name,
-            "[tinyagents::mw] approval gate unavailable; external-effect tool will run without interactive approval"
+            "[tinyagents::mw] approval gate unavailable; external-effect tool is refused"
         );
-        ApprovalResolution::Allow { ticket: None }
+        ApprovalResolution::Deny {
+            reason: refused_approval_text(tool_name, "approval gate unavailable"),
+        }
     }
 }
 

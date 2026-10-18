@@ -8,8 +8,8 @@
 //! by the TinySecurity module) and applies the live privacy mode to it. Only
 //! `Sensitive` depends on the assessment: a clean request goes out, one the
 //! redactor would change (a credential or identifier) or one the module cannot
-//! assess is refused with a non-sensitive message. Under any other mode the
-//! decorator passes straight through without a module call.
+//! assess is refused with a non-sensitive message. Other modes still ask the
+//! module to authorize the external transfer, without a payload assessment.
 //!
 //! It wraps every external route the turn can reach, not the turn's primary
 //! alone: a local primary with an external fallback (or an external tier route)
@@ -73,13 +73,14 @@ impl EgressAssessedModel {
 
     async fn check(&self, request: &ModelRequest) -> tinyinference_llm::Result<()> {
         let mode = current_privacy_mode();
-        if mode != PrivacyMode::Sensitive {
-            return Ok(());
-        }
-        let payload = serde_json::to_string(&request.messages)
-            .ok()
-            .filter(|text| text.len() <= MAX_ASSESSED_BYTES);
-        let assessment = payload.as_deref().map(|text| assess_for_mode(mode, text));
+        let assessment = if mode == PrivacyMode::Sensitive {
+            let payload = serde_json::to_string(&request.messages)
+                .ok()
+                .filter(|text| text.len() <= MAX_ASSESSED_BYTES);
+            payload.as_deref().map(|text| assess_for_mode(mode, text))
+        } else {
+            None
+        };
         match refusal_with(mode, &self.provider, &self.model, assessment).await {
             Some(message) => {
                 tracing::warn!(
@@ -95,21 +96,20 @@ impl EgressAssessedModel {
 }
 
 /// The refusal for sending a request with the given `assessment` to
-/// `provider`/`model` under `mode`, or `None` when the call may proceed. Pure, so
-/// the decision is testable without a module; `None` assessment means the module
-/// gave no answer.
+/// `provider`/`model` under `mode`, or `None` when the call may proceed. A risk
+/// assessment is attached only in Sensitive mode; other modes still require the
+/// module's authorization. `None` assessment means no payload assessment exists.
 pub(crate) async fn refusal_with(
     mode: PrivacyMode,
     provider: &str,
     model: &str,
     assessment: Option<Assessment>,
 ) -> Option<String> {
-    if mode != PrivacyMode::Sensitive {
-        return None;
-    }
     let mut descriptor = EgressDescriptor::inference(provider, model, true);
-    if let Some(assessment) = assessment.filter(|a| a.level != IdentificationRisk::Unknown) {
-        descriptor = descriptor.with_risk(assessment.level, assessment.categories);
+    if mode == PrivacyMode::Sensitive {
+        if let Some(assessment) = assessment.filter(|a| a.level != IdentificationRisk::Unknown) {
+            descriptor = descriptor.with_risk(assessment.level, assessment.categories);
+        }
     }
     egress_blocks_message(mode, &descriptor).await
 }

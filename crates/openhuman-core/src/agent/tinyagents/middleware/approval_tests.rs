@@ -71,13 +71,13 @@ fn the_desktop_exception_is_off_when_the_tool_is_unknown() {
 #[test]
 fn a_required_approval_is_not_allowed_to_run_without_a_gate() {
     let resolution = ApprovalSecurityMiddleware::resolve_without_gate("composio_execute");
-    let mut executed = false;
     match resolution {
-        ApprovalResolution::Allow { .. } => executed = true,
-        ApprovalResolution::Deny { .. } => {}
+        ApprovalResolution::Deny { reason } => {
+            assert!(reason.contains("approval gate unavailable"), "{reason}");
+            assert!(reason.contains("must not be performed"), "{reason}");
+        }
+        ApprovalResolution::Allow { .. } => {
+            panic!("a missing human approval gate must not authorize an external effect")
+        }
     }
-    assert!(
-        !executed,
-        "a missing human approval gate must not authorize an external effect"
-    );
 }
