@@ -25,7 +25,7 @@ Privacy mode is not a policy the model is asked to follow. The first check lives
 
 That makes the guarantee independent of prompts, agents, tools or upstream bugs. If any code path tries to reach a cloud model in local-only mode, it cannot get a client.
 
-`local_only` is also enforced at the egress points where the agent sends your data anywhere else (`crates/openhuman-core/src/security/egress/enforce.rs`):
+`local_only` is also enforced at the egress points where the agent sends your data anywhere else (`crates/openhuman-core/src/security/egress/privacy.rs`, where the decision is the security module's and a restrictive mode with an unavailable module refuses):
 
 | Egress point | Behavior under `local_only` |
 | --- | --- |

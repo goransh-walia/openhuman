@@ -21,7 +21,7 @@ pub struct AutonomySettingsPatch {
     /// (`AutonomyConfig::enabled`): with it off, classification, the approval
     /// gate, the allowlist, the action budget and containment are all inert,
     /// and every other field in this patch has no effect until it is `true`.
-    /// `is_always_forbidden` applies either way.
+    /// the protected-path floor applies either way.
     pub enabled: Option<bool>,
     /// `"readonly" | "supervised" | "full"` (case-insensitive).
     pub level: Option<String>,
@@ -498,7 +498,7 @@ async fn validate_files_dir(raw: &str, config: &Config) -> Result<PathBuf, Strin
             "files_dir must be a folder, not a file: {expanded}"
         ));
     }
-    if crate::security::SecurityPolicy::is_always_forbidden(&candidate) {
+    if crate::security::floor::is_protected(&candidate).await {
         return Err(format!(
             "files_dir cannot be a protected system or credential folder: {expanded}"
         ));

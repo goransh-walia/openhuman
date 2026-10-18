@@ -298,42 +298,6 @@ async fn approval_policy_sandbox_and_secret_wire_contracts() {
     );
 }
 
-#[tokio::test]
-async fn in_process_policy_latency_baseline() {
-    // Measure the host-owned path checks, with policy enforcement on.
-    // Shell parsing now belongs to TinyBox; this baseline does not time its
-    // module call. No time threshold: record host work before choosing a bus budget.
-    let scratch = tempfile::tempdir().unwrap();
-    let mut config = Config::default();
-    config.autonomy.enabled = true;
-    let action = scratch.path().join("action");
-    let state = scratch.path().join("state");
-    std::fs::create_dir_all(&action).unwrap();
-    std::fs::create_dir_all(&state).unwrap();
-    let policy =
-        openhuman_core::security::SecurityPolicy::from_config(&config.autonomy, &state, &action);
-    let path = action.join("baseline.txt").display().to_string();
-    let evaluate = || {
-        assert!(std::hint::black_box(policy.is_path_string_allowed(&path)));
-    };
-    for _ in 0..100 {
-        evaluate();
-    }
-    let mut samples = Vec::with_capacity(10_000);
-    for _ in 0..10_000 {
-        let start = std::time::Instant::now();
-        evaluate();
-        samples.push(start.elapsed().as_nanos());
-    }
-    samples.sort_unstable();
-    println!(
-        "security in-process host path baseline: samples={} checks_per_sample=1 p50_ns={} p99_ns={}",
-        samples.len(),
-        samples[4999],
-        samples[9899]
-    );
-}
-
 #[test]
 fn shared_redaction_corpus_records_existing_catches_and_gaps() {
     let corpus: Value =

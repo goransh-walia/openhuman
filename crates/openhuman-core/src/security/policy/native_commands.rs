@@ -359,7 +359,7 @@ pub(crate) fn to_bus_class(class: CommandClass) -> tinysecurity_bus::CommandClas
 }
 
 #[cfg(feature = "security-module")]
-fn from_bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
+pub(crate) fn from_bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
     use tinysecurity_bus::CommandClass as Bus;
     match class {
         Bus::Read => CommandClass::Read,

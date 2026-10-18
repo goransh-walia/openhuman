@@ -23,13 +23,13 @@ use crate::security::SecurityPolicy;
 /// both are wired rather than collapsing them into one check:
 ///
 /// * [`is_internal_state`](ArtifactPathPolicy::is_internal_state) →
-///   `SecurityPolicy::is_workspace_internal_path`, the specific state locations,
+///   the module's internal-state reservation, the specific state locations,
 ///   which are refused wherever they sit.
 /// * [`internal_root`](ArtifactPathPolicy::internal_root) → `workspace_dir`
 ///   itself, refused wholesale.
 ///
 /// Offload targets resolve under `action_dir`, never `workspace_dir` — the
-/// invariant `is_workspace_internal_path` enforces fail-closed regardless of
+/// invariant the module's internal-state reservation enforces fail-closed regardless of
 /// autonomy tier or `trusted_roots`.
 #[derive(Debug)]
 pub struct WorkspaceGuard {
@@ -45,7 +45,7 @@ impl WorkspaceGuard {
 
 impl ArtifactPathPolicy for WorkspaceGuard {
     fn is_internal_state(&self, path: &Path) -> bool {
-        self.policy.is_workspace_internal_path(path)
+        self.policy.is_internal_blocking(path)
     }
 
     fn internal_root(&self) -> Option<&Path> {

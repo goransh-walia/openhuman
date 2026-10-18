@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use super::helpers::{mime_for_path, readonly_autonomy_block, resolve_upload_path};
+use super::helpers::{mime_for_path, resolve_upload_path};
 use crate::integrations::IntegrationClient;
 use crate::security::SecurityPolicy;
 use tinytools::ToolRunContext;
@@ -44,10 +44,6 @@ impl StorageUploadFileTool {
         action_dir: &Path,
         approval: &crate::security::approval::ApprovalTurnContext,
     ) -> anyhow::Result<ToolResult> {
-        if let Some(blocked) = readonly_autonomy_block(&self.security) {
-            return Ok(blocked);
-        }
-
         let raw_path = match args.get("path").and_then(|v| v.as_str()) {
             Some(p) if !p.trim().is_empty() => p.trim(),
             _ => return Ok(ToolResult::error("path is required")),

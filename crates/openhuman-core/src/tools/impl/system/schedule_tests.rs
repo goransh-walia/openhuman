@@ -1,5 +1,4 @@
 use super::*;
-use crate::security::AutonomyLevel;
 use tempfile::TempDir;
 
 async fn test_setup() -> (TempDir, Config, Arc<SecurityPolicy>) {
@@ -115,49 +114,6 @@ async fn once_and_pause_resume_aliases_work() {
         .await
         .unwrap();
     assert!(!resume.is_error);
-}
-
-#[tokio::test]
-async fn readonly_blocks_mutating_actions() {
-    let tmp = TempDir::new().unwrap();
-    let config = Config {
-        workspace_dir: tmp.path().join("workspace"),
-        action_dir: tmp.path().join("workspace"),
-        config_path: tmp.path().join("config.toml"),
-        autonomy: crate::config::AutonomyConfig {
-            // The tier only binds when the policy is on, and the shipped config
-            // default is off (`[autonomy] enabled = false`).
-            enabled: true,
-            level: AutonomyLevel::ReadOnly,
-            ..Default::default()
-        },
-        ..Config::default()
-    };
-    tokio::fs::create_dir_all(&config.workspace_dir)
-        .await
-        .unwrap();
-    let security = Arc::new(SecurityPolicy::from_config(
-        &config.autonomy,
-        &config.workspace_dir,
-        &config.workspace_dir,
-    ));
-
-    let tool = ScheduleTool::new(security, config);
-
-    let blocked = tool
-        .execute(json!({
-            "action": "create",
-            "expression": "* * * * *",
-            "command": "echo blocked"
-        }))
-        .await
-        .unwrap();
-    assert!(blocked.is_error);
-    assert!(blocked.output().contains("read-only"));
-
-    let list = tool.execute(json!({"action": "list"})).await.unwrap();
-    assert!(!list.is_error);
-    assert!(list.output().contains("No scheduled jobs"));
 }
 
 #[tokio::test]

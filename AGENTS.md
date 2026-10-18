@@ -265,8 +265,9 @@ With the policy **disabled** (the default):
   not enforced.
 - The always-forbidden floor still is: credential stores (`~/.ssh`, `~/.gnupg`,
   `~/.aws`) and system roots stay unreachable, as do `..` traversal and null
-  bytes in a path. It is enforced by the module (`DenialReason::Floor`) and by
-  the host's synchronous `is_always_forbidden` preflight. Keep that floor.
+  bytes in a path. The floor is the module's (`DenialReason::Floor`, and the
+  unconditional `ProtectedPath2` check); the host asks it through
+  `security/floor.rs` and has no floor of its own. Keep that floor.
 
 With `[autonomy] enabled = true`:
 

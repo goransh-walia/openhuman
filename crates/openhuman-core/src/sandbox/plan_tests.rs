@@ -3,6 +3,8 @@ use tinysecurity_bus::{PathGrant, ResourceLimits2, SubjectScope};
 
 fn artifact(backend: SandboxBackend) -> SandboxArtifact2 {
     SandboxArtifact2 {
+        host_run: false,
+        no_workspace: false,
         minimum_isolation: IsolationLevel2::Kernel,
         plan_id: "plan".into(),
         approval_reservation_id: None,

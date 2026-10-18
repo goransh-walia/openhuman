@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use super::helpers::{
-    action_dir_for_context, extension_for_content_type, file_path, readonly_autonomy_block,
-    sanitize_filename, validate_file_id, DOWNLOADS_DIR,
+    action_dir_for_context, extension_for_content_type, file_path, sanitize_filename,
+    validate_file_id, DOWNLOADS_DIR,
 };
 use crate::integrations::IntegrationClient;
 use crate::security::SecurityPolicy;
@@ -44,10 +44,6 @@ impl StorageDownloadFileTool {
         action_dir: &Path,
         approval: &crate::security::approval::ApprovalTurnContext,
     ) -> anyhow::Result<ToolResult> {
-        if let Some(blocked) = readonly_autonomy_block(&self.security) {
-            return Ok(blocked);
-        }
-
         let file_id = match validate_file_id(&args) {
             Ok(id) => id,
             Err(e) => return Ok(ToolResult::error(e)),

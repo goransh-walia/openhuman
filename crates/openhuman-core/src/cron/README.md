@@ -75,9 +75,9 @@ failure classified `retryable` or permanent; `flow` rows go to the
 
 `shell` jobs run through `run_job_command_with_timeout`
 ([`scheduler/shell_job.rs`](./scheduler/shell_job.rs)). Before spawning anything,
-it checks `can_act`, `is_rate_limited`, the host security policy against command
-facts returned by TinyBox `AnalyzeCommand`, and `record_action` against the
-action budget. Missing module analysis fails closed; no local parser replaces
+it asks the module for the autonomy tier and the host security policy against
+command facts returned by TinyBox `AnalyzeCommand`, and spends one action of
+the module's hourly budget. Missing module analysis fails closed; no local parser replaces
 it. Any refusal returns a string starting `blocked by security policy:`, which
 the retry loop treats as final. Execution uses TinyBox `StartExec` on a
 module-owned passthrough resource, preserving the action directory and the

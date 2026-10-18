@@ -2,7 +2,8 @@
 
 The privacy epic's "egress spine" (#4436, #4441): a single, uniform answer to
 "what leaves the device, to where, and why" for every external data transfer,
-plus the `LocalOnly` enforcement chokepoint built on top of it.
+plus the privacy-mode enforcement chokepoint built on top of it. The decision is the
+TinySecurity module's; this folder translates the question and the answer.
 
 ## Key files
 
@@ -11,7 +12,7 @@ plus the `LocalOnly` enforcement chokepoint built on top of it.
 | [`types.rs`](./types.rs) | `EgressDescriptor`, `DataKind`, `EgressReason`, `IdentificationRisk`: the descriptor contract |
 | [`emit.rs`](./emit.rs) | `emit_external_transfer`, the single publish chokepoint, plus per-turn dedup |
 | [`assess.rs`](./assess.rs) | `assess_payload`, `EgressDescriptor::assessed[_parts]`: fills the risk fields from the real outgoing payload via the module's `Redact` (Sensitive mode only) |
-| [`enforce.rs`](./enforce.rs) | `local_only_blocks` (pure decision) and its two side-effecting wrappers, `enforce_egress` / `local_only_tool_block` |
+| [`privacy.rs`](./privacy.rs) | `data_class` (the host's knowledge of which backend routes are control-plane), `egress_blocks_message[_blocking]`, `enforce_egress` (async) and `local_only_tool_block[_blocking]`; the decision is the module's `PrivacyCheck2` |
 
 ## Public surface
 
@@ -34,22 +35,28 @@ plus the `LocalOnly` enforcement chokepoint built on top of it.
   managed chat turn's multi-model fan-out (primary + workload-tier + summarizer
   builds) collapses repeated disclosures of the same destination into one
   event; every other call path emits unconditionally.
-- `local_only_blocks(mode, desc) -> bool`: pure decision, blocks only when
-  `mode == PrivacyMode::LocalOnly`, `desc.is_external`, and the transfer is not
-  an exempt backend control-plane round-trip (`is_control_plane`, private).
-  `Standard` and `Sensitive` never block here.
-- `enforce_egress(desc) -> anyhow::Result<()>`: thin wrapper for
+- `data_class(desc) -> PrivacyClass`: the one thing only the host knows,
+  whether a backend route is a control-plane round trip (session, auth, team,
+  billing, read-only connection management), carries metadata, or carries user
+  content. Anything under `/agent-integrations/` that is not a known
+  control-plane route counts as user content.
+- `egress_blocks_message(mode, desc)` (and `_blocking`): asks the module
+  (`PrivacyCheck2`) whether the registered privacy mode permits the transfer
+  and returns the refusal text, or `None`. `Standard` registers no restriction,
+  so the module is not called. Under a restrictive mode a module that is
+  missing, faulted or slow refuses the transfer.
+- `enforce_egress(desc) -> anyhow::Result<()>`: async wrapper for
   `anyhow`-returning egress sites (composio, integrations, cloud embeddings);
   `Err` with a clean, non-sensitive message when blocked.
-- `local_only_tool_block(desc) -> Option<String>`: thin wrapper for agent
-  tools that return `Ok(ToolResult::error(..))` on denial; the message is
-  prefixed with `POLICY_BLOCKED_MARKER` so the harness treats it as a
-  permanent, non-retryable block.
+- `local_only_tool_block(desc) -> Option<String>` (and `_blocking`): wrapper
+  for agent tools that return `Ok(ToolResult::error(..))` on denial; the
+  message is prefixed with `POLICY_BLOCKED_MARKER` so the harness treats it as
+  a permanent, non-retryable block.
 
-Both `enforce_egress` and `local_only_tool_block` read the live mode via
-`security::live_policy::current_privacy_mode`, which defaults to
-`PrivacyMode::Standard` (no restriction) when no session policy is installed
-(CLI / cron / background), so enforcement is a correct no-op there.
+Both wrappers read the live mode via `security::live_policy::current_privacy_mode`,
+which defaults to `PrivacyMode::Standard` (no restriction) when no session
+policy is installed (CLI / cron / background), so enforcement is a correct
+no-op there.
 
 ## Payload assessment (S5)
 
@@ -79,7 +86,7 @@ when the page is opened (`network_fetch(host)`) and judged by the module as a
 ## Relates to
 
 - `config/schema/privacy.rs`: `PrivacyMode` (`Standard` / `Sensitive` /
-  `LocalOnly`), the config-facing enum `local_only_blocks` matches on.
+  `LocalOnly`), the config-facing enum the host registers with the module.
 - [`tinymemory_api::safety`](https://github.com/tinyhumansai/tinymemory/blob/d1b06334faf7f8abb62bd1bd4ec4c4d4862f53a4/crates/tinymemory-api/src/safety/README.md): the opt-in local identification-risk detector
   that will eventually populate `EgressDescriptor::risk_level` /
   `risk_categories` via `EgressDescriptor::with_risk`.
@@ -101,7 +108,7 @@ when the page is opened (`network_fetch(host)`) and judged by the module as a
 
 ## Tests
 
-- [`types_tests.rs`](./types_tests.rs), [`emit_tests.rs`](./emit_tests.rs), [`enforce_tests.rs`](./enforce_tests.rs).
+- [`types_tests.rs`](./types_tests.rs), [`emit_tests.rs`](./emit_tests.rs), [`privacy_tests.rs`](./privacy_tests.rs).
 
 ## Further reading
 

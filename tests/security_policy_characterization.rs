@@ -3,8 +3,10 @@
 //! always-forbidden table are pinned beside the code in
 //! `security/policy/policy_characterization_tests.rs`, because classification
 //! and the allowlist are crate-private outside tests. This file pins what an
-//! embedder or tool can observe: the shipped defaults, the disabled floor, the
-//! autonomy gate matrix, the hourly limiter and trusted-root grants.
+//! embedder or tool can observe: the shipped defaults and the trusted-root
+//! grants. The path floor, the autonomy gate and the hourly budget are the
+//! TinySecurity module's (`CheckPaths2`, `SpendAction2`) and are pinned in its
+//! repository and by the module-backed host tests.
 
 #[path = "support/env_guard.rs"]
 mod env_guard;
@@ -15,19 +17,8 @@ use tinybox_bus::CommandClass;
 
 use openhuman_core::{
     config::AutonomyConfig,
-    security::{
-        policy::GateDecision, AutonomyLevel, SecurityPolicy, ToolOperation, TrustedAccess,
-        TrustedRoot,
-    },
+    security::{AutonomyLevel, SecurityPolicy, TrustedAccess, TrustedRoot},
 };
-
-fn policy(enabled: bool, autonomy: AutonomyLevel) -> SecurityPolicy {
-    SecurityPolicy {
-        enabled,
-        autonomy,
-        ..SecurityPolicy::default()
-    }
-}
 
 #[test]
 fn shipped_defaults_are_pinned() {
@@ -123,135 +114,4 @@ fn declared_class_parsing_is_pinned() {
         Some(Network)
     );
     assert_eq!(SecurityPolicy::parse_declared_class("nonsense"), None);
-}
-
-#[test]
-fn disabled_policy_still_forbids_credential_stores_and_system_roots() {
-    let off = policy(false, AutonomyLevel::Full);
-    for forbidden in [
-        "/home/u/.ssh/id_rsa",
-        "/home/u/.aws/credentials",
-        "/home/u/.gnupg/x",
-        "/etc/passwd",
-        "/root/x",
-    ] {
-        assert!(
-            !off.is_resolved_path_allowed(Path::new(forbidden)),
-            "{forbidden}"
-        );
-        assert!(!off.is_path_string_allowed(forbidden), "{forbidden}");
-    }
-    assert!(off.is_resolved_path_allowed(Path::new("/srv/anything/else")));
-}
-
-#[test]
-fn enabled_policy_confines_paths_to_workspace_and_trusted_roots() {
-    let ws = tempfile::tempdir().unwrap();
-    let workspace = ws.path().canonicalize().unwrap();
-    let p = SecurityPolicy {
-        enabled: true,
-        workspace_dir: workspace.clone(),
-        action_dir: workspace.clone(),
-        workspace_only: true,
-        trusted_roots: vec![
-            TrustedRoot {
-                path: "/data/ro".into(),
-                access: TrustedAccess::Read,
-            },
-            TrustedRoot {
-                path: "/data/rw".into(),
-                access: TrustedAccess::ReadWrite,
-            },
-            // A grant over a credential directory never works.
-            TrustedRoot {
-                path: "/home/u".into(),
-                access: TrustedAccess::ReadWrite,
-            },
-        ],
-        ..SecurityPolicy::default()
-    };
-    assert!(p.is_resolved_path_allowed(&workspace.join("a.txt")));
-    assert!(!p.is_resolved_path_allowed(Path::new("/elsewhere/a.txt")));
-    assert!(p.is_resolved_path_allowed_for(Path::new("/data/ro/a"), false));
-    assert!(!p.is_resolved_path_allowed_for(Path::new("/data/ro/a"), true));
-    assert!(p.is_resolved_path_allowed_for(Path::new("/data/rw/a"), true));
-    assert!(!p.is_resolved_path_allowed_for(Path::new("/home/u/.ssh/id_rsa"), false));
-    assert!(p.is_resolved_path_allowed_for(Path::new("/home/u/project/a"), true));
-}
-
-#[tokio::test]
-async fn validate_path_rejects_traversal_and_the_floor_even_when_disabled() {
-    let ws = tempfile::tempdir().unwrap();
-    let workspace = ws.path().canonicalize().unwrap();
-    for enabled in [true, false] {
-        let p = SecurityPolicy {
-            enabled,
-            workspace_dir: workspace.clone(),
-            action_dir: workspace.clone(),
-            ..SecurityPolicy::default()
-        };
-        assert!(
-            p.validate_path("/etc/passwd").await.is_err(),
-            "enabled={enabled}"
-        );
-        assert!(
-            p.validate_path("../../../etc/passwd").await.is_err(),
-            "enabled={enabled}"
-        );
-        assert!(
-            p.validate_path("nul\0byte").await.is_err(),
-            "enabled={enabled}"
-        );
-    }
-}
-
-#[test]
-fn hourly_limiter_counts_acts_not_reads_and_names_the_limit() {
-    let p = SecurityPolicy {
-        max_actions_per_hour: 2,
-        ..policy(true, AutonomyLevel::Supervised)
-    };
-    for _ in 0..20 {
-        assert!(p
-            .enforce_tool_operation(ToolOperation::Read, "read")
-            .is_ok());
-    }
-    assert!(!p.is_rate_limited());
-    assert!(p.enforce_tool_operation(ToolOperation::Act, "a").is_ok());
-    assert!(p.enforce_tool_operation(ToolOperation::Act, "b").is_ok());
-    assert!(p.is_rate_limited());
-    let err = p
-        .enforce_tool_operation(ToolOperation::Act, "c")
-        .unwrap_err();
-    assert!(
-        err.contains("Rate limit exceeded") && err.contains("2 actions/hour"),
-        "{err}"
-    );
-    // Each policy instance owns its window; a fresh policy starts empty.
-    let fresh = SecurityPolicy {
-        max_actions_per_hour: 2,
-        ..policy(true, AutonomyLevel::Supervised)
-    };
-    assert!(!fresh.is_rate_limited());
-}
-
-#[test]
-fn read_only_and_disabled_tiers_on_acts() {
-    let ro = policy(true, AutonomyLevel::ReadOnly);
-    assert!(!ro.can_act());
-    assert!(ro
-        .enforce_tool_operation(ToolOperation::Act, "write")
-        .is_err());
-    assert!(ro
-        .enforce_tool_operation(ToolOperation::Read, "read")
-        .is_ok());
-    let off = SecurityPolicy {
-        max_actions_per_hour: 0,
-        ..policy(false, AutonomyLevel::ReadOnly)
-    };
-    assert!(off.can_act(), "a disabled policy never blocks acting");
-    assert!(off
-        .enforce_tool_operation(ToolOperation::Act, "write")
-        .is_ok());
-    assert!(!off.is_rate_limited());
 }

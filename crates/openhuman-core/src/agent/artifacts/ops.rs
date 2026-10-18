@@ -269,6 +269,6 @@ async fn regenerate_presentation(
     ))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "security-module"))]
 #[path = "ops_tests.rs"]
 mod tests;

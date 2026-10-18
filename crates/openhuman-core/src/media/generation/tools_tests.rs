@@ -127,6 +127,9 @@ async fn list_models_reports_both_catalogs_and_defaults() {
 
 #[test]
 fn reference_policy_admits_workspace_files_only() {
+    let _port = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::with_credential_floor(),
+    ));
     let action = Path::new("/home/user/OpenHuman/projects");
     let workspace = Path::new("/home/user/.openhuman/users/u/workspace");
     let policy = reference_policy(action, workspace);

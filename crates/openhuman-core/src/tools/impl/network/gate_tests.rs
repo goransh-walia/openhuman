@@ -5,7 +5,9 @@ use crate::security::{AutonomyLevel, SecurityPolicy};
 use serde_json::json;
 use std::sync::Arc;
 use tinytools::{PermissionLevel, Tool};
-use tinytools_std::network::{CurlTool, HttpRequestTool, PushoverTool, WebFetchTool};
+#[cfg(feature = "security-module")]
+use tinytools_std::network::{CurlTool, PushoverTool};
+use tinytools_std::network::{HttpRequestTool, WebFetchTool};
 
 /// A policy whose command gateway answers class questions with the tier table,
 /// so these tests need not load the security module.
@@ -34,22 +36,55 @@ fn http(security: Arc<SecurityPolicy>) -> HttpRequestTool {
     )
 }
 
+#[cfg(feature = "security-module")]
+use crate::modules::security::gap::stub::StubPort;
+#[cfg(feature = "security-module")]
+use crate::modules::security::gap::{install_port, PortGuard};
+#[cfg(feature = "security-module")]
+use tinysecurity_bus::{BudgetDecision2, DenialReason, Verdict};
+
+#[cfg(feature = "security-module")]
+/// A module that refuses every transfer it is asked about (a restrictive privacy
+/// mode); the module owns the truth table, this scripts one answer.
+fn refusing_privacy() -> PortGuard {
+    install_port(Arc::new(StubPort::allowing().privacy(|_| Verdict::Deny {
+        reason: DenialReason::Privacy,
+    })))
+}
+
+#[cfg(feature = "security-module")]
+/// A module whose autonomy tier is read-only.
+fn read_only_module() -> PortGuard {
+    install_port(Arc::new(
+        StubPort::allowing().budget(|_, _| BudgetDecision2::ReadOnlyMode),
+    ))
+}
+
 // --- the gate answers with the policy's own decisions -----------------------
 
+#[cfg(feature = "security-module")]
 #[test]
 fn read_only_autonomy_cannot_act() {
+    let _module = read_only_module();
     let gate: &dyn NetGate = &tiered(AutonomyLevel::ReadOnly);
     assert!(!gate.can_act());
 }
 
+#[cfg(feature = "security-module")]
 #[test]
-fn the_action_budget_is_shared_with_the_policy() {
+fn the_gate_does_not_count_an_action_the_tool_gate_already_reserved() {
+    // The hourly budget is spent once per call by the tool gate before the tool
+    // runs; the in-tool questions neither ask the module nor refuse.
+    let stub = Arc::new(
+        StubPort::allowing().budget(|_, _| BudgetDecision2::RateLimited { max_per_hour: 1 }),
+    );
+    let _module = install_port(stub.clone());
     let security = policy(AutonomyLevel::Supervised, 1);
     let gate: &dyn NetGate = security.as_ref();
     assert!(!gate.is_rate_limited());
     assert!(gate.record_action());
-    assert!(gate.is_rate_limited());
-    assert!(!gate.record_action());
+    assert!(gate.record_action());
+    assert!(stub.asked().is_empty());
 }
 
 #[test]
@@ -96,8 +131,10 @@ fn a_blocked_tier_stops_the_call_before_the_network() {
 
 // --- privacy mode ------------------------------------------------------------
 
+#[cfg(feature = "security-module")]
 #[test]
 fn local_only_privacy_mode_refuses_with_the_policy_blocked_marker() {
+    let _module = refusing_privacy();
     let _mode = super::super::local_only_scope();
     let msg = NetGate::local_only_block(&tiered(AutonomyLevel::Supervised), "example.com")
         .expect("LocalOnly blocks a network fetch");
@@ -115,8 +152,10 @@ fn standard_privacy_mode_lets_the_request_through() {
 
 // --- the tools, through the real policy ---------------------------------------
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn http_request_blocks_readonly_mode() {
+    let _module = read_only_module();
     let tool = http(policy(AutonomyLevel::ReadOnly, 100));
     let result = tool
         .execute(json!({"url": "https://example.com"}))
@@ -126,21 +165,12 @@ async fn http_request_blocks_readonly_mode() {
     assert!(result.output().contains("read-only"));
 }
 
-#[tokio::test]
-async fn http_request_blocks_when_rate_limited() {
-    let tool = http(policy(AutonomyLevel::Supervised, 0));
-    let result = tool
-        .execute(json!({"url": "https://example.com"}))
-        .await
-        .unwrap();
-    assert!(result.is_error);
-    assert!(result.output().contains("rate limit"));
-}
-
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn http_request_is_blocked_under_local_only_privacy_mode() {
     // Privacy epic S7 (#4441): under LocalOnly the request is refused with a
     // `[policy-blocked]` result before URL validation / network.
+    let _module = refusing_privacy();
     let _mode = super::super::local_only_scope();
     let result = http(Arc::new(tiered(AutonomyLevel::Supervised)))
         .execute(json!({"url": "https://example.com"}))
@@ -159,8 +189,10 @@ async fn http_request_is_blocked_under_local_only_privacy_mode() {
     );
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn web_fetch_and_curl_are_blocked_under_local_only_privacy_mode() {
+    let _module = refusing_privacy();
     let _mode = super::super::local_only_scope();
     let security = Arc::new(tiered(AutonomyLevel::Supervised));
     let fetch = super::super::host::web_fetch_tool(
@@ -201,8 +233,10 @@ async fn web_fetch_and_curl_are_blocked_under_local_only_privacy_mode() {
     }
 }
 
+#[cfg(feature = "security-module")]
 #[tokio::test]
-async fn pushover_honours_read_only_and_the_rate_limit() {
+async fn pushover_honours_the_read_only_tier() {
+    let _module = read_only_module();
     let read_only = PushoverTool::new(policy(AutonomyLevel::ReadOnly, 100), "/tmp".into());
     let result = read_only
         .execute(json!({"message": "hello"}))
@@ -210,11 +244,6 @@ async fn pushover_honours_read_only_and_the_rate_limit() {
         .unwrap();
     assert!(result.is_error);
     assert!(result.output().contains("read-only"));
-
-    let limited = PushoverTool::new(policy(AutonomyLevel::Full, 0), "/tmp".into());
-    let result = limited.execute(json!({"message": "hello"})).await.unwrap();
-    assert!(result.is_error);
-    assert!(result.output().contains("rate limit"));
 }
 
 #[test]
@@ -326,10 +355,26 @@ fn routed_with(payload: Option<Assessment>) -> RoutedGate {
     }
 }
 
+#[cfg(feature = "security-module")]
 #[test]
 fn sensitive_mode_permits_a_fetch_assessed_clean_and_refuses_the_rest() {
     use crate::config::PrivacyMode;
     use crate::security::live_policy::test_privacy_scope;
+    // The module decides from the assessment the gate forwards: clean passes,
+    // anything else (identifying, or not assessed) is refused.
+    let _module = install_port(Arc::new(StubPort::allowing().privacy(
+        |request| match &request.risk {
+            Some(risk)
+                if risk.level == tinysecurity_bus::PrivacyRiskLevel2::None
+                    && risk.categories.is_empty() =>
+            {
+                Verdict::Allow
+            }
+            _ => Verdict::Deny {
+                reason: DenialReason::Privacy,
+            },
+        },
+    )));
     let _mode = test_privacy_scope(PrivacyMode::Sensitive);
     let clean = routed_with(Some(Assessment {
         level: IdentificationRisk::None,

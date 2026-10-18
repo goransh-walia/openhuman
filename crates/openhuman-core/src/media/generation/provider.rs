@@ -164,8 +164,8 @@ struct Guard {
 impl Guard {
     /// Local-only enforcement, then the egress disclosure. A blocked call is
     /// neither disclosed nor sent.
-    fn admit(&self, route: &str) -> ti_image::Result<()> {
-        self.admit_descriptor(Self::descriptor(route))
+    async fn admit(&self, route: &str) -> ti_image::Result<()> {
+        self.admit_descriptor(Self::descriptor(route)).await
     }
 
     /// The descriptor for a metadata-only call to `route`.
@@ -179,7 +179,12 @@ impl Guard {
     /// so under Sensitive the module assesses it. Reference images and frames
     /// are file content the host cannot assess; with any present the call stays
     /// unassessed, which Sensitive refuses.
-    fn admit_prompt(&self, route: &str, prompt: &str, has_media: bool) -> ti_image::Result<()> {
+    async fn admit_prompt(
+        &self,
+        route: &str,
+        prompt: &str,
+        has_media: bool,
+    ) -> ti_image::Result<()> {
         use crate::security::egress::DataKind;
         let descriptor = Self::descriptor(route).with_data_kind(DataKind::Prompt);
         let descriptor = if has_media {
@@ -187,14 +192,14 @@ impl Guard {
         } else {
             descriptor.assessed(prompt)
         };
-        self.admit_descriptor(descriptor)
+        self.admit_descriptor(descriptor).await
     }
 
-    fn admit_descriptor(
+    async fn admit_descriptor(
         &self,
         descriptor: crate::security::egress::EgressDescriptor,
     ) -> ti_image::Result<()> {
-        crate::security::egress::enforce_egress(&descriptor).map_err(|error| {
+        crate::security::egress::enforce_egress(&descriptor).await.map_err(|error| {
             tracing::info!(route = %descriptor.service, %error, "[media_generation] blocked by privacy policy");
             ti_image::Error::Validation(format!("blocked by the privacy policy: {error}"))
         })?;
@@ -235,13 +240,14 @@ impl ImageGenerator for GuardedImage {
 
     async fn generate(&self, request: ImageRequest) -> ti_image::Result<ImageResponse> {
         self.guard
-            .admit_prompt("images", &request.prompt, !request.references.is_empty())?;
+            .admit_prompt("images", &request.prompt, !request.references.is_empty())
+            .await?;
         self.guard.budget().await?;
         self.inner.generate(request).await
     }
 
     async fn list_models(&self) -> ti_image::Result<Vec<MediaModel>> {
-        self.guard.admit("images/models")?;
+        self.guard.admit("images/models").await?;
         self.inner.list_models().await
     }
 }
@@ -262,29 +268,31 @@ impl VideoGenerator for GuardedVideo {
     }
 
     async fn submit(&self, request: VideoRequest) -> ti_video::Result<VideoJob> {
-        self.guard.admit_prompt(
-            "videos",
-            request.prompt.as_deref().unwrap_or_default(),
-            request.first_frame.is_some()
-                || request.last_frame.is_some()
-                || !request.references.is_empty(),
-        )?;
+        self.guard
+            .admit_prompt(
+                "videos",
+                request.prompt.as_deref().unwrap_or_default(),
+                request.first_frame.is_some()
+                    || request.last_frame.is_some()
+                    || !request.references.is_empty(),
+            )
+            .await?;
         self.guard.budget().await?;
         self.inner.submit(request).await
     }
 
     async fn poll(&self, job_id: &str) -> ti_video::Result<VideoJobStatus> {
-        self.guard.admit("videos/{jobId}")?;
+        self.guard.admit("videos/{jobId}").await?;
         self.inner.poll(job_id).await
     }
 
     async fn content(&self, job_id: &str, index: usize) -> ti_video::Result<GeneratedMedia> {
-        self.guard.admit("videos/{jobId}/content")?;
+        self.guard.admit("videos/{jobId}/content").await?;
         self.inner.content(job_id, index).await
     }
 
     async fn list_models(&self) -> ti_video::Result<Vec<MediaModel>> {
-        self.guard.admit("videos/models")?;
+        self.guard.admit("videos/models").await?;
         self.inner.list_models().await
     }
 }

@@ -178,6 +178,13 @@ impl HttpClient for OpenHumanHttp {
         let tier_decision =
             enforce_node_tier_gate(&self.security, CommandClass::Network, "http_request").await?;
 
+        // The node runs outside the harness, so no tool gate has reserved its
+        // action: spend it here, from the same TinySecurity hourly budget.
+        self.security
+            .spend_action(TOOL_NAME)
+            .await
+            .map_err(EngineError::Capability)?;
+
         // The approval gate summarizes/redacts the request BEFORE any credential
         // is injected, so a stored secret never lands in the approval UI or
         // audit trail. Injection happens strictly after this point.

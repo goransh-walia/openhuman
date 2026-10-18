@@ -18,7 +18,7 @@ and TTL enforcement.
   integration billing flow (S3 rates plus margin), charged upfront for the
   whole TTL on upload and as egress on download/link generation.
 - Block the five mutating/transfer tools (everything except `storage_list_files`)
-  when autonomy is read-only (`SecurityPolicy::can_act`).
+  when autonomy is read-only (the tool gate asks the module for the tier before the call runs).
 
 ## Key Files
 
@@ -64,9 +64,10 @@ alphanumeric/`-`/`_` charset before it is interpolated into the URL path
   (`action_dir_for_context`), mirroring the pattern used by media generation
   tools.
 - `StorageUploadFileTool`, `StorageDownloadFileTool`, `StorageGetLinkTool`,
-  `StorageSetVisibilityTool`, and `StorageDeleteFileTool` all check
-  `SecurityPolicy::can_act()` up front and return a
-  `[policy-blocked]` `ToolResult::error` under read-only autonomy;
+  `StorageSetVisibilityTool`, and `StorageDeleteFileTool` do no policy check of
+  their own: the tool gate (`ToolPolicyGateMiddleware`) refuses them with a
+  `[policy-blocked]` result under read-only autonomy and spends the hourly
+  action once per call;
   `StorageListFilesTool` is read-only and unguarded.
 
 ## Wiring
@@ -93,8 +94,8 @@ outside `build_file_storage_tools`.
 
 - `crate::integrations::IntegrationClient` (and `build_client`), the shared
   backend-proxied HTTP client; see the [parent README](../README.md).
-- `crate::security::SecurityPolicy`: gates the mutating tools under
-  read-only autonomy.
+- `crate::security::SecurityPolicy`: carried by the mutating tools; the
+  read-only refusal happens at the tool gate.
 - `tinytools`: `Tool`, `ToolResult`, `PermissionLevel`,
   `ToolCategory`.
 - `tinytools::ToolRunContext`: supplies the TinyAgents workspace root when

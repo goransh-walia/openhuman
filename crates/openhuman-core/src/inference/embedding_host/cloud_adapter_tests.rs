@@ -1,11 +1,19 @@
 use super::*;
 
+#[cfg(feature = "security-module")]
 /// Privacy epic S7 (#4441): under LocalOnly, `embed` refuses before touching
 /// the inner cloud transport (so no network / no auth is needed to observe
 /// the block). Uses the thread-scoped privacy override so it never mutates
 /// the process-global policy that sibling tests read.
 #[tokio::test]
 async fn embed_blocked_under_local_only() {
+    let _module = crate::modules::security::gap::install_port(std::sync::Arc::new(
+        crate::modules::security::gap::stub::StubPort::allowing().privacy(|_| {
+            tinysecurity_bus::Verdict::Deny {
+                reason: tinysecurity_bus::DenialReason::Privacy,
+            }
+        }),
+    ));
     let _mode =
         crate::security::live_policy::test_privacy_scope(crate::config::PrivacyMode::LocalOnly);
     let provider = OpenHumanCloudEmbeddingModel::new(

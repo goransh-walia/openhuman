@@ -25,7 +25,7 @@ use crate::config::PrivacyMode;
 use crate::security::live_policy::current_privacy_mode;
 
 /// Category recorded when the redactor would change the payload. Contains the
-/// `credential` and `identifier` needles [`super::enforce::sensitive_blocks`]
+/// `credential` and `identifier` needles the module's `PrivacyCheck2` Sensitive rule
 /// refuses.
 pub const CATEGORY_SENSITIVE_CONTENT: &str = "credential_or_identifier";
 

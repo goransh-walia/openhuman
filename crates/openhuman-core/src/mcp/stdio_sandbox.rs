@@ -118,10 +118,19 @@ fn dedup(paths: &mut Vec<String>) {
 /// [`for_config`]. A failure is logged and leaves the narrower baseline.
 pub(crate) async fn prepare(config: &Config) {
     let home = grant_home(crate::core::runtime::is_saas(), dirs::home_dir);
-    let request = grant_request(home.as_deref(), &config.runtime.local_jail);
+    let request = match grant_request(home.as_deref(), &config.runtime.local_jail).await {
+        Ok(request) => request,
+        Err(error) => {
+            tracing::warn!(
+                error = %error,
+                "[mcp:sandbox] no protected-path floor; using the system baseline"
+            );
+            return;
+        }
+    };
     match crate::modules::tinybox::resolve_local_grants(config, request).await {
         Ok(reply) => {
-            let grants = admit_module_grants(reply, config.runtime.local_jail.allow_proc);
+            let grants = admit_module_grants(reply, config.runtime.local_jail.allow_proc).await;
             tracing::debug!(
                 read_only = grants.read_only.len(),
                 read_write = grants.read_write.len(),
