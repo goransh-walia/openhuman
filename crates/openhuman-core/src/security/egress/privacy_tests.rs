@@ -219,6 +219,17 @@ mod with_module {
     }
 
     #[tokio::test]
+    async fn standard_mode_refuses_when_the_module_cannot_answer() {
+        let _port = install_port(Arc::new(StubPort::unavailable()));
+        let message = egress_blocks_message(PrivacyMode::Standard, &external_composio())
+            .await
+            .expect("module failure fails closed in every privacy mode");
+        assert!(message.contains("could not confirm"), "{message}");
+        let _mode = test_privacy_scope(PrivacyMode::Standard);
+        assert!(enforce_egress(&external_composio()).await.is_err());
+    }
+
+    #[tokio::test]
     async fn the_tool_block_carries_the_policy_marker_and_clears_when_allowed() {
         let mut desc = EgressDescriptor::network_fetch("api.example.com");
         desc = desc.with_data_kind(DataKind::ToolArguments);
