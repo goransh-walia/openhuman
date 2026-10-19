@@ -13,11 +13,13 @@
 //! [`OpenHumanRunContext`](crate::agent::tinyagents::host::OpenHumanRunContext),
 //! whose `child()` hands it down the sub-agent tree.
 
+use std::sync::Arc;
+
 use tinyagents_harness::cancel::CancellationToken;
 use tinyagents_harness::turn_deadline::TurnDeadline;
 
-use crate::agent::hooks::HookScope;
 use crate::agent::tinyagents::budget::ModelBudget;
+use crate::agent::tinyagents::host::OpenHumanRunContext;
 
 /// Per-turn values an entry point hands to the session it runs.
 ///
@@ -25,6 +27,11 @@ use crate::agent::tinyagents::budget::ModelBudget;
 /// turn exactly as it ran before any host policy existed.
 #[derive(Clone, Default)]
 pub struct HostTurnEnv {
+    /// Exact child-process environment values supplied by the embedding host.
+    ///
+    /// The map is carried through the run context so module-backed shell
+    /// execution receives the same explicit environment as native tools.
+    pub command_environment: Option<Arc<std::collections::BTreeMap<String, String>>>,
     /// Shared model-spend ledger and per-call bounds every model call of the
     /// turn tree is charged against.
     pub model_budget: Option<ModelBudget>,
@@ -38,7 +45,8 @@ pub struct HostTurnEnv {
     /// A cap on real tool invocations, never wider than the product default.
     pub tool_call_limit: Option<usize>,
     /// Agent/turn hook callbacks added after the runtime's global ones.
-    pub hooks: HookScope,
+    pub hooks:
+        tinyagents_hooks::scope::HookScope<OpenHumanRunContext, tinyagents_harness::cost::TurnCost>,
     /// The host's tool belt for this turn is authoritative: tool declarations
     /// recorded in a restored transcript must not bring a revoked tool back.
     pub fresh_tool_snapshot: bool,
@@ -69,6 +77,7 @@ pub struct HostTurnEnv {
 impl std::fmt::Debug for HostTurnEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HostTurnEnv")
+            .field("command_environment", &self.command_environment.is_some())
             .field("model_budget", &self.model_budget.is_some())
             .field("spawn_depth_limit", &self.spawn_depth_limit)
             .field("cancellation", &self.cancellation.is_some())

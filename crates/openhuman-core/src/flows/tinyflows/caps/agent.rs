@@ -24,7 +24,7 @@ use crate::inference::provider::{is_raw_passthrough_model, role_for_model_tier};
 /// agent kind by one of two paths, chosen by [`route_for_agent_ref`]:
 ///
 /// 1. **Full harness turn** (the common case, Phase A). When `agent_ref` names a
-///    harness [`AgentDefinition`](crate::agent::harness::host_definition::AgentDefinition),
+///    harness [`AgentDefinition`](crate::agent_registry::host_definition::AgentDefinition),
 ///    the node builds a real session agent
 ///    ([`OpenHumanSessionHost::from_config_for_agent`](crate::agent::OpenHumanSessionHost::from_config_for_agent)
 ///    + `set_agent_definition_name`) and drives one full turn via
@@ -39,7 +39,7 @@ use crate::inference::provider::{is_raw_passthrough_model, role_for_model_tier};
 ///    the flow's tinyagents graph.
 /// 2. **Persona-shaping completion fallback** (no regression for custom agents).
 ///    When `agent_ref` only resolves to a custom
-///    [`AgentRegistryEntry`](crate::agent::registry::AgentRegistryEntry)
+///    [`AgentRegistryEntry`](crate::agent_registry::AgentRegistryEntry)
 ///    (no harness definition), the node keeps the original single-completion
 ///    behavior: the entry's `system_prompt` / `model` are shaped on top of the
 ///    node request and run through [`OpenHumanLlm::complete`].
@@ -68,6 +68,8 @@ use crate::inference::provider::{is_raw_passthrough_model, role_for_model_tier};
 /// caller's task), so HITL gating still applies to every fanned-out turn.
 pub struct OpenHumanAgentRunner {
     pub config: Arc<Config>,
+    /// The context the run acts under, handed over by whoever started it.
+    pub ctx: crate::core::runtime::DispatchCtx,
     /// The run's approval context (flow run correlation), handed to the gate
     /// with every acting dispatch.
     pub approval: crate::security::approval::ApprovalTurnContext,
@@ -136,7 +138,7 @@ pub(crate) fn route_for_agent_ref(agent_ref: &str) -> AgentRoute {
     if crate::agent::host_agents::resolve(agent_ref).is_some() {
         return AgentRoute::HostAgent;
     }
-    let has_definition = crate::agent::harness::host_definition::AgentDefinitionRegistry::current()
+    let has_definition = crate::agent_registry::host_definition::AgentDefinitionRegistry::current()
         .map(|reg| reg.get(agent_ref).is_some())
         .unwrap_or(false);
     if has_definition {
@@ -175,13 +177,13 @@ impl AgentRunner for OpenHumanAgentRunner {
         request: Value,
         conn: Option<&str>,
     ) -> Result<Value> {
-        // Entry point of a flow agent node: bind the calling task's context once.
-        let dispatch = crate::core::runtime::DispatchCtx::ambient();
+        // Entry point of a flow agent node: the run's own context.
+        let dispatch = self.ctx.clone();
         // The harness definition registry must be initialised before we can
         // build a named agent. Idempotent: a booted core already did this at
         // startup; a bare flow run (tests, standalone) has not. A failure here
         // is non-fatal — we log and fall through to the registry-entry route.
-        if let Err(e) = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        if let Err(e) = crate::agent_registry::host_definition::AgentDefinitionRegistry::init_global(
             &self.config.workspace_dir,
         ) {
             tracing::warn!(
@@ -239,7 +241,7 @@ impl AgentRunner for OpenHumanAgentRunner {
                 // are disabled, which `run_via_registry_fallback` already
                 // rejects with a clear error).
                 let custom_entry =
-                    crate::agent::registry::find_custom_in_config(&self.config, agent_ref);
+                    crate::agent_registry::find_custom_in_config(&self.config, agent_ref);
                 let entry_model = custom_entry.as_ref().and_then(|e| e.model.clone());
                 match route_custom_entry_lookup(custom_entry.as_ref()) {
                     AgentRoute::Harness | AgentRoute::HostAgent => {
@@ -295,7 +297,7 @@ impl AgentRunner for OpenHumanAgentRunner {
 /// over the lookup result so the decision is unit-testable without a live
 /// `Config`/registry.
 pub(crate) fn route_custom_entry_lookup(
-    entry: Option<&crate::agent::registry::AgentRegistryEntry>,
+    entry: Option<&crate::agent_registry::AgentRegistryEntry>,
 ) -> AgentRoute {
     match entry {
         Some(e) if e.enabled => AgentRoute::Harness,
@@ -448,10 +450,8 @@ impl OpenHumanAgentRunner {
         //
         // Cancellation: the run_registry token aborts the engine future, and the
         // inner turn drops with it (task-local scope unwinds cleanly).
-        use crate::agent::turn_origin;
-        let escalated_origin = escalated_origin_for_nested_harness(
-            crate::core::runtime::DispatchCtx::ambient_turn().turn_origin(),
-        );
+        use crate::security::turn_origin;
+        let escalated_origin = escalated_origin_for_nested_harness(self.ctx.turn_origin());
         if let Some(ref escalated) = escalated_origin {
             tracing::debug!(
                 target: "flows",
@@ -513,7 +513,7 @@ impl OpenHumanAgentRunner {
     }
 
     /// Persona-shaping single-completion fallback for a custom
-    /// [`AgentRegistryEntry`](crate::agent::registry::AgentRegistryEntry)
+    /// [`AgentRegistryEntry`](crate::agent_registry::AgentRegistryEntry)
     /// with no harness definition — the pre-Phase-A behavior, kept so custom
     /// agents don't regress.
     async fn run_via_registry_fallback(
@@ -524,7 +524,7 @@ impl OpenHumanAgentRunner {
         conn: Option<&str>,
     ) -> Result<Value> {
         // Resolve + validate the requested agent kind against the registry.
-        let entry = crate::agent::registry::get_agent(dispatch, agent_ref)
+        let entry = crate::agent_registry::get_agent(dispatch, agent_ref)
             .await
             .map_err(EngineError::Capability)?
             .ok_or_else(|| {
@@ -565,6 +565,7 @@ impl OpenHumanAgentRunner {
         }
 
         OpenHumanLlm {
+            ctx: self.ctx.clone(),
             config: self.config.clone(),
         }
         .complete(request, conn)

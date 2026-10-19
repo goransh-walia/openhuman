@@ -90,6 +90,8 @@ pub(crate) struct StoppedTurn<'a> {
     pub(crate) config: Option<std::sync::Arc<crate::config::Config>>,
     /// The turn's reply locale, so the close is written in its language.
     pub(crate) locale: Option<String>,
+    /// The context the stopped turn ran under, for the closing model call.
+    pub(crate) ctx: crate::core::runtime::DispatchCtx,
 }
 
 impl StoppedTurn<'_> {
@@ -240,6 +242,7 @@ fn close_request(turn: &StoppedTurn<'_>, evidence: &Evidence) -> ModelRequest {
 }
 
 async fn model_reply(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &crate::config::Config,
     turn: &StoppedTurn<'_>,
     evidence: &Evidence,
@@ -251,7 +254,7 @@ async fn model_reply(
     }
     let request_id = turn.request_id;
     let (chat_model, model) =
-        match provider::create_chat_model_with_model_id("summarization", config, 0.2) {
+        match provider::create_chat_model_with_model_id_in(ctx, "summarization", config, 0.2) {
             Ok(resolved) => resolved,
             Err(error) => {
                 log::warn!("{LOG_PREFIX} provider init failed request_id={request_id}: {error}");
@@ -281,15 +284,17 @@ async fn model_reply(
 /// read, and a stalled store must not pin the runtime thread. The scoped spawn
 /// carries the caller's tenant, which selects the store.
 async fn read_snapshot(
+    ctx: &crate::core::runtime::DispatchCtx,
     workspace: std::path::PathBuf,
     thread_id: &str,
     request_id: &str,
 ) -> Option<TurnState> {
     let (thread_id, request_id) = (thread_id.to_string(), request_id.to_string());
-    let read = crate::core::runtime::spawn_blocking_scoped(move || {
-        crate::agent::session_store::turn_states_for(&workspace).get_turn(&thread_id, &request_id)
-    })
-    .await;
+    let read = ctx
+        .spawn_blocking(move || {
+            crate::storage::sessions::turn_states_for(&workspace).get_turn(&thread_id, &request_id)
+        })
+        .await;
     match read {
         Ok(Ok(snapshot)) => snapshot,
         Ok(Err(error)) => {
@@ -321,13 +326,14 @@ pub(crate) async fn close_reply(turn: StoppedTurn<'_>) -> Option<WebChatTaskResu
         return None;
     };
     let snapshot = read_snapshot(
+        &turn.ctx,
         config.workspace_dir.clone(),
         turn.thread_id,
         turn.request_id,
     )
     .await;
     let evidence = Evidence::from_snapshot(snapshot.as_ref());
-    let reply = match model_reply(&config, &turn, &evidence).await {
+    let reply = match model_reply(&turn.ctx, &config, &turn, &evidence).await {
         Some(reply) => reply,
         None => plain_reply(&turn, &evidence),
     };

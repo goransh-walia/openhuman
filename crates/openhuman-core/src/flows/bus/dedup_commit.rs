@@ -225,9 +225,14 @@ impl DedupCommitSubscriber {
         }
     }
 
-    async fn handle_finished(&self, flow_id: &str, run_id: &str, status: &str) {
+    async fn handle_finished(
+        &self,
+        ctx: crate::core::runtime::DispatchCtx,
+        flow_id: &str,
+        run_id: &str,
+        status: &str,
+    ) {
         // As the flow's owner: its own configuration (`super::owner`).
-        let ctx = crate::core::runtime::DispatchCtx::ambient();
         let config = super::owner::config_for_scope(&ctx, &self.config);
         let node_ids = self.dedup_node_ids(&ctx, flow_id);
         if node_ids.is_empty() {
@@ -333,11 +338,12 @@ impl EventHandler<DomainEvent> for DedupCommitSubscriber {
         } = event
         {
             // Settle the run as the agent its flow belongs to (`super::owner`).
-            super::owner::as_owner(
-                &self.config,
-                flow_id,
-                self.handle_finished(flow_id, run_id, status),
-            )
+            // `FlowRunFinished` carries no tenant: the host's own, and in SaaS
+            // none (the run is then not settled here).
+            let host = crate::core::runtime::DispatchCtx::host_default();
+            super::owner::as_owner(&host, &self.config, flow_id, |ctx| {
+                self.handle_finished(ctx, flow_id, run_id, status)
+            })
             .await;
         }
     }

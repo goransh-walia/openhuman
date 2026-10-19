@@ -37,10 +37,10 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
-use crate::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
+use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use tinytools::status::POLICY_DENIED_MARKER;
 
 use super::engine::{
@@ -133,7 +133,7 @@ pub struct ApprovalChatContext {
 /// Per-run flow context (flow-approval-surface, PR2 of the tinyflows
 /// approval-surfacing design). `flows::ops::flows_run` / `flows_resume`
 /// hand it to the engine's capabilities, alongside the existing
-/// `Workflow` [`AgentTurnOrigin`](crate::agent::turn_origin::AgentTurnOrigin),
+/// `Workflow` [`AgentTurnOrigin`](crate::security::turn_origin::AgentTurnOrigin),
 /// so a tool call parked from that run can correlate
 /// [`PendingApproval::source_context`](super::types::PendingApproval) back to
 /// the exact flow + run (the origin alone only carries `flow_id`, not

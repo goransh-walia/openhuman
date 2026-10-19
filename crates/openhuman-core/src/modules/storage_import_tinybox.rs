@@ -22,11 +22,12 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use serde_json::{json, Value};
+use serde_json::Value;
 use tinystoragedrivers::{CollectionSpec, ScopedStorage};
 
-use super::storage_grant_tinybox::{JAIL_INDEX_COLLECTION, MODULE_ID};
+use super::storage_grant_schemas::tinybox::{JAIL_INDEX_COLLECTION, MODULE_ID};
 use super::storage_import_support as support;
+use crate::core::runtime::DispatchCtx;
 
 const LOG_PREFIX: &str = "[tinybox-import]";
 /// The registry the module opens over the workspace's jails directory.
@@ -51,8 +52,8 @@ pub(crate) enum Outcome {
 
 /// Imports the index under `<workspace_dir>/jails` into the module's scope of
 /// the installed backend.
-pub(crate) async fn import_legacy(workspace_dir: &Path) -> Result<Outcome> {
-    let Some(scoped) = support::module_scope(MODULE_ID)? else {
+pub(crate) async fn import_legacy(ctx: &DispatchCtx, workspace_dir: &Path) -> Result<Outcome> {
+    let Some(scoped) = support::module_scope(ctx, MODULE_ID)? else {
         return Ok(Outcome::NoBackend);
     };
     import_into(&scoped, &workspace_dir.join(BASE_DIR)).await
@@ -61,7 +62,7 @@ pub(crate) async fn import_legacy(workspace_dir: &Path) -> Result<Outcome> {
 async fn import_into(scoped: &ScopedStorage, base: &Path) -> Result<Outcome> {
     let docs = scoped.documents();
     let marker = support::marker_id("tinybox", base);
-    if support::already_imported(docs, MARKER_COLLECTION, &marker).await? {
+    if support::already_imported(scoped, MARKER_COLLECTION, &marker).await? {
         return Ok(Outcome::AlreadyDone);
     }
     let index = base.join(INDEX_FILE);
@@ -90,13 +91,7 @@ async fn import_into(scoped: &ScopedStorage, base: &Path) -> Result<Outcome> {
         _ => tracing::warn!("{LOG_PREFIX} skipped an index file that is not a JSON object"),
     }
 
-    support::mark_imported(
-        docs,
-        MARKER_COLLECTION,
-        &marker,
-        json!({ "registry": registry, "written": written }),
-    )
-    .await?;
+    support::mark_imported(scoped, MARKER_COLLECTION, &marker).await?;
     tracing::info!("{LOG_PREFIX} imported written={written}");
     Ok(Outcome::Imported { written })
 }

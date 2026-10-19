@@ -48,6 +48,7 @@ async fn process_channel_message_executes_native_tool_calls() {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     process_channel_message(
@@ -120,6 +121,7 @@ async fn process_channel_message_handles_models_command_without_llm_call() {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     let cmd_msg = traits::ChannelMessage {
@@ -221,6 +223,7 @@ async fn process_channel_message_uses_route_override_provider_and_model() {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     process_channel_message(runtime_ctx, routed_msg).await;
@@ -272,6 +275,7 @@ async fn process_channel_message_respects_configured_max_tool_iterations_above_d
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     process_channel_message(
@@ -331,6 +335,7 @@ async fn process_channel_message_reports_configured_max_tool_iterations_limit() 
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     process_channel_message(

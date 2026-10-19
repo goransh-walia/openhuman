@@ -4,7 +4,7 @@
 use crate::config::Config;
 use crate::security::policy::{CommandFlow, CommandQuery, CommandStage, Refusal};
 use crate::security::SecurityPolicy;
-use tinyflows_schedule::types::CronJob;
+use tinyflows_bus::schedule::types::CronJob;
 use tokio::time::Duration;
 
 pub(super) const SHELL_JOB_TIMEOUT_SECS: u64 = 120;
@@ -57,11 +57,13 @@ async fn ask_module(
 }
 
 pub(super) async fn run_job_command(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     security: &SecurityPolicy,
     job: &CronJob,
 ) -> (bool, String) {
     run_job_command_with_timeout(
+        ctx,
         config,
         security,
         job,
@@ -71,6 +73,7 @@ pub(super) async fn run_job_command(
 }
 
 pub(super) async fn run_job_command_with_timeout(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     security: &SecurityPolicy,
     job: &CronJob,

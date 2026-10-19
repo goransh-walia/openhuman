@@ -26,8 +26,11 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use tinystoragedrivers::{CollectionSpec, ScopedStorage};
 
-use super::storage_grant_tinyconnectors::{MODULE_ID, PREFS_COLLECTION, TRIGGER_STREAM_PREFIX};
+use super::storage_grant_schemas::tinyconnectors::{
+    MODULE_ID, PREFS_COLLECTION, TRIGGER_STREAM_PREFIX,
+};
 use super::storage_import_support as support;
+use crate::core::runtime::DispatchCtx;
 
 const LOG_PREFIX: &str = "[connectors-import]";
 const PREFS_DIR: &str = "composio-user-scopes";
@@ -54,11 +57,11 @@ pub(crate) enum Outcome {
 
 /// Imports the legacy files under `state_dir` into the module's scope of the
 /// installed backend.
-pub(crate) async fn import_legacy(state_dir: &Path) -> Result<Outcome> {
-    let Some(scoped) = support::module_scope(MODULE_ID)? else {
+pub(crate) async fn import_legacy(ctx: &DispatchCtx, state_dir: &Path) -> Result<Outcome> {
+    let Some(scoped) = support::module_scope(ctx, MODULE_ID)? else {
         return Ok(Outcome::NoBackend);
     };
-    import_into(&scoped, state_dir).await
+    import_into(ctx, &scoped, state_dir).await
 }
 
 /// A preference file: the toolkit key and its bare JSON value.
@@ -79,10 +82,14 @@ struct Legacy {
     skipped: usize,
 }
 
-async fn import_into(scoped: &ScopedStorage, state_dir: &Path) -> Result<Outcome> {
+async fn import_into(
+    ctx: &DispatchCtx,
+    scoped: &ScopedStorage,
+    state_dir: &Path,
+) -> Result<Outcome> {
     let docs = scoped.documents();
     let marker = support::marker_id("connectors", state_dir);
-    if support::already_imported(docs, MARKER_COLLECTION, &marker).await? {
+    if support::already_imported(scoped, MARKER_COLLECTION, &marker).await? {
         return Ok(Outcome::AlreadyDone);
     }
     let prefs_dir = state_dir.join(PREFS_DIR);
@@ -91,10 +98,10 @@ async fn import_into(scoped: &ScopedStorage, state_dir: &Path) -> Result<Outcome
         return Ok(Outcome::NoSource);
     }
 
-    let legacy =
-        crate::core::runtime::spawn_blocking_scoped(move || read_legacy(&prefs_dir, &triggers_dir))
-            .await
-            .context("the legacy reader panicked")??;
+    let legacy = ctx
+        .spawn_blocking(move || read_legacy(&prefs_dir, &triggers_dir))
+        .await
+        .context("the legacy reader panicked")??;
 
     docs.ensure_collection(&CollectionSpec::new(PREFS_COLLECTION))
         .await
@@ -111,13 +118,7 @@ async fn import_into(scoped: &ScopedStorage, state_dir: &Path) -> Result<Outcome
         triggers += support::append_if_empty(scoped, &day.stream, day.records).await?;
     }
 
-    support::mark_imported(
-        docs,
-        MARKER_COLLECTION,
-        &marker,
-        json!({ "prefs": prefs, "triggers": triggers, "skipped": legacy.skipped }),
-    )
-    .await?;
+    support::mark_imported(scoped, MARKER_COLLECTION, &marker).await?;
     tracing::info!(
         "{LOG_PREFIX} imported prefs={prefs} triggers={triggers} skipped={}",
         legacy.skipped

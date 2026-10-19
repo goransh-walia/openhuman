@@ -4,8 +4,8 @@ use std::path::Path;
 ///
 /// Failures are logged and do not abort startup. Individual migration helpers
 /// remain responsible for their own idempotency markers.
-pub fn run_workspace_migrations(workspace_dir: &Path) {
-    match crate::threads::migrate_welcome_agent_artifacts(workspace_dir) {
+pub fn run_workspace_migrations(ctx: &crate::core::runtime::DispatchCtx, workspace_dir: &Path) {
+    match crate::threads::migrate_welcome_agent_artifacts(ctx, workspace_dir) {
         Ok(result) if result.already_done => {
             log::debug!("[migration::welcome-to-orchestrator] already applied");
         }

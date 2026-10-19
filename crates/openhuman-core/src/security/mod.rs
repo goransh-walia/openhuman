@@ -21,6 +21,8 @@ pub mod policy;
 pub mod prompt_injection;
 pub mod redact;
 pub mod secret_storage;
+pub(crate) mod secure_open;
+pub mod turn_origin;
 
 pub use self::secret_storage::SecretStore;
 pub use egress::{

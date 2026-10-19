@@ -14,7 +14,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use openhuman_core::backend::BackendTransport;
 use openhuman_core::config::Config;
 use openhuman_core::core::runtime::{DomainSet, ServiceSet, TokenSource};
 use openhuman_core::core::types::HostKind;
@@ -96,10 +95,10 @@ pub struct RuntimeBuilder {
     pub(super) session: Option<Session>,
     pub(super) backend_url: Option<String>,
     pub(super) api_key: Option<ApiKey>,
-    pub(super) backend_transport: Option<Arc<dyn BackendTransport>>,
     pub(super) memory_engine: Option<Arc<dyn tinymemory_api::MemoryEngine>>,
     pub(super) session_store: Option<Arc<dyn SessionStoreProvider>>,
     pub(super) cron_delivery: Option<Arc<dyn openhuman_core::cron::host_delivery::CronDelivery>>,
+    pub(super) cron_job_handlers: Vec<(crate::cron::JobKind, Arc<dyn crate::cron::JobKindHandler>)>,
     pub(super) seams: HostSeams,
     pub(super) max_agents: usize,
     pub(super) agent_defaults: super::AgentDefaults,
@@ -142,10 +141,10 @@ impl RuntimeBuilder {
             session: None,
             backend_url: None,
             api_key: None,
-            backend_transport: None,
             memory_engine: None,
             session_store: None,
             cron_delivery: None,
+            cron_job_handlers: Vec::new(),
             seams: HostSeams::default(),
             max_agents: DEFAULT_MAX_AGENTS,
             agent_defaults: super::AgentDefaults::default(),
@@ -220,20 +219,6 @@ impl RuntimeBuilder {
         self
     }
 
-    /// The transport the runtime reaches the hosted TinyHumans backend
-    /// through (see [`BackendTransport`]).
-    ///
-    /// The core carries no backend client of its own: without a transport
-    /// every hosted-backend surface (billing, integrations tools, channel
-    /// relay, cloud voice) answers with a typed "backend unavailable" error
-    /// while agents, memory, skills and RPC work as normal. The
-    /// `openhuman-tinyhumans` crate supplies the SDK-backed implementation
-    /// and a builder that installs it for you.
-    pub fn backend_transport(mut self, transport: Arc<dyn BackendTransport>) -> Self {
-        self.backend_transport = Some(transport);
-        self
-    }
-
     /// The memory engine every agent and [`crate::Runtime::memory`](super::Runtime::memory)
     /// use, in place of the configured `[memory]` engine (TinyHumans over the
     /// backend credential, or CortexDB with a stored key).
@@ -278,6 +263,23 @@ impl RuntimeBuilder {
         delivery: Arc<dyn openhuman_core::cron::host_delivery::CronDelivery>,
     ) -> Self {
         self.cron_delivery = Some(delivery);
+        self
+    }
+
+    /// Run scheduled jobs of `kind` through `handler` instead of the built-in
+    /// one (see [`Runtime::register_job_handler`](crate::Runtime::register_job_handler)).
+    /// Registered when the runtime is built and restored when it drops, so a
+    /// host can swap how `shell`, `agent` or `flow` jobs run without touching
+    /// cron internals. Call it once per kind; a later call replaces an earlier
+    /// one for the same kind.
+    pub fn cron_job_handler(
+        mut self,
+        kind: crate::cron::JobKind,
+        handler: Arc<dyn crate::cron::JobKindHandler>,
+    ) -> Self {
+        self.cron_job_handlers
+            .retain(|(existing, _)| *existing != kind);
+        self.cron_job_handlers.push((kind, handler));
         self
     }
 

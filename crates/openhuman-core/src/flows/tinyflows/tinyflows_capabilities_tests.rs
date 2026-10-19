@@ -1,4 +1,5 @@
 use super::*;
+use crate::flows::tinyflows::caps::OpenHumanCode;
 
 // ── build_capabilities smoke ────────────────────────────────────────────
 
@@ -6,7 +7,12 @@ use super::*;
 fn build_capabilities_constructs_every_slot_without_panicking() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let caps = build_capabilities(config, "test:build", None);
+    let caps = build_capabilities(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        config,
+        "test:build",
+        None,
+    );
     assert!(caps.tasks.is_some(), "Tinyflows task nodes need a runner");
     assert!(
         caps.approvals.is_none(),
@@ -54,7 +60,12 @@ async fn http_adapter_rejects_host_outside_strict_allowlist() {
 async fn engine_run_drives_trigger_to_http_request_through_the_real_seam() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let caps = build_capabilities(config, "test:smoke", None);
+    let caps = build_capabilities(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        config,
+        "test:smoke",
+        None,
+    );
 
     // A deterministically-blocked loopback URL with `on_error: continue` so
     // the run completes even though the (real, SSRF-guarded) HTTP adapter
@@ -109,6 +120,7 @@ async fn code_adapter_javascript_runs_when_isolated_and_refuses_when_isolation_i
             .with_gateway(crate::security::policy::native_commands_stub::StubGateway::tiered()),
     );
     let runner = OpenHumanCode {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         config,
         security,
         approval: Default::default(),
@@ -272,6 +284,9 @@ fn http_cred_name_returns_none_for_non_http_cred_ref_or_empty_name() {
 
 #[tokio::test]
 async fn preflight_fails_before_dispatch_naming_the_missing_field() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     // Seed the schema cache so no live Composio backend is needed. Uses its
@@ -321,6 +336,9 @@ async fn preflight_fails_before_dispatch_naming_the_missing_field() {
 
 #[tokio::test]
 async fn preflight_skips_when_no_schema_is_available() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     // A slug whose toolkit is unknown to the curation catalog has no schema
@@ -332,6 +350,9 @@ async fn preflight_skips_when_no_schema_is_available() {
 
 #[tokio::test]
 async fn preflight_applies_static_arg_rules_without_a_catalog() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     // No catalog seeding for this slug — `GMAIL_ADD_LABEL_TO_EMAIL` is never
@@ -367,6 +388,9 @@ async fn preflight_applies_static_arg_rules_without_a_catalog() {
 
 #[tokio::test]
 async fn preflight_invoker_gates_the_mock_tool_path() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     use tinyflows::caps::ToolInvoker as _;
 
     let tmp = TempDir::new().unwrap();
@@ -456,7 +480,7 @@ fn harness_model_default_override_forwards_raw_byok_models_verbatim() {
 fn route_for_agent_ref_selects_harness_for_definitions_else_fallback() {
     // Ensure the global registry is populated (idempotent no-op if another test
     // already initialised it; builtins are always present either way).
-    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent_registry::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     // A shipped harness definition → full-loop harness path.
     assert_eq!(route_for_agent_ref("workflow_builder"), AgentRoute::Harness);
@@ -499,4 +523,49 @@ fn route_custom_entry_lookup_falls_back_when_no_entry_exists() {
         "an agent_ref unknown to both the harness registry and the custom config registry \
          must still resolve through the fallback (which reports \"unknown agent_ref\")"
     );
+}
+
+// ── Handed context ───────────────────────────────────────────────────────
+
+/// An adapter acts for the context its run was started with, never for the
+/// scope of whichever task happens to poll it: two runs under two contexts do
+/// not cross, even when a third context is ambient.
+#[tokio::test]
+async fn adapters_act_for_the_context_they_were_handed_not_the_ambient_one() {
+    use crate::core::runtime::{context::CoreContext, ComponentSet, DispatchCtx, DomainSet};
+
+    let tmp = TempDir::new().unwrap();
+    let config = test_config(&tmp);
+    let security = Arc::new(SecurityPolicy::from_config(
+        &config.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    ));
+    let sandbox_off = ComponentSet {
+        sandbox: false,
+        ..ComponentSet::default()
+    };
+    let handed_off = DispatchCtx::new(CoreContext::for_test_with_components(sandbox_off));
+    let handed_on = DispatchCtx::new(CoreContext::for_test_with_components(
+        ComponentSet::default(),
+    ));
+    let ambient = CoreContext::for_test(DomainSet::full(), None);
+
+    let build = |ctx: &DispatchCtx| OpenHumanCode {
+        ctx: ctx.clone(),
+        config: config.clone(),
+        security: security.clone(),
+        approval: Default::default(),
+    };
+    let (off, on) = (build(&handed_off), build(&handed_on));
+
+    CoreContext::scope(ambient, async {
+        assert!(!off.ctx.components().sandbox, "the run's own switch wins");
+        assert!(on.ctx.components().sandbox, "two runs do not cross");
+        assert!(
+            DispatchCtx::ambient().components().sandbox,
+            "the ambient scope is a third, unrelated context"
+        );
+    })
+    .await;
 }

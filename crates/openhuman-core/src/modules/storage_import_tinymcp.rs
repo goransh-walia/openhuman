@@ -35,6 +35,7 @@ use sha2::Digest;
 use tinystoragedrivers::secrets::{DocumentSecrets, SecretStore};
 use tinystoragedrivers::{CollectionSpec, DocumentStore, ErrorKind, Precondition, ScopedStorage};
 
+use crate::core::runtime::DispatchCtx;
 use crate::storage::rusqlite::{self, Connection, OpenFlags};
 
 const LOG_PREFIX: &str = "[mcp-import]";
@@ -69,39 +70,32 @@ pub(crate) enum Outcome {
 
 /// Imports the legacy files under `data_dir` into the module's scope of the
 /// installed backend.
-pub(crate) async fn import_legacy(data_dir: &Path) -> Result<Outcome> {
+pub(crate) async fn import_legacy(ctx: &DispatchCtx, data_dir: &Path) -> Result<Outcome> {
     let Some(backend) = crate::storage::installed() else {
         return Ok(Outcome::NoBackend);
     };
-    let scope = super::storage_host::current_module_scope(
-        &crate::core::runtime::DispatchCtx::ambient(),
-        MODULE_ID,
-    )
-    .map_err(|error| anyhow!("resolve the module scope: {:?}", error.kind()))?;
+    let scope = super::storage_host::current_module_scope(ctx, MODULE_ID)
+        .map_err(|error| anyhow!("resolve the module scope: {:?}", error.kind()))?;
     let scoped = backend
         .for_scope(&scope)
         .map_err(|error| anyhow!("open the module scope: {:?}", error.kind()))?;
     let keys = crate::storage::secrets::keys()
         .map_err(|error| anyhow!("no key provider for module secrets: {:?}", error.kind()))?;
     let secrets = DocumentSecrets::new(&scoped, keys);
-    import_into(&scoped, &secrets, data_dir).await
+    import_into(ctx, &scoped, &secrets, data_dir).await
 }
 
 async fn import_into(
+    ctx: &DispatchCtx,
     scoped: &ScopedStorage,
     secrets: &dyn SecretStore,
     data_dir: &Path,
 ) -> Result<Outcome> {
     let docs = scoped.documents();
     let marker = marker_id(data_dir);
-    docs.ensure_collection(&CollectionSpec::new(MARKER_COLLECTION))
+    if crate::storage::import_state::host_import_done(scoped, MARKER_COLLECTION, &marker)
         .await
-        .map_err(|error| anyhow!("declare the marker collection: {:?}", error.kind()))?;
-    if docs
-        .get(MARKER_COLLECTION, &marker)
-        .await
-        .map_err(|error| anyhow!("read the marker: {:?}", error.kind()))?
-        .is_some()
+        .map_err(|error| anyhow!("read the import state: {:?}", error.kind()))?
     {
         return Ok(Outcome::AlreadyDone);
     }
@@ -112,8 +106,8 @@ async fn import_into(
     }
 
     // The files are read on a blocking thread, from copies.
-    let (legacy_servers, legacy_audit) =
-        crate::core::runtime::spawn_blocking_scoped(move || -> Result<_> {
+    let (legacy_servers, legacy_audit) = ctx
+        .spawn_blocking(move || -> Result<_> {
             let servers = if clients.exists() {
                 read_servers(&clients)?
             } else {
@@ -175,20 +169,9 @@ async fn import_into(
         }
     }
 
-    let body = json!({
-        "servers": servers,
-        "secrets": secret_count,
-        "audit": audited,
-        "at": now_ms(),
-    });
-    match docs
-        .put(MARKER_COLLECTION, &marker, body, Precondition::Absent)
+    crate::storage::import_state::host_import_mark(scoped, MARKER_COLLECTION, &marker)
         .await
-    {
-        Ok(_) => {}
-        Err(error) if matches!(error.kind(), ErrorKind::Conflict | ErrorKind::AlreadyExists) => {}
-        Err(error) => return Err(anyhow!("write the marker: {:?}", error.kind())),
-    }
+        .map_err(|error| anyhow!("write the import state: {:?}", error.kind()))?;
     tracing::info!(
         "{LOG_PREFIX} imported servers={servers} secrets={secret_count} audit={audited}"
     );

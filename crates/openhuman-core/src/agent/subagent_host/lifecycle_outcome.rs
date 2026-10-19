@@ -2,17 +2,50 @@
 
 use super::*;
 
-/// The host's in-flight subagent runs of one agent context.
-pub(super) type HostInFlightMap = AsyncMutex<HashMap<HostLifecycleKey, Arc<HostInFlight>>>;
-
 pub(super) fn host_outcome_to_neutral(
     outcome: SubagentRunOutcome,
-    definition: &crate::agent::harness::host_definition::AgentDefinition,
+    definition: &crate::agent_registry::host_definition::AgentDefinition,
     options: &SubagentRunOptions,
 ) -> SubagentOutcome {
+    let usage_cost = outcome.usage.cost();
+    let mut extensions = std::collections::BTreeMap::from_iter([
+        ("agent_id".into(), serde_json::json!(definition.id)),
+        ("iterations".into(), serde_json::json!(outcome.iterations)),
+        (
+            "skill_filter_override".into(),
+            serde_json::json!(options.skill_filter_override),
+        ),
+        (
+            "elapsed_ms".into(),
+            serde_json::json!(outcome.elapsed.as_millis() as u64),
+        ),
+        (
+            "elapsed_ns".into(),
+            serde_json::json!(outcome.elapsed.as_nanos().min(u64::MAX as u128) as u64),
+        ),
+        (
+            "artifact_paths".into(),
+            serde_json::json!(outcome.artifact_paths),
+        ),
+    ]);
+    if let Some(cause) = &outcome.failure_cause {
+        extensions.insert(
+            "failure_cause".into(),
+            serde_json::json!({
+                "class": cause.class,
+                "operation": cause.operation,
+                "summary": cause.summary,
+            }),
+        );
+    }
     let status = match outcome.status {
         SubagentRunStatus::Completed => SubagentOutcomeKind::Completed,
-        SubagentRunStatus::AwaitingUser { question, .. } => {
+        SubagentRunStatus::AwaitingUser {
+            question,
+            options: answer_options,
+            ..
+        } => {
+            extensions.insert("options".into(), serde_json::json!(answer_options));
             SubagentOutcomeKind::AwaitingInput(SubagentPause {
                 reason: question,
                 resume: SubagentResume {
@@ -47,6 +80,12 @@ pub(super) fn host_outcome_to_neutral(
     };
     SubagentOutcome {
         task_id: outcome.task_id,
+        worker_thread_id: options.worker_thread_id.clone(),
+        tier: Some(definition.agent_tier.as_str().to_owned()),
+        model_override: options.model_override.clone(),
+        cost_usd: usage_cost.usd(),
+        cost_source: Some(usage_cost.source),
+        extensions: std::mem::take(&mut extensions),
         output: outcome.output,
         history: outcome
             .final_history
@@ -85,37 +124,6 @@ pub(super) fn host_outcome_to_neutral(
     }
 }
 
-pub(super) fn observer_cancelled_outcome(
-    task_key: &SubagentTaskKey,
-    agent_id: &str,
-) -> SubagentRunOutcome {
-    SubagentRunOutcome {
-        task_id: task_key.task_id.clone(),
-        agent_id: agent_id.to_owned(),
-        output: String::new(),
-        iterations: 0,
-        elapsed: std::time::Duration::default(),
-        mode: super::super::SubagentMode::Typed,
-        status: SubagentRunStatus::Cancelled,
-        final_history: Vec::new(),
-        usage: SubagentUsage::default(),
-        artifact_paths: Vec::new(),
-        persistence_disposition:
-            tinyagents_orchestration::subagent::SubagentPersistenceDisposition::ObserverCancelled,
-    }
-}
-
-pub(super) fn host_observer_outcome(mut outcome: SubagentRunOutcome) -> SubagentRunOutcome {
-    use tinyagents_orchestration::subagent::SubagentPersistenceDisposition as Disposition;
-
-    outcome.persistence_disposition = match outcome.persistence_disposition {
-        Disposition::PauseCommitted | Disposition::PauseReplaced | Disposition::PauseExisting => {
-            Disposition::PauseExisting
-        }
-        Disposition::TerminalInserted | Disposition::TerminalExisting => {
-            Disposition::TerminalExisting
-        }
-        Disposition::ObserverCancelled => Disposition::ObserverCancelled,
-    };
-    outcome
-}
+#[cfg(test)]
+#[path = "lifecycle_outcome_tests.rs"]
+mod tests;

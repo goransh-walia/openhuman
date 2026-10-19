@@ -204,10 +204,7 @@ async fn recall_fetch_and_forget_round_trip_and_recall_records_citations() {
     .await;
     assert!(!fetched.is_error, "{}", text(&fetched));
     assert_eq!(
-        serde_json::from_str::<Value>(&text(&fetched)).unwrap()["hits"]
-            .as_array()
-            .unwrap()
-            .len(),
+        serde_json::from_str::<Value>(&text(&fetched)).unwrap()["items"],
         1
     );
 

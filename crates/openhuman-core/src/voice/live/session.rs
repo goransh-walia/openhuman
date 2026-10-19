@@ -18,10 +18,10 @@ use super::providers;
 use crate::agent::session_host::OpenHumanSessionHost;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::live_harness::{assemble_live_tool_harness, LIVE_MAX_TOOL_CALLS};
-use crate::agent::turn_origin::{with_origin, AgentTurnOrigin};
 use crate::config::schema::voice_live::is_live_provider;
 use crate::config::Config;
 use crate::security::approval::{ApprovalChatContext, ApprovalTurnContext};
+use crate::security::turn_origin::{with_origin, AgentTurnOrigin};
 use crate::threads::store::{ConversationMessage, CreateConversationThread};
 
 /// The agent a live session borrows its tools from.
@@ -95,6 +95,7 @@ pub(crate) fn system_prompt(recent: &[ConversationMessage]) -> String {
 /// Makes sure the session's thread exists, creating a voice thread when the
 /// client is not on one.
 async fn ensure_thread(
+    ctx: &DispatchCtx,
     config: &Config,
     thread_id: Option<String>,
 ) -> Result<String, LiveVoiceError> {
@@ -102,7 +103,7 @@ async fn ensure_thread(
         .filter(|t| !t.trim().is_empty())
         .unwrap_or_else(|| format!("voice-{}", uuid::Uuid::new_v4()));
     crate::threads::store::blocking::ensure_thread(
-        DispatchCtx::ambient(),
+        ctx.clone(),
         config.workspace_dir.clone(),
         CreateConversationThread {
             id: id.clone(),
@@ -121,12 +122,13 @@ async fn ensure_thread(
 
 /// Starts a live session.
 pub(crate) async fn start(
+    ctx: &DispatchCtx,
     config: Arc<Config>,
     request: LiveStartRequest,
     session_id: &str,
 ) -> Result<StartedLiveSession, LiveVoiceError> {
     let provider = resolve_provider(&config, request.provider.as_deref())?;
-    let thread_id = ensure_thread(&config, request.thread_id).await?;
+    let thread_id = ensure_thread(ctx, &config, request.thread_id).await?;
     tracing::debug!(
         session_id,
         provider = %provider,
@@ -134,18 +136,14 @@ pub(crate) async fn start(
         "[voice-live] starting session"
     );
 
-    let mut host = OpenHumanSessionHost::from_config_for_agent(
-        &crate::core::runtime::DispatchCtx::ambient(),
-        &config,
-        LIVE_AGENT_ID,
-    )
-    .map_err(|e| LiveVoiceError::internal(format!("agent build failed: {e}")))?;
+    let mut host = OpenHumanSessionHost::from_config_for_agent(ctx, &config, LIVE_AGENT_ID)
+        .map_err(|e| LiveVoiceError::internal(format!("agent build failed: {e}")))?;
     host.set_event_context(format!("voice_live_{session_id}"), "voice");
     host.set_thread_id(Some(&thread_id));
     let harness = assemble_live_tool_harness(host.live_tool_surface());
 
     let recent = crate::threads::store::blocking::get_messages(
-        DispatchCtx::ambient(),
+        ctx.clone(),
         config.workspace_dir.clone(),
         thread_id.clone(),
     )

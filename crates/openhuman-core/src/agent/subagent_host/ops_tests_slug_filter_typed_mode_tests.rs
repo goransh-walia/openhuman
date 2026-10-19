@@ -6,7 +6,7 @@ use tinyagents_harness::context::{current_run_depth, with_run_depth, RunDepth};
 fn filter_named_scope_keeps_only_named() {
     let parent: Vec<Box<dyn Tool>> = vec![stub("alpha"), stub("beta"), stub("gamma")];
     let def = make_def_named_tools(&["alpha", "gamma"]);
-    let idx = filter_tool_indices(&parent, &def.tools, None);
+    let idx = filter_tool_indices(&parent, &def.tools, &[], None);
     let names: Vec<&str> = idx.iter().map(|&i| parent[i].name()).collect();
     assert_eq!(names, vec!["alpha", "gamma"]);
 }
@@ -21,7 +21,7 @@ fn filter_skill_filter_restricts_to_prefix() {
     ];
     let mut def = make_def_named_tools(&[]);
     def.tools = ToolScope::Wildcard;
-    let idx = filter_tool_indices(&parent, &def.tools, Some("notion"));
+    let idx = filter_tool_indices(&parent, &def.tools, &[], Some("notion"));
     let names: Vec<&str> = idx.iter().map(|&i| parent[i].name()).collect();
     assert_eq!(names, vec!["notion__search", "notion__read"]);
 }
@@ -36,7 +36,7 @@ fn filter_skill_filter_combined_with_named_scope() {
         stub("gmail__send"),
     ];
     let def = make_def_named_tools(&["notion__search", "gmail__send"]);
-    let idx = filter_tool_indices(&parent, &def.tools, Some("notion"));
+    let idx = filter_tool_indices(&parent, &def.tools, &[], Some("notion"));
     let names: Vec<&str> = idx.iter().map(|&i| parent[i].name()).collect();
     assert_eq!(names, vec!["notion__search"]);
 }
@@ -44,25 +44,6 @@ fn filter_skill_filter_combined_with_named_scope() {
 #[test]
 fn subagent_mode_as_str_roundtrip() {
     assert_eq!(SubagentMode::Typed.as_str(), "typed");
-}
-
-#[test]
-fn append_subagent_role_contract_adds_role_and_brevity_rules() {
-    let rendered = append_subagent_role_contract("base prompt".to_string(), "researcher");
-    assert!(rendered.contains("## Sub-agent Role Contract"));
-    assert!(rendered.contains("You are a sub-agent working for a parent OpenHuman agent"));
-    assert!(rendered.contains("Keep your final response concise and synthesis-ready"));
-    assert!(rendered.contains("## Sub-agent Result Contract"));
-    assert!(rendered.contains("Evidence used"));
-    assert!(rendered.contains("Do not include facts in Answer that are not supported"));
-    assert!(rendered.contains("truncated, partial, or too large"));
-}
-
-#[test]
-fn append_subagent_role_contract_is_idempotent() {
-    let once = append_subagent_role_contract("base prompt".to_string(), "researcher");
-    let twice = append_subagent_role_contract(once.clone(), "researcher");
-    assert_eq!(once, twice, "contract suffix should only appear once");
 }
 
 #[tokio::test]
@@ -118,13 +99,28 @@ async fn typed_mode_system_prompt_includes_subagent_role_contract() {
         .iter()
         .find(|m| m.role == "system")
         .expect("system message should be present");
-    assert!(system_msg.content.contains("## Sub-agent Role Contract"));
     assert!(system_msg
         .content
-        .contains("You are a sub-agent working for a parent OpenHuman agent"));
+        .contains("You are a subagent (depth 1) working for a parent agent, not the end user."));
     assert!(system_msg
         .content
-        .contains("Keep your final response concise and synthesis-ready"));
+        .contains("Your assignment: the actual task prompt"));
+    for heading in [
+        "Answer",
+        "Evidence used",
+        "Actions taken",
+        "Open uncertainties",
+        "Failed tool calls",
+        "Recommended next step",
+    ] {
+        assert!(
+            system_msg.content.contains(heading),
+            "missing {heading} heading"
+        );
+    }
+    assert!(system_msg
+        .content
+        .contains("Do not state unsupported facts; disclose truncated or partial tool results."));
 }
 
 #[tokio::test]
@@ -152,6 +148,7 @@ async fn typed_mode_returns_text_through_runner() {
                     checkpoint_dir: None,
                     worktree_action_dir: None,
                     run_queue: None,
+                    message_run_queue: None,
                 },
             ),
         )
@@ -382,6 +379,7 @@ async fn typed_mode_filters_tools_by_skill_filter() {
                     checkpoint_dir: None,
                     worktree_action_dir: None,
                     run_queue: None,
+                    message_run_queue: None,
                 },
             ),
         )

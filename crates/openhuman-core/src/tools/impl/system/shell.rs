@@ -1,9 +1,9 @@
 use super::shell_description::{command_param_description, shell_description};
 use super::shell_support::{exec_result, python_utf8_env};
-use crate::agent::host_runtime::RuntimeAdapter;
 use crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool;
 use crate::config::Config;
 use crate::core::runtime::DispatchCtx;
+use crate::modules::tinybox::host_runtime::RuntimeAdapter;
 use crate::security::audit_record::HostAuditEvent;
 use crate::security::policy::{CommandFlow, CommandQuery, CommandStage};
 use crate::security::SecurityPolicy;

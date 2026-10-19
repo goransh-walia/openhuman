@@ -78,6 +78,7 @@ tinymcp-bus = { path = "../../vendor/tinymcp/crates/tinymcp-bus" }
 # The session store port (`SessionStoreProvider`) a host implements to keep
 # conversations in its own database, and the in-memory provider; same path as
 # the core's so one copy resolves.
+tinyagents-hooks = { workspace = true }
 tinyagents-harness = { path = "../../vendor/tinyagents/crates/tinyagents-harness", default-features = false }
 tinyagents-definition = { path = "../../vendor/tinyagents/crates/tinyagents-definition" }
 tinyagents-session = { path = "../../vendor/tinyagents/crates/tinyagents-session" }
@@ -103,8 +104,12 @@ rand = "0.10"
 async-trait = "0.1"
 tinymemory-api = { path = "../../vendor/tinymemory/crates/tinymemory-api", features = ["conformance"] }
 dirs = "6"
-# `cron_tests` builds core `CronJob`s, whose schedule types live in tinyflows.
-tinyflows-schedule = { path = "../../vendor/tinyflows/crates/tinyflows-schedule" }
+# `cron_tests` builds core `CronJob`s, whose schedule types live in the
+# tinyflows bus contract.
+tinyflows-bus = { path = "../../vendor/tinyflows/crates/tinyflows-bus" }
+# The real tinyflows module, linked into the test binaries (never the product):
+# the scheduler runtime and job store that `cron` reaches over the bus.
+tinyflows-module = { path = "../../vendor/tinyflows/crates/tinyflows-module", features = ["static-link"] }
 env_logger = "0.11"
 # The profile tests and example implement a stub `BackendTransport`, whose
 # `http_client` hands out a `reqwest::Client`. Same features as the core's, so

@@ -11,6 +11,7 @@ struct FakeTool {
     name: &'static str,
     permission: PermissionLevel,
     external: bool,
+    family: Option<&'static str>,
 }
 
 #[async_trait]
@@ -30,6 +31,9 @@ impl Tool for FakeTool {
     fn external_effect(&self) -> bool {
         self.external
     }
+    fn family(&self) -> Option<&str> {
+        self.family
+    }
     async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
         unreachable!("the module source never executes a tool")
     }
@@ -41,6 +45,7 @@ fn registry() -> Vec<Arc<Vec<Box<dyn Tool>>>> {
             name,
             permission,
             external,
+            family: None,
         })
     };
     vec![Arc::new(vec![
@@ -52,6 +57,12 @@ fn registry() -> Vec<Arc<Vec<Box<dyn Tool>>>> {
         tool("gmail_send", PermissionLevel::Write, true),
         tool("web_fetch", PermissionLevel::ReadOnly, true),
         tool(SHELL_TOOL, PermissionLevel::Execute, false),
+        Box::new(FakeTool {
+            name: "desktop_launch",
+            permission: PermissionLevel::ReadOnly,
+            external: true,
+            family: Some("desktop"),
+        }),
     ])]
 }
 
@@ -112,6 +123,25 @@ async fn verdict(
 ) -> Result<Verdict, String> {
     ModuleVerdicts::with_module(tool_sets, module.clone())
         .verdict(&ctx(), &call)
+        .await
+}
+
+async fn verdict_with_desktop_approvals_disabled(
+    module: &Arc<Recorder>,
+    call: TaToolCall,
+) -> Result<Verdict, String> {
+    let mut config = crate::config::Config::default();
+    config.desktop.approvals_enabled = false;
+    let core = crate::core::runtime::CoreContext::for_test_with_config(
+        crate::core::runtime::DomainSet::full(),
+        config,
+    );
+    let context = RunContext::new(
+        RunConfig::new("module-verdicts-desktop-approval-off"),
+        OpenHumanRunContext::new().with_core(Some(core)),
+    );
+    ModuleVerdicts::with_module(registry(), module.clone())
+        .verdict(&context, &call)
         .await
 }
 
@@ -207,6 +237,39 @@ async fn a_tool_with_an_external_effect_asks_with_redacted_evidence_and_no_spend
 }
 
 #[tokio::test]
+async fn an_unavailable_module_denies_external_effects_without_an_approval_gate() {
+    // This process has no interactive ApprovalGate. That must not make a
+    // module fault equivalent to permission for an external effect.
+    let module = Recorder::answering(Err("module unavailable".into()));
+    let answer = verdict(&module, registry(), call("web_fetch", json!({"url": "x"}))).await;
+
+    assert_eq!(answer, Err("module unavailable".into()));
+    assert_eq!(
+        module.asked(),
+        vec![(
+            vec![host_action(ToolPermission::ReadOnly, true, false)],
+            true
+        )]
+    );
+}
+
+#[tokio::test]
+async fn desktop_approval_bypass_keeps_external_metadata_and_fails_closed_on_module_fault() {
+    let module = Recorder::answering(Err("module unavailable".into()));
+    let answer = verdict_with_desktop_approvals_disabled(
+        &module,
+        call("desktop_launch", json!({"app": "Calculator"})),
+    )
+    .await;
+
+    assert_eq!(answer, Err("module unavailable".into()));
+    assert_eq!(
+        module.asked(),
+        vec![(vec![host_action(ToolPermission::ReadOnly, true, false)], true)]
+    );
+}
+
+#[tokio::test]
 async fn shell_asks_for_its_command_without_spending_and_the_category_only_raises() {
     for (category, expected) in [
         (Some("destructive"), Some(CommandClass::Destructive)),
@@ -269,14 +332,14 @@ async fn the_module_verdict_passes_through_unchanged() {
 }
 
 #[tokio::test]
-async fn with_no_approval_gate_a_module_that_cannot_answer_does_not_stop_a_plain_tool() {
-    // No approval gate is installed in unit tests: there is no human to ask and
-    // the resolver has always let such a call through. `shell` is never let through.
+async fn with_no_approval_gate_a_module_fault_still_blocks_acting_tools() {
+    // No interactive approval UI is installed in this process, but the module
+    // still owns admission for acting tools.
     assert!(ApprovalGate::try_global().is_none());
     let module = Recorder::answering(Err("module unavailable".into()));
     assert_eq!(
         verdict(&module, registry(), call("write_file", json!({}))).await,
-        Ok(Verdict::Allow)
+        Err("module unavailable".to_string())
     );
     assert_eq!(
         verdict(
@@ -314,7 +377,7 @@ async fn a_scheduled_origin_in_the_task_scope_reaches_the_module_too() {
         source: TrustedAutomationSource::Cron,
     };
     let seen =
-        crate::agent::turn_origin::with_origin(origin, async { module_origin(&ctx()) }).await;
+        crate::security::turn_origin::with_origin(origin, async { module_origin(&ctx()) }).await;
     assert_eq!(seen, Origin::Cron);
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Run the CI lane plan (lanes-plan.mjs): lanes in parallel, checks in order.
+// Run the CI lane plan (lanes-plan.mjs): private lanes sequentially, hosted
+// lanes with bounded concurrency, and each lane's checks in order.
 //
 // Usage:
 //   node scripts/ci/self-hosted/lanes.mjs --profile ex63|hosted
@@ -9,7 +10,7 @@
 //   node scripts/ci/self-hosted/lanes.mjs --wait-all [--out ci-out]
 //
 // Step-per-lane mode, so a workflow shows every lane as its own step while
-// the lanes still run in parallel:
+// the profile's scheduling remains in effect:
 //   1. `--detach` starts the runner in the background (under
 //      scripts/ci-cancel-aware.sh) and writes the active lanes as JSON to
 //      $GITHUB_OUTPUT `lanes`.
@@ -21,8 +22,7 @@
 // Area flags come from CI_AREA_* (see AREA_ENV). Outputs, under --out:
 //   logs/<lane>.log     full output of each lane
 //   lcov/*.info         coverage written by the coverage checks
-//   ci-timings.json     per-check outcome, timings, target-dir sizes, and
-//                       the compile cache's stats (tinymold or sccache)
+//   ci-timings.json     per-check outcome, timings, target-dir sizes
 // and a per-check outcome table in $GITHUB_STEP_SUMMARY.
 //
 // Exit status is non-zero when any gating check failed or was blocked by a
@@ -126,46 +126,6 @@ export function orderProblems(plan) {
   return problems;
 }
 
-/** One line on sccache's Rust hit rate and where its cache lives, or null. */
-export function sccacheSummary(sccache) {
-  const stats = sccache?.stats;
-  if (!stats) return null;
-  const hits = stats.cache_hits?.counts?.Rust ?? 0;
-  const misses = stats.cache_misses?.counts?.Rust ?? 0;
-  const total = hits + misses;
-  const rate = total ? ` (${Math.round((100 * hits) / total)}%)` : "";
-  const where = /webdav/i.test(sccache.cache_location ?? "")
-    ? "shared store"
-    : "slot disk";
-  return `sccache (${where}): ${hits} Rust hits, ${misses} misses${rate}.`;
-}
-
-/**
- * Lines on tinymold's hit rate and its push to the shared remote, or null.
- *
- * `stats` is `tinymold stats` output: a headline ("87.5% hit rate: 7 of 8
- * cacheable compiles served from cache") and a line of counts.
- */
-export function tinymoldSummary(tinymold) {
-  if (!tinymold) return null;
-  const lines = (tinymold.stats ?? "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const stats =
-    lines.length > 0
-      ? `${lines[0]}${lines[1] ? ` (${lines[1]})` : ""}`
-      : "no stats (`tinymold stats` failed)";
-  const rows = [`tinymold (shared remote): ${stats}.`];
-  const push = tinymold.push;
-  if (push?.ok) rows.push(`tinymold push: ${push.output || "done"}.`);
-  else if (push)
-    rows.push(
-      `tinymold push failed (warning only): ${push.output || `exit ${push.status}`}.`,
-    );
-  return rows.join("\n");
-}
-
 /** Render the per-check outcome table for $GITHUB_STEP_SUMMARY. */
 export function renderSummary(results) {
   const rows = [
@@ -196,10 +156,6 @@ export function renderSummary(results) {
       "",
       `VM memory: ${(mem.totalMiB / 1024).toFixed(1)} GiB, lowest available ${mem.minAvailableMiB == null ? "?" : `${(mem.minAvailableMiB / 1024).toFixed(1)} GiB`}; heavy-compile slots: ${results.heavySlots ?? "uncapped"}.`,
     );
-  const sc = sccacheSummary(results.sccache);
-  if (sc) rows.push("", sc);
-  const tm = tinymoldSummary(results.tinymold);
-  if (tm) rows.push("", tm);
   rows.push(
     "",
     "`skipped` = area untouched; `blocked` = a check it needs did not succeed. Neither is a pass for the check itself.",
@@ -232,67 +188,6 @@ function du(path) {
   const r = spawnSync("du", ["-sb", path], { encoding: "utf8" });
   const bytes = Number.parseInt((r.stdout ?? "").split(/\s+/)[0], 10);
   return Number.isFinite(bytes) ? bytes : null;
-}
-
-function sccacheStats() {
-  const r = spawnSync("sccache", ["--show-stats", "--stats-format", "json"], {
-    encoding: "utf8",
-  });
-  if (r.status !== 0) return null;
-  try {
-    return JSON.parse(r.stdout);
-  } catch {
-    return null;
-  }
-}
-
-/** Whether a runnable `tinymold` binary is on PATH. */
-export function tinymoldOnPath(run = spawnSync) {
-  const r = run("tinymold", ["--version"], { stdio: "ignore" });
-  return !r.error && r.status === 0;
-}
-
-/**
- * Run a tinymold subcommand and capture its output. Never throws: the cache
- * is an accelerator, so its failures are reported, not fatal.
- */
-export function runTinymold(
-  args,
-  { run = spawnSync, env = process.env, timeoutMs = 60_000 } = {},
-) {
-  const r = run("tinymold", args, {
-    encoding: "utf8",
-    env,
-    timeout: timeoutMs,
-  });
-  const output = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
-  return {
-    ok: !r.error && r.status === 0,
-    status: r.status ?? null,
-    output: r.error ? r.error.message : output,
-  };
-}
-
-/**
- * After the lanes: push what this job compiled to the shared remote (only
- * successful compiles are ever stored, so a failed lane's entries are as
- * sound as a passing one's) and read the wrapper log's stats. A failed push
- * never fails the job; the summary step turns it into a warning.
- */
-export function finishTinymold({
-  log,
-  since,
-  run = spawnSync,
-  env = process.env,
-}) {
-  // Bounded: an unreachable server must not hold the job to its timeout.
-  const push = runTinymold(["remote", "push", "--since", String(since)], {
-    run,
-    env,
-    timeoutMs: 10 * 60_000,
-  });
-  const stats = runTinymold(["stats", "--log", log], { run, env });
-  return { log, push, stats: stats.ok ? stats.output : null };
 }
 
 /**
@@ -397,7 +292,12 @@ export class Runner {
   constructor(plan, { out, maxParallel, maxHeavy = Infinity }) {
     this.plan = plan;
     this.out = out;
-    this.maxParallel = maxParallel > 0 ? maxParallel : plan.lanes.length;
+    this.maxParallel =
+      plan.profile === "ex63"
+        ? 1
+        : maxParallel > 0
+          ? maxParallel
+          : plan.lanes.length;
     this.heavy = new PrioritySemaphore(maxHeavy);
     this.maxHeavy = maxHeavy;
     // check id -> { pgid, peakRssMiB } while running; sampled every 5 s.
@@ -457,7 +357,9 @@ export class Runner {
   runCommand(lane, check, logStream, record) {
     const env = { ...process.env, ...(lane.env ?? {}), ...(check.env ?? {}) };
     if (lane.targetDir) {
-      env.CARGO_TARGET_DIR = lane.targetDir;
+      env.CARGO_BUILD_TARGET_DIR =
+        check.env?.CARGO_BUILD_TARGET_DIR ?? lane.targetDir;
+      delete env.CARGO_TARGET_DIR;
       mkdirSync(lane.targetDir, { recursive: true });
     }
     const argv = ["bash", "-o", "pipefail", "-c", check.run];
@@ -767,11 +669,6 @@ async function waitAll(out) {
       appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
     for (const f of gatingFailures(results))
       console.log(`::error::[ci][lanes] ${f} did not pass`);
-    const push = results.tinymold?.push;
-    if (push && !push.ok)
-      console.log(
-        `::warning::[ci][lanes] tinymold remote push failed: ${push.output || `exit ${push.status}`}`,
-      );
   }
   return code;
 }
@@ -789,9 +686,6 @@ async function main() {
     areas,
     env: process.env,
     isPullRequest,
-    // Probed here, in the job that runs the lanes: the microVM guest puts
-    // the binary and the TINYMOLD_* variables in this job's environment.
-    tinymoldOnPath: args.profile === "ex63" && tinymoldOnPath(),
   });
 
   if (args.printMatrix) {
@@ -807,7 +701,6 @@ async function main() {
     return 2;
   }
 
-  if (plan.rustWrapper) log(`Rust compile cache: ${plan.rustWrapper}`);
   log(
     `profile=${args.profile} areas=${
       Object.entries(areas)
@@ -862,9 +755,6 @@ async function main() {
     log(`detached runner pid=${child.pid} lanes=${lanesJson}`);
     return 0;
   }
-  if (plan.rustWrapper === "sccache")
-    spawnSync("sccache", ["--start-server"], { stdio: "ignore" });
-  const jobStart = Math.floor(Date.now() / 1000);
 
   const envHeavy = Number.parseInt(process.env.OH_LANES_MAX_HEAVY ?? "", 10);
   const maxHeavy =
@@ -884,13 +774,6 @@ async function main() {
 
   const started = new Date().toISOString();
   const lanes = await runner.run();
-  let tinymold = null;
-  if (plan.rustWrapper === "tinymold" && !runner.cancelled) {
-    tinymold = finishTinymold({ log: plan.tinymoldLog, since: jobStart });
-    log(
-      `tinymold push: ${tinymold.push.ok ? "ok" : `failed (exit ${tinymold.push.status})`} ${tinymold.push.output}`,
-    );
-  }
   const results = {
     profile: args.profile,
     started,
@@ -898,9 +781,7 @@ async function main() {
     runner: process.env.RUNNER_NAME ?? null,
     areas,
     lanes,
-    rustWrapper: plan.rustWrapper ?? null,
-    sccache: plan.rustWrapper === "sccache" ? sccacheStats() : null,
-    tinymold,
+
     heavySlots: Number.isFinite(maxHeavy) ? maxHeavy : null,
     memory: runner.memory,
     cacheBytes: du(process.env.CI_CACHE_DIR),

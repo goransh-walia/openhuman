@@ -17,16 +17,16 @@ use std::time::Instant;
 use tokio::sync::mpsc::Sender;
 
 use crate::agent::harness::fork_context::{AgentContextPreparedSource, ParentExecutionContext};
-use crate::agent::progress::AgentProgress;
 use crate::agent::subagent_host::SubagentUsage;
 use crate::agent::tinyagents::{
     middleware::turn_context::TurnContextMiddleware, turn_policy::ToolPolicyEnforcement,
 };
-use crate::agent::turn_origin::AgentTurnOrigin;
+use crate::progress::AgentProgress;
+use crate::security::turn_origin::AgentTurnOrigin;
 use tinyagents_definition::SandboxMode;
-use tinyagents_harness::middleware::StopHook;
 use tinyagents_harness::store::InMemoryStore as ToolResultArtifactIndexStore;
 use tinyagents_harness::turn_outcome::{ToolCallOutcome, ToolOutcomeSink};
+use tinyagents_hooks::stop::StopHook;
 use tinyinference_llm::model::ResolvedModelRoute;
 
 /// Allocate a durable-unique root [`RunConfig`](tinyagents_harness::context::RunConfig).
@@ -41,12 +41,7 @@ pub(crate) fn fresh_root_run_config(kind: &str) -> tinyagents_harness::context::
 
 /// Builds an owned direct child for the neutral subagent lifecycle.
 ///
-/// The durable key is derived from `parent` *before* a child exists, preserving
-/// the parent's root id, immediate run id, and thread. `child_config.run_id`
-/// must be a durable-unique child execution id; this helper cannot prove global
-/// uniqueness for a caller-supplied value. The resulting TinyAgents and
-/// OpenHuman cancellation carriers are the same shared token, so either the
-/// lifecycle executor or host child observes cancellation across the tree.
+/// Derives lineage before creation and shares cancellation across the tree.
 pub(crate) fn direct_subagent_child(
     parent: &tinyagents_harness::context::RunContext<OpenHumanRunContext>,
     task_id: impl Into<String>,
@@ -150,6 +145,8 @@ pub(crate) struct SessionTurnSidecar {
     /// iteration cap). The driver classifies it; `after_commit` carries it on
     /// `TurnCompleted` so the trace shows a stopped turn at `WARNING`.
     pub stop: Option<tinyagents_harness::turn_stop::TurnStop>,
+    /// Deferred native terminal finalized after transcript durability.
+    pub deferred_terminal: Option<crate::agent::tinyagents::turn_outcome::DeferredTurnTerminal>,
 }
 
 /// Immutable inputs to the host's pre-dispatch policy.
@@ -291,7 +288,7 @@ pub struct OpenHumanRunContext {
     /// Stop policies evaluated after each model call.
     pub stop_hooks: Vec<Arc<dyn StopHook<tinyagents_harness::cost::TurnCost>>>,
     /// Agent/turn tool callbacks, registered after the runtime's global ones.
-    pub tool_hooks: Vec<Arc<dyn crate::agent::hooks::ToolHook>>,
+    pub tool_hooks: Vec<Arc<dyn tinyagents_hooks::tool::ToolHook<OpenHumanRunContext>>>,
     /// Host cap on real tool invocations for this turn tree; `None` leaves the
     /// product default. Inherited by children.
     pub tool_call_limit: Option<usize>,
@@ -325,6 +322,8 @@ pub struct OpenHumanRunContext {
     pub dispatch: Option<Arc<TurnDispatchState>>,
     /// Optional task recency restriction for integration tools.
     pub task_recency_window: Option<Duration>,
+    /// Exact child-process environment supplied by the host for this turn.
+    pub command_environment: Option<Arc<std::collections::BTreeMap<String, String>>>,
     /// Autonomous skill-run iteration cap lifted onto every sub-agent in the
     /// tree (inherited by `child()` through the clone); `None` for ordinary turns.
     pub autonomous_iter_cap: Option<usize>,
@@ -410,18 +409,18 @@ pub(crate) struct HarnessHostPolicy {
     /// Stop policies evaluated after each model call.
     pub(crate) stop_hooks: Vec<Arc<dyn StopHook<tinyagents_harness::cost::TurnCost>>>,
     /// Agent/turn tool callbacks, registered after the runtime's global ones.
-    pub(crate) tool_hooks: Vec<Arc<dyn crate::agent::hooks::ToolHook>>,
+    pub(crate) tool_hooks: Vec<Arc<dyn tinyagents_hooks::tool::ToolHook<OpenHumanRunContext>>>,
     /// The host's cap on real tool invocations.
     pub(crate) tool_call_cap: Option<usize>,
 }
 
 #[cfg(test)]
 pub(crate) use super::operation_context::tool_context_with_approval;
-pub use super::operation_context::OpenHumanRunExt;
+pub use super::operation_context::{approval_for_tool, OpenHumanRunExt};
 pub(crate) use super::operation_context::{
-    approval_for_tool, dispatch_ctx_for_tool, memory_identity_for_tool, parent_agent_id_for_tool,
-    sandbox_mode_for_tool, task_recency_window_for_tool, turn_origin_for_tool,
-    HostOperationContext,
+    command_environment_for_tool, dispatch_ctx_for_tool, memory_identity_for_tool,
+    memory_in_prompt_for_tool, parent_agent_id_for_tool, sandbox_mode_for_tool,
+    task_recency_window_for_tool, turn_origin_for_tool, HostOperationContext,
 };
 
 impl Default for OpenHumanRunContext {
@@ -456,6 +455,7 @@ impl OpenHumanRunContext {
             attachment_placeholders: Arc::new(Vec::new()),
             dispatch: None,
             task_recency_window: None,
+            command_environment: None,
             autonomous_iter_cap: None,
             sandbox_mode: None,
             spawn_depth: 0,
@@ -506,7 +506,7 @@ impl OpenHumanRunContext {
 
     /// The connected-identities prompt section, read under this run's context.
     pub(crate) fn connected_identities_md(&self) -> String {
-        crate::agent::prompts::render_connected_identities(&self.dispatch_ctx())
+        crate::integrations::render_connected_identities(&self.dispatch_ctx())
     }
 
     /// Sets the direct TinyTools workspace descriptor for this run.
@@ -575,7 +575,7 @@ impl OpenHumanRunContext {
     /// The real tool invocation budget for a turn of `max_iterations`: the
     /// product default, narrowed by the host's explicit cap.
     pub(crate) fn tool_call_limit_for(&self, max_iterations: usize) -> usize {
-        crate::agent::stop_hooks::tool_call_limit(max_iterations, self.tool_call_limit)
+        crate::agent::tinyagents::turn_policy::tool_call_limit(max_iterations, self.tool_call_limit)
     }
 
     /// Applies the host environment an entry point handed to the session:
@@ -589,6 +589,7 @@ impl OpenHumanRunContext {
         }
         self.turn_deadline = env.turn_deadline.or(self.turn_deadline);
         self.tool_call_limit = env.tool_call_limit.or(self.tool_call_limit);
+        self.command_environment = env.command_environment.clone().or(self.command_environment);
         self.memory_identity = env.memory_identity.clone().or(self.memory_identity);
         self.core = env.core.clone().or(self.core);
         self.stop_hooks
@@ -607,13 +608,8 @@ impl OpenHumanRunContext {
         self
     }
 
-    /// Builds the explicit child state for a recursive invocation.
-    ///
-    /// This inheritance rule is tested in B1 and is ready for the later live
-    /// plumbing. Cancellation, workspace, progress, policy hooks and dispatch
-    /// state are inherited. Route observation and usage accounting are isolated,
-    /// so a completed child cannot mutate facts subsequently persisted for its
-    /// parent.
+    /// Builds a child context that inherits authority, cancellation and shared
+    /// workspace policy while keeping route observation and usage isolated.
     pub fn child(&self) -> Self {
         let mut child = self.clone();
         child.spawn_depth = self.spawn_depth.saturating_add(1);
@@ -670,9 +666,7 @@ impl OpenHumanRunContext {
         }
         let cancellation = self.cancellation.clone();
         let workspace = self.workspace.clone();
-        let run_ext = OpenHumanRunExt {
-            task_recency_window: self.task_recency_window,
-        };
+        let run_ext = OpenHumanRunExt::from_run_context(&self);
         let host_operations = Arc::new(HostOperationContext {
             origin: self.origin.clone(),
             approval: self.approval.clone(),
@@ -682,6 +676,7 @@ impl OpenHumanRunContext {
                 .as_ref()
                 .map(|parent| parent.agent_definition_id.clone()),
             memory_identity: self.memory_identity.clone(),
+            memory_turn: self.memory_turn.clone(),
             core: self.core.clone(),
         });
         let context = tinyagents_harness::context::RunContext::new(config, self)

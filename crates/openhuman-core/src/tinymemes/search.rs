@@ -7,16 +7,18 @@
 use serde_json::json;
 
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 
 const TOOL: &str = tinysearch_bus::tools::WEB_SEARCH;
 
 pub(crate) struct OpenHumanSearch {
+    ctx: DispatchCtx,
     config: Config,
 }
 
 impl OpenHumanSearch {
     /// A search backend, or `None` when OpenHuman cannot search right now.
-    pub(crate) fn available(config: &Config) -> Option<Self> {
+    pub(crate) fn available(ctx: &DispatchCtx, config: &Config) -> Option<Self> {
         if !crate::search::is_active(config) {
             return None;
         }
@@ -29,6 +31,7 @@ impl OpenHumanSearch {
             return None;
         }
         Some(Self {
+            ctx: ctx.clone(),
             config: config.clone(),
         })
     }
@@ -45,13 +48,9 @@ impl OpenHumanSearch {
             name: TOOL.to_string(),
             arguments: json!({ "query": query, "max_results": max_results.clamp(1, 20) }),
         };
-        let response = crate::modules::search::execute_tool(
-            &crate::core::runtime::DispatchCtx::ambient(),
-            &self.config,
-            request,
-        )
-        .await
-        .map_err(|e| crate::search::tools::user_facing_error(&e))?;
+        let response = crate::modules::search::execute_tool(&self.ctx, &self.config, request)
+            .await
+            .map_err(|e| crate::search::tools::user_facing_error(&e))?;
         Ok(response
             .results
             .into_iter()

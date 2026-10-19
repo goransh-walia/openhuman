@@ -6,6 +6,7 @@ pub mod network;
 #[cfg(feature = "documents")]
 pub mod presentation;
 pub mod system;
+pub mod threads;
 
 #[cfg(feature = "modules")]
 pub use browser::*;

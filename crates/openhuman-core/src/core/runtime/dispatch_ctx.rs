@@ -65,14 +65,22 @@ impl DispatchCtx {
         Self { core }
     }
 
-    /// The context for work that arrives with none of its own: a bus event, a
-    /// module host callback, a shutdown hook. Outside SaaS that is the process
-    /// default, the one context a single-user host has. In SaaS it is the
-    /// task's own tenant scope only, so work that lost its tenant fails closed
-    /// instead of acting as the operator.
+    /// The context for work that arrives with none of its own and no tenant on
+    /// the wire: a socket-driven bus event, a module host callback, a shutdown
+    /// hook. Outside SaaS that is the process default, the one context a
+    /// single-user host has. In SaaS it is unbound, so work that lost its
+    /// tenant fails closed instead of acting as the operator. It never reads
+    /// the calling task's scope; an event that names its tenant uses
+    /// [`for_event`](Self::for_event), a caller holding a context passes it.
     pub fn host_default() -> Self {
-        if super::is_saas() {
-            Self::ambient()
+        Self::host_default_in(super::is_saas())
+    }
+
+    /// [`host_default`](Self::host_default) as a pure function of the mode, so
+    /// the SaaS rule is testable without locking the test process to SaaS.
+    pub(crate) fn host_default_in(saas: bool) -> Self {
+        if saas {
+            Self::unbound()
         } else {
             Self::process_default()
         }
@@ -162,7 +170,7 @@ impl DispatchCtx {
     /// The origin of the turn this call belongs to. Only a bound context
     /// supplies one: the process default never carries authority, so an
     /// unbound call answers `None` and the gate reads it as `Unknown`.
-    pub fn turn_origin(&self) -> Option<crate::agent::turn_origin::AgentTurnOrigin> {
+    pub fn turn_origin(&self) -> Option<crate::security::turn_origin::AgentTurnOrigin> {
         self.core
             .as_ref()
             .and_then(|core| core.turn_origin().cloned())
@@ -172,10 +180,25 @@ impl DispatchCtx {
     /// calling task's turn scope carries. For a handler whose context was
     /// built by a transport that does not carry the turn's origin, while a
     /// turn that called it into being still holds it (transitional, #7801).
-    pub fn turn_origin_or_scoped(&self) -> Option<crate::agent::turn_origin::AgentTurnOrigin> {
+    pub fn turn_origin_or_scoped(&self) -> Option<crate::security::turn_origin::AgentTurnOrigin> {
         self.turn_origin()
             .or_else(|| Self::ambient_turn().turn_origin())
     }
+    /// This context with `origin` bound as its turn origin, for a run that
+    /// acts under a trusted entry point of its own (a saved flow). The base is
+    /// this context, else the calling task's turn scope, the process default,
+    /// or a bare one, the same resolution `security::turn_origin::with_origin`
+    /// scopes under. This context is not mutated.
+    pub fn with_turn_origin(&self, origin: crate::security::turn_origin::AgentTurnOrigin) -> Self {
+        let base = self
+            .core
+            .clone()
+            .or_else(CoreContext::scoped_for_turn)
+            .or_else(CoreContext::default_context)
+            .unwrap_or_else(CoreContext::bare);
+        Self::new(base.derive_channel_turn(None, Some(origin)))
+    }
+
     /// A non-owning handle on the bound context, for state that outlives the
     /// call (a session, a built turn). The tenant lease is the strong count of
     /// the context ([`CoreContext::tenant_in_use`]), so a long-lived holder

@@ -351,19 +351,19 @@ struct ChannelTurnDescriptor<'a> {
 }
 
 async fn persist_channel_turn(
-    ctx: &DispatchCtx,
+    _ctx: &DispatchCtx,
     workspace_dir: &Path,
     descriptor: ChannelTurnDescriptor<'_>,
 ) -> Result<(), String> {
     // The fixture exists only where both features compile it (channels/mod.rs).
     #[cfg(all(test, feature = "channels", feature = "modules"))]
     let client = {
-        let _ = ctx;
+        let _ = _ctx;
         crate::channels::module_fixture::client().await
     };
     #[cfg(not(all(test, feature = "channels", feature = "modules")))]
     let client = {
-        let config = ctx.load_config().await?;
+        let config = _ctx.load_config().await?;
         if config.workspace_dir != workspace_dir {
             return Err("channel workspace changed".into());
         }

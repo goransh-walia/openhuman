@@ -20,6 +20,11 @@
 //!   in `<workspace>/memory/conversations_backfill.json`, so an interrupted run
 //!   resumes and a later run sends only what is new. A re-sent item is a
 //!   replay (its id is a content digest), never a duplicate.
+//! - **Accepted, then visible.** Every batch but the last goes in with
+//!   accepted writes: the engine returns once it holds them durably, and
+//!   indexes them after. The last waits until it is visible, and the scope's
+//!   log is ordered, so a `done` run is searchable. An engine without
+//!   accepted writes stores every batch as before.
 //! - **Consent.** It uploads chat history to the selected engine, so
 //!   [`start`] refuses without `consent`.
 
@@ -34,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::Config;
 use crate::memory::engine::{self, BoundEngine};
 use crate::memory::error::{MemoryError, MemoryResult};
-use crate::memory::ops::store_many_on;
+use crate::memory::ops::store_many_on_with;
 use crate::memory::scope::{MemoryIdentity, ResolvedIdentity};
 use crate::memory::types::ImportPhase;
 use crate::threads::store::blocking as threads;
@@ -94,32 +99,21 @@ struct BackfillFile {
     stored: BTreeMap<String, u32>,
 }
 
-fn file_path(workspace_dir: &Path) -> PathBuf {
-    workspace_dir
-        .join("memory")
-        .join("conversations_backfill.json")
-}
+const STATE: &str = "conversations_backfill";
 
 fn read_file(workspace_dir: &Path) -> BackfillFile {
-    std::fs::read_to_string(file_path(workspace_dir))
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
+    super::state_store::load(workspace_dir, STATE)
+        .unwrap_or_else(|error| {
+            tracing::warn!(error = %error, "[memory:backfill] reading state failed");
+            None
+        })
         .unwrap_or_default()
 }
 
-/// Persists `file` atomically (staged, synced, renamed), so a crash
-/// mid-write keeps the previous progress instead of losing it.
+/// Persists `file` atomically (one storage write), so a crash mid-write keeps
+/// the previous progress instead of losing it.
 fn write_file(workspace_dir: &Path, file: &BackfillFile) {
-    let result = serde_json::to_vec_pretty(file)
-        .map_err(|error| error.to_string())
-        .and_then(|json| {
-            crate::security::secret_storage::file_store::write_atomic(
-                &file_path(workspace_dir),
-                &json,
-            )
-            .map_err(|error| error.to_string())
-        });
-    if let Err(error) = result {
+    if let Err(error) = super::state_store::save(workspace_dir, STATE, file) {
         tracing::warn!(error = %error, "[memory:backfill] writing state failed");
     }
 }
@@ -132,17 +126,18 @@ struct ThreadPlan {
 }
 
 async fn plan(
+    ctx: &DispatchCtx,
     workspace_dir: &Path,
     bound: Option<&BoundEngine>,
     stored: &BTreeMap<String, u32>,
 ) -> MemoryResult<Vec<ThreadPlan>> {
-    let listed = threads::list_threads(DispatchCtx::ambient(), workspace_dir.to_path_buf())
+    let listed = threads::list_threads(ctx.clone(), workspace_dir.to_path_buf())
         .await
         .map_err(|error| MemoryError::Engine(format!("reading chat threads failed: {error}")))?;
     let mut plans = Vec::new();
     for thread in listed {
         let messages = match threads::get_messages(
-            DispatchCtx::ambient(),
+            ctx.clone(),
             workspace_dir.to_path_buf(),
             thread.id.clone(),
         )
@@ -187,7 +182,7 @@ fn is_running(workspace_dir: &Path) -> bool {
 }
 
 /// `memory_conversations_backfill_status`.
-pub async fn status(config: &Config) -> MemoryResult<BackfillView> {
+pub async fn status(ctx: &DispatchCtx, config: &Config) -> MemoryResult<BackfillView> {
     let workspace_dir = &config.workspace_dir;
     let file = read_file(workspace_dir);
     let mut state = file.state;
@@ -196,7 +191,7 @@ pub async fn status(config: &Config) -> MemoryResult<BackfillView> {
         state.error = Some("the sync was interrupted; start it again to resume".to_string());
     }
     let bound = engine::resolve(config).engine().ok();
-    let plans = plan(workspace_dir, bound.as_ref(), &file.stored).await?;
+    let plans = plan(ctx, workspace_dir, bound.as_ref(), &file.stored).await?;
     Ok(BackfillView {
         state,
         pending_threads: plans.len() as u64,
@@ -205,7 +200,11 @@ pub async fn status(config: &Config) -> MemoryResult<BackfillView> {
 }
 
 /// `memory_conversations_backfill_start`: requires `consent` and memory on.
-pub async fn start(config: &Config, params: BackfillStartParams) -> MemoryResult<BackfillView> {
+pub async fn start(
+    ctx: &DispatchCtx,
+    config: &Config,
+    params: BackfillStartParams,
+) -> MemoryResult<BackfillView> {
     if !params.consent {
         return Err(MemoryError::invalid(
             "storing past chats uploads them to the selected engine; pass consent: true",
@@ -218,10 +217,10 @@ pub async fn start(config: &Config, params: BackfillStartParams) -> MemoryResult
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(workspace_dir.clone());
     if !claimed {
-        return status(config).await;
+        return status(ctx, config).await;
     }
     let mut file = read_file(&workspace_dir);
-    let plans = match plan(&workspace_dir, Some(&bound), &file.stored).await {
+    let plans = match plan(ctx, &workspace_dir, Some(&bound), &file.stored).await {
         Ok(plans) => plans,
         Err(error) => {
             release(&workspace_dir);
@@ -267,9 +266,10 @@ async fn run(
     mut file: BackfillFile,
     plans: Vec<ThreadPlan>,
 ) {
-    for plan in plans {
+    let last = last_batch(identity, &plans);
+    for (thread, plan) in plans.into_iter().enumerate() {
         // Groups of whole turns, so the stored counter never splits a turn.
-        for group in turn_groups(plan.range.clone()) {
+        for (index, group) in turn_groups(plan.range.clone()).into_iter().enumerate() {
             let items = group_items(
                 &identity.layout,
                 &identity.agent_id,
@@ -279,7 +279,18 @@ async fn run(
             );
             let count = items.len() as u64;
             if count > 0 {
-                if let Err(error) = store_many_on(bound, items).await {
+                // Accepted, not indexed: waiting on the engine to index every
+                // batch made a few thousand messages take hours on CortexDB.
+                // The last batch waits until it is visible: the scope's log
+                // is ordered, so everything stored before it is then too, and
+                // `done` still means searchable.
+                let options = if last == Some((thread, index)) {
+                    tinymemory_api::WriteOptions::visible()
+                } else {
+                    tinymemory_api::WriteOptions::accepted()
+                };
+                let stored = store_many_on_with(bound, items, options).await;
+                if let Err(error) = stored {
                     tracing::warn!(
                         code = error.code(),
                         "[memory:backfill] storing a batch failed; stopping"
@@ -311,6 +322,28 @@ async fn run(
         turns = file.state.turns_stored,
         "[memory:backfill] done"
     );
+}
+
+/// The last batch of the run that stores anything, as (thread, group): the
+/// one the run waits on until it is visible.
+fn last_batch(identity: &ResolvedIdentity, plans: &[ThreadPlan]) -> Option<(usize, usize)> {
+    plans.iter().enumerate().rev().find_map(|(thread, plan)| {
+        turn_groups(plan.range.clone())
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, group)| {
+                !group_items(
+                    &identity.layout,
+                    &identity.agent_id,
+                    &plan.thread_id,
+                    &plan.turns,
+                    group,
+                )
+                .is_empty()
+            })
+            .map(|(index, _)| (thread, index))
+    })
 }
 
 #[cfg(test)]

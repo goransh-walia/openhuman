@@ -126,6 +126,7 @@ fn make_discord_ctx(
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     })
 }
 

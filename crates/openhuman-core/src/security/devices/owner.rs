@@ -113,6 +113,7 @@ pub(super) async fn owner_of(
             return Ok(session.agent.clone());
         }
         let revoked = crate::storage::agents::within_agent(
+            ctx,
             session.agent.as_deref(),
             is_revoked(ctx, channel_id),
         )
@@ -135,6 +136,7 @@ pub(super) async fn owner_of(
     }
     if let Some(owner) = cached(channel_id) {
         match crate::storage::agents::within_agent(
+            ctx,
             owner.as_deref(),
             has_live_device(ctx, channel_id),
         )
@@ -151,8 +153,10 @@ pub(super) async fn owner_of(
         }
     }
     let lookups =
-        crate::storage::agents::for_each_scope("device owner", || has_live_device(ctx, channel_id))
-            .await;
+        crate::storage::agents::for_each_scope(ctx, "device owner", |scope_ctx| async move {
+            has_live_device(&scope_ctx, channel_id).await
+        })
+        .await;
     let owner = decide(lookups)?;
     if let Some(owner) = &owner {
         log::debug!(

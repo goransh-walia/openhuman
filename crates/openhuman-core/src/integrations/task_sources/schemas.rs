@@ -468,14 +468,14 @@ fn handle_fetch(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFutur
     Box::pin(async move {
         let config = ctx.load_config().await?;
         let id = read_required::<String>(&params, "id")?;
-        to_json(ops::fetch(&config, id.trim()).await?)
+        to_json(ops::fetch(&ctx, &config, id.trim()).await?)
     })
 }
 
 fn handle_sync(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = ctx.load_config().await?;
-        to_json(ops::sync(&config).await?)
+        to_json(ops::sync(&ctx, &config).await?)
     })
 }
 

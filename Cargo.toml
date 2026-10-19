@@ -30,7 +30,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.64.15"
+version = "0.64.18"
 edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/tinyhumansai/openhuman"
@@ -43,6 +43,7 @@ repository = "https://github.com/tinyhumansai/openhuman"
 openhuman-rpc = { path = "crates/openhuman-rpc", default-features = false }
 openhuman-embed = { path = "crates/openhuman-embed", default-features = false }
 openhuman-tinyhumans = { path = "crates/openhuman-tinyhumans", default-features = false }
+tinyagents-hooks = { path = "vendor/tinyagents/crates/tinyagents-hooks" }
 
 # Patches are workspace-root settings; Cargo ignores them in member manifests.
 [patch."https://github.com/tinyhumansai/tinytools"]
@@ -68,6 +69,26 @@ tinybus = { path = "vendor/tinybus/crates/tinybus" }
 tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
 tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }
 
+[patch."https://github.com/tinyhumansai/tinystoragedrivers"]
+# One editable checkout every module resolves onto: each vendor/tiny* manifest
+# names tinystoragedrivers by git tag, and this redirects them all to
+# vendor/tinystoragedrivers. This reverses #7754's removal of the patch on
+# purpose. The vendored commit must stay semver-compatible with the tag modules
+# declare; scripts/ci/check-storage-owner.mjs enforces that every tsd package
+# resolves to a path under vendor/tinystoragedrivers/. tinystoragedrivers-tinybus
+# is left out: nothing here depends on it, and an unused patch warns. Add it with
+# the first dependent.
+tinystoragedrivers = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers" }
+tinystoragedrivers-bus = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-bus" }
+tinystoragedrivers-busproxy = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-busproxy" }
+tinystoragedrivers-client = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-client" }
+tinystoragedrivers-core = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
+tinystoragedrivers-file = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-file" }
+tinystoragedrivers-mongodb = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-mongodb" }
+tinystoragedrivers-s3 = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-s3" }
+tinystoragedrivers-secrets = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
+tinystoragedrivers-sqlite = { path = "vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
+
 [patch."https://github.com/tinyhumansai/tinyinference"]
 # tinymemes depends on the Jev client by git; resolve it to the vendored copy.
 tinyinference-decisions = { path = "vendor/tinyagents/vendor/tinyinference/crates/tinyinference-decisions" }
@@ -83,6 +104,7 @@ tinyinference-voice = { path = "vendor/tinyagents/vendor/tinyinference/crates/ti
 # own for standalone builds); resolve those names to the one copy the host uses.
 tinyagents-live = { path = "vendor/tinyagents/crates/tinyagents-live" }
 tinyagents-harness = { path = "vendor/tinyagents/crates/tinyagents-harness" }
+tinyagents-hooks = { path = "vendor/tinyagents/crates/tinyagents-hooks" }
 tinytools = { path = "vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 tinybus = { path = "vendor/tinybus/crates/tinybus" }
 tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
@@ -95,6 +117,7 @@ tinyinference-providers = { path = "vendor/tinyagents/vendor/tinyinference/crate
 tinyinference-voice = { path = "vendor/tinyagents/vendor/tinyinference/crates/tinyinference-voice" }
 tinyflows = { path = "vendor/tinyflows/crates/tinyflows" }
 tinychannels = { path = "vendor/tinychannels" }
+tiny-artifacts = { path = "vendor/tiny-artifacts/crates/tiny-artifacts" }
 
 # Emit enough release DWARF for server-side Sentry symbolication while keeping
 # shipped binaries small. The CI profile deliberately disables LTO/debug info.
@@ -116,3 +139,10 @@ debug = false
 
 [profile.dev.package."*"]
 debug = false
+
+# Module admission hashes the host executable (tinybus `attach_linked`), once
+# per process. nextest runs every test in its own process, so an unoptimised
+# SHA-256 over a ~500 MB test binary cost ~10 s per module-backed test. Keep
+# in sync with the other workspace manifest.
+[profile.dev.package.sha2]
+opt-level = 3

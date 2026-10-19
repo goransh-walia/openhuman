@@ -36,7 +36,8 @@ impl Tool for Web3ModuleTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.run(&DispatchCtx::ambient(), args, None).await
+        self.execute_with_context(args, tinytools::ToolCallOptions::default(), None)
+            .await
     }
 
     async fn execute_with_context(
@@ -46,8 +47,8 @@ impl Tool for Web3ModuleTool {
         context: Option<&dyn tinytools::ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
         let approval = crate::agent::tinyagents::host::run_context::approval_for_tool(context);
-        self.run(&DispatchCtx::ambient(), args, approval.chat.as_ref())
-            .await
+        let ctx = crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(context);
+        self.run(&ctx, args, approval.chat.as_ref()).await
     }
 
     async fn execute_with_options(

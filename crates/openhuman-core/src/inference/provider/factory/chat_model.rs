@@ -6,39 +6,27 @@ use crate::core::runtime::DispatchCtx;
 #[cfg(not(test))]
 use crate::inference::provider::factory::access_gates::verify_session_active;
 
-/// Build an `Arc<dyn ChatModel>` for the given workload role.
+/// Build an `Arc<dyn ChatModel>` for the given workload role, under `ctx`.
 ///
 /// The crate [`ChatModel`] is the model interface for the harness and one-shot
 /// inference callers. Production and tests both inject this native interface;
 /// `temperature` is applied as the request default while an explicit per-call
 /// value still wins.
-pub fn create_chat_model(
+pub fn create_chat_model_in(
+    ctx: &DispatchCtx,
     role: &str,
     config: &Config,
     temperature: f64,
 ) -> anyhow::Result<Arc<dyn ChatModel<()>>> {
-    Ok(create_chat_model_with_model_id(role, config, temperature)?.0)
+    Ok(create_chat_model_with_model_id_in(ctx, role, config, temperature)?.0)
 }
 
-/// Like [`create_chat_model`], but also returns the resolved model id.
+/// Like [`create_chat_model_in`], but also returns the resolved model id.
 ///
 /// One-shot callers that persist or log the concrete model (e.g. the memory
 /// summarise audit) need the id the role resolved to; the plain
-/// [`create_chat_model`] drops it.
-///
-/// Resolves the agent-local model overrides against the calling task's ambient
-/// context; a caller that holds its own context uses
-/// [`create_chat_model_with_model_id_in`].
-pub fn create_chat_model_with_model_id(
-    role: &str,
-    config: &Config,
-    temperature: f64,
-) -> anyhow::Result<(Arc<dyn ChatModel<()>>, String)> {
-    create_chat_model_with_model_id_in(&DispatchCtx::ambient(), role, config, temperature)
-}
-
-/// [`create_chat_model_with_model_id`] under an explicit context: the host
-/// model overrides of the agent `ctx` runs for win over the configured route.
+/// [`create_chat_model_in`] drops it. The host model overrides of the agent
+/// `ctx` runs for win over the configured route.
 pub fn create_chat_model_with_model_id_in(
     ctx: &DispatchCtx,
     role: &str,
@@ -68,7 +56,7 @@ pub(super) fn create_chat_model_with_model_id_inner(
         return Ok((model, "mock-model".to_string()));
     }
     // Managed OpenHuman backend → crate-native host `ChatModel`
-    // ([`OpenHumanBackendModel`], issue #4727 Motion B) instead of a
+    // (issue #4727 Motion B) instead of a
     // adapted provider. A native test-model override must still win, so only
     // take this path when no
     // override is installed. The public wrapper supplies the construction-time
@@ -145,7 +133,7 @@ pub(crate) fn resolves_to_managed_backend(role: &str, config: &Config) -> bool {
 ///    unknown provider slug, local-only privacy-mode block, …) reused
 ///    verbatim so this probe never re-implements it.
 /// 2. **Managed-backend readiness** — when `role` resolves to the managed
-///    OpenHuman backend, [`OpenHumanBackendModel::probe_readiness`] makes one
+///    OpenHuman backend, the registered provider's readiness probe makes one
 ///    cheap real completion attempt to catch the "account has no provider API
 ///    key configured" class of failure that construction alone cannot see
 ///    (construction only builds the client; it never calls the backend).
@@ -158,7 +146,11 @@ pub(crate) fn resolves_to_managed_backend(role: &str, config: &Config) -> bool {
 /// `Ok(())` without ever touching the network or resolving `role` again —
 /// `resolves_to_managed_backend` is a pure config read that would otherwise
 /// still call this "managed" in a test with a bare default `Config`.
-pub async fn probe_inference_readiness(role: &str, config: &Config) -> Result<(), String> {
+pub async fn probe_inference_readiness(
+    ctx: &DispatchCtx,
+    role: &str,
+    config: &Config,
+) -> Result<(), String> {
     #[cfg(any(test, feature = "e2e-test-support", feature = "rss-bench"))]
     if test_provider_override::current().is_some() {
         log::debug!(
@@ -168,7 +160,7 @@ pub async fn probe_inference_readiness(role: &str, config: &Config) -> Result<()
     }
 
     log::debug!("[flows][inference-probe] role={role} verifying model construction");
-    if let Err(e) = create_chat_model_with_model_id_inner(&DispatchCtx::ambient(), role, config) {
+    if let Err(e) = create_chat_model_with_model_id_inner(ctx, role, config) {
         log::debug!("[flows][inference-probe] role={role} construction failed: {e}");
         return Err(e.to_string());
     }
@@ -185,9 +177,16 @@ pub async fn probe_inference_readiness(role: &str, config: &Config) -> Result<()
         "[flows][inference-probe] role={role} resolves to the managed OpenHuman backend — \
          probing readiness"
     );
-    let (managed_model, model_id) =
-        resolve_managed_backend(role, config, &EgressLedger::none()).map_err(|e| e.to_string())?;
-    let result = managed_model.probe_readiness().await;
+    let Some(probe) =
+        crate::inference::registry::chat_model(PROVIDER_OPENHUMAN).and_then(|entry| entry.probe)
+    else {
+        // The registered provider has no readiness probe: construction above
+        // succeeded, and there is nothing further to ask it.
+        log::debug!("[flows][inference-probe] role={role} managed provider registered no probe");
+        return Ok(());
+    };
+    let model_id = resolve_managed_model(role, config, None);
+    let result = probe(role.to_string(), model_id.clone(), config.clone()).await;
     log::debug!(
         "[flows][inference-probe] role={role} model={model_id} probe result: {}",
         if result.is_ok() { "ready" } else { "not ready" }

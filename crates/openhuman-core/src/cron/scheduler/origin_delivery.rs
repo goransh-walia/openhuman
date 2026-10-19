@@ -18,8 +18,8 @@ use crate::web_chat::{publish_web_channel_event, WebChannelEvent};
 use anyhow::{anyhow, Result};
 use std::path::Path;
 use {
-    crate::cron::channel_bridge, tinyflows_schedule::types::CronJob,
-    tinyflows_schedule::types::DeliveryStatus, tinyflows_schedule::types::JobOrigin,
+    crate::cron::channel_bridge, tinyflows_bus::schedule::types::CronJob,
+    tinyflows_bus::schedule::types::DeliveryStatus, tinyflows_bus::schedule::types::JobOrigin,
 };
 
 /// What a scheduled run replies when it has nothing worth sending.
@@ -124,7 +124,7 @@ pub(crate) async fn append_to_origin_transcript(
 }
 
 /// The transcript store a web thread's turns were written to: the session
-/// store under [`agent_key_for`](crate::agent::session_store::agent_key_for)
+/// store under [`agent_key_for`](crate::storage::sessions::agent_key_for)
 /// of the job's tenant and the thread's agent, the key the session host
 /// resolved for the same tenant.
 pub(crate) fn origin_transcripts(
@@ -132,8 +132,8 @@ pub(crate) fn origin_transcripts(
     tenant: &crate::core::runtime::Tenant,
     agent_id: &str,
 ) -> std::sync::Arc<dyn tinyagents_session::transcript::TranscriptLocator> {
-    let key = crate::agent::session_store::agent_key_for(tenant, agent_id);
-    crate::agent::session_store::transcripts_or_files(&key, workspace_dir)
+    let key = crate::storage::sessions::agent_key_for(tenant, agent_id);
+    crate::storage::sessions::transcripts_or_files(&key, workspace_dir)
 }
 
 /// Deliver one run's output to the job's origin conversation.
@@ -200,6 +200,7 @@ pub(crate) async fn deliver_to_origin(
             agent_id,
         } => {
             deliver_to_web_thread(
+                ctx,
                 config,
                 tenant.as_ref(),
                 job,
@@ -240,6 +241,7 @@ pub(crate) async fn deliver_to_origin(
 }
 
 async fn deliver_to_web_thread(
+    ctx: &DispatchCtx,
     config: &Config,
     tenant: Option<&crate::core::runtime::Tenant>,
     job: &CronJob,
@@ -260,20 +262,22 @@ async fn deliver_to_web_thread(
     let persist_thread = thread_id.to_string();
     let persist_request = request_id.clone();
     let persist_text = text.to_string();
-    let persist_ctx = DispatchCtx::ambient();
-    crate::core::runtime::spawn_blocking_scoped(move || {
-        crate::web_chat::persist_delivered_reply(
-            &persist_ctx,
-            &workspace,
-            &persist_thread,
-            &persist_request,
-            &persist_text,
-            &[],
-        )
-    })
-    .await
-    .map_err(|e| anyhow!("origin reply persistence task failed: {e}"))?
-    .map_err(|e| anyhow!("could not store the reply in the origin thread: {e}"))?;
+    let persist_ctx = ctx.clone();
+    persist_ctx
+        .clone()
+        .spawn_blocking(move || {
+            crate::web_chat::persist_delivered_reply(
+                &persist_ctx,
+                &workspace,
+                &persist_thread,
+                &persist_request,
+                &persist_text,
+                &[],
+            )
+        })
+        .await
+        .map_err(|e| anyhow!("origin reply persistence task failed: {e}"))?
+        .map_err(|e| anyhow!("could not store the reply in the origin thread: {e}"))?;
 
     publish_web_channel_event(WebChannelEvent {
         event: "proactive_message".to_string(),

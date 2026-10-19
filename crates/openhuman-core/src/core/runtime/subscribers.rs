@@ -110,6 +110,7 @@ pub(super) fn register_domain_subscribers(
     config: crate::config::Config,
     embedded_core: bool,
     domains: crate::core::runtime::DomainSet,
+    ctx: &DispatchCtx,
 ) {
     use crate::core::all::DomainGroup;
     use std::sync::{Arc, Once};
@@ -164,7 +165,7 @@ pub(super) fn register_domain_subscribers(
         // so they observe a real policy on their first iteration (otherwise they
         // fall back to `Policy::Normal` and miss the initial throttle decision on
         // battery-powered hosts).
-        crate::cron::scheduler_gate::init_global(config.scheduler_gate.clone());
+        crate::platform::llm_gate::init_global(config.scheduler_gate.clone());
 
         // A headless host (Docker / VPS / CI) has no interactive login; it
         // hands the core a credential through the environment instead. The
@@ -174,8 +175,9 @@ pub(super) fn register_domain_subscribers(
         crate::security::credentials::seed_api_key_from_env(&config);
         if std::env::var_os(crate::security::credentials::BACKEND_SESSION_TOKEN_ENV).is_some() {
             let config = config.clone();
+            let ctx = ctx.clone();
             tokio::spawn(async move {
-                crate::security::credentials::seed_session_from_env(&DispatchCtx::ambient(), &config).await;
+                crate::security::credentials::seed_session_from_env(&ctx, &config).await;
             });
         }
 
@@ -186,11 +188,11 @@ pub(super) fn register_domain_subscribers(
         // 401.
         if crate::security::credentials::api_key::has_api_key(&config) {
             log::info!("[auth] api-key credential present at startup — scheduler gate signed in");
-            crate::cron::scheduler_gate::set_signed_out(false);
+            crate::platform::llm_gate::set_signed_out(false);
         } else {
             match crate::security::credentials::jwt::get_session_token(&config) {
                 Ok(Some(_)) => {
-                    crate::cron::scheduler_gate::set_signed_out(false);
+                    crate::platform::llm_gate::set_signed_out(false);
                 }
                 Ok(None) => {
                     log::info!(
@@ -199,7 +201,7 @@ pub(super) fn register_domain_subscribers(
                         config.config_path.display(),
                         crate::security::secret_storage::backend_name(),
                     );
-                    crate::cron::scheduler_gate::set_signed_out(true);
+                    crate::platform::llm_gate::set_signed_out(true);
                 }
                 Err(err) => {
                     log::warn!(
@@ -208,7 +210,7 @@ pub(super) fn register_domain_subscribers(
                         config.config_path.display(),
                         crate::security::secret_storage::backend_name(),
                     );
-                    crate::cron::scheduler_gate::set_signed_out(true);
+                    crate::platform::llm_gate::set_signed_out(true);
                 }
             }
         }
@@ -434,7 +436,7 @@ pub(super) fn register_domain_subscribers(
             // global-bus subscriber settles `agent_runs` from
             // `DomainEvent::Subagent{Completed,Failed}`, preventing rows from
             // leaking as perpetual `running` timeline entries on thread reopen.
-            crate::agent::orchestration::run_ledger_finalize::register_run_ledger_finalize_subscriber(&config);
+            crate::agent_runs::register_subagent_finalize_subscriber(&config);
         }
     } else {
         log::debug!(

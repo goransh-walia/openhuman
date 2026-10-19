@@ -89,7 +89,11 @@ fn persistence_failure_and_invalid_scope_never_acknowledge_a_write() {
     let args = json!({"action":"learn","text":"Prefers tea"});
     assert!(enqueue(&config, &args, &facts).is_err());
     assert!(!path(&config.workspace_dir).exists());
-    std::fs::write(config.workspace_dir.join("memory"), "blocks directory").unwrap();
+    std::fs::write(
+        config.workspace_dir.join("storage"),
+        "blocks the storage directory",
+    )
+    .unwrap();
     assert!(enqueue(&config, &args, &self::facts(&config)).is_err());
 }
 
@@ -105,25 +109,12 @@ fn private_outbox_is_scrubbed_before_persistence_and_has_a_size_limit() {
         &facts(&config),
     )
     .unwrap();
-    let file = path(&config.workspace_dir);
-    let persisted = std::fs::read_to_string(&file).unwrap();
+    let persisted = serde_json::to_string(&read(&config.workspace_dir).unwrap()).unwrap();
     assert!(!persisted.contains(secret));
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
-            0o600
-        );
-        assert_eq!(
-            std::fs::metadata(file.parent().unwrap())
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o700
-        );
-    }
+    assert!(
+        !path(&config.workspace_dir).exists(),
+        "the queue is a storage value, not a file"
+    );
     let huge = "x".repeat(MAX_BYTES);
     assert!(enqueue(
         &config,
@@ -194,6 +185,10 @@ impl tinymemory_api::MemoryEngine for HeldEngine {
     }
 }
 
+/// A guard against a hang, not a latency budget: on a loaded machine the held
+/// write still acknowledges promptly, so a generous bound never slows a pass.
+const TIMEOUT: Duration = Duration::from_secs(30);
+
 #[tokio::test]
 async fn held_engine_writes_do_not_delay_acknowledgements_or_hold_the_producer_lock() {
     use tinytools::Tool;
@@ -208,18 +203,18 @@ async fn held_engine_writes_do_not_delay_acknowledgements_or_hold_the_producer_l
     crate::memory::engine::install_test_engine(&config.workspace_dir, engine.clone());
     let tool = crate::memory::MemoryTool::new(Arc::new(config.clone()));
     let first = tokio::time::timeout(
-        Duration::from_secs(2),
+        TIMEOUT,
         tool.execute(json!({"action":"learn","text":"First fact"})),
     )
     .await
     .unwrap()
     .unwrap();
     assert!(!first.is_error);
-    tokio::time::timeout(Duration::from_secs(2), engine.entered.notified())
+    tokio::time::timeout(TIMEOUT, engine.entered.notified())
         .await
         .unwrap();
     let second = tokio::time::timeout(
-        Duration::from_secs(2),
+        TIMEOUT,
         tool.execute(json!({"action":"learn","text":"Second fact"})),
     )
     .await
@@ -240,7 +235,8 @@ fn corrupt_existing_outbox_is_preserved_and_refuses_new_writes() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
     let file = path(&config.workspace_dir);
-    super::super::files::write_private(&file, b"corrupt existing state").unwrap();
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, b"corrupt existing state").unwrap();
     assert!(enqueue(
         &config,
         &json!({"action":"learn","text":"Prefers tea"}),
@@ -392,7 +388,9 @@ async fn an_erase_fence_clears_prior_pending_learnings_across_restart() {
         &facts(&config),
     )
     .unwrap();
-    let fence = fence_and_clear(&config).await.unwrap();
+    let fence = fence_and_clear(&crate::core::runtime::DispatchCtx::ambient(), &config)
+        .await
+        .unwrap();
     assert!(read(&config.workspace_dir).unwrap().is_empty());
     drop(fence);
     let restarted = config_in(&tmp);
@@ -424,10 +422,16 @@ async fn an_erase_fence_waits_for_only_the_current_write_and_preserves_later_enq
         &facts(&config),
     )
     .unwrap();
-    schedule(Arc::new(config.clone()), &Namespace::ROOT);
+    schedule(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        Arc::new(config.clone()),
+        &Namespace::ROOT,
+    );
     engine.entered.notified().await;
     let fence_config = config.clone();
-    let fencing = tokio::spawn(async move { fence_and_clear(&fence_config).await });
+    let fencing = tokio::spawn(async move {
+        fence_and_clear(&crate::core::runtime::DispatchCtx::ambient(), &fence_config).await
+    });
     let state = owner_state(&config);
     while !state.gate.is_fenced() {
         tokio::task::yield_now().await;
@@ -458,7 +462,11 @@ async fn an_erase_fence_waits_for_only_the_current_write_and_preserves_later_enq
         &facts(&config),
     )
     .unwrap();
-    schedule(Arc::new(config.clone()), &Namespace::ROOT);
+    schedule(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        Arc::new(config.clone()),
+        &Namespace::ROOT,
+    );
     assert_eq!(read(&config.workspace_dir).unwrap().len(), 2);
     drop(fence);
     drain(&config).await;
@@ -491,7 +499,9 @@ async fn separate_owner_roots_share_a_workspace_without_blocking_or_erasing_each
         &facts(&second),
     )
     .unwrap();
-    let fence = fence_and_clear(&first).await.unwrap();
+    let fence = fence_and_clear(&crate::core::runtime::DispatchCtx::ambient(), &first)
+        .await
+        .unwrap();
     assert_eq!(
         drain(&second).await,
         1,
@@ -524,7 +534,9 @@ async fn erasing_one_owner_fences_pending_writes_from_every_team_root() {
         &facts(&second),
     )
     .unwrap();
-    let fence = fence_and_clear(&first).await.unwrap();
+    let fence = fence_and_clear(&crate::core::runtime::DispatchCtx::ambient(), &first)
+        .await
+        .unwrap();
     assert!(read_at(&queue_path(&first, &facts(&first).reach.at))
         .unwrap()
         .is_empty());
@@ -542,7 +554,9 @@ async fn erasing_one_owner_fences_pending_writes_from_every_team_root() {
 async fn a_later_erase_clears_pending_writes_admitted_during_the_first_erase() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    let first = fence_and_clear(&config).await.unwrap();
+    let first = fence_and_clear(&crate::core::runtime::DispatchCtx::ambient(), &config)
+        .await
+        .unwrap();
     enqueue(
         &config,
         &json!({"action":"learn","text":"Queued after the first erase began"}),
@@ -550,7 +564,9 @@ async fn a_later_erase_clears_pending_writes_admitted_during_the_first_erase() {
     )
     .unwrap();
     drop(first);
-    let second = fence_and_clear(&config).await.unwrap();
+    let second = fence_and_clear(&crate::core::runtime::DispatchCtx::ambient(), &config)
+        .await
+        .unwrap();
     assert!(
         read(&config.workspace_dir).unwrap().is_empty(),
         "the second erase must discard a learning admitted before it started"

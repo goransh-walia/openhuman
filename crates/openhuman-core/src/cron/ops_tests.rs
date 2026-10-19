@@ -1,7 +1,7 @@
 use super::*;
 use crate::cron::get_job;
 use tempfile::TempDir;
-use tinyflows_schedule::types::ActiveHours;
+use tinyflows_bus::schedule::types::ActiveHours;
 
 fn test_config(tmp: &TempDir) -> Config {
     let config = Config {
@@ -202,6 +202,9 @@ fn update_rejects_expression_for_non_cron_schedule() {
 fn add_once_creates_future_at_schedule() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
+    // The first call in a process starts the module runtime and attaches the
+    // module (seconds); take the baseline after it so only the call is timed.
+    crate::cron::list_jobs(&config).unwrap();
     let before = chrono::Utc::now();
     let job = add_once(&config, "5m", "echo hello").unwrap();
     match job.schedule {
@@ -229,7 +232,11 @@ fn add_once_propagates_parse_delay_errors() {
 fn add_once_at_stores_exact_timestamp() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let when = chrono::Utc::now() + chrono::Duration::hours(1);
+    // The store keeps instants as epoch milliseconds.
+    let when = chrono::DateTime::from_timestamp_millis(
+        (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp_millis(),
+    )
+    .unwrap();
     let job = add_once_at(&config, when, "echo hi").unwrap();
     match job.schedule {
         Schedule::At { at } => assert_eq!(at, when),
@@ -539,7 +546,7 @@ fn single_flight_system_job(config: &Config, name: &str) -> CronJob {
         config,
         &job.id,
         CronJobPatch {
-            policy: Some(tinyflows_schedule::JobPolicy {
+            policy: Some(tinyflows_bus::schedule::JobPolicy {
                 retries: Some(0),
                 single_flight: true,
             }),

@@ -24,7 +24,7 @@ use tinymemes_bus::{
 
 use super::{docs, inference, jev, search};
 use crate::config::Config;
-use crate::core::runtime::CoreContext;
+use crate::core::runtime::{CoreContext, DispatchCtx};
 
 /// How long an entry may live without its `End`.
 const MAX_AGE: Duration = Duration::from_secs(15 * 60);
@@ -44,14 +44,23 @@ pub(super) struct Session {
 }
 
 impl Session {
-    pub(super) fn new(config: &Config) -> Self {
+    /// The dispatch context the registering caller runs under; the host's own
+    /// when it had none (a single-user process), which fails closed in SaaS.
+    pub(super) fn dispatch_ctx(&self) -> DispatchCtx {
+        match self.context.clone() {
+            Some(context) => DispatchCtx::new(context),
+            None => DispatchCtx::host_default(),
+        }
+    }
+
+    pub(super) fn new(ctx: &DispatchCtx, config: &Config) -> Self {
         Self {
             config: config.clone(),
             jev: tokio::sync::OnceCell::new(),
-            // Only the caller's own task scope is carried. Without one, a
+            // Only the caller's own context is carried. Without one, a
             // single-user process falls back to its default context on the
             // callback side as anywhere else, and SaaS fails closed.
-            context: CoreContext::scoped(),
+            context: ctx.core().cloned(),
         }
     }
 
@@ -105,14 +114,14 @@ impl Drop for Registration {
 }
 
 /// Register a remix for `config`'s workspace under a fresh correlation id.
-pub(super) fn register(config: &Config) -> Registration {
+pub(super) fn register(ctx: &DispatchCtx, config: &Config) -> Registration {
     let correlation = uuid::Uuid::new_v4().to_string();
     let mut sessions = registry();
     sessions.retain(|_, entry| entry.registered.elapsed() < MAX_AGE);
     sessions.insert(
         correlation.clone(),
         Entry {
-            session: Arc::new(Session::new(config)),
+            session: Arc::new(Session::new(ctx, config)),
             registered: Instant::now(),
         },
     );
@@ -198,12 +207,17 @@ async fn answer(session: &Session, member: &str, payload: Value) -> Result<Value
 }
 
 async fn complete(session: &Session, request: CompleteRequest) -> HostResult<String> {
-    inference::complete(&session.config, &request.system, &request.user)
-        .await
-        .map_err(|error| {
-            log::warn!("[tinymemes] complete callback failed: {error}");
-            HostFailure::Backend
-        })
+    inference::complete(
+        &session.dispatch_ctx(),
+        &session.config,
+        &request.system,
+        &request.user,
+    )
+    .await
+    .map_err(|error| {
+        log::warn!("[tinymemes] complete callback failed: {error}");
+        HostFailure::Backend
+    })
 }
 
 async fn evaluate(session: &Session, envelope: EvaluateEnvelope) -> HostResult<EvaluateEnvelope> {
@@ -232,7 +246,9 @@ async fn search(
     session: &Session,
     request: SearchRequest,
 ) -> HostResult<Vec<tinymemes_bus::SearchResult>> {
-    let Some(backend) = search::OpenHumanSearch::available(&session.config) else {
+    let Some(backend) =
+        search::OpenHumanSearch::available(&session.dispatch_ctx(), &session.config)
+    else {
         return Err(HostFailure::Unsupported);
     };
     backend
@@ -248,7 +264,11 @@ async fn search(
 async fn load_index(session: &Session, request: LoadIndexRequest) -> HostResult<Option<String>> {
     let config = session.config.clone();
     let kind: IndexKind = request.kind;
-    match crate::core::runtime::spawn_blocking_scoped(move || docs::load(&config, kind)).await {
+    match session
+        .dispatch_ctx()
+        .spawn_blocking(move || docs::load(&config, kind))
+        .await
+    {
         Ok(Ok(document)) => Ok(document),
         Ok(Err(error)) => {
             log::warn!("[tinymemes] cannot read index: {error}");
@@ -263,10 +283,10 @@ async fn load_index(session: &Session, request: LoadIndexRequest) -> HostResult<
 
 async fn save_index(session: &Session, request: SaveIndexRequest) -> HostResult<()> {
     let config = session.config.clone();
-    match crate::core::runtime::spawn_blocking_scoped(move || {
-        docs::save(&config, request.kind, request.json)
-    })
-    .await
+    match session
+        .dispatch_ctx()
+        .spawn_blocking(move || docs::save(&config, request.kind, request.json))
+        .await
     {
         Ok(Ok(())) => Ok(()),
         Ok(Err(error)) => {

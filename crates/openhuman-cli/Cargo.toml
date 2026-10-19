@@ -74,6 +74,10 @@ required-features = ["http-server", "bin-tools"]
 # files. #5021 is still the right fix for symbols named in the middle of an
 # otherwise gate-free target — required-features is the blunt instrument, and
 # it costs the whole target when the gate is off.
+[[example]]
+name = "storage_schema_dump"
+path = "../../examples/storage_schema_dump.rs"
+
 [[test]]
 # Loads the tinydocs module from the linked executable and calls GenerateDocx
 # end to end. Local only: needs `--features linked-modules,documents`.
@@ -110,6 +114,11 @@ path = "../../tests/storage_approvals_e2e.rs"
 # storage backend into the process-wide slot.
 name = "storage_domains_e2e"
 path = "../../tests/storage_domains_e2e.rs"
+
+[[test]]
+# Spawns the binary against a tempdir HOME; installs nothing in-process.
+name = "storage_layout_migration_e2e"
+path = "../../tests/storage_layout_migration_e2e.rs"
 
 [[test]]
 # Its own binary: it installs a storage backend into the process-wide slot.
@@ -205,8 +214,8 @@ path = "../../tests/security_crypto_characterization.rs"
 [[test]]
 name = "json_rpc_e2e"
 path = "../../tests/json_rpc_e2e.rs"
-# `voice::reply_speech::{test_seam, TEST_SEAM_ENV}` — the reply-speech seam
-# only exists in the real voice module, not the stub.
+# `openhuman_tinyhumans::voice::reply_speech::{test_seam, TEST_SEAM_ENV}` — the
+# reply-speech seam only exists with the voice feature (hosted TTS provider).
 required-features = ["voice"]
 
 [[test]]

@@ -217,11 +217,12 @@ impl ComposioExecuteTool {
         // hazard the composio client resolution below guards against, and
         // restructuring the reload earlier would move it ahead of the
         // sandbox/task-window setup this function does first.
-        match evaluate_tool_visibility(self.config.as_ref(), &tool).await {
+        let dispatch = crate::core::runtime::DispatchCtx::ambient_turn();
+        match evaluate_tool_visibility(&dispatch, self.config.as_ref(), &tool).await {
             ToolDecision::Allow | ToolDecision::PassthroughCheckScope { .. } => {}
             ToolDecision::BlockedByScope { scope } => {
                 let toolkit = toolkit_from_slug(&tool).unwrap_or_default();
-                let pref = load_user_scope_pref(self.config.as_ref(), &toolkit).await;
+                let pref = load_user_scope_pref(&dispatch, self.config.as_ref(), &toolkit).await;
                 let msg = scope_error_message(&tool, scope, pref);
                 tracing::info!(
                     tool = %tool,

@@ -4,12 +4,12 @@ use crate::core::runtime::DispatchCtx;
 use async_trait::async_trait;
 use tinybus::EventHandler;
 
-use crate::agent::triage::{
-    apply_decision, remote_trigger_origin, run_triage, TriageOutcome, TriggerEnvelope,
-};
-use crate::agent::turn_origin::with_origin;
 use crate::core::events::DomainEvent;
 use crate::integrations::composio::trigger_history;
+use crate::security::turn_origin::with_origin;
+use crate::triage::{
+    apply_decision, remote_trigger_origin, run_triage, TriageOutcome, TriggerEnvelope,
+};
 
 /// Env var that **disables** the triage pipeline. The pipeline is
 /// enabled by default; set to `1`/`true`/`yes` to opt out (e.g. for
@@ -107,7 +107,7 @@ impl EventHandler<DomainEvent> for ComposioTriggerSubscriber {
                             ..Default::default()
                         },
                     };
-                    if let Err(error) = store.record(&config, event).await {
+                    if let Err(error) = store.record(&ctx, &config, event).await {
                         tracing::warn!(error = %error, "[composio][history] failed to archive trigger");
                     }
                 }

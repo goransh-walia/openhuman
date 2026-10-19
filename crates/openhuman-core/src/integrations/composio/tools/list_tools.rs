@@ -180,7 +180,8 @@ impl ComposioListToolsTool {
         // The module owns the route's query construction and applies the
         // user's stored scope preference to the listing (the default request),
         // so the host does not filter a second time.
-        super::super::ops::ensure_user_scopes_migrated(&live_config).await;
+        let dispatch = crate::core::runtime::DispatchCtx::ambient_turn();
+        super::super::ops::ensure_user_scopes_migrated(&dispatch, &live_config).await;
         let request = ComposioListToolsRequest {
             toolkits: toolkits.clone().unwrap_or_default(),
             tags: tags.clone().unwrap_or_default(),

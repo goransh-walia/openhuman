@@ -473,7 +473,7 @@ async fn auto_approve_all_overrides_require_approval_workflow() {
 /// accident. Deleting it to make a change pass is the one wrong response.
 #[tokio::test]
 async fn auto_approve_all_allows_a_remote_triage_dispatch_without_parking() {
-    use crate::agent::triage::{remote_trigger_origin, TriggerEnvelope};
+    use crate::triage::{remote_trigger_origin, TriggerEnvelope};
 
     let _env = crate::config::TEST_ENV_LOCK.lock().await;
     let (gate, dir) = test_gate();

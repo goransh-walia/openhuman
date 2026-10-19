@@ -146,8 +146,8 @@ async fn boot_migrates_legacy_files_into_the_chosen_folder() {
     let _port = crate::modules::security::gap::install_port(std::sync::Arc::new(
         crate::modules::security::gap::stub::StubPort::with_credential_floor(),
     ));
-    use crate::agent::artifacts::store::save_artifact_meta;
-    use crate::agent::artifacts::{ArtifactKind, ArtifactMeta, ArtifactStatus};
+    use crate::artifacts::store::save_artifact_meta;
+    use crate::artifacts::{ArtifactKind, ArtifactMeta, ArtifactStatus};
 
     let _g = ENV_LOCK.lock().await;
     let tmp = tempdir().unwrap();
@@ -221,8 +221,8 @@ async fn files_made_before_a_folder_change_keep_resolving() {
     let _port = crate::modules::security::gap::install_port(std::sync::Arc::new(
         crate::modules::security::gap::stub::StubPort::with_credential_floor(),
     ));
-    use crate::agent::artifacts::store::{create_artifact, finalize_artifact};
-    use crate::agent::artifacts::{ArtifactKind, FileRoots};
+    use crate::artifacts::store::{create_artifact, finalize_artifact};
+    use crate::artifacts::{ArtifactKind, FileRoots};
 
     let tmp = tempdir().unwrap();
     let mut cfg = tmp_config(&tmp);
@@ -256,7 +256,7 @@ async fn files_made_before_a_folder_change_keep_resolving() {
         "{:?}",
         cfg.files_dir_history
     );
-    let value = crate::agent::artifacts::ops::ai_get_artifact(&cfg, &meta.id)
+    let value = crate::artifacts::ops::ai_get_artifact(&cfg, &meta.id)
         .await
         .expect("an artifact from the previous folder still resolves")
         .into_cli_compatible_json()

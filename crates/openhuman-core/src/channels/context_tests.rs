@@ -51,6 +51,7 @@ fn runtime_context() -> ChannelRuntimeContext {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     }
 }
 

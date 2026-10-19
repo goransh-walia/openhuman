@@ -24,11 +24,11 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Context, Result};
-use serde_json::json;
 use tinystoragedrivers::{Capability, ScopedStorage};
 
-use super::storage_grant_tinyjuice::{CCR_BLOB_PREFIX, MODULE_ID};
+use super::storage_grant_schemas::tinyjuice::{CCR_BLOB_PREFIX, MODULE_ID};
 use super::storage_import_support as support;
+use crate::core::runtime::DispatchCtx;
 
 const LOG_PREFIX: &str = "[tinyjuice-import]";
 /// `tinyjuice::cache::store::short_hash`: 16 bytes, hex encoded.
@@ -58,11 +58,15 @@ pub(crate) enum Outcome {
 
 /// Imports the CCR files under `root` into the module's scope of the installed
 /// backend. `ttl` is the configured original lifetime; `None` keeps them.
-pub(crate) async fn import_legacy(root: &Path, ttl: Option<Duration>) -> Result<Outcome> {
-    let Some(scoped) = support::module_scope(MODULE_ID)? else {
+pub(crate) async fn import_legacy(
+    ctx: &DispatchCtx,
+    root: &Path,
+    ttl: Option<Duration>,
+) -> Result<Outcome> {
+    let Some(scoped) = support::module_scope(ctx, MODULE_ID)? else {
         return Ok(Outcome::NoBackend);
     };
-    import_into(&scoped, root, ttl, SystemTime::now()).await
+    import_into(ctx, &scoped, root, ttl, SystemTime::now()).await
 }
 
 /// One readable original: its token, text and age.
@@ -73,14 +77,14 @@ struct LegacyOriginal {
 }
 
 async fn import_into(
+    ctx: &DispatchCtx,
     scoped: &ScopedStorage,
     root: &Path,
     ttl: Option<Duration>,
     now: SystemTime,
 ) -> Result<Outcome> {
-    let docs = scoped.documents();
     let marker = support::marker_id("ccr", root);
-    if support::already_imported(docs, MARKER_COLLECTION, &marker).await? {
+    if support::already_imported(scoped, MARKER_COLLECTION, &marker).await? {
         return Ok(Outcome::AlreadyDone);
     }
     if !root.is_dir() {
@@ -92,10 +96,10 @@ async fn import_into(
     }
 
     let dir = root.to_owned();
-    let (originals, mut skipped) =
-        crate::core::runtime::spawn_blocking_scoped(move || read_originals(&dir, now))
-            .await
-            .context("the legacy reader panicked")??;
+    let (originals, mut skipped) = ctx
+        .spawn_blocking(move || read_originals(&dir, now))
+        .await
+        .context("the legacy reader panicked")??;
 
     let (mut imported, mut expired) = (0usize, 0usize);
     for original in originals {
@@ -132,13 +136,7 @@ async fn import_into(
         imported += 1;
     }
 
-    support::mark_imported(
-        docs,
-        MARKER_COLLECTION,
-        &marker,
-        json!({ "imported": imported, "expired": expired, "skipped": skipped }),
-    )
-    .await?;
+    support::mark_imported(scoped, MARKER_COLLECTION, &marker).await?;
     tracing::info!("{LOG_PREFIX} imported={imported} expired={expired} skipped={skipped}");
     Ok(Outcome::Imported {
         imported,
@@ -153,7 +151,7 @@ fn is_token(name: &str) -> bool {
 
 /// The modified time and bytes of a regular file, or `None` for a link,
 /// directory or anything else; the file is never reached through a symlink.
-fn read_regular(path: &Path) -> Result<Option<(SystemTime, Vec<u8>)>> {
+pub(super) fn read_regular(path: &Path) -> Result<Option<(SystemTime, Vec<u8>)>> {
     use std::io::Read;
     let mut options = std::fs::File::options();
     options.read(true);

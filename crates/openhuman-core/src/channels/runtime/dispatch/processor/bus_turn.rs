@@ -2,10 +2,10 @@
 //! to the `agent.run_turn` handler, with the orchestrator's tool scoping.
 
 use crate::agent::bus::{AgentTurnRequest, AgentTurnResponse, AGENT_RUN_TURN_METHOD};
-use crate::agent::progress::AgentProgress;
-use crate::agent::turn_origin::AgentTurnOrigin;
 use crate::channels::context::{ChannelRouteSelection, ChannelRuntimeContext};
 use crate::core::bus::BUS;
+use crate::progress::AgentProgress;
+use crate::security::turn_origin::AgentTurnOrigin;
 use std::sync::Arc;
 use tinyagents_session::transcript::TranscriptMessage;
 use tinybus::NativeRequestError;
@@ -59,7 +59,7 @@ pub(super) async fn dispatch_bus_turn(
         // `config`) stay on an injected model source.
         turn_model_source: match &ctx.config {
             Some(cfg) => crate::agent::tinyagents::TurnModelSource::new_crate_native_from_string(
-                &crate::core::runtime::DispatchCtx::ambient(),
+                &ctx.dispatch_ctx(),
                 "chat",
                 route.provider.clone(),
                 cfg.clone(),
@@ -88,7 +88,7 @@ pub(super) async fn dispatch_bus_turn(
         // operator config; the desktop / web-chat path (where the user
         // owns the local filesystem) goes through a different turn
         // builder and keeps the operator default. Mirrors the triage-arm
-        // hardening in `agent::triage::evaluator`.
+        // hardening in `triage::evaluator`.
         multimodal_files: crate::config::MultimodalFileConfig::for_untrusted_channel_input(),
         max_tool_iterations: ctx.max_tool_iterations,
         on_delta: None, // on_progress handles text deltas now

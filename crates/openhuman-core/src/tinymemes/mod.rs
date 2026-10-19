@@ -72,13 +72,14 @@ pub(crate) trait Remixer: Send + Sync {
 
 /// The loadable `tinymemes` module, with this workspace's callbacks served.
 struct ModuleRemixer<'a> {
+    ctx: &'a DispatchCtx,
     config: &'a Config,
 }
 
 #[async_trait]
 impl Remixer for ModuleRemixer<'_> {
     async fn remix(&self, request: RemixRequest) -> Result<RemixResponse, String> {
-        service::remix(self.config, request).await
+        service::remix(self.ctx, self.config, request).await
     }
 }
 
@@ -87,6 +88,7 @@ impl Remixer for ModuleRemixer<'_> {
 /// the thread is in the treatment arm. Fails open: the reply is left
 /// untouched on any error.
 pub(crate) async fn remix_task_reply(
+    ctx: &DispatchCtx,
     config: &Config,
     thread_id: &str,
     request_id: &str,
@@ -100,6 +102,7 @@ pub(crate) async fn remix_task_reply(
     }
     if let Some(remixed) = remix_final_reply(
         arm::arm_for(config, arm::mode(), thread_id),
+        ctx,
         config,
         thread_id,
         request_id,
@@ -118,6 +121,7 @@ pub(crate) async fn remix_task_reply(
 /// duration, logged for both arms so throughput can be compared.
 async fn remix_final_reply(
     arm: Arm,
+    ctx: &DispatchCtx,
     config: &Config,
     thread_id: &str,
     request_id: &str,
@@ -136,14 +140,14 @@ async fn remix_final_reply(
     let started = Instant::now();
     // Fail open: without the thread, the reading would judge the reply out of
     // context, so the original goes out instead.
-    let Some(messages) = load(config, thread_id).await else {
+    let Some(messages) = load(ctx, config, thread_id).await else {
         log_outcome(&turn, started, "history_unavailable", None);
         return None;
     };
-    let remixer = ModuleRemixer { config };
+    let remixer = ModuleRemixer { ctx, config };
     remix_with(
         &remixer,
-        options(config),
+        options(ctx, config),
         &messages,
         &turn,
         started,
@@ -185,33 +189,32 @@ fn gate(arm: Arm, turn: &TurnInfo<'_>) -> bool {
 /// The thread as stored. Blocking file work, so it runs off the async
 /// runtime. `None` when the thread cannot be read.
 async fn load(
+    ctx: &DispatchCtx,
     config: &Config,
     thread_id: &str,
 ) -> Option<Vec<crate::threads::store::ConversationMessage>> {
     let config = config.clone();
     let thread_id = thread_id.to_owned();
-    crate::core::runtime::spawn_blocking_scoped(move || {
-        crate::threads::store::get_messages(
-            &DispatchCtx::ambient(),
-            config.workspace_dir.clone(),
-            &thread_id,
-        )
-        .map_err(|e| log::warn!("[tinymemes] thread history unavailable: {e}"))
+    let ctx = ctx.clone();
+    ctx.clone()
+        .spawn_blocking(move || {
+            crate::threads::store::get_messages(&ctx, config.workspace_dir.clone(), &thread_id)
+                .map_err(|e| log::warn!("[tinymemes] thread history unavailable: {e}"))
+                .ok()
+        })
+        .await
         .ok()
-    })
-    .await
-    .ok()
-    .flatten()
+        .flatten()
 }
 
 /// What the host decides for the module: the meme cooldown
 /// (`OPENHUMAN_TINYMEMES_MEME_COOLDOWN` over `[memes] meme_cooldown`) and
 /// whether web search can serve research at all.
-fn options(config: &Config) -> RemixOptions {
+fn options(ctx: &DispatchCtx, config: &Config) -> RemixOptions {
     options_with(
         std::env::var(COOLDOWN_ENV).ok().as_deref(),
         config.memes.meme_cooldown,
-        search::OpenHumanSearch::available(config).is_some(),
+        search::OpenHumanSearch::available(ctx, config).is_some(),
     )
 }
 

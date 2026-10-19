@@ -16,6 +16,7 @@ use crate::threads::store::ConversationMessage;
 /// Writes final transcripts for one session.
 #[derive(Debug)]
 pub(crate) struct TranscriptPersister {
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     thread_id: String,
     session_id: String,
@@ -25,12 +26,14 @@ pub(crate) struct TranscriptPersister {
 
 impl TranscriptPersister {
     pub(crate) fn new(
+        ctx: DispatchCtx,
         workspace_dir: PathBuf,
         thread_id: String,
         session_id: String,
         provider: String,
     ) -> Self {
         Self {
+            ctx,
             workspace_dir,
             thread_id,
             session_id,
@@ -76,7 +79,7 @@ impl TranscriptPersister {
         };
         let id = message.id.clone();
         match crate::threads::store::blocking::append_message(
-            DispatchCtx::ambient(),
+            self.ctx.clone(),
             self.workspace_dir.clone(),
             self.thread_id.clone(),
             message,

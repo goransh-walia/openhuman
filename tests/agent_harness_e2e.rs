@@ -37,7 +37,7 @@ use futures_util::StreamExt;
 use serde_json::{json, Value};
 use tempfile::tempdir;
 
-use openhuman_core::agent::harness::host_definition::AgentDefinitionRegistry;
+use openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry;
 use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
 use openhuman_rpc::server::build_core_http_router;
 
@@ -659,6 +659,7 @@ async fn wait_for_terminal_request(
 struct Stack {
     rpc_base: String,
     _home_guard: EnvVarGuard,
+    _action_dir_guard: EnvVarGuard,
     _workspace_guard: EnvVarGuard,
     _backend_guard: EnvVarGuard,
     _vite_guard: EnvVarGuard,
@@ -704,8 +705,11 @@ async fn boot_stack_with_config(extra_config: &str) -> Stack {
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path().to_path_buf();
     let openhuman_home = home.join(".openhuman");
+    let action_dir = home.join("OpenHuman/projects");
+    std::fs::create_dir_all(&action_dir).expect("create action directory");
 
     let home_guard = EnvVarGuard::set_to_path("HOME", &home);
+    let action_dir_guard = EnvVarGuard::set_to_path("OPENHUMAN_ACTION_DIR", &action_dir);
     let workspace_guard = EnvVarGuard::unset("OPENHUMAN_WORKSPACE");
     let backend_guard = EnvVarGuard::unset("BACKEND_URL");
     let vite_guard = EnvVarGuard::unset("VITE_BACKEND_URL");
@@ -742,6 +746,7 @@ async fn boot_stack_with_config(extra_config: &str) -> Stack {
     Stack {
         rpc_base,
         _home_guard: home_guard,
+        _action_dir_guard: action_dir_guard,
         _workspace_guard: workspace_guard,
         _backend_guard: backend_guard,
         _vite_guard: vite_guard,
@@ -782,6 +787,32 @@ async fn send_web_chat(
         .and_then(Value::as_str)
         .unwrap_or_else(|| panic!("accepted web chat has no request_id: {result}"))
         .to_owned()
+}
+
+async fn bind_thread_action_dir(stack: &Stack, thread_id: &str, action_dir: &Path) {
+    let created = post_json_rpc(
+        &stack.rpc_base,
+        7_900,
+        "openhuman.threads_upsert",
+        json!({
+            "id": thread_id,
+            "title": thread_id,
+            "created_at": "2026-01-01T00:00:00Z"
+        }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&created, "upsert attachment test thread");
+    let bound = post_json_rpc(
+        &stack.rpc_base,
+        7_901,
+        "openhuman.threads_update_working_dir",
+        json!({
+            "thread_id": thread_id,
+            "action_dir": action_dir.to_string_lossy()
+        }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&bound, "bind attachment test thread action directory");
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -944,7 +975,7 @@ async fn multi_turn_state_persistence_inner() {
 // ─── Task 3: Subagent delegation happy path ───────────────────────────────────
 //
 // Tool surface (crates/openhuman-core/src/tools/orchestrator_tools.rs,
-//   crates/openhuman-core/src/agent/registry/agents/vision_agent/agent.toml):
+//   crates/openhuman-core/src/agent_registry/agents/vision_agent/agent.toml):
 //   - vision_agent has `delegate_name = "analyze_image"`, so the
 //     orchestrator LLM sees a tool named "analyze_image" synthesised by collect_orchestrator_tools.
 //   - The tool takes { "prompt": string, ... } per ArchetypeDelegationTool schema.
@@ -974,6 +1005,12 @@ async fn subagent_delegation_happy_path_inner() {
     let fixture_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/images/handoff-hero.png");
     let stack = boot_stack().await;
+    bind_thread_action_dir(
+        &stack,
+        "thread-sub",
+        &stack._tmp.path().join("OpenHuman/projects"),
+    )
+    .await;
     let image_path = Path::new(&std::env::var("HOME").expect("test HOME"))
         .join("OpenHuman/projects/delegation-vision.png");
     std::fs::create_dir_all(image_path.parent().expect("action directory"))
@@ -1418,6 +1455,12 @@ async fn approval_gate_approve_flow_inner() {
         text_completion("Done. File written: APPROVED_WRITE_CANARY"),
     ]);
     let stack = boot_stack_with_config(SUPERVISED_AUTONOMY_CONFIG).await;
+    bind_thread_action_dir(
+        &stack,
+        "thread-approve",
+        &stack._tmp.path().join("OpenHuman/projects"),
+    )
+    .await;
 
     // Pre-create the file so file_write sees it as an existing file and
     // external_effect_with_args returns true → approval gate intercepts.
@@ -1991,7 +2034,7 @@ async fn provider_error_retry_inner() {
 // multi_hop_delegation_chain:
 //   Depth-1 subagents (vision_agent, task_manager_agent, etc.) do NOT have
 //   spawn tools in their named lists. Verified: vision_agent's agent.toml
-//   (agent/registry/agents/vision_agent/agent.toml) names only `file_read` and
+//   (agent_registry/agents/vision_agent/agent.toml) names only `file_read` and
 //   `image_info`. It contains no
 //   spawn_subagent, spawn_worker_thread, or spawn_parallel_agents. The only
 //   agents with spawn tools are orchestrator and trigger_reactor (loader.rs:383,
@@ -2188,6 +2231,12 @@ async fn multi_hop_delegation_chain_inner() {
     let fixture_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/images/handoff-hero.png");
     let stack = boot_stack().await;
+    bind_thread_action_dir(
+        &stack,
+        "thread-multihop",
+        &stack._tmp.path().join("OpenHuman/projects"),
+    )
+    .await;
     let image_path = Path::new(&std::env::var("HOME").expect("test HOME"))
         .join("OpenHuman/projects/delegation-vision.png");
     std::fs::create_dir_all(image_path.parent().expect("action directory"))
@@ -2195,7 +2244,7 @@ async fn multi_hop_delegation_chain_inner() {
     std::fs::copy(&fixture_path, &image_path).expect("copy vision fixture");
     reset_script(vec![
         // request[0]: Orchestrator delegates to vision_agent via
-        // `analyze_image` (its delegate_name, agent/registry/agents/vision_agent/agent.toml:3).
+        // `analyze_image` (its delegate_name, agent_registry/agents/vision_agent/agent.toml:3).
         tool_call_completion(
             "analyze_image",
             json!({
@@ -2320,10 +2369,10 @@ async fn multi_hop_delegation_chain_inner() {
 
 mod streaming_support {
     use async_trait::async_trait;
-    use openhuman_core::agent::harness::host_definition::{
+    use openhuman_core::agent::OpenHumanSessionHost;
+    use openhuman_core::agent_registry::host_definition::{
         AgentDefinition, AgentDefinitionRegistry,
     };
-    use openhuman_core::agent::OpenHumanSessionHost;
     use openhuman_core::config::{AgentConfig, ContextConfig};
     use serde_json::json;
     use std::collections::VecDeque;
@@ -2597,7 +2646,7 @@ mod streaming_support {
 ///   5. Final answer is "stream final".
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn streaming_tool_call_accumulation() {
-    use openhuman_core::agent::progress::AgentProgress;
+    use openhuman_core::progress::AgentProgress;
     use std::sync::Mutex;
     use streaming_support::{
         agent_with_s, native_tool_response_s, text_response_s, workspace_s, EchoTool,

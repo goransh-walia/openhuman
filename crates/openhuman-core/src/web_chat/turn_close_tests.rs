@@ -48,6 +48,7 @@ fn stopped(cause: StopCause, stuck: StuckPoint) -> StoppedTurn<'static> {
         stuck,
         config: None,
         locale: None,
+        ctx: crate::core::runtime::DispatchCtx::host_default(),
     }
 }
 

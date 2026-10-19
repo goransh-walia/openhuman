@@ -52,27 +52,35 @@ impl EventHandler<DomainEvent> for PendingDeletionsSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) {
-        let DomainEvent::CredentialChanged { kind } = event else {
+        let DomainEvent::CredentialChanged { kind, tenant } = event else {
             return;
         };
         if kind == "cleared" {
             return;
         }
-        let config = match DispatchCtx::ambient().load_config().await {
+        let Some(ctx) = DispatchCtx::for_event(tenant.as_ref()) else {
+            tracing::debug!("[memory:bus] credential change has no tenant; deletions wait");
+            return;
+        };
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => {
                 tracing::debug!(error = %error, "[memory:bus] config unavailable; deletions wait");
                 return;
             }
         };
-        drain_pending_deletions(&config, kind).await;
+        drain_pending_deletions(&ctx, &config, kind).await;
     }
 }
 
 /// Runs the deletions queued while memory was off, after a credential of
 /// `kind` was stored.
-pub(crate) async fn drain_pending_deletions(config: &crate::config::Config, kind: &str) -> usize {
-    super::tool_writes::schedule_all(Arc::new(config.clone()));
+pub(crate) async fn drain_pending_deletions(
+    ctx: &DispatchCtx,
+    config: &crate::config::Config,
+    kind: &str,
+) -> usize {
+    super::tool_writes::schedule_all(ctx, Arc::new(config.clone()));
     let settled = super::deletion::drain(config).await;
     tracing::debug!(kind = %kind, settled, "[memory:bus] pending deletions drained after sign-in");
     settled
@@ -91,20 +99,24 @@ impl EventHandler<DomainEvent> for SystemJobsSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) {
-        let DomainEvent::CronSystemJobDue { job } = event else {
+        let DomainEvent::CronSystemJobDue { job, tenant } = event else {
             return;
         };
         if job != SOURCES_SYNC_JOB && job != BACKGROUND_JOB {
             return;
         }
-        let config = match DispatchCtx::ambient().load_config().await {
+        let Some(ctx) = DispatchCtx::for_event(tenant.as_ref()) else {
+            tracing::debug!(job = %job, "[memory:bus] system job has no tenant; skipped");
+            return;
+        };
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => {
                 tracing::debug!(error = %error, job = %job, "[memory:bus] config unavailable");
                 return;
             }
         };
-        run_system_job(&config, job).await;
+        run_system_job(&ctx, &config, job).await;
         if job == SOURCES_SYNC_JOB {
             sync_live_agent_sources().await;
         }
@@ -120,7 +132,7 @@ async fn sync_live_agent_sources() {
             match crate::config::ops::load_current_or_init(&dispatch).await {
                 Ok(config) => {
                     tracing::debug!(agent = %agent_id, "[memory:bus] agent source sync");
-                    run_system_job(&config, SOURCES_SYNC_JOB).await;
+                    run_system_job(&dispatch, &config, SOURCES_SYNC_JOB).await;
                 }
                 Err(error) => {
                     tracing::debug!(agent = %agent_id, %error, "[memory:bus] agent config unavailable");
@@ -132,19 +144,20 @@ async fn sync_live_agent_sources() {
 }
 
 /// Runs one memory cron job against `config`.
-pub async fn run_system_job(config: &crate::config::Config, job: &str) {
+pub async fn run_system_job(ctx: &DispatchCtx, config: &crate::config::Config, job: &str) {
     match job {
         SOURCES_SYNC_JOB => {
-            let started = super::sources::sync_due(config, Utc::now());
+            let started = super::sources::sync_due(ctx, config, Utc::now());
             tracing::debug!(
                 started = started.len(),
                 "[memory:bus] due source syncs started"
             );
         }
         BACKGROUND_JOB => {
-            super::tool_writes::schedule_all(Arc::new(config.clone()));
-            super::import::resume_interrupted(config).await;
+            super::tool_writes::schedule_all(ctx, Arc::new(config.clone()));
+            super::import::resume_interrupted(ctx, config).await;
             super::layout_migration::tick(
+                ctx,
                 config,
                 std::sync::Arc::new(super::layout_migration::AppHost::new(config.clone())),
                 std::sync::Arc::new(super::import::scheduler_paused),

@@ -116,6 +116,7 @@ fn scope_lock(config: &Config) -> std::sync::Arc<tokio::sync::Mutex<()>> {
 /// Remix one reply through the loaded module, serving its callbacks for
 /// `config`'s workspace meanwhile. `request.correlation` is set here.
 pub(crate) async fn remix(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     mut request: RemixRequest,
 ) -> Result<RemixResponse, String> {
@@ -130,7 +131,7 @@ pub(crate) async fn remix(
         .connection()
         .proxy(STATE_INTERFACE, REMIX_PATH, REMIX_INTERFACE)
         .map_err(|error| error.to_string())?;
-    let registration = callbacks::register(config);
+    let registration = callbacks::register(ctx, config);
     request.correlation = registration.correlation().to_owned();
     // A disabled request makes no callbacks and starts no research, so there
     // is nothing to keep the registration for.

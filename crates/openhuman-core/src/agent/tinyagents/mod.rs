@@ -8,7 +8,7 @@
 //! **adapter seam**: it bridges openhuman's `Provider`, `Tool`, and `TranscriptMessage`
 //! types onto the crate's `ChatModel`, `Tool`, and `Message` traits, then drives
 //! a turn through [`AgentHarness::invoke`]. The chat / channel / sub-agent
-//! routes drive a turn through [`TurnSpec`].
+//! routes call [`run_turn_via_tinyagents_shared`] (default ON in production).
 //!
 //! The chat route is at functional parity with the legacy `run_turn_engine`:
 //! the [`OpenhumanEventBridge`] mirrors the harness event stream onto
@@ -23,8 +23,6 @@ pub mod config;
 mod context_wiring;
 mod deadline_wind_down;
 pub mod discovery;
-mod egress_model;
-mod embeddings;
 pub mod host;
 pub(crate) mod hosted_error;
 pub(crate) mod journal;
@@ -33,9 +31,7 @@ pub(crate) mod journal;
 pub(crate) mod live_harness;
 mod memory_summarizer;
 pub(crate) mod middleware;
-pub(crate) mod model;
 pub(crate) mod observability;
-pub mod run_mode;
 // `pub` since issue #6014, and the inconsistency it removes is the point:
 // `AgentBuilder::payload_summarizer` is a **public** setter taking
 // `Arc<DynPayloadSummarizer>`, so the seam was already advertised to embedders
@@ -51,36 +47,32 @@ pub mod budget;
 pub mod payload_summarizer;
 mod policy_denial;
 pub(crate) mod reaper;
-pub(crate) mod reasoning;
-pub(crate) mod replay;
 mod routes;
 mod steering_forwarder;
-pub(crate) mod stop_hooks;
-pub mod todos;
+mod supplemental_trace;
 pub(crate) mod tool_registration;
 mod turn_exec;
+mod turn_exec_native;
 mod turn_middleware;
-mod turn_model_resolver;
-mod turn_models;
 mod turn_outcome;
 mod turn_plan;
-mod turn_policy;
+pub(crate) mod turn_policy;
 mod turn_run_error;
 mod turn_run_finalize;
-mod use_skill_dispatch;
 mod verify_before_finish;
 
 pub(crate) use crate::agent::message_convert::chat_message_to_message;
 #[cfg(feature = "flows")]
 pub(crate) use crate::agent::message_convert::ta_call_to_oh_call;
 
-#[allow(unused_imports)] // Wired into the recall/retrieval facade in workstream 09.2.
-pub(crate) use embeddings::ProviderEmbeddingModel;
+pub(crate) use crate::inference::reasoning::{apply_requested_effort, parse_reasoning_effort};
+pub use crate::inference::turn_models::TurnModelSource;
 pub(crate) use observability::SubagentScope;
-pub(crate) use reasoning::{apply_requested_effort, parse_reasoning_effort};
+pub(crate) use supplemental_trace::SupplementalTrace;
 pub(crate) use turn_exec::TurnSpec;
-pub use turn_models::TurnModelSource;
-pub(crate) use turn_models::TurnModels;
+pub(crate) use turn_exec_native::NativeSubagentRunContext;
+#[cfg(test)]
+pub(crate) use turn_outcome::DeferredTurnTerminal;
 pub(crate) use turn_outcome::TinyagentsTurnOutcome;
 #[cfg(test)]
 pub(crate) use turn_policy::is_subagent_spawn_or_delegate_tool;

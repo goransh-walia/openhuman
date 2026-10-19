@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use tinyagents_definition::DefinitionRegistry;
 use tinyagents_harness::host::{
-    BudgetGate, ContextComposer, LearningSink, ModelResolver, ProgressSink, SecurityGate,
+    BudgetGate, ContextComposer, FixedModelResolver, ModelResolver, ProgressSink, SecurityGate,
     ToolOutcomeClassifier,
 };
 
@@ -18,7 +18,9 @@ fn inputs() -> (OpenHumanHostBundleInputs, OpenHumanRunContext) {
             config: Arc::new(Config::default()),
             definitions: Arc::new(AgentDefinitionRegistry::builtins_only()),
             tool_sets: Vec::new(),
-            post_turn_hooks: Vec::new(),
+            model_resolver: Arc::new(FixedModelResolver::new(Arc::new(
+                tinyagents_harness::testkit::ScriptedModel::new(Vec::new()),
+            ))),
             session_definition: None,
         },
         turn,
@@ -26,9 +28,11 @@ fn inputs() -> (OpenHumanHostBundleInputs, OpenHumanRunContext) {
 }
 
 #[test]
-fn factory_records_every_concrete_adapter_in_one_bundle() {
+fn factory_preserves_the_selected_model_and_host_authority() {
     let (inputs, turn) = inputs();
+    let selected_model = inputs.model_resolver.clone();
     let host = OpenHumanHostBundleFactory::build(inputs, &turn);
+    assert!(Arc::ptr_eq(&selected_model, &host.capabilities.models));
 
     let context: Arc<dyn ContextComposer> = host.context.clone();
     let definitions: Arc<dyn DefinitionRegistry> = host.definitions.clone();
@@ -36,7 +40,6 @@ fn factory_records_every_concrete_adapter_in_one_bundle() {
     let models: Arc<dyn ModelResolver<()>> = host.models.clone();
     let budget: Arc<dyn BudgetGate> = host.budget.clone();
     let progress: Arc<dyn ProgressSink> = host.progress.clone();
-    let learning: Arc<dyn LearningSink> = host.learning.clone();
     let outcomes: Arc<dyn ToolOutcomeClassifier> = host.tool_outcomes.clone();
 
     assert!(Arc::ptr_eq(&context, &host.capabilities.context));
@@ -53,10 +56,7 @@ fn factory_records_every_concrete_adapter_in_one_bundle() {
         &progress,
         host.capabilities.progress.as_ref().expect("progress")
     ));
-    assert!(Arc::ptr_eq(
-        &learning,
-        host.capabilities.learning.as_ref().expect("learning")
-    ));
+    assert!(host.capabilities.learning.is_none());
     assert!(Arc::ptr_eq(
         &outcomes,
         host.capabilities

@@ -15,7 +15,7 @@ use parking_lot::Mutex;
 #[cfg(test)]
 use tinychannels::host::{
     AllowlistStore, ApprovalDecision, ApprovalGate, ConversationMessage, ConversationStore,
-    EventSink, LifecycleRegistry, ShutdownHook, SpeechRequest, SpeechResult, SpeechSynthesizer,
+    EventSink, LifecycleRegistry, ShutdownHook,
     Transcriber, TranscriptionRequest, TranscriptionResult,
 };
 
@@ -114,45 +114,6 @@ impl Transcriber for VoiceTranscriber {
             text: result.text,
             language: result.language,
             duration_secs: result.duration_secs,
-        })
-    }
-}
-
-// ---------------------------------------------------------------------------
-// SpeechSynthesizer → voice reply_speech
-// ---------------------------------------------------------------------------
-
-/// Text-to-speech backed by the hosted reply-speech synthesizer.
-#[cfg(test)]
-pub struct VoiceSynthesizer {
-    pub config: Arc<Config>,
-}
-
-#[cfg(test)]
-#[async_trait]
-impl SpeechSynthesizer for VoiceSynthesizer {
-    async fn synthesize(&self, request: SpeechRequest) -> anyhow::Result<SpeechResult> {
-        tracing::debug!(
-            "{LOG_PREFIX} synthesize chars={} voice={:?}",
-            request.text.len(),
-            request.voice
-        );
-        let opts = crate::voice::reply_speech::ReplySpeechOptions {
-            voice_id: request.voice,
-            model_id: None,
-            output_format: request.format,
-            voice_settings: None,
-        };
-        let outcome =
-            crate::voice::reply_speech::synthesize_reply(&self.config, &request.text, &opts)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-        let value = outcome.value;
-        let visemes = serde_json::to_value(&value.visemes).ok();
-        Ok(SpeechResult {
-            audio_base64: value.audio_base64,
-            mime_type: value.audio_mime,
-            visemes,
         })
     }
 }

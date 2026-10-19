@@ -26,10 +26,13 @@ impl EventHandler<DomainEvent> for CredentialRefreshSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) {
-        let DomainEvent::CredentialChanged { kind } = event else {
+        let DomainEvent::CredentialChanged { kind, tenant } = event else {
             return;
         };
-        let ctx = DispatchCtx::ambient();
+        let Some(ctx) = DispatchCtx::for_event(tenant.as_ref()) else {
+            tracing::debug!(kind = %kind, "[search][bus] credential change has no tenant; skipping refresh");
+            return;
+        };
         let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => {

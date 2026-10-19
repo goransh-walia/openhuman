@@ -127,6 +127,7 @@ impl ComposioAuthorizeTool {
             Ok(resp) => {
                 crate::core::bus::BUS.publish(
                     crate::core::events::DomainEvent::ComposioConnectionCreated {
+                        tenant: crate::core::runtime::DispatchCtx::ambient_turn().event_tenant(),
                         toolkit: toolkit.clone(),
                         connection_id: resp.connection_id.clone(),
                         connect_url: resp.connect_url.clone(),

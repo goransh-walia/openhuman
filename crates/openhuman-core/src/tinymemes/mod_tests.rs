@@ -229,6 +229,7 @@ async fn a_disabled_flag_leaves_the_task_reply_alone() {
     // Disabled arm: no module is touched and nothing changes.
     let out = remix_final_reply(
         Arm::Disabled,
+        &DispatchCtx::ambient(),
         &config,
         "thread",
         "req",
@@ -239,6 +240,7 @@ async fn a_disabled_flag_leaves_the_task_reply_alone() {
     .await;
     assert_eq!(out, None);
     remix_task_reply(
+        &DispatchCtx::ambient(),
         &config,
         "thread",
         "req",
@@ -290,7 +292,13 @@ async fn component_off_refuses_the_remix_before_any_module_load() {
         reply_id: None,
         options: RemixOptions::default(),
     };
-    let err = service::remix(&config, request).await.unwrap_err();
+    let err = service::remix(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        request,
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("component is off"), "{err}");
 }
 

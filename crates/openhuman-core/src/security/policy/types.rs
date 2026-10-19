@@ -1,7 +1,9 @@
 use crate::config::PrivacyMode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// How much autonomy the agent has
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -192,6 +194,15 @@ pub struct SecurityPolicy {
     pub block_high_risk_commands: bool,
     /// Directories outside the workspace the agent may access (read or read-write).
     pub trusted_roots: Vec<TrustedRoot>,
+    /// Exact, finalized media artifact files admitted for read-only inspection.
+    /// Shared with the media tools so file_read and image_info follow the same
+    /// per-artifact grant without trusting the whole Files directory.
+    #[doc(hidden)]
+    pub media_artifact_paths: Arc<std::sync::Mutex<HashSet<PathBuf>>>,
+    /// Configured Files roots used to resolve Ready artifact records after a
+    /// session is rebuilt.
+    #[doc(hidden)]
+    pub media_files_roots: Arc<std::sync::Mutex<Option<crate::artifacts::FileRoots>>>,
     /// Whether the agent may install OS packages via the `install_tool` tool.
     pub allow_tool_install: bool,
     /// Tool names the user has pre-approved ("Always allow"). The `ApprovalGate`
@@ -246,6 +257,8 @@ impl Default for SecurityPolicy {
             require_approval_for_medium_risk: true,
             block_high_risk_commands: true,
             trusted_roots: Vec::new(),
+            media_artifact_paths: Arc::new(std::sync::Mutex::new(HashSet::new())),
+            media_files_roots: Arc::new(std::sync::Mutex::new(None)),
             allow_tool_install: false,
             auto_approve: Vec::new(),
             auto_approve_all: false,

@@ -33,9 +33,9 @@ use tinytools::{PermissionLevel, Tool};
 use super::approval::{approval_tool_name, ApprovalSecurityMiddleware};
 use super::tinysecurity::{VerdictSource, SHELL_TOOL};
 use crate::agent::tinyagents::host::OpenHumanRunContext;
-use crate::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::security::approval::ApprovalGate;
 use crate::security::policy::{CommandFlow, CommandStage, SecurityPolicy};
+use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 
 const LOG: &str = "[tinyagents::mw::tinysecurity]";
 
@@ -125,7 +125,6 @@ impl VerdictSource for ModuleVerdicts {
         ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> Result<Verdict, String> {
-        let dispatch = ctx.data.dispatch_ctx();
         let shell = call.name == SHELL_TOOL;
         // Unknown name: nothing to reason about, and "unknown" never means fine.
         let Some((level, declared_external)) = self.effects.resolve_tool(&call.name).map(|tool| {
@@ -139,12 +138,10 @@ impl VerdictSource for ModuleVerdicts {
                 reason: DenialReason::UnsupportedEffect,
             });
         };
-        // The desktop approvals-off exception only ever lifts a prompt.
-        let external = declared_external
-            && !self
-                .effects
-                .desktop_approvals_disabled(&dispatch, &call.name)
-                .await;
+        // Approval posture may waive a human prompt, but it must not rewrite
+        // the tool's declared external effect. TinySecurity needs the real
+        // effect metadata to enforce privacy and policy in every posture.
+        let external = declared_external;
         let acts = level_acts(level);
         let (checks, redact) = if shell {
             let Some(check) = shell_check(&call.arguments) else {
@@ -166,16 +163,7 @@ impl VerdictSource for ModuleVerdicts {
             };
             (vec![check], external)
         };
-        match self.module.ask(ctx, call, checks, redact).await {
-            Err(_fault) if !shell && ApprovalGate::try_global().is_none() => {
-                tracing::warn!(
-                    tool = %call.name,
-                    "{LOG} no approval gate installed and the module cannot answer; not refusing a non-shell tool"
-                );
-                Ok(Verdict::Allow)
-            }
-            answer => answer,
-        }
+        self.module.ask(ctx, call, checks, redact).await
     }
 }
 

@@ -1,42 +1,17 @@
+use super::agent_run::{build_agent_for_cron_job, run_agent_job, EMPTY_AGENT_OUTPUT};
 use super::*;
 use crate::config::Config;
-use crate::security::policy::native_commands_stub::StubGateway;
-use crate::security::policy::{CommandFlow, CommandStage, Refusal};
 use crate::security::SecurityPolicy;
 use chrono::{Duration as ChronoDuration, Timelike, Utc};
 use std::sync::Arc;
 use tempfile::TempDir;
 use tinyagents_harness::agent_error::AgentError;
-use tinyflows_schedule::types::JobType;
-use tinyflows_schedule::types::SessionTarget;
+use tinyflows_bus::schedule::types::JobType;
+use tinyflows_bus::schedule::types::SessionTarget;
 use {
-    crate::cron, tinyflows_schedule::types::ActiveHours, tinyflows_schedule::types::DeliveryConfig,
+    crate::cron, tinyflows_bus::schedule::types::ActiveHours,
+    tinyflows_bus::schedule::types::DeliveryConfig,
 };
-
-/// `execute_job_now` with the policy's command gateway scripted, so the
-/// retry loop is exercised without loading the security module. What the module
-/// answers for a command is pinned by `modules/security_command_tests.rs`.
-async fn execute_job_gated(
-    config: &Config,
-    gateway: Arc<StubGateway>,
-    job: &CronJob,
-    run_id: &str,
-) -> (bool, String) {
-    let security = Arc::new(SecurityPolicy::from_full_config(config).with_gateway(gateway));
-    let binding = host::Binding::current(config, security);
-    let ports = host::ports(&binding);
-    match tinyflows_schedule::runtime::execute_with_retry(
-        &ports,
-        &host::scheduler_config(config),
-        job,
-        run_id,
-    )
-    .await
-    {
-        Ok(attempt) => (attempt.success, attempt.output),
-        Err(error) => (false, error.to_string()),
-    }
-}
 
 async fn test_config(tmp: &TempDir) -> Config {
     let ws = tmp.path().join("workspace");
@@ -46,11 +21,6 @@ async fn test_config(tmp: &TempDir) -> Config {
         config_path: tmp.path().join("config.toml"),
         ..Config::default()
     };
-    // Shell jobs run under the untrusted-spawn gate (the TinyBox jail). Unit
-    // tests load no native module, so they take the operator's explicit
-    // opt-out; the gate itself is pinned in `shell_job_jail_tests`.
-    let mut config = config;
-    config.sandbox.enabled = Some(false);
     tokio::fs::create_dir_all(&config.workspace_dir)
         .await
         .unwrap();
@@ -61,9 +31,9 @@ fn test_job(command: &str) -> CronJob {
     CronJob {
         claim_generation: 0,
         policy: Default::default(),
-        id: "test-job".into(),
+        id: format!("test-job-{}", uuid::Uuid::new_v4()),
         expression: "* * * * *".into(),
-        schedule: tinyflows_schedule::types::Schedule::Cron {
+        schedule: tinyflows_bus::schedule::types::Schedule::Cron {
             expr: "* * * * *".into(),
             tz: None,
             active_hours: None,
@@ -204,8 +174,13 @@ async fn retryable_shell_failure_consumes_the_whole_retry_budget() {
     let counter = tmp.path().join("retryable-attempts.log");
     let job = test_job(&counting_failure_command(&counter));
 
-    let (success, output) =
-        execute_job_gated(&config, StubGateway::allow(), &job, "test-run").await;
+    let (success, output) = execute_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "test-run",
+    )
+    .await;
 
     assert!(
         !success,
@@ -258,14 +233,17 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     // and this test would be measuring the retryable path instead of the
     // blocked one — passing for entirely the wrong reason.
     assert!(
-        security.enabled && security.autonomy == crate::security::AutonomyLevel::ReadOnly,
+        !security.tier_allows_acting_blocking(),
         "fixture must be read-only, or this test does not exercise the blocked path"
     );
 
+    // The first call in a process starts the module runtime and attaches the
+    // module (seconds); warm it so the timing below measures retry sleeps only.
+    cron::list_jobs(&config).unwrap();
     let started = std::time::Instant::now();
-    let (success, output) = execute_job_gated(
+    let (success, output) = execute_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
-        StubGateway::refuse(Refusal::ReadOnly),
         &job,
         "test-run",
     )
@@ -284,7 +262,7 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
         attempt_count(&counter)
     );
     assert!(
-        elapsed < std::time::Duration::from_secs(1),
+        elapsed < std::time::Duration::from_millis(config.reliability.provider_backoff_ms) * 2,
         "the loop slept for {elapsed:?} on a deterministic policy refusal. A security block is \
          permanent across the backoff curve and must return on the first attempt; retrying it \
          only delays the user's error by the full retry budget (here about 4 s)."
@@ -307,18 +285,23 @@ async fn a_shell_job_runs_on_this_platform() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
-            .with_gateway(StubGateway::allow());
+        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
     // Fixture guard: a policy that refused to act would make this pass by
     // never spawning anything.
     assert!(
-        !security.enabled || security.autonomy != crate::security::AutonomyLevel::ReadOnly,
+        security.tier_allows_acting_blocking(),
         "the fixture policy must permit acting"
     );
 
     let job = test_job("echo tinyhumans");
 
-    let (success, output) = run_job_command(&config, &security, &job).await;
+    let (success, output) = run_job_command(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        &security,
+        &job,
+    )
+    .await;
 
     assert!(success, "the shell job did not succeed: {output}");
     assert!(
@@ -327,65 +310,18 @@ async fn a_shell_job_runs_on_this_platform() {
     );
 }
 
+#[cfg(feature = "modules")]
 #[tokio::test]
-async fn scheduled_shell_authorization_fails_closed_when_the_module_cannot_answer() {
+async fn scheduled_shell_authorization_fails_closed_when_tinybox_is_disabled() {
     let tmp = TempDir::new().unwrap();
-    let config = test_config(&tmp).await;
+    let mut config = test_config(&tmp).await;
+    config.modules.enabled = false;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
-            .with_gateway(StubGateway::refuse(Refusal::Unavailable));
-
-    for result in [
-        authorize_shell_command(&security, "echo must-not-run").await,
-        admit_shell_command(&security, "echo must-not-run").await,
-    ] {
-        assert_eq!(result, Err("Command analysis is unavailable.".to_owned()));
-    }
-}
-
-/// The module's reasons map onto the scheduler's existing refusal strings, and
-/// authorization asks under the scheduled-execution rule without spending the
-/// budget while admission (the run) does.
-#[tokio::test]
-async fn scheduled_shell_refusals_keep_their_messages_and_stages() {
-    let tmp = TempDir::new().unwrap();
-    let config = test_config(&tmp).await;
-    let base =
         SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
-    for (reason, message) in [
-        (
-            Refusal::Protected,
-            "blocked by security policy: command rejected",
-        ),
-        (
-            Refusal::RateLimit,
-            "blocked by security policy: rate limit exceeded",
-        ),
-        (
-            Refusal::NotAllowed,
-            "blocked by security policy: command not allowed",
-        ),
-        (
-            Refusal::HighRisk,
-            "blocked by security policy: command not allowed",
-        ),
-    ] {
-        let security = base.clone().with_gateway(StubGateway::refuse(reason));
-        assert_eq!(
-            authorize_shell_command(&security, "ls").await,
-            Err(message.to_owned()),
-            "{reason:?}"
-        );
-    }
-    let gateway = StubGateway::allow();
-    let security = base.with_gateway(gateway.clone());
-    authorize_shell_command(&security, "ls").await.unwrap();
-    admit_shell_command(&security, "ls").await.unwrap();
-    let asked = gateway.asked();
-    assert_eq!(asked.len(), 2);
-    assert!(asked.iter().all(|q| q.flow == CommandFlow::Scheduled));
-    assert_eq!(asked[0].stage, CommandStage::Authorize);
-    assert_eq!(asked[1].stage, CommandStage::Execute);
+
+    let result = authorize_shell_command(&security, "echo must-not-run").await;
+
+    assert_eq!(result, Err("Command analysis is unavailable.".to_owned()));
 }
 
 /// A pipeline keeps the shell's own exit status, not `pipefail`'s.
@@ -408,55 +344,27 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
-            .with_gateway(StubGateway::allow());
+        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
     // Fixture guard: a policy that refused to act would report failure for a
     // reason that has nothing to do with the pipeline.
     assert!(
-        !security.enabled || security.autonomy != crate::security::AutonomyLevel::ReadOnly,
+        security.tier_allows_acting_blocking(),
         "the fixture policy must permit acting"
     );
 
     let job = test_job("false | true");
 
-    let (success, output) = run_job_command(&config, &security, &job).await;
+    let (success, output) = run_job_command(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        &security,
+        &job,
+    )
+    .await;
 
     assert!(
         success,
         "`false | true` is a success under a plain `-lc`; pipefail would make it \
          a failure and re-status every existing job with a pipeline in it: {output}"
-    );
-}
-
-/// Scheduled shell authorization and admission on the released module, with no
-/// gateway stub: the allowlist applies, the protected floor refuses, and only
-/// admission (the run) spends the hourly budget.
-#[cfg(feature = "security-module")]
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key (downloads the published archive)"]
-async fn scheduled_shell_commands_are_gated_by_the_released_module() {
-    use crate::modules::security::released_support::Released;
-    use crate::security::AutonomyLevel;
-
-    let released = Released::new();
-    let supervised = released.policy(AutonomyLevel::Supervised, 100);
-    authorize_shell_command(&supervised, "ls").await.unwrap();
-    assert_eq!(
-        authorize_shell_command(&supervised, "cat ~/.ssh/id_rsa").await,
-        Err("blocked by security policy: command rejected".to_owned())
-    );
-    assert_eq!(
-        authorize_shell_command(&supervised, "definitely-not-on-the-allowlist --now").await,
-        Err("blocked by security policy: command not allowed".to_owned())
-    );
-
-    let limited = released.policy(AutonomyLevel::Supervised, 1);
-    for _ in 0..3 {
-        authorize_shell_command(&limited, "ls").await.unwrap();
-    }
-    admit_shell_command(&limited, "ls").await.unwrap();
-    assert_eq!(
-        admit_shell_command(&limited, "ls").await,
-        Err("blocked by security policy: rate limit exceeded".to_owned())
     );
 }

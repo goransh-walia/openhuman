@@ -6,8 +6,8 @@
 //! that wraps a model call or a tool call lives here, in the intended order:
 //! usage and route capture, time awareness and the repeat/failure breakers,
 //! tool exposure, the prompt-cache guard, tool-outcome capture, the context
-//! ladder, plan mode, budgets, the tool-boundary gates (approval, CLI/RPC
-//! scope, session tool policy, credential scrub) and the final request shaping
+//! ladder, plan mode, budgets, the tool-boundary gates (TinySecurity policy and
+//! approvals, CLI/RPC scope, session tool policy, credential scrub) and the final request shaping
 //! (argument recovery, embedder hooks, nudges, the memory pack).
 
 use std::collections::HashSet;
@@ -20,33 +20,33 @@ use tinyagents_harness::middleware::{
 };
 use tinyagents_harness::middleware::{
     plan_mode_middleware, ArgRecoveryMiddleware, BudgetLimits, BudgetMiddleware,
-    BudgetParityObserver, ContextCompressionMiddleware, PromptCacheGuardMiddleware,
-    RepeatProgressMiddleware, RunModeHandle, ToolPolicyMiddleware as TaToolPolicyMiddleware,
+    ContextCompressionMiddleware, PromptCacheGuardMiddleware, RepeatProgressMiddleware,
+    RunModeHandle, ToolPolicyMiddleware as TaToolPolicyMiddleware,
 };
 use tinyagents_harness::runtime::AgentHarness;
 use tinyagents_harness::steering::SteeringHandle;
 use tinyagents_harness::turn_outcome::{HaltSummarySlot, ToolOutcomeSink};
 use tinyagents_harness::turn_policy::REPEATED_TOOL_FAILURE_THRESHOLD;
+use tinyagents_hooks::lifecycle::BudgetParityObserver;
 use tinyinference_llm::model::CapabilitySet;
 
 use crate::agent::tinyagents::context_wiring::install_context_ladder;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::middleware;
 use crate::agent::tinyagents::middleware::turn_context::TurnContextMiddleware;
-use crate::agent::tinyagents::model::TurnChatModel;
 use crate::agent::tinyagents::observability::{ProviderUsageCarry, SubagentScope, ToolFailureMap};
 use crate::agent::tinyagents::routes;
-use crate::agent::tinyagents::stop_hooks;
 use crate::agent::tinyagents::verify_before_finish;
+use crate::inference::provider::model::TurnChatModel;
 
 use super::ToolPolicyEnforcement;
 
 /// What the middleware stack needs to know about the turn.
 pub(super) struct TurnMiddlewareInputs {
+    /// Configured provider id used only when the response has no resolved route.
+    pub(super) provider_id: String,
     /// The turn's primary model name.
     pub(super) model: String,
-    /// The provider id when the primary model leaves the device; `None` for a
-    /// local runtime. Installs the payload-time egress check.
     /// The shared tool sets the turn's tools resolve against.
     pub(super) tool_sets: Vec<tinyagents_runtime::turn_driver::SharedToolSet>,
     /// The allowlist the turn registered under (`None` = every visible tool).
@@ -67,10 +67,8 @@ pub(super) struct TurnMiddlewareInputs {
     pub(super) has_route_fallback: bool,
     /// The turn's dispatch context (its embedder tool hooks come from it).
     pub(super) dispatch: crate::core::runtime::DispatchCtx,
-    /// A hosted root: its session's channel tool policy also feeds the security
-    /// gate with the channel's "ask a human first" tools, which a hosted root's
-    /// gate used to park itself. Tool authorization is the one shared gate for
-    /// every path.
+    /// Hosted roots authorize tools through `OpenHumanSecurityGate`; installing
+    /// the legacy approval middleware as well would issue a second approval.
     pub(super) hosted_security_gate: bool,
     /// Whether this run pauses gracefully at its model-call cap (issue #6014).
     /// Only such a run gets the in-loop conclusion: a run that errors at its cap
@@ -126,6 +124,7 @@ pub(super) fn install_turn_middleware(
     inputs: TurnMiddlewareInputs,
 ) -> TurnWiring {
     let TurnMiddlewareInputs {
+        provider_id,
         model,
         tool_sets,
         allowed,
@@ -139,7 +138,7 @@ pub(super) fn install_turn_middleware(
         deterministic_cacheable,
         has_route_fallback,
         dispatch,
-        hosted_security_gate,
+        hosted_security_gate: _hosted_security_gate,
         pause_at_cap,
         run_mode,
         memory_turn,
@@ -178,15 +177,28 @@ pub(super) fn install_turn_middleware(
     // response, instead of every `native model adapter` pushing it. Installed
     // unconditionally — usage flows on every turn — and shares the same carry the
     // bridge drains on `UsageRecorded`.
-    harness.push_model_middleware(Arc::new(routes::UsageCarryMiddleware::new(
-        provider_usage_carry.clone(),
-    )));
+    let usage_carry = provider_usage_carry.clone();
+    harness.push_model_middleware(Arc::new(
+        tinyagents_harness::middleware::library::UsageCarryMiddleware::new(move |response| {
+            if let Some(usage) =
+                crate::inference::provider::model::usage_info_from_response(response)
+            {
+                usage_carry
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .push_back(usage);
+            }
+        }),
+    ));
 
     // Route audit capture is a typed run-context concern. The canonical
     // TinyInference decorator attached in `turn_models` stamps the successful
     // unary response and the streamed terminal response, and this middleware
     // moves that metadata into the explicit OpenHuman carrier.
-    harness.push_model_middleware(Arc::new(routes::ResolvedRouteMiddleware));
+    harness.push_model_middleware(Arc::new(routes::ResolvedRouteMiddleware::new(
+        provider_id,
+        model,
+    )));
 
     // Per-call capability gate (issue #4249, Workstream 02.1): when the turn has
     // derivable capability needs (today: vision for a `hint:vision` turn), stamp
@@ -194,9 +206,9 @@ pub(super) fn install_turn_middleware(
     // model is rejected pre-dispatch (and, once 02.2 lands, a capable fallback is
     // selected) instead of failing at the provider.
     if let Some(required) = required_capabilities {
-        harness.push_model_middleware(Arc::new(routes::RequiredCapabilitiesMiddleware::new(
-            required,
-        )));
+        harness.push_model_middleware(Arc::new(
+            tinyagents_harness::middleware::library::RequiredCapabilitiesMiddleware::new(required),
+        ));
     }
 
     // Fallback event parity (issue #4249, Workstream 02.2): the crate's
@@ -208,7 +220,9 @@ pub(super) fn install_turn_middleware(
     // `[fallback]`). Installed only when a fallback chain exists; it never re-issues
     // the call, so it adds no provider dispatch (no double-fallback).
     if has_route_fallback {
-        harness.push_model_middleware(Arc::new(routes::FallbackObserverMiddleware::new(model)));
+        harness.push_model_middleware(Arc::new(
+            tinyagents_harness::middleware::library::FallbackObserverMiddleware::new(model),
+        ));
     }
 
     // Capture context settings before `install` consumes `context_mw`.
@@ -247,7 +261,9 @@ pub(super) fn install_turn_middleware(
                 Arc::new(is_repeat_call_exempt),
             )
             .with_read_only(Arc::new(move |name: &str| read_only_tools.contains(name)))
-            .with_cleared_placeholder(crate::agent::context::CLEARED_PLACEHOLDER),
+            .with_cleared_placeholder(
+                tinyagents_harness::middleware::library::DEFAULT_CLEARED_PLACEHOLDER,
+            ),
         )
     });
     // Time awareness (#6953); before the repeat guard so its notes land last.
@@ -278,13 +294,29 @@ pub(super) fn install_turn_middleware(
         harness.push_middleware(mw.clone());
     }
 
-    stop_hooks::install(
-        harness,
-        handle.as_ref(),
-        model,
-        stop_hooks,
-        halt_summary.clone(),
-    );
+    if handle.is_some() && !stop_hooks.is_empty() {
+        let summary = halt_summary.clone();
+        harness.push_middleware(Arc::new(
+            tinyagents_hooks::stop::StopHookMiddleware::new(model, stop_hooks)
+                .with_metrics_seed(crate::agent::cost::turn_cost())
+                .with_stop_observer(move |report| {
+                    tracing::warn!(
+                        target: "stop_hooks",
+                        hook = %report.hook,
+                        iteration = report.iteration,
+                        model = %report.model,
+                        "[stop_hooks] hook voted to stop the turn — pausing run: {}",
+                        report.reason
+                    );
+                    *summary
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(format!(
+                        "Stopping after {} model call(s): {}",
+                        report.iteration, report.reason
+                    ));
+                }),
+        ));
+    }
     // SHADOW tool-exposure layer (issue #4249, 01.3 — dynamic exposure). Compose
     // the OpenHuman exposure policy as a crate-native selection layer
     // (ToolAllowlistMiddleware + a ContextualToolSelectionMiddleware built via
@@ -467,6 +499,18 @@ pub(super) fn install_turn_middleware(
             DIRECT_WEB_READ_LIMIT,
         )));
     }
+    // TinySecurity owns the policy decision and approval route on every harness
+    // path. Keep it first so a refusal cannot reach another middleware.
+    // Hosted channel policy contributes a declarative verdict to the same gate;
+    // it never opens a second prompt path.
+    middleware::security_gate::install(
+        harness,
+        tool_sets.clone(),
+        tool_policy
+            .as_ref()
+            .map(|enforcement| enforcement.session.clone()),
+    );
+
     // SDK-owned tool-policy projection (issue #4249 / tinyagents-full-migration
     // 01.1). Keep this narrow for now: enforce sandbox requirements declared by
     // adapter policies without enabling classification/approval/result-byte
@@ -478,24 +522,6 @@ pub(super) fn install_turn_middleware(
         TaToolPolicyMiddleware::new(harness.tools().policies()).require_sandbox(true),
     ));
 
-    // The security gate (issue #7328, phase 6): the TinySecurity module's decision
-    // for an effect-bearing tool, mapped onto the harness decision, with a
-    // required approval settled through the global `ApprovalGate`. It is the
-    // first tool middleware on every path so a refused call reaches nothing
-    // else. A hosted root installs it too; its host `SecurityGate` only refuses a
-    // nested call and screens input.
-    middleware::security_gate::install(
-        harness,
-        tool_sets.clone(),
-        hosted_security_gate
-            .then(|| {
-                tool_policy
-                    .as_ref()
-                    .map(|enforcement| enforcement.session.clone())
-            })
-            .flatten(),
-    );
-
     // CLI/RPC-only scope gate — a tool restricted to explicit CLI/RPC invocation
     // must not run from the model loop. Intrinsic to the tool, so installed on
     // every path (channel/session/sub-agent).
@@ -503,26 +529,12 @@ pub(super) fn install_turn_middleware(
         tinyagents_harness::middleware::CliRpcOnlyMiddleware::new(tool_sets.clone()),
     ));
 
-    // Builder-configured tool policy (`.tool_policy()`), enforced at the tool
-    // boundary. The in-house engine ran this in `agent_tool_exec`; the tinyagents
-    // path bypassed it, so a deny/require-approval silently no-opped (security
-    // regression). Installed only when the caller threads an enforcement context
-    // (the session chat path); channel/CLI + sub-agent paths pass `None`.
-    // The packed-tool router below gates on the same session, and `None`
-    // disables it, so take a copy before the enforcement is moved.
+    // The declarative tool-policy session is already fed to TinySecurity above.
+    // Keep the same snapshot for packed/deferred tool projection so discovery
+    // cannot reintroduce a name hidden by the session policy.
     let route_session = tool_policy
         .as_ref()
         .map(|enforcement| enforcement.session.clone());
-    if let Some(enforcement) = tool_policy {
-        harness.push_tool_middleware(Arc::new(
-            middleware::tool_policy::ToolPolicyMiddleware::new(
-                enforcement.policy,
-                enforcement.session,
-                tool_sets.clone(),
-                enforcement.channel,
-            ),
-        ));
-    }
 
     // Credential scrubbing (issue #4453): redact credential-shaped secrets out of
     // every tool result. The legacy engine ran `scrub_credentials` over every
@@ -575,9 +587,9 @@ pub(super) fn install_turn_middleware(
     let mut embedder_tool_hooks = crate::agent::hooks::embedder_tool_hooks_in(&dispatch);
     embedder_tool_hooks.extend(scoped_tool_hooks);
     if !embedder_tool_hooks.is_empty() {
-        harness.push_middleware(Arc::new(
-            middleware::embedder_hooks::EmbedderToolHooksMiddleware::new(embedder_tool_hooks),
-        ));
+        harness.push_middleware(Arc::new(tinyagents_hooks::tool::ToolHooksMiddleware::<
+            super::host::OpenHumanRunContext,
+        >::new(embedder_tool_hooks)));
     }
 
     // Registered last so its `before_model` sees the request after every

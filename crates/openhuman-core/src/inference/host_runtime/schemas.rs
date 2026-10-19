@@ -14,7 +14,7 @@ use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
 
 /// Params for `inference.agent_chat` and `inference.agent_chat_simple`.
 ///
-/// A near-copy of the params in [`crate::agent::schemas`], which
+/// A near-copy of the params in [`crate::agent_runs::schemas`], which
 /// backs the `agent.chat` / `agent.chat_simple` namespace over the same ops.
 /// The two diverge in one field: only this surface accepts a per-call
 /// `inference_url` + `api_key`, because `agent.chat` describes a turn on the
@@ -255,6 +255,7 @@ fn handle_agent_chat_simple(ctx: DispatchCtx, params: Map<String, Value>) -> Con
         let config = ctx.load_config().await?;
         to_json(
             crate::inference::host_runtime::ops::agent_chat_simple(
+                &ctx,
                 &config,
                 &p.message,
                 p.model_override,

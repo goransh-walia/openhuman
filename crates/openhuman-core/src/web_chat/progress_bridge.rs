@@ -174,9 +174,7 @@ use wire_caps::{cap_wire_args, cap_wire_output};
 
 #[path = "progress_bridge_ledger.rs"]
 mod ledger;
-pub(super) use ledger::{
-    ledger_append_event, ledger_get_telemetry, ledger_upsert_agent_run, ledger_upsert_telemetry,
-};
+pub(super) use ledger::{ledger_append_event, ledger_upsert_agent_run, ledger_upsert_telemetry};
 
 /// Build the worktree-isolation slice of a `subagent_completed`
 /// [`SubagentProgressDetail`] (#3376). An empty `changed_files` collapses to
@@ -221,7 +219,7 @@ fn session_profile_user_attribution(config: &crate::config::Config) -> Option<St
 /// with the correct client/thread/request IDs. The task runs until the
 /// sender is dropped (i.e. when the agent turn finishes).
 pub(crate) fn spawn_progress_bridge(
-    mut rx: tokio::sync::mpsc::Receiver<crate::agent::progress::AgentProgress>,
+    mut rx: tokio::sync::mpsc::Receiver<crate::progress::AgentProgress>,
     client_id: String,
     thread_id: String,
     request_id: String,
@@ -230,7 +228,7 @@ pub(crate) fn spawn_progress_bridge(
     config: crate::config::Config,
     dispatch_ctx: crate::core::runtime::DispatchCtx,
 ) -> ProgressBridgeHandle {
-    use crate::agent::progress::AgentProgress;
+    use crate::progress::AgentProgress;
     use std::collections::HashMap;
     use tinyagents_session::run_ledger::{
         AgentRunKind, AgentRunStatus, AgentRunUpsert, RunEventAppend, RunTelemetryUpsert,
@@ -241,7 +239,7 @@ pub(crate) fn spawn_progress_bridge(
         std::sync::Mutex<Option<super::turn_timing::TurnTimingSnapshot>>,
     > = std::sync::Arc::new(std::sync::Mutex::new(None));
     let timing_snapshot_for_task = timing_snapshot.clone();
-    crate::core::runtime::spawn_scoped(async move {
+    dispatch_ctx.clone().spawn(async move {
         log::debug!(
             "[web_channel][bridge] spawned client_id={} thread_id={} request_id={} speak_reply={:?} source={:?} session_id={:?} hold_text_stream={}",
             client_id,
@@ -253,7 +251,6 @@ pub(crate) fn spawn_progress_bridge(
             metadata.hold_text_stream,
         );
         let mut round: u32 = 0;
-        let mut parent_max_iterations: u32 = 0;
         // Accumulates the parent agent's streamed narration for the current
         // round. When a tool call closes the round, this leading narration is
         // flushed as an interim chat bubble (`chat_interim`) so it persists in
@@ -268,8 +265,6 @@ pub(crate) fn spawn_progress_bridge(
         // web-channel event (see `publish_seq_stamped`). Unique per emission so
         // the frontend can dedup by `(request_id, seq)`.
         let mut emit_seq: u64 = 0;
-        let bridge_ctx =
-            || BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
         let mut parent_completed = false;
         let mut parent_tool_count: u64 = 0;
         let mut child_tool_counts: HashMap<String, u64> = HashMap::new();
@@ -282,8 +277,8 @@ pub(crate) fn spawn_progress_bridge(
             TurnStateMirror::new(turn_state_store, thread_id.clone(), request_id.clone());
 
         // #3886: structured tracing export (`progress_bridge_trace.rs`).
-        let (mut span_collector, mut journal_trace_ctx) =
-            trace::span_collector(&config, &metadata, &client_id, &thread_id, &request_id).unzip();
+        let mut journal_trace_ctx =
+            trace::trace_context(&config, &metadata, &client_id, &thread_id, &request_id);
 
         // #4270: emit a periodic liveness beat for the whole in-flight turn so
         // the frontend silence timer never false-fires during a long prefill or
@@ -299,6 +294,8 @@ pub(crate) fn spawn_progress_bridge(
         // real beat lands one full interval after the turn begins.
         heartbeat.tick().await;
         let mut turn_active = false;
+        let bridge_ctx =
+            BridgeCtx::new(&client_id, &thread_id, &request_id, &config, &dispatch_ctx);
 
         loop {
             let event = tokio::select! {
@@ -329,9 +326,6 @@ pub(crate) fn spawn_progress_bridge(
             };
             events_seen += 1;
             turn_state.observe(&event);
-            if let Some(collector) = span_collector.as_mut() {
-                collector.record(&event, unix_epoch_ms());
-            }
             match &event {
                 AgentProgress::TextDelta { delta, iteration } => {
                     log::trace!(
@@ -467,7 +461,6 @@ pub(crate) fn spawn_progress_bridge(
                     max_iterations,
                 } => {
                     round = iteration;
-                    parent_max_iterations = max_iterations;
                     publish_seq_stamped(
                         &dispatch_ctx,
                         &mut emit_seq,
@@ -633,9 +626,8 @@ pub(crate) fn spawn_progress_bridge(
                     parent_call_id,
                     ..
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_spawned(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         &mut subagent_parent_call_ids,
                         round,
@@ -662,9 +654,8 @@ pub(crate) fn spawn_progress_bridge(
                     dirty_status,
                     ..
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_completed(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         &mut subagent_parent_call_ids,
                         &child_tool_counts,
@@ -686,9 +677,8 @@ pub(crate) fn spawn_progress_bridge(
                     task_id,
                     error,
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_failed(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         &mut subagent_parent_call_ids,
                         &child_tool_counts,
@@ -705,9 +695,8 @@ pub(crate) fn spawn_progress_bridge(
                     worker_thread_id,
                     checkpoint_path,
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_awaiting_user(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         &subagent_parent_call_ids,
                         round,
@@ -725,9 +714,8 @@ pub(crate) fn spawn_progress_bridge(
                     max_iterations,
                     extended_policy,
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_iteration_started(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         round,
                         agent_id,
@@ -747,9 +735,8 @@ pub(crate) fn spawn_progress_bridge(
                     display_label,
                     display_detail,
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_tool_call_started(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         &mut child_tool_counts,
                         round,
@@ -779,9 +766,8 @@ pub(crate) fn spawn_progress_bridge(
                     display_detail,
                     structured,
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_tool_call_completed(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         round,
                         agent_id,
@@ -806,9 +792,8 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_text_delta(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         round,
                         agent_id,
@@ -823,9 +808,8 @@ pub(crate) fn spawn_progress_bridge(
                     delta,
                     iteration,
                 } => {
-                    let ctx = bridge_ctx();
                     subagent_events::on_subagent_thinking_delta(
-                        &ctx,
+                        &bridge_ctx,
                         &mut emit_seq,
                         round,
                         agent_id,
@@ -1075,35 +1059,14 @@ pub(crate) fn spawn_progress_bridge(
         // publishing an error. Trace export is best-effort I/O and must not
         // hold up terminal delivery after the progress stream closed.
         let _ = drained_tx.send(true);
-        if let Some(mut collector) = span_collector.take() {
-            collector.finish(unix_epoch_ms());
-            let live_spans = collector.spans().to_vec();
-            let journal_export = if let Some(trace_ctx) = journal_trace_ctx.take() {
-                super::journal_shadow::shadow_compare_journal_projection(
-                    &dispatch_ctx,
-                    &request_id,
-                    trace_ctx.clone(),
-                    parent_max_iterations,
-                    &live_spans,
-                )
-                .await
-                .map(|observations| (trace_ctx, observations))
-            } else {
-                None
-            };
-            if let Some((trace_ctx, observations)) = journal_export {
-                let run_telemetry = ledger_get_telemetry(&config, &request_id);
-                crate::agent::progress_tracing::export_run_trace_from_journal(
-                    &config,
-                    &trace_ctx,
-                    &observations,
-                    run_telemetry.as_ref(),
-                    &live_spans,
-                )
-                .await;
-            } else {
-                crate::agent::progress_tracing::export_run_trace(&config, &live_spans).await;
-            }
+        if let Some(trace_ctx) = journal_trace_ctx.take() {
+            crate::core::observability::progress_tracing::export_run_trace_from_journal(
+                &dispatch_ctx,
+                &config,
+                &request_id,
+                trace_ctx,
+            )
+            .await;
         }
 
         log::debug!(
@@ -1124,7 +1087,3 @@ pub(crate) fn spawn_progress_bridge(
 #[cfg(test)]
 #[path = "progress_bridge_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "progress_bridge_wire_caps_tests.rs"]
-mod wire_caps_tests;

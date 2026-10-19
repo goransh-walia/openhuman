@@ -32,10 +32,10 @@ use tinymemory_api::{
 };
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
-use crate::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::config::Config;
 use crate::memory::types::{LearnParams, RecallParams};
 use crate::memory::{MemoryError, MemoryResult};
+use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::security::SecurityPolicy;
 
 /// Prefix of a flow's own tag (see [`flow_tag`]).
@@ -408,15 +408,13 @@ impl Tool for FlowMemoryRecallTool {
 
 /// Write access to a flow's own memory — and *only* its own. See the module
 /// doc for the security invariant this tool exists to preserve.
-pub struct FlowMemoryRememberTool {
-    security: Arc<SecurityPolicy>,
-}
+pub struct FlowMemoryRememberTool {}
 
 impl FlowMemoryRememberTool {
     /// Holds no memory handle — config and engine are resolved per call.
     #[must_use]
-    pub fn new(security: Arc<SecurityPolicy>) -> Self {
-        Self { security }
+    pub fn new(_security: Arc<SecurityPolicy>) -> Self {
+        Self {}
     }
 }
 

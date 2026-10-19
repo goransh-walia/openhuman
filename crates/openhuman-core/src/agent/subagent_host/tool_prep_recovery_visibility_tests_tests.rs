@@ -18,7 +18,7 @@ fn names(idx: &[usize], tools: &[Box<dyn tinytools::Tool>]) -> Vec<String> {
 fn named_scope_still_includes_recovery_tool() {
     let t = tools();
     // Named scope allow-lists only current_time — recovery tool not listed.
-    let idx = filter_tool_indices(&t, &ToolScope::Named(vec!["current_time".into()]), None);
+    let idx = filter_tool_indices(&t, &ToolScope::Named(vec!["current_time".into()]), &[], None);
     let got = names(&idx, &t);
     assert!(got.contains(&"current_time".to_string()));
     assert!(
@@ -33,7 +33,7 @@ fn tool_less_agent_stays_tool_less() {
     // ToolScope::Named([])) runs no tools and produces no compacted output,
     // so it must NOT be handed the recovery tool — it stays empty.
     let t = tools();
-    let idx = filter_tool_indices(&t, &ToolScope::Named(vec![]), None);
+    let idx = filter_tool_indices(&t, &ToolScope::Named(vec![]), &[], None);
     assert!(idx.is_empty(), "empty scope must yield zero tools: {idx:?}");
 }
 
@@ -41,14 +41,14 @@ fn tool_less_agent_stays_tool_less() {
 fn skill_filter_still_includes_recovery_tool() {
     let t = tools();
     // A skill-restricted subagent (only `foo__*` tools) must still get it.
-    let idx = filter_tool_indices(&t, &ToolScope::Wildcard, Some("foo"));
+    let idx = filter_tool_indices(&t, &ToolScope::Wildcard, &[], Some("foo"));
     assert!(names(&idx, &t).contains(&RECOVERY_TOOL_NAME.to_string()));
 }
 
 #[test]
 fn parent_visibility_caps_wildcard_child_scope() {
     let t = tools();
-    let mut idx = filter_tool_indices(&t, &ToolScope::Wildcard, None);
+    let mut idx = filter_tool_indices(&t, &ToolScope::Wildcard, &[], None);
     let parent_visible = ["current_time".to_string()].into_iter().collect();
 
     retain_parent_visible_tool_indices(&mut idx, &t, &parent_visible);

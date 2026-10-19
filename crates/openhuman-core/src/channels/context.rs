@@ -61,6 +61,17 @@ pub(crate) struct ChannelRuntimeContext {
     /// Full config for building crate-native turn models (Phase 3 P3-B). `Some` in
     /// production; `None` lets tests inject a model source directly.
     pub(crate) config: Option<Arc<crate::config::Config>>,
+    /// The core context this channel runtime was built under. Held weakly: a
+    /// channel runtime outlives no tenant. `None` in tests and bespoke hosts
+    /// that never bound one.
+    pub(crate) core: Option<std::sync::Weak<crate::core::runtime::CoreContext>>,
+}
+
+impl ChannelRuntimeContext {
+    /// The dispatch context this runtime's work runs under.
+    pub(crate) fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
+        crate::core::runtime::DispatchCtx::from_weak(self.core.as_ref())
+    }
 }
 
 /// Resolve the configured module client; unit tests use an attested bus fixture.

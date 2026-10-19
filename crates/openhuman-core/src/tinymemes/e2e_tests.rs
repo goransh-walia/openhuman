@@ -67,9 +67,13 @@ async fn the_real_module_fails_open_and_reads_its_documents_through_the_host() {
     let config = config_in(dir.path(), &artifact);
     write_legacy(&config, "remixed.json", "[\"old-1\"]");
 
-    let response = service::remix(&config, request("That's done."))
-        .await
-        .expect("the module answered");
+    let response = service::remix(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        request("That's done."),
+    )
+    .await
+    .expect("the module answered");
     assert!(!response.remixed, "{response:?}");
     assert_eq!(response.reply, "That's done.");
     // The module reported the request finished, so nothing is kept for it.
@@ -94,7 +98,13 @@ async fn a_disabled_request_passes_through_without_a_callback() {
     write_legacy(&config, "remixed.json", "[\"untouched\"]");
     let mut disabled = request("hello");
     disabled.enabled = false;
-    let response = service::remix(&config, disabled).await.unwrap();
+    let response = service::remix(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        disabled,
+    )
+    .await
+    .unwrap();
     assert_eq!(response.reply, "hello");
     assert_eq!(response.skipped, Some(SkipReason::Disabled));
     assert_eq!(
@@ -121,9 +131,10 @@ async fn concurrent_remixes_for_two_workspaces_stay_in_their_own_documents() {
     write_legacy(&a, "remixed.json", "[\"from-a\"]");
     write_legacy(&b, "remixed.json", "[\"from-b\"]");
 
+    let host = crate::core::runtime::DispatchCtx::host_default();
     let (ra, rb) = tokio::join!(
-        service::remix(&a, request("reply a")),
-        service::remix(&b, request("reply b"))
+        service::remix(&host, &a, request("reply a")),
+        service::remix(&host, &b, request("reply b"))
     );
     assert_eq!(ra.unwrap().reply, "reply a");
     assert_eq!(rb.unwrap().reply, "reply b");

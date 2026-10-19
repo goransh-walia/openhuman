@@ -17,7 +17,6 @@ use reqwest::StatusCode;
 use serde_json::{json, Map, Value};
 use tempfile::{tempdir, TempDir};
 
-use openhuman_core::agent::turn_origin::{self, AgentTurnOrigin};
 use openhuman_core::config::Config;
 use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
 use openhuman_core::mcp::registry::connections;
@@ -29,6 +28,7 @@ use openhuman_core::security::approval::{
     all_approval_controller_schemas, all_approval_registered_controllers, ExecutionOutcome,
     GateOutcome,
 };
+use openhuman_core::security::turn_origin::{self, AgentTurnOrigin};
 use openhuman_core::security::{live_policy, SecurityPolicy};
 use openhuman_core::tools::registry::{registry_entries, registry_entries_for_config};
 use openhuman_rpc::server::build_core_http_router;
@@ -397,7 +397,7 @@ enabled = true
 
 #[tokio::test(flavor = "current_thread")]
 async fn tool_registry_entries_fall_back_on_current_thread_runtime() {
-    let entries = registry_entries();
+    let entries = registry_entries(&openhuman_core::core::runtime::DispatchCtx::host_default());
     assert!(entries
         .iter()
         .any(|entry| entry.tool_id == "tools.web_search"));

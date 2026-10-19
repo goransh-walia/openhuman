@@ -26,8 +26,9 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::json;
 use tinystoragedrivers::ScopedStorage;
 
-use super::storage_grant_tinywallet::{MODULE_ID, PAYMENTS_STREAM};
+use super::storage_grant_schemas::tinywallet::{MODULE_ID, PAYMENTS_STREAM};
 use super::storage_import_support as support;
+use crate::core::runtime::DispatchCtx;
 
 const LOG_PREFIX: &str = "[x402-import]";
 const LEDGER_FILE: &str = "x402/payments.jsonl";
@@ -49,41 +50,40 @@ pub(crate) enum Outcome {
 
 /// Imports the legacy ledger under `workspace_dir` into the module's scope of
 /// the installed backend.
-pub(crate) async fn import_legacy(workspace_dir: &Path) -> Result<Outcome> {
-    let Some(scoped) = support::module_scope(MODULE_ID)? else {
+pub(crate) async fn import_legacy(ctx: &DispatchCtx, workspace_dir: &Path) -> Result<Outcome> {
+    let Some(scoped) = support::module_scope(ctx, MODULE_ID)? else {
         return Ok(Outcome::NoBackend);
     };
-    import_into(&scoped, workspace_dir).await
+    import_into(ctx, &scoped, workspace_dir).await
 }
 
-async fn import_into(scoped: &ScopedStorage, workspace_dir: &Path) -> Result<Outcome> {
+async fn import_into(
+    ctx: &DispatchCtx,
+    scoped: &ScopedStorage,
+    workspace_dir: &Path,
+) -> Result<Outcome> {
     let docs = scoped.documents();
     let marker = support::marker_id("x402", workspace_dir);
-    if support::already_imported(docs, MARKER_COLLECTION, &marker).await? {
+    if support::already_imported(scoped, MARKER_COLLECTION, &marker).await? {
         return Ok(Outcome::AlreadyDone);
     }
     let ledger = workspace_dir.join(LEDGER_FILE);
     if !ledger.is_file() {
         return Ok(Outcome::NoSource);
     }
-    let (records, skipped) = crate::core::runtime::spawn_blocking_scoped(move || -> Result<_> {
-        let text = std::fs::read_to_string(&ledger)
-            .with_context(|| format!("read {}", ledger.display()))?;
-        Ok(support::parse_jsonl(&text))
-    })
-    .await
-    .context("the legacy reader panicked")??;
+    let (records, skipped) = ctx
+        .spawn_blocking(move || -> Result<_> {
+            let text = std::fs::read_to_string(&ledger)
+                .with_context(|| format!("read {}", ledger.display()))?;
+            Ok(support::parse_jsonl(&text))
+        })
+        .await
+        .context("the legacy reader panicked")??;
 
     let payments = support::append_if_empty(scoped, PAYMENTS_STREAM, records)
         .await
         .map_err(|error| anyhow!("import the payments: {error:#}"))?;
-    support::mark_imported(
-        docs,
-        MARKER_COLLECTION,
-        &marker,
-        json!({ "payments": payments, "skipped": skipped }),
-    )
-    .await?;
+    support::mark_imported(scoped, MARKER_COLLECTION, &marker).await?;
     tracing::info!("{LOG_PREFIX} imported payments={payments} skipped={skipped}");
     Ok(Outcome::Imported { payments, skipped })
 }

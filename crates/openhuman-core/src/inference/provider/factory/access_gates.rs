@@ -99,7 +99,7 @@ pub(super) fn emit_inference_egress(role: &str, provider: &str, egress: &EgressL
         return;
     }
     if p == PROVIDER_OPENHUMAN {
-        // Managed backend is emitted centrally in `resolve_managed_backend`,
+        // Managed backend is emitted centrally in `managed_chat_model`,
         // the universal managed ChatModel funnel. Skipping here avoids a
         // duplicate descriptor.
         return;
@@ -198,7 +198,7 @@ pub(crate) fn verify_backend_session_active(config: &Config) -> anyhow::Result<(
         return Ok(());
     }
     // Fast path: the scheduler gate already knows the session is dead.
-    if crate::cron::scheduler_gate::is_signed_out() {
+    if crate::platform::llm_gate::is_signed_out() {
         anyhow::bail!(
             "SESSION_EXPIRED: backend session not active — sign in to use custom providers"
         );

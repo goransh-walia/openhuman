@@ -117,6 +117,7 @@ pub async fn composio_set_api_key(
     crate::core::bus::BUS.publish(crate::core::events::DomainEvent::ComposioConfigChanged {
         mode: effective_mode.clone(),
         api_key_set: true,
+        tenant: ctx.event_tenant(),
     });
     tracing::debug!(
         mode = %effective_mode,
@@ -157,6 +158,7 @@ pub async fn composio_clear_api_key(
     crate::core::bus::BUS.publish(crate::core::events::DomainEvent::ComposioConfigChanged {
         mode: "backend".to_string(),
         api_key_set: false,
+        tenant: ctx.event_tenant(),
     });
     tracing::debug!("[composio-cache] published ComposioConfigChanged after clear_api_key");
 

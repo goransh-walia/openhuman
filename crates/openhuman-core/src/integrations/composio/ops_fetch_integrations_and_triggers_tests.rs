@@ -27,6 +27,7 @@ async fn offline_local_session_never_fetches_hosted_integrations() {
 
 #[tokio::test]
 async fn fetch_connected_integrations_via_mock_aggregates_tools() {
+    crate::integrations::composio::test_backend_route::register();
     let _guard = cache_guard_async().await;
     // Connections: gmail + notion. Tools: filtered to those toolkits
     // and prefixed with the uppercased slug. The toolkits route
@@ -90,6 +91,7 @@ async fn fetch_connected_integrations_via_mock_aggregates_tools() {
 
 #[tokio::test]
 async fn fetch_connected_integrations_treats_slack_and_telegram_status_like_ui() {
+    crate::integrations::composio::test_backend_route::register();
     let _guard = cache_guard_async().await;
     let app = Router::new()
         .route(
@@ -578,7 +580,8 @@ async fn composio_list_connections_routes_through_direct_mode() {
     // remote will reject the test request, so we assert on the error
     // shape: it must reference `composio` AND must NOT reference the
     // backend-session path (proving the factory routed us to direct).
-    let result = composio_list_connections(&config).await;
+    let result =
+        composio_list_connections(&crate::core::runtime::DispatchCtx::ambient(), &config).await;
     match result {
         Ok(outcome) => {
             // Some sandboxes resolve OK with an empty list — accept
@@ -646,7 +649,7 @@ async fn composio_list_connections_returns_empty_when_direct_mode_no_key() {
     // RC of TAURI-RUST-R4: this MUST be Ok(empty), not Err — no error is
     // constructed, so nothing reaches Sentry and the 5 s poll stops
     // churning.
-    let outcome = composio_list_connections(&config)
+    let outcome = composio_list_connections(&crate::core::runtime::DispatchCtx::ambient(), &config)
         .await
         .expect("direct mode with no key must return an empty list, not an error");
     assert!(

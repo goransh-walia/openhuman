@@ -6,8 +6,9 @@
 //! and the image/video agents' allowlists already use. `media_list_models`
 //! lists what the generators can run.
 
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -18,8 +19,8 @@ use tinyagents_harness::tinyinference_video::{VideoGenerator, WaitPolicy};
 use tinytools::{PermissionLevel, Tool, ToolCategory, ToolResult};
 
 use super::artifact_tool::MediaArtifactTool;
-use super::provider::{managed_generators, MediaGenerators};
-use crate::agent::artifacts::ArtifactKind;
+use super::provider::MediaGenerators;
+use crate::artifacts::ArtifactKind;
 use crate::config::Config;
 
 /// Image tool name (pinned by the `media` pack and agent allowlists).
@@ -33,32 +34,43 @@ pub const LIST_MODELS_TOOL_NAME: &str = "media_list_models";
 const VIDEO_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const VIDEO_WAIT_BUDGET: Duration = Duration::from_secs(600);
 
+pub type MediaReferenceAllowlist = Arc<Mutex<HashSet<PathBuf>>>;
+
 const IMAGE_DESCRIPTION: &str = "Generate or edit images from a text prompt via OpenRouter \
-     (default model: Seedream 5.0 Lite). Pass `references` (https URLs or workspace file paths) \
-     to edit, restyle, or keep a subject consistent. Saves each image under the workspace \
-     `generated-media/` folder and returns the file path. Billed per call: after an error that \
+     (default model: Seedream 5.0 Lite). Pass `references` (https URLs, workspace paths, or \
+     paths returned by earlier media calls) \
+     to edit, restyle, or keep a subject consistent. Saves each image in the Files folder and \
+     returns its local file path. Billed per call: after an error that \
      says the call was billed, do not call again — report it to the user.";
 
 const VIDEO_DESCRIPTION: &str = "Generate a short video clip via OpenRouter (default model: \
      Seedance 2.0 Mini, 4–15 s, 480p/720p, optional audio). Optionally start from \
-     `first_frame` or end on `last_frame` (URL or workspace path). Blocks until the clip is \
-     ready (minutes) and saves it under `generated-media/`. Billed per call: if it times out, \
+     `first_frame` or end on `last_frame` (URL, workspace path, or path returned by an earlier \
+     media call). Blocks until the clip is \
+     ready (minutes) and saves it in the Files folder. Billed per call: if it times out, \
      call again with `resume_job_id` instead of submitting a new job.";
 
-/// Registers the media tools, or nothing when no backend is reachable.
-pub fn build_media_tools(root_config: &Config, action_dir: &Path) -> Vec<Box<dyn Tool>> {
-    let Some(generators) = managed_generators(root_config) else {
-        return Vec::new();
-    };
-    media_tools_from(
+/// Builds the media tools over `generators` for a configuration: the
+/// reference-file policy, the files roots and the video wait come from
+/// `root_config`; `allowed_references` is the session's shared allowlist of
+/// artifact paths. The generators come from the host that owns the media
+/// service (the core has none of its own).
+pub fn media_tools_for_config(
+    generators: MediaGenerators,
+    root_config: &Config,
+    action_dir: &Path,
+    allowed_references: MediaReferenceAllowlist,
+) -> Vec<Box<dyn Tool>> {
+    media_tools_from_with_allowlist(
         generators,
         action_dir,
         &root_config.workspace_dir,
-        crate::agent::artifacts::FileRoots::from_config(root_config),
+        crate::artifacts::FileRoots::from_config(root_config),
         // Each poll's job state feeds the call's progress heartbeat
         // (`super::progress`, wired per call by `MediaArtifactTool`), so a
         // multi-minute wait is not silent.
         WaitPolicy::new(VIDEO_POLL_INTERVAL, VIDEO_WAIT_BUDGET),
+        allowed_references,
     )
 }
 
@@ -69,13 +81,35 @@ pub fn media_tools_from(
     generators: MediaGenerators,
     action_dir: &Path,
     workspace_dir: &Path,
-    files_dir: impl Into<crate::agent::artifacts::FileRoots>,
+    files_dir: impl Into<crate::artifacts::FileRoots>,
     video_wait: WaitPolicy,
+) -> Vec<Box<dyn Tool>> {
+    media_tools_from_with_allowlist(
+        generators,
+        action_dir,
+        workspace_dir,
+        files_dir,
+        video_wait,
+        Arc::new(Mutex::new(HashSet::new())),
+    )
+}
+
+fn media_tools_from_with_allowlist(
+    generators: MediaGenerators,
+    action_dir: &Path,
+    workspace_dir: &Path,
+    files_dir: impl Into<crate::artifacts::FileRoots>,
+    video_wait: WaitPolicy,
+    allowed_artifacts: MediaReferenceAllowlist,
 ) -> Vec<Box<dyn Tool>> {
     let files = files_dir.into();
     let generators = Arc::new(generators);
-    let output = MediaOutput::new(action_dir)
-        .with_reference_policy(reference_policy(action_dir, workspace_dir));
+    let output = MediaOutput::new(action_dir).with_reference_policy(reference_policy(
+        action_dir,
+        workspace_dir,
+        Arc::clone(&allowed_artifacts),
+    ));
+    let output_blobs = Arc::clone(&output.blobs);
     let image_tool = |image: &Arc<dyn ImageGenerator>| {
         GenerateImageTool::new(Arc::clone(image), output.clone())
             .with_name(IMAGE_TOOL_NAME)
@@ -91,6 +125,8 @@ pub fn media_tools_from(
                 workspace_dir.to_path_buf(),
                 files.clone(),
             )
+            .with_blobs(Arc::clone(&output_blobs))
+            .with_reference_allowlist(Arc::clone(&allowed_artifacts))
             // A tool per call, around generators that disclose to that call's
             // chat.
             .with_per_call_inner({
@@ -113,6 +149,8 @@ pub fn media_tools_from(
                 workspace_dir.to_path_buf(),
                 files,
             )
+            .with_blobs(output_blobs)
+            .with_reference_allowlist(Arc::clone(&allowed_artifacts))
             .with_per_call_inner({
                 let generators = Arc::clone(&generators);
                 let output = output.clone();
@@ -155,6 +193,7 @@ fn video_tool(
 pub(crate) fn reference_policy(
     action_dir: &Path,
     workspace_dir: &Path,
+    allowed_artifacts: MediaReferenceAllowlist,
 ) -> tinyagents_harness::media::ReferencePathPolicy {
     let roots: Vec<PathBuf> = vec![action_dir.to_path_buf(), workspace_dir.to_path_buf()];
     Arc::new(move |path: &Path| {
@@ -170,7 +209,11 @@ pub(crate) fn reference_policy(
                 path.display()
             ));
         }
-        if !roots.iter().any(|root| path.starts_with(root)) {
+        let is_filed_artifact = allowed_artifacts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(path);
+        if !is_filed_artifact && !roots.iter().any(|root| path.starts_with(root)) {
             return Err(format!(
                 "reference path {} is outside the workspace; use a URL or a file inside the workspace",
                 path.display()

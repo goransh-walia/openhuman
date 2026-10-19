@@ -91,12 +91,6 @@ pub async fn load_current_or_init(ctx: &DispatchCtx) -> anyhow::Result<Config> {
     Ok(config)
 }
 
-/// [`load_current_or_init`] for a caller with no context of its own yet: reads
-/// the task's ambient one. Transitional (#7801), like `DispatchCtx::ambient`.
-pub async fn load_current_or_init_ambient() -> anyhow::Result<Config> {
-    load_current_or_init(&crate::core::runtime::DispatchCtx::ambient()).await
-}
-
 /// Loads the config that belongs to `workspace_dir`, rather than whichever one
 /// the process-global active-user / `OPENHUMAN_WORKSPACE` resolution currently
 /// selects.
@@ -200,7 +194,7 @@ pub async fn reload_config_from_paths(
     }
 }
 
-async fn normalize_loaded_config(config: &mut Config) {
+pub(crate) async fn normalize_loaded_config(config: &mut Config) {
     // Welcome-agent routing normalization removed (the welcome agent has been
     // deleted; all chat turns route directly to the orchestrator). The
     // `chat_onboarding_completed` field is retained only for backward-compatible
@@ -210,6 +204,9 @@ async fn normalize_loaded_config(config: &mut Config) {
         binding.apply_chat(config);
     }
     seed_and_enrich_model_registry(config);
+    // Hook point for a host's resolved endpoints; covers the embedder-supplied
+    // config path, which never goes through `Config::load_*`.
+    crate::config::enrichers::run_enrichers(config);
 }
 
 /// Populate per-token pricing on the model registry from the static catalog.

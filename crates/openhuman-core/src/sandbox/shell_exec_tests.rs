@@ -118,7 +118,12 @@ async fn a_disabled_module_never_falls_back_to_a_host_shell_for_a_jailed_run() {
         require_process_isolation: true,
         deny_read: Vec::new(),
     });
-    assert!(run(&config, shell).await.is_err());
+    assert!(run(
+        &config,
+        shell
+    )
+    .await
+    .is_err());
     assert!(!marker.exists());
 }
 

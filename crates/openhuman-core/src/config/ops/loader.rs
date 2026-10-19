@@ -6,10 +6,11 @@ mod reset_local_data;
 mod runtime_flags;
 mod snapshot;
 
+#[cfg(test)]
+pub(crate) use load::normalize_loaded_config;
 pub use load::{
     load_config_for_workspace_with_timeout, load_config_in, load_config_with_timeout,
-    load_current_or_init, load_current_or_init_ambient, reload_config_from_paths,
-    reload_config_snapshot_with_timeout,
+    load_current_or_init, reload_config_from_paths, reload_config_snapshot_with_timeout,
 };
 pub(crate) use paths::fallback_workspace_dir;
 #[cfg(test)]

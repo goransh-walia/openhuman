@@ -7,9 +7,6 @@ use tempfile::TempDir;
 use tinytools::ToolContent;
 use tinytools::ToolResult;
 
-#[path = "../integrations/test_support.rs"]
-mod integration_test_support;
-
 fn test_config(tmp: &TempDir) -> Config {
     Config {
         workspace_dir: tmp.path().join("workspace"),
@@ -122,9 +119,11 @@ const PRODUCTIVITY_TOOLS: &[&str] = &[
     // `agent_workflows` domain was dissolved into `workflows`; workflow
     // discovery/run tools now live under the Knowledge theme
     // (`list_workflows`, `run_workflow`, …).
-    "artifact_list",
-    "artifact_get",
-    "artifact_delete",
+    "create_artifact",
+    "read_artifact",
+    "update_artifact",
+    "list_artifacts",
+    "delete_artifact",
     "task_source_list",
     "task_source_get",
     "task_source_fetch",
@@ -137,15 +136,17 @@ const PRODUCTIVITY_TOOLS: &[&str] = &[
 ];
 
 const PRODUCTIVITY_DEFAULT_OFF: &[&str] = &[
-    "artifact_delete",
+    "delete_artifact",
     "task_source_add",
     "task_source_update",
     "task_source_remove",
 ];
 
 const PRODUCTIVITY_ALWAYS_ON: &[&str] = &[
-    "artifact_list",
-    "artifact_get",
+    "create_artifact",
+    "read_artifact",
+    "update_artifact",
+    "list_artifacts",
     "task_source_fetch",
     "task_source_status",
 ];
@@ -354,8 +355,6 @@ mod catalog_fixture_tests;
 mod composio_registration_tests;
 #[path = "ops_tests_default_registry_tests.rs"]
 mod default_registry_tests;
-#[path = "ops_tests_domain_family_tests.rs"]
-mod domain_family_tests;
 #[path = "ops_tests_execution_and_serde_tests.rs"]
 mod execution_and_serde_tests;
 #[path = "ops_tests_repl_tools_tests.rs"]

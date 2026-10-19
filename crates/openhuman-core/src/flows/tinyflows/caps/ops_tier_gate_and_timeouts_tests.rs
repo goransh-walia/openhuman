@@ -80,6 +80,7 @@ async fn http_adapter_blocks_under_readonly_tier() {
 
     let (_dir, creds) = http_cred_store();
     let http = OpenHumanHttp {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
         http_config: HttpRequestConfig::default(),
         http_creds: Arc::new(creds),
@@ -109,9 +110,13 @@ async fn http_adapter_blocks_under_readonly_tier() {
 /// `http_request`, and `code` node paths, which all gate on tier first.
 #[tokio::test]
 async fn composio_tool_call_blocks_under_readonly_tier() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     use crate::security::AutonomyLevel;
 
     let tools = OpenHumanTools {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
         approval: Default::default(),
@@ -144,6 +149,9 @@ async fn composio_tool_call_blocks_under_readonly_tier() {
 /// under a read-only tier.
 #[tokio::test]
 async fn composio_read_action_allowed_under_readonly_tier() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     use crate::security::AutonomyLevel;
 
     let class = classify_composio_action_for_tier("TWITTER_RECENT_SEARCH").await;
@@ -159,6 +167,7 @@ async fn composio_read_action_allowed_under_readonly_tier() {
     // it may still fail downstream (no Composio session configured in
     // this test), but never with the policy-blocked marker.
     let tools = OpenHumanTools {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
         approval: Default::default(),
@@ -184,6 +193,9 @@ async fn composio_read_action_allowed_under_readonly_tier() {
 /// reads included).
 #[tokio::test]
 async fn composio_read_action_does_not_prompt_under_supervised_tier() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     use crate::security::AutonomyLevel;
 
     let class = classify_composio_action_for_tier("TWITTER_RECENT_SEARCH").await;
@@ -197,6 +209,7 @@ async fn composio_read_action_does_not_prompt_under_supervised_tier() {
     );
 
     let tools = OpenHumanTools {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::Supervised)),
         approval: Default::default(),
@@ -415,11 +428,11 @@ fn agent_node_runtime_resolves_to_the_definitions_effective_iteration_cap() {
     let config = resolver_test_config(&tmp);
     assert_eq!(config.agent.max_tool_iterations, 10);
 
-    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+    crate::agent_registry::host_definition::AgentDefinitionRegistry::init_global(
         &config.workspace_dir,
     )
     .expect("agent registry init");
-    let def = crate::agent::harness::host_definition::AgentDefinitionRegistry::global()
+    let def = crate::agent_registry::host_definition::AgentDefinitionRegistry::global()
         .expect("registry initialised")
         .get("planner")
         .expect("planner definition registered")

@@ -230,6 +230,7 @@ async fn round20_composio_ops_cover_authorize_scopes() {
     store_session_token(&harness.config);
 
     let legacy_extra = composio_authorize(
+        &openhuman_core::core::runtime::DispatchCtx::host_default(),
         &harness.config,
         "gmail",
         Some(json!({ "oauth_scopes": [123] })),
@@ -240,6 +241,7 @@ async fn round20_composio_ops_cover_authorize_scopes() {
     assert_eq!(legacy_extra.connection_id, "conn-authorize");
 
     let authorized = composio_authorize(
+        &openhuman_core::core::runtime::DispatchCtx::host_default(),
         &harness.config,
         " gmail ",
         Some(json!({ "waba_id": "waba-round20" })),
@@ -250,6 +252,7 @@ async fn round20_composio_ops_cover_authorize_scopes() {
     assert_eq!(authorized.connection_id, "conn-authorize");
 
     let listed = composio_list_tools(
+        &openhuman_core::core::runtime::DispatchCtx::host_default(),
         &harness.config,
         Some(vec!["gmail".into(), "github".into()]),
         Some(vec!["readOnlyHint".into()]),

@@ -77,7 +77,7 @@ pub async fn channel_relay_inbound(
         chars = params.text.chars().count(),
         "[channels::relay] relayed message accepted"
     );
-    crate::core::runtime::spawn_scoped(run_relay_turn(
+    ctx.spawn(run_relay_turn(
         ctx.clone(),
         config,
         params,
@@ -152,7 +152,12 @@ pub(crate) async fn run_relay_turn(
 
     let security =
         Arc::new(SecurityPolicy::from_full_config(&config).with_privacy_mode(config.privacy.mode));
-    let parts = match build_channel_turn_parts(&config, &security, PromptToolDescs::Registered) {
+    let parts = match build_channel_turn_parts(
+        &dispatch_ctx,
+        &config,
+        &security,
+        PromptToolDescs::Registered,
+    ) {
         Ok(parts) => parts,
         Err(error) => {
             tracing::error!(
@@ -183,6 +188,7 @@ pub(crate) async fn run_relay_turn(
     let mut channels_by_name: HashMap<String, Arc<dyn crate::channels::Channel>> = HashMap::new();
     channels_by_name.insert(params.channel.clone(), channel.clone());
     let mut runtime = runtime_context(
+        &dispatch_ctx,
         &config,
         parts,
         Arc::new(channels_by_name),

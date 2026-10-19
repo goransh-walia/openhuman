@@ -17,6 +17,7 @@ fn reads_a_url_from_toml() {
 fn debug_never_prints_credentials() {
     let config = StorageConfig {
         url: Some("mongodb://app:hunter2@db.internal/openhuman".into()),
+        ..StorageConfig::default()
     };
     let shown = format!("{config:?}");
     assert!(!shown.contains("hunter2"), "{shown}");
@@ -30,6 +31,7 @@ fn debug_drops_query_and_fragment_tokens() {
             "mongodb://db.internal/openhuman?authMechanismProperties=AWS_SESSION_TOKEN%3Asecret"
                 .into(),
         ),
+        ..StorageConfig::default()
     };
     let shown = format!("{config:?}");
     assert!(!shown.contains("AWS_SESSION_TOKEN"), "{shown}");
@@ -40,6 +42,16 @@ fn debug_drops_query_and_fragment_tokens() {
 fn debug_leaves_credential_free_urls_readable() {
     let config = StorageConfig {
         url: Some("sqlite:/tmp/x".into()),
+        ..StorageConfig::default()
     };
     assert!(format!("{config:?}").contains("sqlite:/tmp/x"));
+}
+
+#[test]
+fn journal_retention_defaults_to_thirty_days_and_reads_from_toml() {
+    assert_eq!(StorageConfig::default().journal_retention_days, 30);
+    let unset: StorageConfig = toml::from_str("url = \"memory\"").unwrap();
+    assert_eq!(unset.journal_retention_days, 30);
+    let set: StorageConfig = toml::from_str("journal_retention_days = 7").unwrap();
+    assert_eq!(set.journal_retention_days, 7);
 }

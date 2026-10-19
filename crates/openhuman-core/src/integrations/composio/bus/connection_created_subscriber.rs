@@ -4,6 +4,7 @@
 //! identity provider.
 
 use crate::core::runtime::DispatchCtx;
+use std::future::Future;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -78,6 +79,7 @@ impl EventHandler<DomainEvent> for ComposioConnectionCreatedSubscriber {
             toolkit,
             connection_id,
             connect_url: _,
+            tenant,
         } = event
         else {
             return;
@@ -87,13 +89,30 @@ impl EventHandler<DomainEvent> for ComposioConnectionCreatedSubscriber {
             connection_id = %connection_id,
             "[composio:bus] connection_created"
         );
+        let Some(ctx) = DispatchCtx::for_event(tenant.as_ref()) else {
+            tracing::debug!(toolkit = %toolkit, "[composio:bus] connection_created has no tenant; skipped");
+            return;
+        };
         // The cache refresh runs for every toolkit; only the profile fetch is gated on a native provider.
         let toolkit = toolkit.clone();
         let connection_id = connection_id.clone();
-        tokio::spawn(async move {
-            on_connection_created(&DispatchCtx::ambient(), toolkit, connection_id).await
+        spawn_connection_created_task(ctx, move |task_ctx| async move {
+            on_connection_created(&task_ctx, toolkit, connection_id).await;
         });
     }
+}
+
+fn spawn_connection_created_task<F, Fut>(
+    ctx: DispatchCtx,
+    task: F,
+) -> tokio::task::JoinHandle<Fut::Output>
+where
+    F: FnOnce(DispatchCtx) -> Fut + Send + 'static,
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    let task_ctx = ctx.clone();
+    ctx.spawn(task(task_ctx))
 }
 
 async fn on_connection_created(ctx: &DispatchCtx, toolkit: String, connection_id: String) {
@@ -184,7 +203,7 @@ async fn on_connection_created(ctx: &DispatchCtx, toolkit: String, connection_id
         );
         return;
     }
-    if let Err(e) = ops::composio_get_user_profile(&live_config, &connection_id).await {
+    if let Err(e) = ops::composio_get_user_profile(ctx, &live_config, &connection_id).await {
         tracing::warn!(
             toolkit = %toolkit,
             connection_id = %connection_id,
@@ -193,6 +212,10 @@ async fn on_connection_created(ctx: &DispatchCtx, toolkit: String, connection_id
         );
     }
 }
+
+#[cfg(test)]
+#[path = "connection_created_subscriber_tests.rs"]
+mod tests;
 
 // ── Connection-readiness polling ────────────────────────────────────
 

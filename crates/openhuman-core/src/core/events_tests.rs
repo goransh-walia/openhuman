@@ -343,6 +343,7 @@ fn all_variants_have_correct_domain() {
                 toolkit: "gmail".into(),
                 connection_id: "conn-1".into(),
                 connect_url: "https://backend.composio.dev/connect/abc".into(),
+                tenant: None,
             },
             "composio",
         ),
@@ -366,6 +367,7 @@ fn all_variants_have_correct_domain() {
             DomainEvent::ComposioConfigChanged {
                 mode: "direct".into(),
                 api_key_set: true,
+                tenant: None,
             },
             "composio",
         ),

@@ -10,6 +10,7 @@ use tinyinference_llm::message::Message;
 use tinyinference_llm::model::ModelRequest;
 
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 use crate::inference::provider;
 
 /// Workload role whose provider tinymemes borrows.
@@ -17,11 +18,17 @@ pub(crate) const ROLE: &str = "summarization";
 const TEMPERATURE: f64 = 0.7;
 
 /// One system + user completion on the `summarization` provider.
-pub(crate) async fn complete(config: &Config, system: &str, user: &str) -> Result<String, String> {
+pub(crate) async fn complete(
+    ctx: &DispatchCtx,
+    config: &Config,
+    system: &str,
+    user: &str,
+) -> Result<String, String> {
     // Built per call so a provider change in Settings applies without a
     // restart; construction is cheap and synchronous.
-    let (model, resolved) = provider::create_chat_model_with_model_id(ROLE, config, TEMPERATURE)
-        .map_err(|e| format!("openhuman inference unavailable: {e}"))?;
+    let (model, resolved) =
+        provider::create_chat_model_with_model_id_in(ctx, ROLE, config, TEMPERATURE)
+            .map_err(|e| format!("openhuman inference unavailable: {e}"))?;
     // Reasoning off for tinymemes' calls only (the rest of OpenHuman keeps
     // its configured reasoning). The managed backend honours the
     // `without_reasoning` flag; a BYOK route to OpenRouter needs
@@ -63,8 +70,8 @@ pub(crate) fn routes_to_openrouter(config: &Config) -> bool {
 }
 
 /// The model id OpenHuman would use for tinymemes, for the startup log line.
-pub(crate) fn resolved_model(config: &Config) -> String {
-    provider::create_chat_model_with_model_id(ROLE, config, TEMPERATURE)
+pub(crate) fn resolved_model(ctx: &DispatchCtx, config: &Config) -> String {
+    provider::create_chat_model_with_model_id_in(ctx, ROLE, config, TEMPERATURE)
         .map(|(_, id)| id)
         .unwrap_or_else(|e| format!("unavailable ({e})"))
 }

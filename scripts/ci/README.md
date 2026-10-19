@@ -17,7 +17,7 @@ authoritative spec; this is an index so a CI failure log points somewhere.
 | [`rust-coverage.sh`](rust-coverage.sh) | Runs the complete product-feature Rust suite under `cargo-llvm-cov`, including every core integration target and the root Rust support crates. |
 | [`assert-coverage-presence.sh`](assert-coverage-presence.sh) + [`coverage-presence-allowlist.txt`](coverage-presence-allowlist.txt) | Fails when an eligible Rust source file produced no lcov records at all, meaning the full product suite never compiled it (openhuman#5593). Allowlist entries must document, inline, which gate excludes the file and why that's intended. |
 | [`list-feature-gated-rust-tests.mjs`](list-feature-gated-rust-tests.mjs) | Prints every file under `crates/openhuman-core/src` that carries tests behind a product feature gate (`voice`, `media`, `web3`, `meet`, `mcp`, `skills`, `flows`, `channels`, `contacts`). `ci-lite.yml`'s `rust-feature-gate-smoke` job diffs the output against a checked-in EXPECTED list so a new gated test file forces the gate-contract test filters to be reviewed (#5022). |
-| [`check-saas-ambient.mjs`](check-saas-ambient.mjs) + [`saas-ambient-baseline.json`](saas-ambient-baseline.json) (`pnpm saas:ambient`) | Ratchets code in `crates/openhuman-core/src` that reaches past a SaaS user agent's `CoreContext`: bare `tokio::spawn` / `spawn_blocking` / `std::thread::spawn` (use `core::runtime::spawn_scoped`), direct `Config::load_or_init`, `env::set_var` / `remove_var`, and `home_dir()`. Each existing site is baselined exactly; a new one fails, and a fixed one must be removed with `--write-baseline`. |
+| [`check-saas-ambient.mjs`](check-saas-ambient.mjs) + [`saas-ambient-baseline.json`](saas-ambient-baseline.json) (`pnpm saas:ambient`) | Ratchets code in `crates/openhuman-core/src` that reaches past a SaaS user agent's `CoreContext`: bare `tokio::spawn` / `spawn_blocking` / `std::thread::spawn` (use `DispatchCtx::spawn` / `spawn_blocking`), direct `Config::load_or_init`, `env::set_var` / `remove_var`, and `home_dir()`. Each existing site is baselined exactly; a new one fails, and a fixed one must be removed with `--write-baseline`. |
 | [`orch-ip-gate.sh`](orch-ip-gate.sh) | Blocks the server-side orchestration "brain" (reasoning/wake graph, its prompts, per-agent model-selection metadata) from re-entering this open client repo. |
 
 The complete Rust and frontend coverage suites feed the PR CI Gate's
@@ -36,8 +36,8 @@ not a completed migration. `pnpm rust:module-boundaries:complete` additionally
 rejects all exceptions and pending contracts. Cargo failure is an audit failure.
 Generated probes and lockfiles stay in the checkout's `target/module-boundaries/`.
 
-`check-openhuman-rust-layout.mjs` and `check-crate-chain.mjs` run through
-`pnpm rust:layout`. The module-boundary audit has the two pnpm commands above,
+`check-openhuman-rust-layout.mjs`, `check-crate-chain.mjs` and
+`check-storage-owner.mjs` and `check-storage-schema.mjs` run through `pnpm rust:layout`. The module-boundary audit has the two pnpm commands above,
 and the ambient-access ratchet runs through `pnpm saas:ambient`. Other gates
 are invoked directly, e.g.
 `node scripts/ci/check-feature-forwarding.mjs` or

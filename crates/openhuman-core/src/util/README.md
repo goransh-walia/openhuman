@@ -115,8 +115,8 @@ uses.
 
 - The sanitization rule is owned by `tinymcp_bus` (`vendor/tinymcp`).
 - Hosted-backend URL resolution (defaults, `BACKEND_URL` overrides) belongs
-  to the installed backend transport in `crates/openhuman-tinyhumans`, asked
-  through `crate::backend`. [`url.rs`](./url.rs) only does string and URL shape work.
+  to `crates/openhuman-tinyhumans`, which publishes the result on
+  `Config.resolved_endpoints` (`config::register_enricher`). [`url.rs`](./url.rs) only does string and URL shape work.
 - Secret scrubbing for logs and Sentry lives in `core::log_redaction` and
   `core::observability`; module-backed redaction is `security::redact`.
 

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::agent::host_runtime::{NativeRuntime, RuntimeAdapter};
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
+use crate::modules::tinybox::host_runtime::{NativeRuntime, RuntimeAdapter};
 use crate::security::SecurityPolicy;
 use crate::tools;
 use crate::tools::native_ops_types::{ExecuteToolOutcome, RuntimeToolSummary};

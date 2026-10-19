@@ -1,5 +1,5 @@
 use super::*;
-use crate::agent::host_runtime::{NativeRuntime, RuntimeAdapter};
+use crate::modules::tinybox::host_runtime::{NativeRuntime, RuntimeAdapter};
 use crate::security::policy::native_commands_stub::StubGateway;
 use crate::security::policy::{CommandFlow, CommandStage, Refusal};
 use crate::security::{AutonomyLevel, SecurityPolicy};

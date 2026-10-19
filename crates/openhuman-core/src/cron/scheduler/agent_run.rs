@@ -6,7 +6,7 @@ use super::failure_classification::classify_agent_anyhow_for_user;
 use super::origin_context::build_run_prompt;
 use crate::agent::OpenHumanSessionHost;
 use crate::config::Config;
-use {tinyflows_schedule::types::CronJob, tinyflows_schedule::types::SessionTarget};
+use {tinyflows_bus::schedule::types::CronJob, tinyflows_bus::schedule::types::SessionTarget};
 
 /// Recency window the morning briefing installs around its turn so Composio
 /// task-fetch tools only surface tasks created/changed in the last day. Read
@@ -20,16 +20,23 @@ pub(super) async fn run_agent_job(
     job: &CronJob,
 ) -> (bool, String, Option<String>) {
     let run_id = uuid::Uuid::new_v4().to_string();
-    run_agent_job_for_run(config, job, &run_id).await
+    run_agent_job_for_run(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        config,
+        job,
+        &run_id,
+    )
+    .await
 }
 
 pub(super) async fn run_agent_job_for_run(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     job: &CronJob,
     run_id: &str,
 ) -> (bool, String, Option<String>) {
     let name = job.name.clone().unwrap_or_else(|| "cron-job".to_string());
-    let prefixed_prompt = build_run_prompt(config, job, &name).await;
+    let prefixed_prompt = build_run_prompt(ctx, config, job, &name).await;
 
     // Apply per-job model override onto a cloned Config, so the Agent
     // sees it through the normal `default_model` path without mutating
@@ -60,7 +67,7 @@ pub(super) async fn run_agent_job_for_run(
     } else {
         let agent_id = selected_agent_id;
         if let Some(registry) =
-            crate::agent::harness::host_definition::AgentDefinitionRegistry::current()
+            crate::agent_registry::host_definition::AgentDefinitionRegistry::current()
         {
             if let Some(def) = registry.get(agent_id) {
                 tracing::debug!(
@@ -92,7 +99,8 @@ pub(super) async fn run_agent_job_for_run(
                         // discarded — `create_chat_model_with_model_id` wraps the
                         // same `create_chat_provider` resolution, so the model id is
                         // identical; temperature is irrelevant to id resolution.
-                        match crate::inference::provider::create_chat_model_with_model_id(
+                        match crate::inference::provider::create_chat_model_with_model_id_in(
+                            ctx,
                             workload,
                             &effective,
                             effective.default_temperature,
@@ -152,11 +160,7 @@ pub(super) async fn run_agent_job_for_run(
                 target = ?job.session_target,
                 "[cron] building isolated agent for scheduled job"
             );
-            match build_agent_for_cron_job(
-                &crate::core::runtime::DispatchCtx::ambient(),
-                &effective,
-                job,
-            ) {
+            match build_agent_for_cron_job(ctx, &effective, job) {
                 Ok(BuiltCronAgent { mut agent, context }) => {
                     // Tag events so downstream subscribers can correlate
                     // cron-triggered turns. `cron` is the channel so the
@@ -191,7 +195,7 @@ pub(super) async fn run_agent_job_for_run(
                     // that channel's turn instead, so its external-effect
                     // tools stay gated like its creator's were.
                     let origin = crate::cron::origin::turn_origin_for_job_run(job, run_id);
-                    let turn = crate::agent::turn_origin::with_origin(
+                    let turn = crate::security::turn_origin::with_origin(
                         origin,
                         agent.run_single(&prefixed_prompt),
                     );

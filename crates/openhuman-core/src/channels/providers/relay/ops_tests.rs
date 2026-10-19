@@ -1,8 +1,8 @@
 use super::super::channel::CHANNEL_OUTBOUND_EVENT;
 use super::*;
 use crate::agent::bus::{mock_agent_run_turn, AgentTurnRequest, AgentTurnResponse};
-use crate::agent::turn_origin::AgentTurnOrigin;
 use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet};
+use crate::security::turn_origin::AgentTurnOrigin;
 use std::sync::Mutex;
 
 #[tokio::test]
@@ -27,18 +27,19 @@ async fn relayed_thread_and_external_authority_survive_scoped_spawn() {
                 .unwrap()
                 .derive_channel_turn(Some(thread.clone()), None),
             async {
-                crate::agent::turn_origin::with_origin(origin, async {
+                crate::security::turn_origin::with_origin(origin, async {
                     let (child_thread, child_agent, child_origin) =
-                        crate::core::runtime::spawn_scoped(async {
-                            (
-                                CoreContext::current_channel_thread(),
-                                CoreContext::scoped()
-                                    .and_then(|ctx| ctx.session_agent().map(str::to_owned)),
-                                crate::agent::turn_origin::current(),
-                            )
-                        })
-                        .await
-                        .unwrap();
+                        crate::core::runtime::DispatchCtx::ambient()
+                            .spawn(async {
+                                (
+                                    CoreContext::current_channel_thread(),
+                                    CoreContext::scoped()
+                                        .and_then(|ctx| ctx.session_agent().map(str::to_owned)),
+                                    crate::security::turn_origin::current(),
+                                )
+                            })
+                            .await
+                            .unwrap();
                     assert_eq!(child_thread.as_deref(), Some(thread.as_str()));
                     assert_eq!(child_agent.as_deref(), Some("relay-agent"));
                     assert!(matches!(

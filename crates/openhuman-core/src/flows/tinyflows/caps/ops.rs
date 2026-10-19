@@ -140,6 +140,7 @@ pub(crate) fn http_cred_name(conn: &str) -> Option<&str> {
 /// connected set is never consulted then) or when the connected set could not
 /// be fetched (fail-closed).
 async fn flow_tool_allowed(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     slug: &str,
     connected_toolkits: Option<&[String]>,
@@ -161,7 +162,7 @@ async fn flow_tool_allowed(
             tracing::debug!(target: "flows", %slug, %toolkit, "[flows] tool_call curation: reject — slug is not a curated action of this toolkit");
             return false;
         };
-        let pref = load_user_scope_pref(config, &toolkit).await;
+        let pref = load_user_scope_pref(ctx, config, &toolkit).await;
         let allowed = pref.allows(curated.scope);
         tracing::debug!(target: "flows", %slug, %toolkit, allowed, "[flows] tool_call curation: static curated catalog decision");
         return allowed;
@@ -203,7 +204,7 @@ async fn flow_tool_allowed(
     // classify_unknown heuristic (mirrors
     // `providers::is_action_visible_with_pref`'s uncurated branch), which the
     // pre-fix Path B never applied at all.
-    let pref = load_user_scope_pref(config, &toolkit).await;
+    let pref = load_user_scope_pref(ctx, config, &toolkit).await;
     let allowed = pref.allows(classify_unknown(slug));
     tracing::debug!(target: "flows", %slug, %toolkit, allowed, "[flows] tool_call curation: live catalog + scope decision");
     allowed
@@ -297,13 +298,17 @@ pub(crate) async fn classify_composio_action_for_tier(slug: &str) -> CommandClas
 /// Deny-by-default curation gate for a flow `tool_call` slug (see
 /// [`flow_tool_allowed`] for the decision matrix). Fetches the user's live
 /// connected-toolkit set only when the slug's toolkit has no static catalog.
-pub(crate) async fn is_curated_flow_tool(config: &Config, slug: &str) -> bool {
+pub(crate) async fn is_curated_flow_tool(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    slug: &str,
+) -> bool {
     let connected = if slug_needs_connected_set(slug) {
         connected_toolkit_slugs(config).await
     } else {
         None
     };
-    flow_tool_allowed(config, slug, connected.as_deref()).await
+    flow_tool_allowed(ctx, config, slug, connected.as_deref()).await
 }
 
 /// Finds the connected account a Composio `connection_id` refers to within a
@@ -360,7 +365,7 @@ pub(crate) async fn resolve_composio_account(
 /// - **connection_ref**: `conn` (`"composio:<toolkit>:<connection_id>"`) is
 ///   parsed and forwarded in both modes: Direct passes it to Composio's
 ///   execute endpoint, while Backend includes it as `connectionId` in the
-///   authenticated `/agent-integrations/composio/execute` request. Omitting a
+///   authenticated composio execute request. Omitting a
 ///   ref deliberately keeps the ambient-account behavior. A supplied but
 ///   stale/foreign id is still forwarded exactly so the provider rejects it;
 ///   it must never degrade to the ambient account (fixes #5751 / E-m3).
@@ -382,6 +387,9 @@ pub(crate) async fn resolve_composio_account(
 /// // For such flows authors should set `require_approval`. FOLLOW-UP: auto-force
 /// // approval when a trigger-driven run's tool/http config contains `=`-exprs.
 pub struct OpenHumanTools {
+    /// The context the run acts under: the scope-pref reads of the curation
+    /// gate resolve against it rather than the calling task's own scope.
+    pub ctx: crate::core::runtime::DispatchCtx,
     pub config: Arc<Config>,
     pub security: Arc<SecurityPolicy>,
     /// The run's approval context (flow run correlation), handed to the gate
@@ -584,6 +592,7 @@ impl ToolInvoker for PreflightToolInvoker {
 impl ToolInvoker for OpenHumanTools {
     async fn invoke(&self, slug: &str, args: Value, conn: Option<&str>) -> Result<Value> {
         let ctx = tools::ToolCallCtx {
+            dispatch: &self.ctx,
             config: &self.config,
             security: &self.security,
             approval: &self.approval,
@@ -607,11 +616,15 @@ impl ToolInvoker for OpenHumanTools {
 /// flow-scoped memory: `OpenHumanMemory` tags memory items with
 /// `flows::flow_tag`, derived independently from the run's trusted origin.
 ///
+/// `ctx` is the context the run acts under: the agent, code and HTTP adapters
+/// act for it instead of reading the calling task's own scope.
+///
 /// `flow_run` is the run the capabilities serve: every acting dispatch hands it
 /// to the approval gate (with the tool call), so a parked approval is stamped
 /// with the exact flow and run. `None` for a run with no flow identity (a dry
 /// run, a preview).
 pub fn build_capabilities(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: Arc<Config>,
     state_namespace: impl Into<String>,
     flow_run: Option<crate::security::approval::FlowRunContext>,
@@ -626,20 +639,24 @@ pub fn build_capabilities(
 
     Capabilities {
         llm: Arc::new(OpenHumanLlm {
+            ctx: ctx.clone(),
             config: config.clone(),
         }),
         tools: Arc::new(OpenHumanTools {
+            ctx: ctx.clone(),
             config: config.clone(),
             security: security.clone(),
             approval: approval.clone(),
         }),
         http: Arc::new(OpenHumanHttp {
+            ctx: ctx.clone(),
             security: security.clone(),
             http_config,
             http_creds,
             approval: approval.clone(),
         }),
         code: Arc::new(OpenHumanCode {
+            ctx: ctx.clone(),
             config: config.clone(),
             security: security.clone(),
             approval: approval.clone(),
@@ -647,6 +664,7 @@ pub fn build_capabilities(
         state: crate::flows::tinyflows::state::FlowState::open(&config, state_namespace)
             .into_state_store(),
         agent: Some(Arc::new(OpenHumanAgentRunner {
+            ctx: ctx.clone(),
             config: config.clone(),
             approval: approval.clone(),
         })),
@@ -671,6 +689,7 @@ pub fn build_capabilities(
         approvals: None,
         memory: Some(Arc::new(
             crate::flows::tinyflows::memory_adapter::OpenHumanMemory {
+                ctx: ctx.clone(),
                 config: config.clone(),
                 security,
                 approval,

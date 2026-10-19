@@ -228,7 +228,7 @@ pub async fn inference_analyze_sentiment(
          User message: {message}"
     );
     let runtime = crate::inference::local_runtime_config(config);
-    let Some(_permit) = crate::cron::scheduler_gate::wait_for_capacity().await else {
+    let Some(_permit) = crate::platform::llm_gate::wait_for_capacity().await else {
         return Ok(Outcome::single_log(
             SentimentResult::neutral(),
             "local inference paused while signed out",

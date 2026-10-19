@@ -28,6 +28,7 @@ export const TEST_MODULE_IDS = [
   "tinyhosts",
   "tinyconnectors",
   "tinysecurity",
+  "tinyflows",
 ];
 
 /** Concatenate registry.rs and its `registry/records_*.rs` fragments. */

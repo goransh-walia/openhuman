@@ -209,11 +209,11 @@ pub async fn set_credential(
         identity::clear_current_user();
         sentry_scope::clear();
         if !was_authenticated {
-            start_credential_gated_services(config).await;
+            start_credential_gated_services(ctx, config).await;
         } else {
             spawn_integrations_cache_warm(config);
         }
-        crate::cron::scheduler_gate::set_signed_out(false);
+        crate::platform::llm_gate::set_signed_out(false);
         #[cfg(feature = "channels")]
         crate::channels::session::resume_channel_service();
         tracing::info!(
@@ -222,7 +222,7 @@ pub async fn set_credential(
             "{LOG_PREFIX} api key stored"
         );
         let state = build_session_state(config)?;
-        publish_credential_changed(CredentialKind::ApiKey.as_str());
+        publish_credential_changed(ctx, CredentialKind::ApiKey.as_str());
         return Ok(Outcome::single_log(state, "api key stored"));
     }
 
@@ -338,13 +338,13 @@ pub async fn set_credential(
             return Err(error);
         }
         logs.push("process globals rebound after credential install".to_string());
-        start_credential_gated_services(&effective_config).await;
+        start_credential_gated_services(ctx, &effective_config).await;
         logs.push("credential-gated services started".to_string());
     }
 
     // Open the scheduler gate now that a live credential is in place; workers
     // sleeping in the paused poll loop resume at their next iteration.
-    crate::cron::scheduler_gate::set_signed_out(false);
+    crate::platform::llm_gate::set_signed_out(false);
     #[cfg(feature = "channels")]
     crate::channels::session::resume_channel_service();
     // An API key wins over a session for every backend request. Keep the
@@ -371,7 +371,7 @@ pub async fn set_credential(
     );
 
     let state = build_session_state(&effective_config)?;
-    publish_credential_changed(resolved.kind.as_str());
+    publish_credential_changed(ctx, resolved.kind.as_str());
     Ok(Outcome::new(state, logs))
 }
 
@@ -460,7 +460,7 @@ pub async fn clear_credential(
             logs.push("api key cleared".to_string());
         }
         if !crate::security::credentials::session_support::has_backend_credential(config) {
-            crate::cron::scheduler_gate::set_signed_out(true);
+            crate::platform::llm_gate::set_signed_out(true);
         } else if removed_api_key {
             // Clearing the preferred API key exposes the surviving session.
             // Restore the session's process identity immediately.
@@ -483,15 +483,15 @@ pub async fn clear_credential(
     // deliberately stops the gated services and closes the scheduler gate, so
     // restore the surviving key's runtime after that teardown has completed.
     if removed_session && api_key::has_api_key(config) {
-        start_credential_gated_services(config).await;
-        crate::cron::scheduler_gate::set_signed_out(false);
+        start_credential_gated_services(ctx, config).await;
+        crate::platform::llm_gate::set_signed_out(false);
         sentry_scope::clear();
         identity::clear_current_user();
         logs.push("credential-gated services restarted for api key".to_string());
     }
 
     if removed_session || removed_api_key {
-        publish_credential_changed("cleared");
+        publish_credential_changed(ctx, "cleared");
     }
     Ok(Outcome::new(
         json!({
@@ -513,7 +513,7 @@ async fn clear_session_credential(
     config: &Config,
 ) -> Result<Outcome<bool>, String> {
     let mut logs = Vec::new();
-    crate::cron::scheduler_gate::set_signed_out(true);
+    crate::platform::llm_gate::set_signed_out(true);
     #[cfg(feature = "web3")]
     if let Err(error) = crate::modules::web3_service::close_service(config).await {
         tracing::warn!(%error, "{LOG_PREFIX} failed to close Web3 service during sign-out");
@@ -552,7 +552,7 @@ async fn clear_session_credential(
     }
 
     deactivate_user_scope()?;
-    stop_credential_gated_services(config).await;
+    stop_credential_gated_services(ctx, config).await;
 
     // Every process-global store must follow the now-active pre-login
     // workspace, or a signed-out caller keeps reading the previous account's
@@ -629,10 +629,11 @@ pub(crate) fn process_credential_refusal(saas: bool, operation: &str) -> Result<
 
 /// Tell credential-derived caches (the search module's managed routes) to
 /// refresh. Carries only the kind, never the credential.
-fn publish_credential_changed(kind: &str) {
+fn publish_credential_changed(ctx: &DispatchCtx, kind: &str) {
     tracing::debug!(kind, "{LOG_PREFIX} publishing CredentialChanged");
     crate::core::bus::BUS.publish(crate::core::events::DomainEvent::CredentialChanged {
         kind: kind.to_string(),
+        tenant: ctx.event_tenant(),
     });
 }
 

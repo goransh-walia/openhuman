@@ -17,6 +17,7 @@ async fn cancel_flow_run_cancels_when_flow_id_matches_the_owner() {
     .unwrap()
     .value;
     let run = ops::flows_run(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &config,
         &flow.id,
         json!({}),
@@ -147,6 +148,9 @@ async fn dry_run_workflow_by_flow_id_runs_the_saved_flow_graph() {
 
 #[tokio::test]
 async fn validate_workflow_by_draft_id_checks_the_draft_graph() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     let draft = ops::flows_draft_create(

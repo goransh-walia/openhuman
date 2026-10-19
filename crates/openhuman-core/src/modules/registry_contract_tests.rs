@@ -45,6 +45,13 @@ fn contract_names() -> Vec<(&'static str, &'static str, &'static str)> {
             tinychannels_bus::names::BUS_NAME,
             tinychannels_bus::names::OBJECT_PATH,
         ),
+        // The Authoring identity the module registers under; the scheduler is
+        // a second object on it (pinned by `the_flows_record_serves_the_schedule_object`).
+        (
+            "tinyflows",
+            tinyflows_bus::BUS_NAME,
+            tinyflows_bus::OBJECT_PATH,
+        ),
     ];
     #[cfg(feature = "modules")]
     names.push(("tinybox", tinybox_bus::INTERFACE, tinybox_bus::OBJECT_PATH));
@@ -121,10 +128,10 @@ fn a_drifted_contract_constant_is_reported_as_a_mismatch() {
     feature = "tinymemes"
 ))]
 #[test]
-fn a_product_feature_build_carries_all_twelve_records() {
-    // TinySecurity is a thirteenth, always-on record whenever its module is
-    // built in (`security-module`); it has no component switch.
-    let expected = 12 + usize::from(cfg!(feature = "security-module"));
+fn a_product_feature_build_carries_all_records() {
+    // TinyFlows is part of current main's product registry. TinySecurity is
+    // an additional always-on record whenever its module feature is enabled.
+    let expected = 13 + usize::from(cfg!(feature = "security-module"));
     assert_eq!(ALL.len(), expected);
     for id in [
         "tinycomputer",
@@ -137,11 +144,21 @@ fn a_product_feature_build_carries_all_twelve_records() {
         "tinyconnectors",
         "tinybox",
         "tinychannels",
+        "tinyflows",
         "tinyhosts",
         "tinymemes",
     ] {
         assert!(find(id).is_some(), "{id} missing from the registry");
     }
+    #[cfg(feature = "security-module")]
+    {
+        assert!(
+            find("tinysecurity").is_some(),
+            "tinysecurity missing from the registry"
+        );
+        assert!(component_for("tinysecurity").is_none());
+    }
+    assert_eq!(UNSWITCHABLE, &["tinysecurity"]);
 }
 
 #[test]
@@ -150,7 +167,7 @@ fn every_record_maps_to_a_real_component() {
         if UNSWITCHABLE.contains(&record.id) {
             assert!(
                 component_for(record.id).is_none(),
-                "'{}' is security enforcement and must have no [components] switch",
+                "module '{}' unexpectedly has a component switch",
                 record.id
             );
             continue;
@@ -172,5 +189,38 @@ fn every_record_maps_to_a_real_component() {
                 ),
             "mapping for unknown module '{id}'"
         );
+    }
+}
+
+/// The scheduler is a second interface on the same module, and the host calls
+/// it by the contract's own names: the record carries the Authoring identity,
+/// and the Schedule object and callback interfaces are distinct from it and from
+/// each other.
+#[test]
+fn the_flows_record_serves_the_schedule_object() {
+    use tinyflows_bus::schedule;
+    let record = find("tinyflows").expect("tinyflows is registered");
+    assert_eq!(record.bus_name, schedule::BUS_NAME);
+    assert_ne!(record.object_path, schedule::OBJECT_PATH);
+    assert_ne!(schedule::INTERFACE, schedule::CALLBACK_INTERFACE);
+    assert_ne!(schedule::INTERFACE, schedule::DOCUMENT_INTERFACE);
+    assert_eq!(schedule::CONTRACT_VERSION, 4, "the host speaks contract v4");
+    assert_eq!(component_for("tinyflows"), Some("tinyflows"));
+}
+
+/// The pins are the published v0.8.23 `checksum.toml` (the first release with
+/// schedule contract v3).
+#[test]
+fn the_flows_record_pins_every_host_of_one_release() {
+    let record = find("tinyflows").unwrap();
+    assert_eq!(record.version, "0.8.23");
+    assert_eq!(record.assets.len(), 11);
+    for asset in record.assets {
+        assert!(
+            asset.archive.starts_with("tinyflows-module-0.8.23-"),
+            "{}",
+            asset.archive
+        );
+        assert_eq!(asset.sha256.len(), 64, "{}", asset.archive);
     }
 }

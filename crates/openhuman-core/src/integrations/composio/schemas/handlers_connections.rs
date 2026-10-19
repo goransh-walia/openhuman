@@ -47,7 +47,7 @@ pub(super) fn handle_list_connections(
 ) -> ControllerFuture {
     Box::pin(async move {
         let config = ctx.load_config().await?;
-        to_json(ops::composio_list_connections(&config).await?)
+        to_json(ops::composio_list_connections(&ctx, &config).await?)
     })
 }
 
@@ -56,7 +56,7 @@ pub(super) fn handle_authorize(ctx: DispatchCtx, params: Map<String, Value>) -> 
         let config = ctx.load_config().await?;
         let toolkit = read_required_non_empty(&params, "toolkit")?;
         let extra_params = params.get("extra_params").cloned();
-        to_json(ops::composio_authorize(&config, &toolkit, extra_params).await?)
+        to_json(ops::composio_authorize(&ctx, &config, &toolkit, extra_params).await?)
     })
 }
 
@@ -67,7 +67,7 @@ pub(super) fn handle_delete_connection(
     Box::pin(async move {
         let config = ctx.load_config().await?;
         let connection_id = read_required_non_empty(&params, "connection_id")?;
-        to_json(ops::composio_delete_connection(&config, &connection_id).await?)
+        to_json(ops::composio_delete_connection(&ctx, &config, &connection_id).await?)
     })
 }
 

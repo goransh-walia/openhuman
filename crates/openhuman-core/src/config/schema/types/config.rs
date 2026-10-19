@@ -217,7 +217,7 @@ pub struct Config {
     /// Background-AI scheduler gate — throttles embeddings and other
     /// LLM-bound background work based on power
     /// state, CPU pressure, and deployment mode. See
-    /// [`crate::cron::scheduler_gate`].
+    /// [`crate::platform::llm_gate`].
     #[serde(default)]
     pub scheduler_gate: SchedulerGateConfig,
 
@@ -240,7 +240,7 @@ pub struct Config {
     /// Global context management configuration — budget thresholds,
     /// summarization trigger, microcompact/autocompact toggles, and the
     /// session-memory extraction cadence. Consumed by
-    /// [`crate::agent::context::ContextManager`].
+    /// the agent context middleware configuration.
     #[serde(default)]
     pub context: ContextConfig,
 
@@ -334,7 +334,7 @@ pub struct Config {
     /// User-facing agent registry — shipped default agents plus user-authored
     /// custom agents and persisted enable/disable/tool-policy overrides.
     #[serde(default)]
-    pub agent_registry: crate::agent::registry::types::AgentRegistryConfig,
+    pub agent_registry: crate::agent_registry::types::AgentRegistryConfig,
 
     #[serde(default)]
     pub agents: HashMap<String, DelegateAgentConfig>,
@@ -388,6 +388,14 @@ pub struct Config {
     #[serde(skip)]
     #[schemars(skip)]
     pub ephemeral_route: Option<crate::config::schema::ephemeral_route::EphemeralRoute>,
+
+    /// Runtime only — service endpoints and identity a host's config enricher
+    /// resolved ([`crate::config::register_enricher`]). Empty until one runs;
+    /// never serialized. See
+    /// [`resolved_endpoints`](crate::config::schema::resolved_endpoints).
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub resolved_endpoints: crate::config::schema::resolved_endpoints::ResolvedEndpoints,
 
     /// Provider string for direct conversational chat (simple back-and-forth).
     #[serde(default)]

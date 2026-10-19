@@ -19,6 +19,7 @@ pub(crate) async fn bootstrap_core_runtime(
     host_kind: crate::core::types::HostKind,
     config: Option<crate::config::Config>,
     domains: crate::core::runtime::DomainSet,
+    ctx: &DispatchCtx,
 ) {
     use crate::platform::socket::{set_global_socket_manager, SocketManager};
     use std::sync::Arc;
@@ -38,7 +39,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // SQLite files (approvals, devices, notifications, task sources) into it
     // once, read-only, before anything below opens those stores. A no-op
     // without a backend; failures are logged and retried at the next boot.
-    for report in crate::storage::import::run(&cfg).await {
+    for report in crate::storage::import::run(ctx, &cfg).await {
         if let Err(error) = report.outcome {
             log::warn!(
                 "[runtime] legacy {} store import failed: {error:#}",
@@ -74,6 +75,7 @@ pub(crate) async fn bootstrap_core_runtime(
         cfg.clone(),
         embedded_core,
         domains,
+        ctx,
     );
 
     // Latch the config-corruption recovery signal (#5167) so `app_state_snapshot`
@@ -87,7 +89,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // meant to gate the first tool call of the first turn has to be loaded
     // before any session exists, and the alternative — loading lazily on the
     // first event — would let that first call through while the file is read.
-    crate::hooks::init(&DispatchCtx::ambient(), &cfg).await;
+    crate::hooks::init(ctx, &cfg).await;
 
     // --- Turn-state recovery -------------------------------------------
     // Any per-thread turn snapshots left on disk from a previous process
@@ -97,7 +99,7 @@ pub(crate) async fn bootstrap_core_runtime(
     //
     // An installed host session store repairs itself, once; with none, the
     // workspace default store is swept.
-    let host_store = crate::agent::session_store::installed_in(&DispatchCtx::ambient());
+    let host_store = crate::storage::sessions::installed_in(ctx);
     if let Some(provider) = &host_store {
         match provider.recover() {
             Ok(()) => log::info!("[runtime] host session store recovered"),
@@ -106,7 +108,7 @@ pub(crate) async fn bootstrap_core_runtime(
     }
     if host_store.is_none() {
         let now = chrono::Utc::now().to_rfc3339();
-        match crate::agent::session_store::default_turn_states_for(&workspace_dir)
+        match crate::storage::sessions::default_turn_states_for(&workspace_dir)
             .mark_all_interrupted(&now)
         {
             Ok(0) => {}
@@ -127,10 +129,9 @@ pub(crate) async fn bootstrap_core_runtime(
     // rendering as perpetual "running" timeline entries on thread reopen.
     if agent_enabled {
         if !crate::storage::installed_is_shared() {
-            match crate::agent::session_store::with_ledger(
-                &cfg.workspace_dir,
-                |ledger| async move { ledger.interrupt_orphaned_agent_runs().await },
-            ) {
+            match crate::storage::sessions::with_ledger(&cfg.workspace_dir, |ledger| async move {
+                ledger.interrupt_orphaned_agent_runs().await
+            }) {
                 Ok(0) => {}
                 Ok(count) => {
                     log::info!("[runtime] settled {count} orphaned agent run(s) on startup")
@@ -162,10 +163,8 @@ pub(crate) async fn bootstrap_core_runtime(
         // result never reached its chat thread is still pending in the durable
         // completion log (`<workspace>/.openhuman/background_completions.jsonl`).
         // Schedule its delivery turn through the normal idle-gated path.
-        let redelivering = crate::agent::orchestration::background_delivery::recover_on_boot(
-            &DispatchCtx::ambient(),
-            &workspace_dir,
-        );
+        let redelivering =
+            crate::agent::orchestration::background_delivery::recover_on_boot(ctx, &workspace_dir);
         if redelivering > 0 {
             log::info!(
                 "[runtime] scheduled redelivery of undelivered background completions for \
@@ -190,7 +189,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // multiple times. Uses the per-user scoped workspace_dir.
     if agent_enabled {
         if let Err(err) =
-            crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+            crate::agent_registry::host_definition::AgentDefinitionRegistry::init_global(
                 &workspace_dir,
             )
         {
@@ -347,6 +346,7 @@ pub(crate) async fn bootstrap_core_runtime(
         // (The approval/plan-review surface bridge is registered unconditionally
         // above — it must run even when this gate-install branch is skipped.)
         crate::web_chat::register_artifact_surface_subscriber();
+        crate::threads::artifact_rows::register_artifact_row_subscriber();
     } else {
         log::info!(
             "[runtime] approval gate DISABLED (OPENHUMAN_APPROVAL_GATE=0 honored on host={}) — \
@@ -365,13 +365,14 @@ pub(crate) async fn bootstrap_core_runtime(
     // sets OPENHUMAN_APPROVAL_GATE=0 (CR #3328947323 on PR #3026). Idempotent
     // (OnceLock-guarded inside register_artifact_surface_subscriber).
     crate::web_chat::register_artifact_surface_subscriber();
+    crate::threads::artifact_rows::register_artifact_row_subscriber();
     // Memory-activity surface bridges DomainEvent::MemoryStored/Recalled onto
     // the web channel's `memory_activity` event (C5) — same unconditional
     // placement rationale as the bridges above. Idempotent (OnceLock-guarded).
     crate::web_chat::register_memory_activity_surface_subscriber();
 
     // --- Workspace migrations --------------------------------------------
-    crate::platform::startup::run_workspace_migrations(&workspace_dir);
+    crate::platform::startup::run_workspace_migrations(ctx, &workspace_dir);
 
     // --- Socket manager bootstrap ---
     let socket_mgr = Arc::new(SocketManager::new());

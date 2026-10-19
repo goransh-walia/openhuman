@@ -124,7 +124,9 @@ async fn a_trigger_handled_as_an_agent_uses_the_agent_config() {
     };
     let subscriber = FlowTriggerSubscriber::new(std::sync::Arc::new(registered));
     assert_eq!(
-        subscriber.config_for_scope().workspace_dir,
+        subscriber
+            .config_for_scope(&crate::core::runtime::DispatchCtx::unbound())
+            .workspace_dir,
         std::path::PathBuf::from("/tmp/flows-trigger-registered"),
         "outside an agent the registered config is used"
     );
@@ -136,10 +138,10 @@ async fn a_trigger_handled_as_an_agent_uses_the_agent_config() {
         ContextOverlay::new(agent_config, DomainSet::full(), Default::default())
             .session_agent("flows-trigger-agent"),
     );
-    let seen = CoreContext::scope(agent, async {
-        subscriber.config_for_scope().workspace_dir.clone()
-    })
-    .await;
+    let seen = subscriber
+        .config_for_scope(&crate::core::runtime::DispatchCtx::new(agent))
+        .workspace_dir
+        .clone();
     assert_eq!(seen, std::path::PathBuf::from("/tmp/flows-trigger-agent"));
 }
 

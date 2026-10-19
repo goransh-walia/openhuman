@@ -99,18 +99,25 @@ pub async fn remove(config: &Config, id: &str) -> Result<Outcome<Value>, String>
 }
 
 /// Manually fetch one source now (`FetchReason::Manual`).
-pub async fn fetch(config: &Config, id: &str) -> Result<Outcome<super::FetchOutcome>, String> {
+pub async fn fetch(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    id: &str,
+) -> Result<Outcome<super::FetchOutcome>, String> {
     let source = store::get_source(config, id).map_err(|e| e.to_string())?;
-    let outcome = pipeline::run_source_once(config, &source, FetchReason::Manual).await;
+    let outcome = pipeline::run_source_once(ctx, config, &source, FetchReason::Manual).await;
     Ok(Outcome::new(outcome, vec![]))
 }
 
 /// Manually sync all enabled task sources now.
-pub async fn sync(config: &Config) -> Result<Outcome<Vec<super::FetchOutcome>>, String> {
+pub async fn sync(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+) -> Result<Outcome<Vec<super::FetchOutcome>>, String> {
     let sources = store::list_sources(config).map_err(|e| e.to_string())?;
     let mut outcomes = Vec::new();
     for source in sources.into_iter().filter(|source| source.enabled) {
-        outcomes.push(pipeline::run_source_once(config, &source, FetchReason::Manual).await);
+        outcomes.push(pipeline::run_source_once(ctx, config, &source, FetchReason::Manual).await);
     }
     tracing::info!(
         source_count = outcomes.len(),
