@@ -245,7 +245,7 @@ async fn run_live_tool(
     let mut run = tinyagents_harness::middleware::AgentRun::new();
     let mut status = tinyagents_harness::events::HarnessRunStatus::new(
         ctx.run_id().clone(),
-        tinyagents_harness::ComponentId::new("test".into()),
+        tinyagents_harness::ComponentId::new("test"),
     );
     let mut messages = Vec::new();
     let outcome = execute_tool_batch(
