@@ -67,6 +67,19 @@ fn ctx() -> RunContext<OpenHumanRunContext> {
     )
 }
 
+fn ctx_with_desktop_approvals_disabled() -> RunContext<OpenHumanRunContext> {
+    let mut config = crate::config::Config::default();
+    config.desktop.approvals_enabled = false;
+    let core = crate::core::CoreContext::for_test_with_config(
+        crate::core::DomainSet::full(),
+        config,
+    );
+    RunContext::new(
+        RunConfig::new("channel-verdicts-desktop-off"),
+        OpenHumanRunContext::new().with_core(Some(core)),
+    )
+}
+
 fn call(name: &str) -> TaToolCall {
     TaToolCall {
         id: "c1".into(),
@@ -99,6 +112,23 @@ async fn require_approval_never_silently_allows_a_plain_tool() {
         .expect("the refusal says approval is unavailable");
     assert!(text.contains("requires human approval"), "{text}");
     assert!(text.contains("no approval flow"), "{text}");
+}
+
+#[tokio::test]
+async fn desktop_approvals_off_does_not_waive_the_channel_session_ceiling() {
+    assert!(ApprovalGate::try_global().is_none());
+    let channel = source(ToolPolicyAction::RequireApproval);
+    let answer = channel
+        .verdict(&ctx_with_desktop_approvals_disabled(), &call("write_file"))
+        .await
+        .unwrap();
+    assert_eq!(
+        answer,
+        Verdict::Deny {
+            reason: DenialReason::Access
+        },
+        "desktop prompt settings may not widen a channel-level approval requirement"
+    );
 }
 
 #[tokio::test]
