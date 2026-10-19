@@ -1,12 +1,12 @@
 use super::*;
 use std::collections::HashMap;
 
+use crate::security::approval::ApprovalGate;
 use serde_json::json;
 use tinyagents_harness::context::RunConfig;
 use tinytools::{
-    TaskProfile, TaskRiskLevel, ToolPolicyDecision, ToolPolicySession,
+    PermissionLevel, TaskProfile, TaskRiskLevel, ToolPolicyDecision, ToolPolicySession,
 };
-use crate::security::approval::ApprovalGate;
 
 /// Builds a session whose channel policy yields `action` for `tool_name`.
 fn policy_session(tool_name: &str, action: ToolPolicyAction) -> ToolPolicySession {

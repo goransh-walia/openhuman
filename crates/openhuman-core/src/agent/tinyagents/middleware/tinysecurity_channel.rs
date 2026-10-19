@@ -15,6 +15,7 @@
 //! non-deny setting into its weakest on exactly the hosts with no human present,
 //! so the call is denied instead.
 
+use crate::security::approval::ApprovalGate;
 use async_trait::async_trait;
 use tinyagents_harness::context::RunContext;
 use tinyinference_llm::tool::ToolCall as TaToolCall;
@@ -57,6 +58,15 @@ impl VerdictSource for ChannelApprovalVerdicts {
     ) -> Result<Verdict, String> {
         if !self.demands_approval(&call.name) {
             return Ok(Verdict::Allow);
+        }
+        if ApprovalGate::try_global().is_none() {
+            tracing::warn!(
+                tool = %call.name,
+                "{LOG} channel policy requires approval but no approval gate is installed; denying"
+            );
+            return Ok(Verdict::Deny {
+                reason: DenialReason::Access,
+            });
         }
         Ok(Verdict::Deny {
             reason: DenialReason::ApprovalUnavailable,

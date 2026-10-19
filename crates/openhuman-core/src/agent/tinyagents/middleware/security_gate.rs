@@ -86,9 +86,7 @@ pub(crate) fn tool_middleware(
         let mut sources: Vec<Arc<dyn VerdictSource>> =
             vec![Arc::new(ModuleVerdicts::new(tool_sets.clone()))];
         if let Some(session) = channel {
-            sources.push(Arc::new(ChannelApprovalVerdicts::new(
-                session,
-            )));
+            sources.push(Arc::new(ChannelApprovalVerdicts::new(session)));
         }
         let policy = TinySecurityPolicy::with_sources(sources);
         let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets));
