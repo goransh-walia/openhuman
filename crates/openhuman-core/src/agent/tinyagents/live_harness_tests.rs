@@ -237,7 +237,7 @@ async fn run_live_tool(
     harness: &AgentHarness<(), OpenHumanRunContext>,
     name: &'static str,
     core: Arc<crate::core::runtime::CoreContext>,
-) -> ToolResult {
+) -> String {
     use tinyagents_harness::agent_loop::phases::execute_tool_batch;
     let mut ctx = OpenHumanRunContext::new()
         .with_core(Some(core))
@@ -259,7 +259,12 @@ async fn run_live_tool(
     )
     .await
     .expect("tool batch runs");
-    outcome.results.into_iter().next().expect("one tool result")
+    outcome
+        .results
+        .into_iter()
+        .next()
+        .expect("one tool result")
+        .text()
 }
 
 #[tokio::test]
@@ -274,7 +279,7 @@ async fn builder_policy_deny_blocks_live_execution_through_the_installed_gate() 
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "inert_observed", test_core(true)).await;
-    assert!(result.is_error, "the builder denial must reach the model");
+    assert!(result.contains("builder policy refused"), "{result}");
     assert_eq!(calls.load(Ordering::SeqCst), 0, "denied tool had no effect");
     assert_eq!(checks.load(Ordering::SeqCst), 1, "the callback runs once");
 }
@@ -291,7 +296,7 @@ async fn session_deny_blocks_live_execution_even_when_module_would_allow() {
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "inert_observed", test_core(true)).await;
-    assert!(result.is_error, "the session denial must reach the model");
+    assert!(!result.contains("effect ran"), "{result}");
     assert_eq!(calls.load(Ordering::SeqCst), 0, "denied tool had no effect");
 }
 
@@ -307,10 +312,7 @@ async fn session_hidden_tool_cannot_run_from_a_direct_live_call() {
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "inert_observed", test_core(true)).await;
-    assert!(
-        result.is_error,
-        "a prompt-hidden tool cannot be called by name"
-    );
+    assert!(!result.contains("effect ran"), "{result}");
     assert_eq!(calls.load(Ordering::SeqCst), 0, "hidden tool had no effect");
 }
 
@@ -326,10 +328,7 @@ async fn desktop_approvals_off_does_not_waive_live_session_approval() {
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "desktop_launch", test_core(false)).await;
-    assert!(
-        result.is_error,
-        "desktop preference cannot waive session approval"
-    );
+    assert!(!result.contains("effect ran"), "{result}");
     assert_eq!(
         calls.load(Ordering::SeqCst),
         0,
@@ -349,7 +348,7 @@ async fn builder_approval_is_resolved_once_and_fails_closed_without_a_gate() {
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "inert_observed", test_core(true)).await;
-    assert!(result.is_error, "approval with no gate must fail closed");
+    assert!(!result.contains("effect ran"), "{result}");
     assert_eq!(
         calls.load(Ordering::SeqCst),
         0,
@@ -374,10 +373,7 @@ async fn desktop_approvals_off_waives_only_builder_callback_approval() {
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "desktop_launch", test_core(false)).await;
-    assert!(
-        !result.is_error,
-        "the configured builder approval may be waived"
-    );
+    assert!(result.contains("effect ran"), "{result}");
     assert_eq!(calls.load(Ordering::SeqCst), 1, "allowed tool runs once");
     assert_eq!(
         checks.load(Ordering::SeqCst),
