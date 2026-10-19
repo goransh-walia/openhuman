@@ -202,6 +202,7 @@ async fn explicit_workspace_policy_blocks_unguarded_offload_before_writing() {
 }
 
 #[tokio::test]
+#[cfg(feature = "security-module")]
 async fn a_wired_writer_redacts_before_the_bytes_reach_disk() {
     let _module = nothing_is_internal();
     // `new_artifact_offload` always installs the redactor, so no call site can

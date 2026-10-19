@@ -277,8 +277,17 @@ fn contains(folder: &Path, inside: &Path) -> bool {
 /// `/private/etc`: a `/private/...` path is also checked without that prefix,
 /// as the protected prefixes name the familiar form.
 pub fn refused_path(path: &Path) -> Option<String> {
-    crate::modules::security::gap::is_protected_blocking(path)
-        .then(|| "the file is in a protected location".to_string())
+    #[cfg(feature = "security-module")]
+    let refused = crate::modules::security::gap::is_protected_blocking(path);
+    // Without the mandatory policy module there is no authority to admit a
+    // path. Keep the artifact writer closed rather than introducing a local
+    // path classifier as a fallback.
+    #[cfg(not(feature = "security-module"))]
+    let refused = {
+        let _ = path;
+        true
+    };
+    refused.then(|| "the file is in a protected location".to_string())
 }
 
 /// [`file_roots`] as the crate's folders, with [`refused_path`] as their guard.

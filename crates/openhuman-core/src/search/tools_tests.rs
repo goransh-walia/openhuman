@@ -82,6 +82,7 @@ fn recorded_tools_keep_their_declaration() {
 }
 
 #[tokio::test]
+#[cfg(feature = "security-module")]
 async fn local_only_blocks_external_search_tool_dispatch() {
     use crate::modules::security::gap::install_port;
     use crate::modules::security::gap::stub::{Asked, StubPort};
@@ -109,6 +110,7 @@ async fn local_only_blocks_external_search_tool_dispatch() {
 }
 
 #[tokio::test]
+#[cfg(feature = "security-module")]
 async fn standard_privacy_mode_allows_search_tool_dispatch() {
     let _privacy =
         crate::security::live_policy::test_privacy_scope(crate::config::PrivacyMode::Standard);

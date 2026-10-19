@@ -14,7 +14,7 @@ fn single_user_keeps_the_operator_home() {
     assert_eq!(home, Some(PathBuf::from("/home/op")));
 }
 
-#[cfg(feature = "modules")]
+#[cfg(feature = "security-module")]
 mod with_module {
     use super::*;
     use crate::modules::security::gap::install_port;
