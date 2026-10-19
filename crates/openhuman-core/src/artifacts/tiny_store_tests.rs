@@ -275,6 +275,7 @@ fn a_working_folder_that_contains_the_workspace_is_not_trusted() {
 }
 
 #[test]
+#[cfg(feature = "security-module")]
 fn a_protected_location_is_refused_under_its_macos_canonical_name() {
     // `/etc` canonicalizes to `/private/etc` on macOS.
     assert!(refused_path(Path::new("/private/etc/hosts")).is_some());
@@ -283,4 +284,10 @@ fn a_protected_location_is_refused_under_its_macos_canonical_name() {
     assert!(refused_path(Path::new("/private/var/folders/x/notes.md")).is_none());
     assert!(refused_path(Path::new("/private/tmp/notes.md")).is_none());
     assert!(refused_path(Path::new("/Users/me/OpenHuman/notes.md")).is_none());
+}
+
+#[test]
+#[cfg(not(feature = "security-module"))]
+fn an_artifact_path_is_refused_without_the_security_module() {
+    assert!(refused_path(Path::new("/workspace/notes.md")).is_some());
 }
