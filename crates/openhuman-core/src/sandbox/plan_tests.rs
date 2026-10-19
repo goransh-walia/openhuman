@@ -52,6 +52,7 @@ fn a_jail_plan_maps_grants_network_and_isolation_floor() {
     assert!(plan.jail.require_process_isolation);
     assert_eq!(plan.network, NetworkPolicy::Denied);
     assert_eq!(plan.resources, ResourceLimits::default());
+    assert_eq!(plan.jail.resources, Some(plan.resources));
 }
 
 #[test]
@@ -72,6 +73,7 @@ fn planned_bounds_override_defaults_and_absent_bounds_keep_them() {
     assert_eq!(plan.resources.memory_bytes, 64 << 20);
     assert_eq!(plan.resources.pids_max, defaults.pids_max);
     assert_eq!(plan.resources.disk_bytes, defaults.disk_bytes);
+    assert_eq!(plan.jail.resources, Some(plan.resources));
     assert!(!plan.jail.allow_subprocess);
 }
 

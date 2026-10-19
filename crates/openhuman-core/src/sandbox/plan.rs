@@ -156,6 +156,7 @@ impl BoxPlan {
             } else {
                 super::local_grants::credential_store_paths(home)
             },
+            resources: Some(resources),
         };
         Ok(Self {
             executor,
@@ -189,6 +190,7 @@ impl BoxPlan {
                 enforcement: JailEnforcement::Declared,
                 require_process_isolation: false,
                 deny_read: Vec::new(),
+                resources: None,
             },
             network: NetworkPolicy::Open,
             resources: resources(artifact)?,

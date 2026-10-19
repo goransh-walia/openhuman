@@ -117,6 +117,7 @@ async fn a_disabled_module_never_falls_back_to_a_host_shell_for_a_jailed_run() {
         enforcement: contract::JailEnforcement::Enforced,
         require_process_isolation: true,
         deny_read: Vec::new(),
+        resources: None,
     });
     assert!(run(
         &config,

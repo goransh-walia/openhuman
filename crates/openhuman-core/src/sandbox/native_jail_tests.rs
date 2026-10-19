@@ -92,6 +92,7 @@ fn open_jail() -> contract::NativeJailConfig {
         enforcement: contract::JailEnforcement::Enforced,
         require_process_isolation: true,
         deny_read: Vec::new(),
+        resources: None,
     }
 }
 

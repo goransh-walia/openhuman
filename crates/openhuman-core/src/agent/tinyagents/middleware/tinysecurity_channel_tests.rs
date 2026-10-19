@@ -70,8 +70,8 @@ fn ctx() -> RunContext<OpenHumanRunContext> {
 fn ctx_with_desktop_approvals_disabled() -> RunContext<OpenHumanRunContext> {
     let mut config = crate::config::Config::default();
     config.desktop.approvals_enabled = false;
-    let core = crate::core::CoreContext::for_test_with_config(
-        crate::core::DomainSet::full(),
+    let core = crate::core::runtime::CoreContext::for_test_with_config(
+        crate::core::runtime::DomainSet::full(),
         config,
     );
     RunContext::new(
