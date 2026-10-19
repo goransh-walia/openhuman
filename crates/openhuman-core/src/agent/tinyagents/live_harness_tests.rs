@@ -381,3 +381,47 @@ async fn desktop_approvals_off_waives_only_builder_callback_approval() {
         "one builder decision is evaluated"
     );
 }
+
+#[cfg(not(feature = "security-module"))]
+#[tokio::test]
+async fn missing_module_fails_closed_for_external_live_tools_when_approvals_are_off() {
+    let (surface, calls, _) = governed_surface(
+        "desktop_launch",
+        Some("desktop"),
+        PermissionLevel::Write,
+        true,
+        ToolPolicyAction::Allow,
+        PolicyDecision::Allow,
+    );
+    let harness = assemble_live_tool_harness(surface);
+    let result = run_live_tool(&harness, "desktop_launch", test_core(false)).await;
+    assert!(
+        !result.contains("effect ran"),
+        "external effect ran without module: {result}"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "external side effect is not invoked"
+    );
+}
+
+#[cfg(not(feature = "security-module"))]
+#[tokio::test]
+async fn missing_module_keeps_inert_live_reads_available() {
+    let (surface, calls, _) = governed_surface(
+        "inert_observed",
+        None,
+        PermissionLevel::ReadOnly,
+        false,
+        ToolPolicyAction::Allow,
+        PolicyDecision::Allow,
+    );
+    let harness = assemble_live_tool_harness(surface);
+    let result = run_live_tool(&harness, "inert_observed", test_core(false)).await;
+    assert!(
+        result.contains("effect ran"),
+        "inert read should remain available: {result}"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "inert read runs once");
+}
