@@ -4,7 +4,6 @@
 
 use super::*;
 use crate::config::PrivacyMode;
-use crate::security::live_policy::test_privacy_scope;
 
 fn external_composio() -> EgressDescriptor {
     EgressDescriptor::composio("GITHUB_CREATE_ISSUE")
@@ -116,6 +115,7 @@ mod with_module {
     use super::*;
     use crate::modules::security::gap::install_port;
     use crate::modules::security::gap::stub::{Asked, StubPort};
+    use crate::security::live_policy::test_privacy_scope;
     use tinysecurity_bus::{PrivacyDataClass2, PrivacyMode as BusMode, PrivacyRiskLevel2, Verdict};
 
     fn refusing() -> Arc<StubPort> {
