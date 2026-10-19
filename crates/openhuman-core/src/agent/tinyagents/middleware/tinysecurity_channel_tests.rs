@@ -40,7 +40,10 @@ struct Plain;
 #[async_trait]
 impl Tool for Plain {
     fn name(&self) -> &str {
-        "write_file"
+        "desktop_launch"
+    }
+    fn family(&self) -> Option<&str> {
+        Some("desktop")
     }
     fn description(&self) -> &str {
         "test tool"
@@ -60,8 +63,12 @@ impl Tool for Plain {
 }
 
 fn source(action: ToolPolicyAction) -> ChannelApprovalVerdicts {
+    source_for("write_file", action)
+}
+
+fn source_for(tool_name: &str, action: ToolPolicyAction) -> ChannelApprovalVerdicts {
     ChannelApprovalVerdicts::new(
-        policy_session("write_file", action),
+        policy_session(tool_name, action),
         vec![Arc::new(vec![Box::new(Plain) as Box<dyn Tool>])],
     )
 }
@@ -123,9 +130,12 @@ async fn require_approval_never_silently_allows_a_plain_tool() {
 #[tokio::test]
 async fn desktop_approvals_off_does_not_waive_the_channel_session_ceiling() {
     assert!(ApprovalGate::try_global().is_none());
-    let channel = source(ToolPolicyAction::RequireApproval);
+    let channel = source_for("desktop_launch", ToolPolicyAction::RequireApproval);
     let answer = channel
-        .verdict(&ctx_with_desktop_approvals_disabled(), &call("write_file"))
+        .verdict(
+            &ctx_with_desktop_approvals_disabled(),
+            &call("desktop_launch"),
+        )
         .await
         .unwrap();
     assert_eq!(
