@@ -48,6 +48,12 @@ impl Tool for Plain {
     fn parameters_schema(&self) -> serde_json::Value {
         json!({ "type": "object" })
     }
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::Write
+    }
+    fn external_effect(&self) -> bool {
+        true
+    }
     async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
         unreachable!("the channel source never executes a tool")
     }
