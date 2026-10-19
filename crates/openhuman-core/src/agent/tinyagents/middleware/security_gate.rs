@@ -88,7 +88,6 @@ pub(crate) fn tool_middleware(
         if let Some(session) = channel {
             sources.push(Arc::new(ChannelApprovalVerdicts::new(
                 session,
-                tool_sets.clone(),
             )));
         }
         let policy = TinySecurityPolicy::with_sources(sources);

@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use serde_json::json;
 use tinyagents_harness::context::RunConfig;
 use tinytools::{
-    PermissionLevel, TaskProfile, TaskRiskLevel, ToolPolicyDecision, ToolPolicySession, ToolResult,
+    TaskProfile, TaskRiskLevel, ToolPolicyDecision, ToolPolicySession,
 };
+use crate::security::approval::ApprovalGate;
 
 /// Builds a session whose channel policy yields `action` for `tool_name`.
 fn policy_session(tool_name: &str, action: ToolPolicyAction) -> ToolPolicySession {
@@ -35,42 +36,12 @@ fn policy_session(tool_name: &str, action: ToolPolicyAction) -> ToolPolicySessio
     }
 }
 
-struct Plain;
-
-#[async_trait]
-impl Tool for Plain {
-    fn name(&self) -> &str {
-        "desktop_launch"
-    }
-    fn family(&self) -> Option<&str> {
-        Some("desktop")
-    }
-    fn description(&self) -> &str {
-        "test tool"
-    }
-    fn parameters_schema(&self) -> serde_json::Value {
-        json!({ "type": "object" })
-    }
-    fn permission_level(&self) -> PermissionLevel {
-        PermissionLevel::Write
-    }
-    fn external_effect(&self) -> bool {
-        true
-    }
-    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
-        unreachable!("the channel source never executes a tool")
-    }
-}
-
 fn source(action: ToolPolicyAction) -> ChannelApprovalVerdicts {
     source_for("write_file", action)
 }
 
 fn source_for(tool_name: &str, action: ToolPolicyAction) -> ChannelApprovalVerdicts {
-    ChannelApprovalVerdicts::new(
-        policy_session(tool_name, action),
-        vec![Arc::new(vec![Box::new(Plain) as Box<dyn Tool>])],
-    )
+    ChannelApprovalVerdicts::new(policy_session(tool_name, action))
 }
 
 fn ctx() -> RunContext<OpenHumanRunContext> {

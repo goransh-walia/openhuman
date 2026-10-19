@@ -15,18 +15,14 @@
 //! non-deny setting into its weakest on exactly the hosts with no human present,
 //! so the call is denied instead.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use tinyagents_harness::context::RunContext;
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinysecurity_bus::{DenialReason, Verdict};
-use tinytools::{Tool, ToolPolicyAction, ToolPolicySession};
+use tinytools::{ToolPolicyAction, ToolPolicySession};
 
-use super::approval::ApprovalSecurityMiddleware;
 use super::tinysecurity::VerdictSource;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
-use crate::security::approval::ApprovalGate;
 
 const LOG: &str = "[tinyagents::mw::tinysecurity_channel]";
 
@@ -37,16 +33,11 @@ const NO_APPROVAL_FLOW: &str = "This tool requires human approval, and no approv
 /// Feeds a session's channel `RequireApproval` decisions into the security gate.
 pub(crate) struct ChannelApprovalVerdicts {
     session: ToolPolicySession,
-    /// Resolves the desktop approvals-off exception for a call's tool.
-    effects: ApprovalSecurityMiddleware,
 }
 
 impl ChannelApprovalVerdicts {
-    pub(crate) fn new(session: ToolPolicySession, tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>) -> Self {
-        Self {
-            session,
-            effects: ApprovalSecurityMiddleware::new(tool_sets),
-        }
+    pub(crate) fn new(session: ToolPolicySession) -> Self {
+        Self { session }
     }
 
     fn demands_approval(&self, tool: &str) -> bool {
@@ -61,28 +52,11 @@ impl ChannelApprovalVerdicts {
 impl VerdictSource for ChannelApprovalVerdicts {
     async fn verdict(
         &self,
-        ctx: &RunContext<OpenHumanRunContext>,
+        _ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> Result<Verdict, String> {
         if !self.demands_approval(&call.name) {
             return Ok(Verdict::Allow);
-        }
-        if self
-            .effects
-            .desktop_approvals_disabled(&ctx.data.dispatch_ctx(), &call.name)
-            .await
-        {
-            tracing::debug!(tool = %call.name, "{LOG} channel approval skipped by desktop setting");
-            return Ok(Verdict::Allow);
-        }
-        if ApprovalGate::try_global().is_none() {
-            tracing::warn!(
-                tool = %call.name,
-                "{LOG} channel policy requires approval but no approval gate is installed; denying"
-            );
-            return Ok(Verdict::Deny {
-                reason: DenialReason::Access,
-            });
         }
         Ok(Verdict::Deny {
             reason: DenialReason::ApprovalUnavailable,
