@@ -65,32 +65,32 @@
       "test": "n/a"
     },
     {
+      "file": "crates/openhuman-core/src/doctor/checks/runtime.rs",
+      "spawns": 1,
+      "trust": "unclassified",
+      "plan": "",
+      "executor": "n/a",
+      "test": ""
+    },
+    {
+      "file": "crates/openhuman-core/src/doctor/checks/sandbox.rs",
+      "spawns": 1,
+      "trust": "unclassified",
+      "plan": "",
+      "executor": "n/a",
+      "test": ""
+    },
+    {
+      "file": "crates/openhuman-core/src/hooks/shell.rs",
+      "spawns": 2,
+      "trust": "unclassified",
+      "plan": "",
+      "executor": "n/a",
+      "test": ""
+    },
+    {
       "file": "crates/openhuman-core/src/inference/host_runtime/service/speech.rs",
       "spawns": 1,
-      "trust": "host-probe",
-      "plan": "n/a",
-      "executor": "n/a",
-      "test": "n/a"
-    },
-    {
-      "file": "crates/openhuman-core/src/platform/doctor/core/daemon_env_checks.rs",
-      "spawns": 1,
-      "trust": "host-probe",
-      "plan": "n/a",
-      "executor": "n/a",
-      "test": "n/a"
-    },
-    {
-      "file": "crates/openhuman-core/src/platform/doctor/core/memory_agent_checks.rs",
-      "spawns": 1,
-      "trust": "host-probe",
-      "plan": "n/a",
-      "executor": "n/a",
-      "test": "n/a"
-    },
-    {
-      "file": "crates/openhuman-core/src/platform/doctor/core/workspace_checks.rs",
-      "spawns": 2,
       "trust": "host-probe",
       "plan": "n/a",
       "executor": "n/a",
@@ -179,14 +179,6 @@
       "executor": "direct",
       "test": "pending",
       "note": "operator-approved host mutation by design (interactive human approval + allow_tool_install, fixed manager argv, validated package name); a jail would block the global prefix it exists to write. Refused under SaaS (install_tool_tests.rs). Owner decision whether to scope it to a per-manager prefix"
-    },
-    {
-      "file": "crates/openhuman-core/src/voice/always_on/transcribe.rs",
-      "spawns": 1,
-      "trust": "host-probe",
-      "plan": "n/a",
-      "executor": "n/a",
-      "test": "n/a"
     },
     {
       "file": "crates/openhuman-tui/src/app/artifacts.rs",
