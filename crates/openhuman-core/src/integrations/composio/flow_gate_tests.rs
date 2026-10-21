@@ -1,8 +1,8 @@
 use super::*;
 use crate::agent::prompts::types::IntegrationConnection;
-use crate::integrations::composio::catalog::{
-    seed_live_catalog_cache, seed_live_catalog_cache_expired, ToolContract,
-};
+#[cfg(feature = "flows")]
+use crate::integrations::composio::catalog::seed_live_catalog_cache_expired;
+use crate::integrations::composio::catalog::{seed_live_catalog_cache, ToolContract};
 use crate::integrations::composio::{ComposioExecuteResponse, ConnectedIntegration};
 use serde_json::json;
 use tinybox_bus::CommandClass;
@@ -220,6 +220,7 @@ async fn connected_uncatalogued_toolkit_now_passes() {
 /// re-fetch — which fails in this test (no live Composio backend) — and
 /// `flow_tool_allowed` must fail CLOSED, unlike the fresh-seed case above
 /// which passes.
+#[cfg(feature = "flows")]
 #[tokio::test]
 async fn expired_live_catalog_entry_is_treated_as_a_cache_miss() {
     // Reaches the connector module, whose route is process-wide: hold the module
