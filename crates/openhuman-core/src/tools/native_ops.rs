@@ -177,6 +177,7 @@ pub async fn execute_tool(
     let gate = crate::agent::tinyagents::middleware::security_gate::tool_middleware(
         vec![Arc::clone(&tools)],
         None,
+        None,
     );
     run_gated(&tools, gate, tool_name, args, prefer_markdown).await
 }

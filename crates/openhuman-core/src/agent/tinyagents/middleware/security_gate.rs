@@ -130,7 +130,7 @@ pub(crate) fn tool_middleware(
         }
         let policy: Arc<dyn ToolCallPolicy<OpenHumanRunContext>> =
             Arc::new(CombinedPolicy { policies });
-        let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets));
+        let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets.clone()));
         let mut gate = gate(policy, resolver);
         if let Some(enforcement) = enforcement {
             gate = gate.with_session_ceiling(
