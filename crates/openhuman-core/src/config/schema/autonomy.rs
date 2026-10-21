@@ -147,6 +147,21 @@ fn default_allowed_commands() -> Vec<String> {
 }
 
 fn default_forbidden_paths() -> Vec<String> {
+    #[cfg(windows)]
+    {
+        // Unix system roots are not valid absolute Windows paths. TinySecurity
+        // rejects rooted paths without a drive during policy registration, so
+        // keep the portable home-directory protections here and rely on its
+        // unconditional Windows system-root floor for OS directories.
+        return vec![
+            "~/.ssh".into(),
+            "~/.gnupg".into(),
+            "~/.aws".into(),
+            "~/.config".into(),
+        ];
+    }
+
+    #[cfg(not(windows))]
     vec![
         "/etc".into(),
         "/root".into(),
@@ -201,3 +216,7 @@ impl Default for AutonomyConfig {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "autonomy_tests.rs"]
+mod tests;
