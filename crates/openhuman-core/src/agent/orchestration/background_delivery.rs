@@ -59,8 +59,6 @@ use super::busy_guard::is_busy;
 use super::busy_guard::{busy, clear_busy_for_thread, TurnBusy};
 use super::completion_notice::build_undelivered_notice;
 use super::completion_owners;
-#[cfg(test)]
-use super::delivery_drain::{run_drain, DrainOutcome};
 use super::delivery_drain::{DrainFence, RECOVERY_BUSY_POLL};
 #[path = "delivery_events.rs"]
 mod delivery_events;
@@ -143,7 +141,8 @@ fn schedule_delivery(ctx: &DispatchCtx, thread_id: String, delay: Duration) {
 }
 
 /// `wait_idle`: after the delay, keep waiting while the thread's user turn is in
-/// flight instead of giving up (see [`run_drain`]). `fence` drops the drain
+/// flight instead of giving up (see [`super::delivery_drain::run_drain`]).
+/// `fence` drops the drain
 /// once this node loses the owning profile's lease.
 fn schedule_delivery_inner(
     ctx: DispatchCtx,
