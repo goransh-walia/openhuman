@@ -31,14 +31,14 @@ mkdir -p "$OPENHUMAN_TEST_SECURITY_FIXTURE_DIR"
 # the owner's committed budget (p50 <= 1 ms, p99 <= 10 ms; see
 # vendor/tinysecurity/docs/performance.md). The measured record, including the
 # calls per representative turn, is written to OPENHUMAN_SECURITY_PERF_OUT.
-profile_args=()
+set --
 if [[ "${OPENHUMAN_SECURITY_PERF_BUDGET:-}" == "1" ]]; then
-  profile_args=(--release)
+  set -- --release
   export OPENHUMAN_SECURITY_PERF_BUDGET
   export OPENHUMAN_SECURITY_PERF_OUT="${OPENHUMAN_SECURITY_PERF_OUT:-$PWD/target/security-perf.json}"
   mkdir -p "$(dirname "$OPENHUMAN_SECURITY_PERF_OUT")"
 fi
 
-bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib "${profile_args[@]}" \
+bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib "$@" \
   --no-default-features --features inference,web3,modules,security-module \
   modules::security -- --include-ignored --nocapture

@@ -44,6 +44,11 @@ test("default run exercises the native tests in the debug profile", () => {
   assert.match(log, /BUDGET=\n/);
 });
 
+test("fixture does not expand an empty profile array under nounset", () => {
+  const source = readFileSync(script, "utf8");
+  assert.doesNotMatch(source, /"\$\{profile_args\[@\]\}"/);
+});
+
 test("budget mode runs under --release and names the perf record output", () => {
   const { result, log, dir } = run({ OPENHUMAN_SECURITY_PERF_BUDGET: "1" });
   assert.equal(result.status, 0, result.stderr);
@@ -66,4 +71,12 @@ test("workflow gates the budget in its own job and keeps the record", () => {
   assert.match(text, /latency-budget:/);
   assert.match(text, /OPENHUMAN_SECURITY_PERF_BUDGET: "1"/);
   assert.match(text, /name: security-perf/);
+});
+
+test("workflow enables long Git paths before recursive Windows checkout", () => {
+  const text = readFileSync(workflow, "utf8");
+  assert.match(
+    text,
+    /if: runner\.os == 'Windows'\n\s+run: git config --global core\.longpaths true\n\s+- uses: actions\/checkout@/,
+  );
 });
