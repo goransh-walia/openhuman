@@ -47,7 +47,17 @@ impl ToolCallPolicy<OpenHumanRunContext> for CombinedPolicy {
         for policy in &self.policies {
             decisions.push(policy.check(ctx, call).await);
         }
-        super::tinysecurity::combine_decisions(decisions)
+        let mut combined = PolicyDecision::Allow;
+        for decision in decisions {
+            match (&combined, &decision) {
+                (PolicyDecision::Deny { .. }, _) => {}
+                (_, PolicyDecision::Deny { .. }) => combined = decision,
+                (PolicyDecision::RequireApproval { .. }, _) => {}
+                (_, PolicyDecision::RequireApproval { .. }) => combined = decision,
+                _ => {}
+            }
+        }
+        combined
     }
 }
 
