@@ -161,7 +161,6 @@ async fn a_turn_parks_its_approval_on_the_chat_its_run_context_carries() {
     run.approval = ApprovalTurnContext::chat(chat("t-turn"));
     let security = security_gate_for(&run);
 
-    let g = gate.clone();
     let task = tokio::spawn(async move {
         turn_origin::with_origin(web_origin_for("t-turn"), async move {
             // A real await point before the gate check: the context must survive it.

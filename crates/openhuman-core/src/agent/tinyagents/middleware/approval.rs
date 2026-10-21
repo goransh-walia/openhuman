@@ -180,6 +180,7 @@ impl ApprovalSecurityMiddleware {
             ApprovalExecutionOutcome::Cancelled(_)
             | ApprovalExecutionOutcome::Control(_)
             | ApprovalExecutionOutcome::Abandoned => (ExecutionOutcome::Aborted, None),
+            _ => (ExecutionOutcome::Aborted, None),
         };
         gate.record_execution(ticket, execution, error.as_deref());
     }
