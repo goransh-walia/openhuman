@@ -317,7 +317,7 @@ pub async fn approval_decide(
                     row.tool_name
                 ));
             }
-            Some((_tenant, Variant::Forced)) | None => {}
+            Some((_, Variant::Forced)) | None => {}
         }
     }
 

@@ -68,3 +68,54 @@ async fn a_build_without_the_module_refuses_every_gated_call() {
     assert!(engine.history(5).await.unwrap().is_empty());
     engine.release("r");
 }
+
+#[tokio::test]
+async fn whole_tool_trust_stays_with_the_exact_tenant_and_variant() {
+    let engine = super::super::engine_stub::StubEngine::new();
+    let trusted = Tenant {
+        profile: Some("alice".into()),
+        agent: Some("agent-a".into()),
+    };
+    engine
+        .grant_tool_trust(&trusted, Variant::Standard, "gmail_send")
+        .await
+        .unwrap();
+
+    let exact = CheckInput {
+        tenant: trusted.clone(),
+        ..input()
+    };
+    assert!(matches!(
+        engine.check(exact).await.unwrap(),
+        Checked::Approved { .. }
+    ));
+
+    // The grant belongs to one agent's standard approval scope. Another agent,
+    // the profile process, or a stricter posture must still prompt.
+    for (tenant, variant) in [
+        (
+            Tenant {
+                profile: Some("alice".into()),
+                agent: Some("agent-b".into()),
+            },
+            Variant::Standard,
+        ),
+        (
+            Tenant {
+                profile: Some("alice".into()),
+                agent: None,
+            },
+            Variant::Standard,
+        ),
+        (trusted.clone(), Variant::FlowStrict),
+    ] {
+        assert!(matches!(
+            engine.check(CheckInput {
+                tenant,
+                variant,
+                ..input()
+            }).await,
+            Err(EngineError::Unavailable(_))
+        ));
+    }
+}
