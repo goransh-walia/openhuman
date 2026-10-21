@@ -11,7 +11,7 @@
 //! 2. human-in-the-loop approval (`ApprovalSecurityMiddleware` through the
 //!    global `ApprovalGate`),
 //! 3. the CLI/RPC-only scope gate,
-//! 4. the session's `ToolPolicyMiddleware` (deny / require-approval rules),
+//! 4. the builder and session tool-policy ceiling (deny / require-approval rules),
 //! 5. credential scrubbing of every tool result,
 //! 6. malformed-argument recovery,
 //! 7. bare packed-tool routing and embedder tool hooks.
@@ -96,6 +96,18 @@ pub(crate) fn assemble_live_tool_harness(
             .as_ref()
             .map(|enforcement| enforcement.session.clone()),
     );
+    // The live harness has no turn-middleware assembly, so it must install the
+    // builder/session policy boundary explicitly. Keep it immediately after the
+    // shared TinySecurity gate: the module remains the first authority consulted,
+    // while this second, non-prompting policy boundary can only narrow admission.
+    if let Some(enforcement) = &tool_policy {
+        harness.push_tool_middleware(Arc::new(middleware::tool_policy::ToolPolicyMiddleware::new(
+            enforcement.policy.clone(),
+            enforcement.session.clone(),
+            tool_sets.clone(),
+            enforcement.channel.clone(),
+        )));
+    }
     harness.push_middleware(Arc::new(
         TaToolPolicyMiddleware::new(harness.tools().policies()).require_sandbox(true),
     ));
