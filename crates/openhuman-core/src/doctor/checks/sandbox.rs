@@ -149,11 +149,6 @@ impl SandboxBackendCheck {
                     "Review the sandbox runtime and rerun doctor.",
                 ),
             },
-            SandboxBackend::Firejail | SandboxBackend::Bubblewrap => Finding::error(
-                "sandbox/backend",
-                "The configured sandbox backend is not supported by this build.",
-                "Select Docker, Landlock, automatic selection, or no backend.",
-            ),
         }
     }
 }

@@ -252,7 +252,6 @@ fn referenced_but_disabled(config: &Config) -> Vec<Finding> {
     if config.sandbox.enabled == Some(true)
         || !matches!(&config.sandbox.backend, crate::config::SandboxBackend::Auto)
         || explicitly_configured(config, "sandbox.backend")
-        || !config.sandbox.firejail_args.is_empty()
     {
         references.push(("sandbox", "sandbox"));
     }

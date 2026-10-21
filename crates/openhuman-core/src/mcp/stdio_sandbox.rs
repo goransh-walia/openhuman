@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use tinymcp_bus::StdioSandboxConfig;
+use tinymcp_bus::{StdioSandboxConfig, StdioSandboxEnforcement};
 
 use crate::config::Config;
 use crate::sandbox::local_grants::{
@@ -106,6 +106,7 @@ pub(crate) fn for_config(config: &Config) -> Option<StdioSandboxConfig> {
         // Third-party code: the backend must meet the untrusted-code floor or
         // the server is refused.
         require_process_isolation: true,
+        enforcement: StdioSandboxEnforcement::Enforced,
     })
 }
 

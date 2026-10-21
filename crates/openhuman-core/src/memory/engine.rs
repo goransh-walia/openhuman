@@ -273,7 +273,7 @@ fn guard_read_only_engine(engine: Arc<dyn MemoryEngine>) -> Arc<dyn MemoryEngine
         .bind_external(
             engine,
             "doctor://inspection",
-            crate::security::scrub::host_policy(),
+            tinymemory_integrations::safety::Policy::corroborated(),
         )
         .engine
 }
