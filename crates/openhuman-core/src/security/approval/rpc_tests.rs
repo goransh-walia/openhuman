@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet, Tenant};
 use crate::security::approval::engine_stub::StubEngine;
-use crate::security::approval::GateOutcome;
+use crate::config::Config;
+use crate::security::approval::{ApprovalChatContext, ApprovalTurnContext, GateOutcome};
 use crate::security::turn_origin::{self, AgentTurnOrigin};
 use crate::tools::toolpacks::ToolGroups;
 use tempfile::TempDir;
