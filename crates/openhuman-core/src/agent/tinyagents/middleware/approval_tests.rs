@@ -152,7 +152,7 @@ async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
 }
 
 #[tokio::test]
-async fn ordinary_audit_ticket_retains_the_admitting_run_tenant() {
+async fn ordinary_audit_terminal_writes_use_each_admitting_run_tenant() {
     let _lock = AUDIT_TEST_LOCK.get_or_init(Default::default).lock().await;
     let _reset_latch = ResetAuditFailureLatch;
     let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
@@ -162,7 +162,7 @@ async fn ordinary_audit_ticket_retains_the_admitting_run_tenant() {
         crate::core::runtime::DomainSet::full(),
         None,
     );
-    let tenant_core = root.derive_with(
+    let tenant_a_core = root.derive_with(
         crate::core::runtime::ContextOverlay::new(
             crate::config::Config::default(),
             crate::core::runtime::DomainSet::full(),
@@ -170,9 +170,21 @@ async fn ordinary_audit_ticket_retains_the_admitting_run_tenant() {
         )
         .profile("audit-tenant-a"),
     );
-    let ctx = RunContext::new(
-        RunConfig::new("ordinary-audit-tenant"),
-        OpenHumanRunContext::new().with_core(Some(tenant_core)),
+    let tenant_b_core = root.derive_with(
+        crate::core::runtime::ContextOverlay::new(
+            crate::config::Config::default(),
+            crate::core::runtime::DomainSet::full(),
+            crate::tools::toolpacks::ToolGroups::none(),
+        )
+        .profile("audit-tenant-b"),
+    );
+    let ctx_a = RunContext::new(
+        RunConfig::new("ordinary-audit-tenant-a"),
+        OpenHumanRunContext::new().with_core(Some(tenant_a_core)),
+    );
+    let ctx_b = RunContext::new(
+        RunConfig::new("ordinary-audit-tenant-b"),
+        OpenHumanRunContext::new().with_core(Some(tenant_b_core)),
     );
     let call = TaToolCall {
         id: "call-ordinary-tenant".into(),
@@ -182,25 +194,44 @@ async fn ordinary_audit_ticket_retains_the_admitting_run_tenant() {
     };
 
     let ApprovalResolution::Allow {
-        ticket: Some(ticket),
-    } = resolver.resolve_allowed(&ctx, &call).await
+        ticket: Some(ticket_a),
+    } = resolver.resolve_allowed(&ctx_a, &call).await
     else {
-        panic!("an allowed external effect needs an audit ticket")
+        panic!("the first allowed external effect needs an audit ticket")
     };
-    let admitted_dispatch = resolver
-        .audit_tickets
-        .lock()
-        .unwrap()
-        .get(&ticket)
-        .expect("ticket retains the run context")
-        .dispatch
-        .clone();
+    let ApprovalResolution::Allow {
+        ticket: Some(ticket_b),
+    } = resolver.resolve_allowed(&ctx_b, &call).await
+    else {
+        panic!("the second allowed external effect needs an audit ticket")
+    };
+    let result = TaToolResult::success("completed");
+    let recorded_profiles = Arc::new(std::sync::Mutex::new(Vec::new()));
 
-    assert_eq!(
-        admitted_dispatch.tenant().unwrap().profile.as_deref(),
-        Some("audit-tenant-a"),
-        "terminal audit must be attributed to the run that admitted the tool"
-    );
+    for (ticket, expected_profile) in [
+        (ticket_a.as_str(), "audit-tenant-a"),
+        (ticket_b.as_str(), "audit-tenant-b"),
+    ] {
+        let observed = recorded_profiles.clone();
+        resolver.record_terminal_with(
+            None,
+            ticket,
+            ApprovalExecutionOutcome::Result(&result),
+            move |dispatch, _event| {
+                observed
+                    .lock()
+                    .unwrap()
+                    .push(dispatch.tenant().unwrap().profile);
+                Ok(())
+            },
+        );
+        assert_eq!(
+            recorded_profiles.lock().unwrap().last().and_then(Option::as_deref),
+            Some(expected_profile),
+            "terminal audit must use the context that admitted this ticket"
+        );
+    }
+    assert_eq!(recorded_profiles.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -235,7 +266,7 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
         None,
         &ticket,
         ApprovalExecutionOutcome::Result(&result),
-        move |event| {
+        move |_dispatch, event| {
             first_write.fetch_add(1, Ordering::SeqCst);
             *observed.lock().unwrap() = Some(event);
             Err("audit stream unavailable".into())
@@ -275,7 +306,7 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
         None,
         &ticket,
         ApprovalExecutionOutcome::Result(&result),
-        move |_| {
+        move |_, _| {
             repeated_write.fetch_add(1, Ordering::SeqCst);
             Ok(())
         },
