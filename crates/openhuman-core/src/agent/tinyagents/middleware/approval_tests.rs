@@ -139,6 +139,52 @@ async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
     }
 }
 
+#[tokio::test]
+async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions() {
+    let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
+        Box::new(ExternalAuditTool) as Box<dyn Tool>,
+    ])]);
+    let ctx = RunContext::new(RunConfig::new("ordinary-audit-failure"), OpenHumanRunContext::new());
+    let call = TaToolCall {
+        id: "call-audit-failure".into(),
+        name: "send_external".into(),
+        arguments: serde_json::json!({"payload": "sensitive"}),
+        invalid: None,
+    };
+    let ApprovalResolution::Allow {
+        ticket: Some(ticket),
+    } = resolver.resolve_allowed(&ctx, &call).await
+    else {
+        panic!("the first external call should be admitted before its terminal audit")
+    };
+    let result = TaToolResult::success("sensitive returned content");
+    let recorded = Arc::new(std::sync::Mutex::new(None));
+    let observed = recorded.clone();
+    resolver.record_terminal_with(
+        None,
+        &ticket,
+        ApprovalExecutionOutcome::Result(&result),
+        move |event| {
+            *observed.lock().unwrap() = Some(event);
+            Err("audit stream unavailable".into())
+        },
+    );
+
+    assert!(!result.is_error, "an audit failure cannot rewrite a completed result");
+    assert!(resolver.audit_failure.load(Ordering::SeqCst));
+    let event = recorded.lock().unwrap().take().expect("audit event attempted");
+    assert_eq!(event.kind, crate::security::audit_record::HostAuditKind::Execution);
+    assert_eq!(event.attribution, "tool:send_external");
+    let serialized = event.arguments.to_string();
+    assert!(serialized.contains("success"));
+    assert!(!serialized.contains("sensitive"));
+
+    assert!(matches!(
+        resolver.resolve_allowed(&ctx, &call).await,
+        ApprovalResolution::Deny { .. }
+    ));
+}
+
 #[test]
 fn a_required_approval_is_not_allowed_to_run_without_a_gate() {
     let resolution = ApprovalSecurityMiddleware::resolve_without_gate("composio_execute");
