@@ -7,26 +7,17 @@ use serde_json::{json, Value};
 
 use super::helpers::{file_path, validate_file_id, validate_visibility};
 use crate::integrations::IntegrationClient;
-use openhuman_embed::__host::security::SecurityPolicy;
 use tinytools::{PermissionLevel, Tool, ToolCategory, ToolResult};
 
 use crate::integrations::file_storage::types::FileMeta;
 
 pub struct StorageSetVisibilityTool {
     client: Arc<IntegrationClient>,
-    security: Arc<SecurityPolicy>,
 }
 
 impl StorageSetVisibilityTool {
     pub fn new(client: Arc<IntegrationClient>) -> Self {
-        Self::new_with_security(client, Arc::new(SecurityPolicy::default()))
-    }
-
-    pub fn new_with_security(
-        client: Arc<IntegrationClient>,
-        security: Arc<SecurityPolicy>,
-    ) -> Self {
-        Self { client, security }
+        Self { client }
     }
 }
 

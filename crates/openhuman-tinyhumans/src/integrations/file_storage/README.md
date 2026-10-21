@@ -75,8 +75,8 @@ alphanumeric/`-`/`_` charset before it is interpolated into the URL path
 `build_file_storage_tools(root_config, action_dir)` (`tools/registry.rs`) is
 the sole construction entry point. It returns an empty tool list when
 `crate::integrations::build_client` yields no client (no backend URL
-configured, or the user is not signed in), otherwise builds a
-`SecurityPolicy` from `root_config.autonomy` and returns all six tools.
+configured, or the user is not signed in), otherwise returns all six tools.
+The agent's tool-policy middleware applies autonomy checks at execution time.
 
 Called from [`crates/openhuman-core/src/tools/ops.rs`](../../tools/ops.rs) (around line 905):
 
@@ -94,8 +94,7 @@ outside `build_file_storage_tools`.
 
 - `crate::integrations::IntegrationClient` (and `build_client`), the shared
   backend-proxied HTTP client; see the [parent README](../README.md).
-- `crate::security::SecurityPolicy`: carried by the mutating tools; the
-  read-only refusal happens at the tool gate.
+- OpenHuman's tool-policy middleware: applies the read-only refusal at execution time.
 - `tinytools`: `Tool`, `ToolResult`, `PermissionLevel`,
   `ToolCategory`.
 - `tinytools::ToolRunContext`: supplies the TinyAgents workspace root when
