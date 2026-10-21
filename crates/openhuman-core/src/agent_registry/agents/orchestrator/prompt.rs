@@ -20,8 +20,8 @@ use std::fmt::Write;
 use tinyagents_definition::SubagentEntry;
 use tinyagents_harness::prompt::{PROMPT_TIER_CONTEXT_MARKER, PROMPT_TIER_VOLATILE_MARKER};
 use tinyskills::Skill as Workflow;
-use tinytools_agent::dialect::ToolCallFormat;
 use tinytools::sanitize::sanitize_for_llm;
+use tinytools_agent::dialect::ToolCallFormat;
 
 const ARCHETYPE: &str = include_str!("prompt.md");
 
