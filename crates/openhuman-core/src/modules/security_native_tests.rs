@@ -83,11 +83,16 @@ pub(crate) async fn native_fixture_configured(
     if approvals {
         module_config.approvals = Some(super::approval_init_config());
         module_config.audit = Some(super::audit_init_config());
-        super::super::security_host::install(&client, None)
-            .await
-            .unwrap();
     }
     adjust(&mut module_config);
+    let keyring_backend = module_config
+        .crypto
+        .as_ref()
+        .and_then(|crypto| crypto.keyring.as_ref())
+        .map(|keyring| keyring.backend.clone());
+    super::super::security_host::install(&client, keyring_backend)
+        .await
+        .unwrap();
     let configuration = serde_json::to_value(module_config).unwrap();
     let record = if let Ok(host_key) = std::env::var("OPENHUMAN_TEST_SECURITY_RELEASE_HOST") {
         let record = *super::super::registry::find(MODULE_ID).unwrap();
