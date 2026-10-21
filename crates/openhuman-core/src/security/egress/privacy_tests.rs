@@ -12,6 +12,20 @@ fn external_composio() -> EgressDescriptor {
 // ── data_class: the host's knowledge of which routes carry user content ─────
 
 #[test]
+fn integration_class_comes_from_the_descriptor_not_backend_route_names() {
+    let unclassified = EgressDescriptor::integration("/auth/refresh");
+    assert_ne!(
+        data_class(&unclassified),
+        PrivacyClass::ControlPlane,
+        "core must not infer hosted-backend route policy from endpoint names"
+    );
+
+    let host_classified = EgressDescriptor::integration("/agent-integrations/composio/execute")
+        .with_control_plane(true);
+    assert_eq!(data_class(&host_classified), PrivacyClass::ControlPlane);
+}
+
+#[test]
 fn control_plane_exempts_non_tool_namespace() {
     // A control-plane call re-homed onto an integration descriptor: anything not
     // under /agent-integrations/ is exempt.
