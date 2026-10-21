@@ -149,13 +149,6 @@ impl OpenHumanSessionHost {
             host_runtime::create_runtime(&config.runtime, config.shell.hide_window)?,
         );
         let security = Arc::new(SecurityPolicy::from_full_config(config));
-        // Keep the shell execution audit sink available while security audit
-        // writes are being consolidated through TinySecurity.
-        let audit = crate::security::get_or_create_workspace_audit_logger(
-            crate::config::AuditConfig::default(),
-            config.workspace_dir.clone(),
-        )?;
-
         // Load the user's persisted tool preferences once. They drive two
         // things below: granting the App UI Control / App Automation mutation
         // opt-in (#3762) and filtering the tool set to the enabled snapshot.
@@ -192,7 +185,6 @@ impl OpenHumanSessionHost {
                 Arc::clone(&tool_config),
                 &security,
                 runtime,
-                audit,
                 &tool_config.browser,
                 &tool_config.http_request,
                 &tool_config.action_dir,
