@@ -152,13 +152,17 @@ pub(crate) async fn native_fixture_configured(
         .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
         .unwrap()
         .with_timeout(CALL_TIMEOUT);
-    tokio::time::timeout(LOAD_TIMEOUT, async {
+    let available = tokio::time::timeout(LOAD_TIMEOUT, async {
         while !proxy.is_available().await.unwrap() {
             tokio::task::yield_now().await;
         }
     })
-    .await
-    .unwrap();
+    .await;
+    assert!(
+        available.is_ok(),
+        "native module did not become available: {:#?}",
+        host.list()
+    );
     if record.version != "test-only" {
         let unpinned = super::super::ModuleRecord {
             assets: &[],
