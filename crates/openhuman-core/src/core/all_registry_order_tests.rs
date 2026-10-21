@@ -61,10 +61,7 @@ fn memory_controllers_form_one_contiguous_run_in_aggregator_order() {
         "memory controllers are no longer contiguous in the registry"
     );
 
-    let registered: Vec<&'static str> = positions
-        .iter()
-        .map(|&i| all[i].schema.function)
-        .collect();
+    let registered: Vec<&'static str> = positions.iter().map(|&i| all[i].schema.function).collect();
     let aggregator: Vec<&'static str> = crate::memory::all_memory_registered_controllers()
         .iter()
         .map(|c| c.schema.function)
