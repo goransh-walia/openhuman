@@ -8,7 +8,6 @@ use super::{
     StorageGetLinkTool, StorageListFilesTool, StorageSetVisibilityTool, StorageUploadFileTool,
 };
 use crate::integrations::IntegrationClient;
-use openhuman_embed::__host::security::{AutonomyLevel, SecurityPolicy};
 use tinytools::{PermissionLevel, Tool, ToolCategory};
 
 fn dummy_client() -> Arc<IntegrationClient> {
@@ -252,13 +251,6 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn client_for(server: &MockServer) -> Arc<IntegrationClient> {
     Arc::new(IntegrationClient::new(server.uri(), "tok".to_string()))
-}
-
-fn readonly_security() -> Arc<SecurityPolicy> {
-    Arc::new(SecurityPolicy {
-        autonomy: AutonomyLevel::ReadOnly,
-        ..SecurityPolicy::default()
-    })
 }
 
 #[tokio::test]
