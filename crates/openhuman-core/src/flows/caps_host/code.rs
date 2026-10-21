@@ -14,7 +14,7 @@ use super::*;
 use crate::config::Config;
 use crate::sandbox::{execute_in_sandbox, spawn_policy, SandboxBackendKind};
 use crate::security::SecurityPolicy;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 /// [`CodeRunner`] adapter running sandboxed user code via
 /// `crates/openhuman-core/src/sandbox/ops.rs` (`spawn_policy` +

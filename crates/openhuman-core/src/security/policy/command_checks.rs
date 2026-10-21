@@ -6,7 +6,7 @@
 //! `native_commands.rs` for how the host asks it.
 
 use super::types::SecurityPolicy;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 impl SecurityPolicy {
     /// Parse an LLM-declared command category. This is an **escalate-only**

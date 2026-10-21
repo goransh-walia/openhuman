@@ -16,7 +16,7 @@ use crate::modules::tinybox::host_runtime::{NativeRuntime, RuntimeAdapter};
 use crate::security::SecurityPolicy;
 use crate::tools;
 use crate::tools::native_ops_types::{ExecuteToolOutcome, RuntimeToolSummary};
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolScope};
 use tracing::{debug, trace};
 

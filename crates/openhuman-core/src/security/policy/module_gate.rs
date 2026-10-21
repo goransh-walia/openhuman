@@ -76,7 +76,7 @@ impl Budget {
 pub async fn host_action_class(
     permission: tinytools::PermissionLevel,
     external_effect: bool,
-) -> Result<tinybox_bus::CommandClass, String> {
+) -> Result<tinysecurity_bus::CommandClass, String> {
     native::host_action_class(permission, external_effect).await
 }
 
@@ -215,7 +215,7 @@ mod native {
     pub(super) async fn host_action_class(
         permission: tinytools::PermissionLevel,
         external_effect: bool,
-    ) -> Result<tinybox_bus::CommandClass, String> {
+    ) -> Result<tinysecurity_bus::CommandClass, String> {
         use tinysecurity_bus::{HostActionClassRequest2, ToolPermission};
         use tinytools::PermissionLevel as Level;
         let permission = match permission {
@@ -289,7 +289,7 @@ mod native {
     pub(super) async fn host_action_class(
         _permission: tinytools::PermissionLevel,
         _external_effect: bool,
-    ) -> Result<tinybox_bus::CommandClass, String> {
+    ) -> Result<tinysecurity_bus::CommandClass, String> {
         Err(NO_MODULE.into())
     }
 

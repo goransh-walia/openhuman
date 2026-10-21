@@ -393,7 +393,7 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
 async fn scheduled_shell_requires_an_allow_verdict_before_jail_execution() {
     use crate::security::policy::native_commands_stub::StubGateway;
     use crate::security::{GateDecision, SecurityPolicy};
-    use tinybox_bus::CommandClass;
+    use tinysecurity_bus::CommandClass;
 
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;

@@ -12,7 +12,7 @@ use tinytools_std::filesystem::FsGate;
 
 use crate::security::policy::{PathKind, TrustedAccess, TrustedRoot};
 use crate::security::{AutonomyLevel, GateDecision, SecurityPolicy};
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 /// Clone `security` and scope it to `root`, a run's workspace descriptor root.
 ///

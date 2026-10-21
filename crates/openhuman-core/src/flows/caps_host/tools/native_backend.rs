@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 use tinytools::ToolResult;
 
 use crate::{config::Config, security::SecurityPolicy};

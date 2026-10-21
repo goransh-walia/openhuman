@@ -14,7 +14,7 @@ use crate::security::egress::{
     IdentificationRisk,
 };
 use crate::security::{GateDecision, SecurityPolicy};
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 /// Build the egress descriptor for an outbound HTTP request (privacy epic S2,
 /// #4436). The host is the destination; a request body carries tool arguments

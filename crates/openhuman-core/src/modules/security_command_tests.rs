@@ -4,24 +4,24 @@ use crate::security::policy::{CommandFlow, CommandStage};
 use crate::security::{AutonomyLevel, GateDecision, SecurityPolicy};
 use tinysecurity_bus::{CommandDenial, CommandGate};
 
-fn host_class(name: &str) -> tinybox_bus::CommandClass {
+fn host_class(name: &str) -> tinysecurity_bus::CommandClass {
     match name {
-        "Read" => tinybox_bus::CommandClass::Read,
-        "Write" => tinybox_bus::CommandClass::Write,
-        "Network" => tinybox_bus::CommandClass::Network,
-        "Install" => tinybox_bus::CommandClass::Install,
-        "Destructive" => tinybox_bus::CommandClass::Destructive,
+        "Read" => tinysecurity_bus::CommandClass::Read,
+        "Write" => tinysecurity_bus::CommandClass::Write,
+        "Network" => tinysecurity_bus::CommandClass::Network,
+        "Install" => tinysecurity_bus::CommandClass::Install,
+        "Destructive" => tinysecurity_bus::CommandClass::Destructive,
         other => panic!("unknown class {other}"),
     }
 }
 
-fn bus_class(class: tinybox_bus::CommandClass) -> CommandClass {
+fn bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
     match class {
-        tinybox_bus::CommandClass::Read => CommandClass::Read,
-        tinybox_bus::CommandClass::Write => CommandClass::Write,
-        tinybox_bus::CommandClass::Network => CommandClass::Network,
-        tinybox_bus::CommandClass::Install => CommandClass::Install,
-        tinybox_bus::CommandClass::Destructive => CommandClass::Destructive,
+        tinysecurity_bus::CommandClass::Read => CommandClass::Read,
+        tinysecurity_bus::CommandClass::Write => CommandClass::Write,
+        tinysecurity_bus::CommandClass::Network => CommandClass::Network,
+        tinysecurity_bus::CommandClass::Install => CommandClass::Install,
+        tinysecurity_bus::CommandClass::Destructive => CommandClass::Destructive,
     }
 }
 
@@ -144,9 +144,9 @@ async fn released_module_gives_the_answers_the_deleted_host_command_tests_pinned
 fn expected_tier_gate(
     autonomy: AutonomyLevel,
     enabled: bool,
-    class: tinybox_bus::CommandClass,
+    class: tinysecurity_bus::CommandClass,
 ) -> GateDecision {
-    use tinybox_bus::CommandClass::*;
+    use tinysecurity_bus::CommandClass::*;
     use AutonomyLevel::*;
     use GateDecision::*;
     match (enabled, autonomy, class) {
@@ -173,11 +173,11 @@ async fn released_module_tier_gate_matches_the_inlined_table() {
         for enabled in [true, false] {
             let host = policy(autonomy, enabled);
             for class in [
-                tinybox_bus::CommandClass::Read,
-                tinybox_bus::CommandClass::Write,
-                tinybox_bus::CommandClass::Network,
-                tinybox_bus::CommandClass::Install,
-                tinybox_bus::CommandClass::Destructive,
+                tinysecurity_bus::CommandClass::Read,
+                tinysecurity_bus::CommandClass::Write,
+                tinysecurity_bus::CommandClass::Network,
+                tinysecurity_bus::CommandClass::Install,
+                tinysecurity_bus::CommandClass::Destructive,
             ] {
                 let decision = native
                     .ask(
