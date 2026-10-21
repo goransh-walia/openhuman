@@ -278,47 +278,14 @@ pub async fn approval_decide(
     // grant. A failed grant leaves later calls gated, and an agent request is
     // stored under the agent's exact TinySecurity subject rather than widening
     // the process scope. Strict-flow scopes never accept whole-tool grants.
-    if decision == ApprovalDecision::ApproveAlwaysForTool {
-        match tool_grant_scope {
-            Some((tenant, Variant::Standard)) => {
-                match gate.grant_tool_trust(&tenant, Variant::Standard, &row.tool_name) {
-                    Ok(()) => {
-                        tracing::info!(
-                            tool = row.tool_name.as_str(),
-                            agent_id = tenant.agent.as_deref().unwrap_or("<process>"),
-                            "[rpc:approval_decide] durable whole-tool grant recorded"
-                        );
-                        logs.push(format!(
-                            "[approval] '{}' added to the Always-allow list",
-                            row.tool_name
-                        ));
-                    }
-                    Err(err) => {
-                        tracing::warn!(
-                            tool = row.tool_name.as_str(),
-                            error = %err,
-                            "[rpc:approval_decide] failed to persist whole-tool grant; later calls will prompt"
-                        );
-                        logs.push(format!(
-                            "[approval] WARNING: could not save 'Always allow' for '{}': {err}",
-                            row.tool_name
-                        ));
-                    }
-                }
-            }
-            Some((_tenant, Variant::FlowStrict)) => {
-                tracing::warn!(
-                    request_id = row.request_id.as_str(),
-                    tool = row.tool_name.as_str(),
-                    "[rpc:approval_decide] strict-flow request cannot create a whole-tool grant"
-                );
-                logs.push(format!(
-                    "[approval] WARNING: '{}' was approved for this call; strict workflow approvals are not granted globally",
-                    row.tool_name
-                ));
-            }
-            Some((_, Variant::Forced)) | None => {}
-        }
+    if let Some(log) = persist_tool_grant_after_decision(
+        &gate,
+        decision,
+        tool_grant_scope,
+        &row.request_id,
+        &row.tool_name,
+    ) {
+        logs.push(log);
     }
 
     // "Approve always for this flow" (flow-approval-surface, PR2): unlike
@@ -383,3 +350,57 @@ pub async fn approval_decide(
     );
     Ok(Outcome::new(row, logs))
 }
+
+/// Persist an "always allow this tool" choice only after the caller has
+/// resolved the current parked request. Failure is best effort: the current
+/// call remains approved, while later calls continue to require a decision.
+fn persist_tool_grant_after_decision(
+    gate: &ApprovalGate,
+    decision: ApprovalDecision,
+    scope: Option<(crate::core::runtime::Tenant, Variant)>,
+    request_id: &str,
+    tool: &str,
+) -> Option<String> {
+    if decision != ApprovalDecision::ApproveAlwaysForTool {
+        return None;
+    }
+    match scope {
+        Some((tenant, Variant::Standard)) => {
+            match gate.grant_tool_trust(&tenant, Variant::Standard, tool) {
+                Ok(()) => {
+                    tracing::info!(
+                        tool,
+                        agent_id = tenant.agent.as_deref().unwrap_or("<process>"),
+                        "[rpc:approval_decide] durable whole-tool grant recorded"
+                    );
+                    Some(format!("[approval] '{tool}' added to the Always-allow list"))
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        tool,
+                        error = %err,
+                        "[rpc:approval_decide] failed to persist whole-tool grant; later calls will prompt"
+                    );
+                    Some(format!(
+                        "[approval] WARNING: could not save 'Always allow' for '{tool}': {err}"
+                    ))
+                }
+            }
+        }
+        Some((_tenant, Variant::FlowStrict)) => {
+            tracing::warn!(
+                request_id,
+                tool,
+                "[rpc:approval_decide] strict-flow request cannot create a whole-tool grant"
+            );
+            Some(format!(
+                "[approval] WARNING: '{tool}' was approved for this call; strict workflow approvals are not granted globally"
+            ))
+        }
+        Some((_, Variant::Forced)) | None => None,
+    }
+}
+
+#[cfg(test)]
+#[path = "rpc_tests.rs"]
+mod tests;
