@@ -7,7 +7,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use tinyagents_harness::context::RunContext;
-use tinyagents_harness::middleware::{ApprovalResolution, ApprovalResolver};
+use tinyagents_harness::middleware::{
+    ApprovalExecutionOutcome, ApprovalResolution, ApprovalResolver,
+};
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::ToolResult as TaToolResult;
 
@@ -131,11 +133,12 @@ impl ApprovalSecurityMiddleware {
         let summary = summarize_action(&call.name, &call.arguments);
         let redacted = crate::security::redact::arguments(&call.arguments);
         let (outcome, request_id) = gate
-            .intercept_audited(
+            .intercept_audited_for_call(
                 &ctx.data.approval,
                 approval_name.as_ref(),
                 &summary,
                 redacted,
+                (!call.id.trim().is_empty()).then_some(call.id.as_str()),
             )
             .await;
         match outcome {
@@ -161,6 +164,24 @@ impl ApprovalSecurityMiddleware {
         ApprovalResolution::Deny {
             reason: refused_approval_text(tool_name, "approval gate unavailable"),
         }
+    }
+
+    pub(crate) fn record_terminal_on(
+        gate: &ApprovalGate,
+        ticket: &str,
+        outcome: ApprovalExecutionOutcome<'_>,
+    ) {
+        let (execution, error) = match outcome {
+            ApprovalExecutionOutcome::Result(result) if result.is_error => {
+                (ExecutionOutcome::Failure, Some(result.output()))
+            }
+            ApprovalExecutionOutcome::Result(_) => (ExecutionOutcome::Success, None),
+            ApprovalExecutionOutcome::Failed(_) => (ExecutionOutcome::Failure, None),
+            ApprovalExecutionOutcome::Cancelled(_)
+            | ApprovalExecutionOutcome::Control(_)
+            | ApprovalExecutionOutcome::Abandoned => (ExecutionOutcome::Aborted, None),
+        };
+        gate.record_execution(ticket, execution, error.as_deref());
     }
 }
 
@@ -247,13 +268,17 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
     /// (idempotent; a no-op when the id is unknown).
     fn record(&self, ticket: &str, result: &TaToolResult) {
         if let Some(gate) = ApprovalGate::try_global() {
-            let exec = if result.is_error {
-                ExecutionOutcome::Failure
-            } else {
-                ExecutionOutcome::Success
-            };
-            let error = result.is_error.then(|| result.output());
-            gate.record_execution(ticket, exec, error.as_deref());
+            Self::record_terminal_on(
+                &gate,
+                ticket,
+                ApprovalExecutionOutcome::Result(result),
+            );
+        }
+    }
+
+    fn record_terminal(&self, ticket: &str, outcome: ApprovalExecutionOutcome<'_>) {
+        if let Some(gate) = ApprovalGate::try_global() {
+            Self::record_terminal_on(&gate, ticket, outcome);
         }
     }
 }
