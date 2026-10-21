@@ -3,11 +3,11 @@ use super::implementations::network::{McpListServersTool, McpListToolsTool};
 use super::*;
 use crate::config::{Config, DelegateAgentConfig};
 use crate::modules::tinybox::host_runtime::{NativeRuntime, RuntimeAdapter};
-use crate::security::SecurityPolicy;
+use crate::security::{AuditLogger, SecurityPolicy};
 use crate::tools::delegate::DelegateTool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tinyagents_harness::tools::{CurrentTimeTool, ResolveTimeTool};
+use tinyagents_harness_tools::{CurrentTimeTool, ResolveTimeTool};
 use tinytools::Tool;
 use tinytools_std::detect_tools::DetectToolsTool;
 use tinytools_std::filesystem::{
@@ -24,14 +24,22 @@ pub fn default_tools(security: Arc<SecurityPolicy>) -> Vec<Box<dyn Tool>> {
 /// Create the default tool registry with explicit runtime adapter.
 ///
 /// Convenience entry point used by tests and the lightweight CLI surface.
-/// Production assembly sites use [`all_tools_with_runtime`].
+/// Production assembly sites use [`all_tools_with_runtime`] and pass a real
+/// [`AuditLogger`]; this wrapper substitutes [`AuditLogger::disabled`] so
+/// existing test callers do not need to plumb one through.
 pub fn default_tools_with_runtime(
     security: Arc<SecurityPolicy>,
     runtime: Arc<dyn RuntimeAdapter>,
 ) -> Vec<Box<dyn Tool>> {
+    let audit = AuditLogger::disabled();
     let config = Arc::new(Config::default());
     vec![
-        Box::new(ShellTool::with_config(security.clone(), runtime, config)),
+        Box::new(ShellTool::with_config(
+            security.clone(),
+            runtime,
+            audit,
+            config,
+        )),
         Box::new(FileReadTool::new(security.clone())),
         Box::new(FileWriteTool::new(security)),
     ]
@@ -42,6 +50,7 @@ pub fn default_tools_with_runtime(
 pub fn all_tools(
     config: Arc<Config>,
     security: &Arc<SecurityPolicy>,
+    audit: Arc<AuditLogger>,
     browser_config: &crate::config::BrowserConfig,
     http_config: &crate::config::HttpRequestConfig,
     action_dir: &std::path::Path,
@@ -52,6 +61,7 @@ pub fn all_tools(
         config,
         security,
         Arc::new(NativeRuntime::new()),
+        audit,
         browser_config,
         http_config,
         action_dir,
@@ -68,6 +78,7 @@ pub fn all_tools_with_runtime(
     config: Arc<Config>,
     security: &Arc<SecurityPolicy>,
     runtime: Arc<dyn RuntimeAdapter>,
+    audit: Arc<AuditLogger>,
     browser_config: &crate::config::BrowserConfig,
     http_config: &crate::config::HttpRequestConfig,
     action_dir: &std::path::Path,
@@ -75,11 +86,46 @@ pub fn all_tools_with_runtime(
     root_config: &crate::config::Config,
     approval_workspace_root: Option<&std::path::Path>,
 ) -> Vec<Box<dyn Tool>> {
-    #[cfg(not(feature = "modules"))]
-    let _ = browser_config;
+    all_tools_with_runtime_and_pack_handle(
+        config,
+        security,
+        runtime,
+        audit,
+        browser_config,
+        http_config,
+        action_dir,
+        agents,
+        root_config,
+        approval_workspace_root,
+    )
+    .0
+}
+
+/// Build the full tool registry and return its pack handle alongside it.
+///
+/// The handle belongs to the session that owns the registry; callers retain it
+/// so later registry refreshes can rebind `use_skill` without inspecting the
+/// tool's generic dispatch extension.
+#[allow(clippy::implicit_hasher, clippy::too_many_arguments)]
+pub fn all_tools_with_runtime_and_pack_handle(
+    config: Arc<Config>,
+    security: &Arc<SecurityPolicy>,
+    runtime: Arc<dyn RuntimeAdapter>,
+    audit: Arc<AuditLogger>,
+    browser_config: &crate::config::BrowserConfig,
+    http_config: &crate::config::HttpRequestConfig,
+    action_dir: &std::path::Path,
+    agents: &HashMap<String, DelegateAgentConfig>,
+    root_config: &crate::config::Config,
+    approval_workspace_root: Option<&std::path::Path>,
+) -> (
+    Vec<Box<dyn Tool>>,
+    tinyagents_harness_tools::skills::PackRegistryHandle,
+) {
     let shell: Box<dyn Tool> = Box::new(ShellTool::with_config(
         security.clone(),
         Arc::clone(&runtime),
+        Arc::clone(&audit),
         Arc::clone(&config),
     ));
 
@@ -172,9 +218,7 @@ pub fn all_tools_with_runtime(
     // lifecycle. doctor/health/cost/dashboard/security reads are default-ON.
     // service_status / daemon_host_prefs_get default-ON; the lifecycle
     // mutators ship default-OFF via `tools::user_filter` (service_lifecycle).
-    tools.extend(crate::platform::doctor::tools::registered_tools(
-        config.clone(),
-    ));
+    tools.extend(crate::doctor::tools::registered_tools(config.clone()));
     tools.extend(crate::platform::health::tools::registered_tools());
     tools.extend(crate::platform::cost::tools::registered_tools(
         config.clone(),
@@ -414,6 +458,7 @@ pub fn all_tools_with_runtime(
         root_config,
         security,
         runtime: &runtime,
+        audit: &audit,
         browser_config,
         http_config,
         action_dir,
@@ -561,13 +606,13 @@ pub fn all_tools_with_runtime(
     // cover the `delegate_*` tools synthesised later by
     // `orchestrator_tools::collect_orchestrator_tools` — which never pass
     // through this function.
-    crate::tools::toolpacks::append_pack_tools(&mut tools);
+    let pack_registry = crate::tools::toolpacks::append_pack_tools(&mut tools);
     // The lookup half of `ToolExposure::Deferred` is not registered here: the
     // tinyagents harness advertises its intrinsic `tool_search` bridge
     // (a found tool is then called by its own name) whenever a run has a
     // deferred tool (`tool::discover`), ranked by whatever `agent::tinyagents::discovery` installed. A host-registered
     // `tool_search` would shadow that bridge.
-    tools
+    (tools, pack_registry)
 }
 
 #[path = "ops_tool_groups.rs"]

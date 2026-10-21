@@ -19,6 +19,8 @@ use tinytools_agent::dialect::{
     CodeDialect, CodeStyle, NativeDialect, PFormatDialect, ToolCallFormat, ToolDialect, XmlDialect,
 };
 
+#[path = "factory_tool_registry.rs"]
+mod tool_registry;
 #[path = "factory_workflows.rs"]
 mod workflows;
 
@@ -147,6 +149,12 @@ impl OpenHumanSessionHost {
             host_runtime::create_runtime(&config.runtime, config.shell.hide_window)?,
         );
         let security = Arc::new(SecurityPolicy::from_full_config(config));
+        // Keep the shell execution audit sink available while security audit
+        // writes are being consolidated through TinySecurity.
+        let audit = crate::security::get_or_create_workspace_audit_logger(
+            crate::config::AuditConfig::default(),
+            config.workspace_dir.clone(),
+        )?;
 
         // Load the user's persisted tool preferences once. They drive two
         // things below: granting the App UI Control / App Automation mutation
@@ -179,13 +187,12 @@ impl OpenHumanSessionHost {
         let tool_config: Arc<Config> = Arc::clone(&base_config);
 
         // Host-only (`host_only.rs`): no config-derived tool is even built.
-        let mut tools = if host_only {
-            Vec::new()
-        } else {
-            tools::ops::all_tools_with_runtime(
+        let (mut tools, pack_registry_handle) = tool_registry::make_tool_registry(host_only, || {
+            tools::ops::all_tools_with_runtime_and_pack_handle(
                 Arc::clone(&tool_config),
                 &security,
                 runtime,
+                audit,
                 &tool_config.browser,
                 &tool_config.http_request,
                 &tool_config.action_dir,
@@ -195,7 +202,7 @@ impl OpenHumanSessionHost {
                     .as_ref()
                     .map(|descriptor| descriptor.root.as_path()),
             )
-        };
+        });
 
         // Filter tools by the user preference loaded above.
         if !enabled_tools.is_empty() {
@@ -744,6 +751,7 @@ impl OpenHumanSessionHost {
         let mut builder = OpenHumanSessionHost::builder()
             .crate_native_provider(ctx, provider_role, Arc::clone(&base_config))
             .tools(tools)
+            .pack_registry_handle(pack_registry_handle)
             .synthesized_tools(delegation_tools)
             .visible_tool_names(visible)
             .withheld_tool_names(withheld_tool_names)
