@@ -180,21 +180,22 @@ impl OpenHumanSessionHost {
         let tool_config: Arc<Config> = Arc::clone(&base_config);
 
         // Host-only (`host_only.rs`): no config-derived tool is even built.
-        let (mut tools, pack_registry_handle) = tool_registry::make_tool_registry(host_only, || {
-            tools::ops::all_tools_with_runtime_and_pack_handle(
-                Arc::clone(&tool_config),
-                &security,
-                runtime,
-                &tool_config.browser,
-                &tool_config.http_request,
-                &tool_config.action_dir,
-                &tool_config.agents,
-                &tool_config,
-                workspace_descriptor
-                    .as_ref()
-                    .map(|descriptor| descriptor.root.as_path()),
-            )
-        });
+        let (mut tools, pack_registry_handle) =
+            tool_registry::make_tool_registry(host_only, || {
+                tools::ops::all_tools_with_runtime_and_pack_handle(
+                    Arc::clone(&tool_config),
+                    &security,
+                    runtime,
+                    &tool_config.browser,
+                    &tool_config.http_request,
+                    &tool_config.action_dir,
+                    &tool_config.agents,
+                    &tool_config,
+                    workspace_descriptor
+                        .as_ref()
+                        .map(|descriptor| descriptor.root.as_path()),
+                )
+            });
 
         // Filter tools by the user preference loaded above.
         if !enabled_tools.is_empty() {
