@@ -128,10 +128,7 @@ async fn mock_client_with_docker_control_delay(
 fn host_and_module_contract_versions_must_cover_the_full_host_surface() {
     let (major, minor) = contract::CONTRACT_VERSION;
     assert_eq!(require_compatible(contract::CONTRACT_VERSION), Ok(()));
-    assert_eq!(
-        require_compatible((major, minor + 1)),
-        Ok(())
-    );
+    assert_eq!(require_compatible((major, minor + 1)), Ok(()));
     if minor > 0 {
         assert_eq!(
             require_compatible((major, minor - 1)).expect_err("older member set is refused"),
@@ -139,8 +136,7 @@ fn host_and_module_contract_versions_must_cover_the_full_host_surface() {
         );
     }
     assert_eq!(
-        require_compatible((major + 1, minor))
-            .expect_err("different major is refused"),
+        require_compatible((major + 1, minor)).expect_err("different major is refused"),
         ModuleCallError::IncompatibleContract
     );
 }
