@@ -8,9 +8,13 @@ use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::middleware::approval::ApprovalSecurityMiddleware;
 use async_trait::async_trait;
 use tinyagents_harness::context::{RunConfig, RunContext};
-use tinyagents_harness::middleware::ApprovalResolution;
+use tinyagents_harness::middleware::{
+    ApprovalExecutionOutcome, ApprovalGateMiddleware, ApprovalResolution, ApprovalResolver,
+    BoxToolFuture, MiddlewareStack, ToolBaseCall,
+};
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::{PermissionLevel, Tool, ToolResult};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct Effectful;
 
@@ -83,6 +87,58 @@ fn call() -> TaToolCall {
         name: "slack_post".into(),
         arguments: serde_json::json!({"text": "hi"}),
         invalid: None,
+    }
+}
+
+struct GateBackedResolver {
+    gate: Arc<ApprovalGate>,
+    security: ApprovalSecurityMiddleware,
+}
+
+#[async_trait]
+impl ApprovalResolver<OpenHumanRunContext> for GateBackedResolver {
+    async fn requires_approval(
+        &self,
+        ctx: &RunContext<OpenHumanRunContext>,
+        call: &TaToolCall,
+    ) -> bool {
+        self.security
+            .requires_approval(&ctx.data.dispatch_ctx(), &call.name, &call.arguments)
+            .await
+    }
+
+    async fn resolve(
+        &self,
+        ctx: &RunContext<OpenHumanRunContext>,
+        call: &TaToolCall,
+    ) -> ApprovalResolution {
+        self.security.resolve_on(&self.gate, ctx, call).await
+    }
+
+    fn record(&self, ticket: &str, result: &ToolResult) {
+        self.record_terminal(ticket, ApprovalExecutionOutcome::Result(result));
+    }
+
+    fn record_terminal(&self, ticket: &str, outcome: ApprovalExecutionOutcome<'_>) {
+        ApprovalSecurityMiddleware::record_terminal_on(&self.gate, ticket, outcome);
+    }
+}
+
+struct CountingWrite {
+    effects: Arc<AtomicUsize>,
+}
+
+impl ToolBaseCall<(), OpenHumanRunContext> for CountingWrite {
+    fn call<'a>(
+        &'a self,
+        _ctx: &'a RunContext<OpenHumanRunContext>,
+        _state: &'a (),
+        _call: TaToolCall,
+    ) -> BoxToolFuture<'a> {
+        Box::pin(async move {
+            self.effects.fetch_add(1, Ordering::SeqCst);
+            Ok(ToolResult::success("posted"))
+        })
     }
 }
 
@@ -189,4 +245,63 @@ async fn concurrent_turns_park_on_their_own_chats() {
             ApprovalResolution::Allow { .. }
         ));
     }
+}
+
+#[tokio::test]
+async fn supervised_write_runs_once_after_approval_and_records_the_exact_call() {
+    let (gate, _dir) = test_gate();
+    let gate = Arc::new(gate);
+    let mut run = OpenHumanRunContext::new();
+    run.approval = ApprovalTurnContext::chat(chat("t-supervised-write"));
+    let ctx = RunContext::new(RunConfig::new("supervised-write"), run);
+    let resolver = Arc::new(GateBackedResolver {
+        gate: gate.clone(),
+        security: ApprovalSecurityMiddleware::new(vec![Arc::new(vec![Box::new(Effectful)
+            as Box<dyn Tool>])]),
+    });
+    let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
+    stack.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new(
+        "approval",
+        resolver,
+    )));
+    let effects = Arc::new(AtomicUsize::new(0));
+    let base = CountingWrite {
+        effects: effects.clone(),
+    };
+    let mut supervised_call = call();
+    supervised_call.id = "call-supervised-write".into();
+
+    let g = gate.clone();
+    let task = tokio::spawn(async move {
+        turn_origin::with_origin(web_origin_for("t-supervised-write"), async move {
+            stack
+                .run_wrapped_tool(&ctx, &(), supervised_call, &base)
+                .await
+                .unwrap()
+                .into_result()
+        })
+        .await
+    });
+
+    let request_id = parked(&gate, "t-supervised-write").await;
+    let pending = gate
+        .list_pending()
+        .unwrap()
+        .into_iter()
+        .find(|pending| pending.request_id == request_id)
+        .expect("the supervised write is persisted while parked");
+    assert_eq!(pending.tool_call_id.as_deref(), Some("call-supervised-write"));
+    assert_eq!(effects.load(Ordering::SeqCst), 0, "a parked write has no effect");
+
+    gate.decide(&request_id, ApprovalDecision::ApproveOnce)
+        .unwrap();
+    let result = task.await.unwrap();
+    assert!(!result.is_error, "approved write should complete: {}", result.output());
+    assert_eq!(effects.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        stub_of(&gate).state(&request_id),
+        Some(crate::security::approval::engine_stub::State::Executed(
+            ExecutionOutcome::Success
+        ))
+    );
 }
