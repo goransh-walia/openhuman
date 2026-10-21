@@ -8,11 +8,8 @@
 //! keeps no second log. What the host itself observes, and the module cannot, is
 //! recorded here through the module's `RecordAudit2`:
 //!
-//! - a shell command's execution result (`tool:shell`).
-//!
-//! A no-prompt policy decision (`auto_approve_all`, approvals off, an allowlist
-//! match) is not recorded from here: the approval engine turns the required
-//! approval into an audited automatic one itself.
+//! - a shell command's execution result (`tool:shell`); and
+//! - an external-effect tool's terminal result (`tool:<registered-name>`).
 //!
 //! A row the module cannot record is an `Err`. The caller logs it at warn level;
 //! there is no fallback sink and the row is never dropped silently.
@@ -53,6 +50,17 @@ impl std::fmt::Debug for HostAuditEvent {
 }
 
 impl HostAuditEvent {
+    /// The content-free terminal outcome of an external-effect tool call.
+    /// Tool arguments and returned content are deliberately excluded.
+    #[must_use]
+    pub fn external_tool_execution(tool_name: &str, outcome: &str) -> Self {
+        Self {
+            kind: HostAuditKind::Execution,
+            attribution: format!("tool:{tool_name}"),
+            arguments: json!({ "outcome": outcome }),
+        }
+    }
+
     /// The row of one shell command: whether it was allowed to run, whether it
     /// needed a human approval, and how it ended.
     #[must_use]
