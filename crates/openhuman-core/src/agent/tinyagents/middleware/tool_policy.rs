@@ -453,6 +453,15 @@ impl ToolCallPolicy<OpenHumanRunContext> for SessionCeilingPolicy {
         _ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> PolicyDecision {
+        if self
+            .host
+            .session
+            .decision_for(&call.name)
+            .action
+            == tinytools::ToolPolicyAction::RequireApproval
+        {
+            return PolicyDecision::require_approval("session policy requires approval");
+        }
         match self.host.channel_permission_block(call, false) {
             Some(reason) => PolicyDecision::deny(reason),
             None => PolicyDecision::Allow,

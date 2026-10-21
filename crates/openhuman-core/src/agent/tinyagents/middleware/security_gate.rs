@@ -17,9 +17,39 @@ use std::sync::Arc;
 
 use tinyagents_harness::runtime::AgentHarness;
 use tinytools::Tool;
+use tinyagents_harness::context::RunContext;
+use tinyagents_harness::middleware::{PolicyDecision, ToolCallPolicy};
+use tinyinference_llm::tool::ToolCall as TaToolCall;
 
 use super::approval::ApprovalSecurityMiddleware;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
+use crate::agent::tinyagents::ToolPolicyEnforcement;
+
+/// Folds independent host and module policies before the single resolver sees
+/// an approval request. A denial from any source dominates an approval from
+/// another source.
+struct CombinedPolicy {
+    policies: Vec<Arc<dyn ToolCallPolicy<OpenHumanRunContext>>>,
+}
+
+#[async_trait::async_trait]
+impl ToolCallPolicy<OpenHumanRunContext> for CombinedPolicy {
+    fn name(&self) -> &str {
+        "openhuman_security_gate"
+    }
+
+    async fn check(
+        &self,
+        ctx: &RunContext<OpenHumanRunContext>,
+        call: &TaToolCall,
+    ) -> PolicyDecision {
+        let mut decisions = Vec::with_capacity(self.policies.len());
+        for policy in &self.policies {
+            decisions.push(policy.check(ctx, call).await);
+        }
+        super::tinysecurity::combine_decisions(decisions)
+    }
+}
 
 /// The gate over `policy`, settling a required approval through `resolver`.
 /// Denials render in the structured `Blocked / Reason / Workaround` shape the
@@ -76,6 +106,7 @@ pub(crate) fn gate(
 pub(crate) fn tool_middleware(
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
     channel: Option<tinytools::ToolPolicySession>,
+    enforcement: Option<ToolPolicyEnforcement>,
 ) -> Arc<dyn tinyagents_harness::middleware::ToolMiddleware<(), OpenHumanRunContext>> {
     #[cfg(feature = "security-module")]
     {
@@ -88,13 +119,41 @@ pub(crate) fn tool_middleware(
         if let Some(session) = channel {
             sources.push(Arc::new(ChannelApprovalVerdicts::new(session)));
         }
-        let policy = TinySecurityPolicy::with_sources(sources);
+        let security_policy: Arc<dyn ToolCallPolicy<OpenHumanRunContext>> =
+            Arc::new(TinySecurityPolicy::with_sources(sources));
+        let mut policies = vec![security_policy];
+        if let Some(enforcement) = &enforcement {
+            policies.push(super::tool_policy::ToolPolicyMiddleware::builder_policy(
+                enforcement.policy.clone(),
+                tool_sets.clone(),
+            ));
+        }
+        let policy: Arc<dyn ToolCallPolicy<OpenHumanRunContext>> =
+            Arc::new(CombinedPolicy { policies });
         let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets));
-        Arc::new(gate(Arc::new(policy), resolver))
+        let mut gate = gate(policy, resolver);
+        if let Some(enforcement) = enforcement {
+            gate = gate.with_session_ceiling(
+                super::tool_policy::ToolPolicyMiddleware::session_ceiling(
+                    enforcement.session.clone(),
+                    tool_sets.clone(),
+                    enforcement.channel.clone(),
+                ),
+            );
+            gate = gate.with_post_gate(
+                super::tool_policy::ToolPolicyMiddleware::skill_post_gate(
+                    enforcement.session,
+                    tool_sets,
+                    enforcement.channel,
+                ),
+            );
+        }
+        Arc::new(gate)
     }
     #[cfg(not(feature = "security-module"))]
     {
         let _ = channel;
+        let _ = enforcement;
         Arc::new(tinyagents_harness::middleware::ApprovalGateMiddleware::new(
             "approval_security",
             Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
@@ -110,8 +169,9 @@ pub(crate) fn install(
     harness: &mut AgentHarness<(), OpenHumanRunContext>,
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
     channel: Option<tinytools::ToolPolicySession>,
+    enforcement: Option<ToolPolicyEnforcement>,
 ) {
-    harness.push_tool_middleware(tool_middleware(tool_sets, channel));
+    harness.push_tool_middleware(tool_middleware(tool_sets, channel, enforcement));
 }
 
 #[cfg(all(test, feature = "security-module"))]

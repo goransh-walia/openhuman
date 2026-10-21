@@ -509,6 +509,7 @@ pub(super) fn install_turn_middleware(
         tool_policy
             .as_ref()
             .map(|enforcement| enforcement.session.clone()),
+        tool_policy.clone(),
     );
 
     // SDK-owned tool-policy projection (issue #4249 / tinyagents-full-migration
