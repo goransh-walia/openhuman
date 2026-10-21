@@ -69,6 +69,7 @@ pub(crate) struct StubEngine {
     seen: Mutex<Vec<Seen>>,
     refuse: AtomicBool,
     fail_reserve: AtomicBool,
+    fail_record_execution: AtomicBool,
     always_pending: AtomicBool,
     /// The durable flow trust the module keeps: `(flow, tool)` pairs.
     trust: Mutex<std::collections::BTreeSet<(String, String)>>,
@@ -142,6 +143,11 @@ impl StubEngine {
     /// Make every later `reserve` fail.
     pub(crate) fn fail_reserve(&self, fail: bool) {
         self.fail_reserve.store(fail, Ordering::SeqCst);
+    }
+
+    /// Make every terminal audit write fail.
+    pub(crate) fn fail_record_execution(&self, fail: bool) {
+        self.fail_record_execution.store(fail, Ordering::SeqCst);
     }
 
     /// Put a request in the store as an earlier launch left it: pending, with
@@ -352,6 +358,11 @@ impl ApprovalEngine for StubEngine {
         request_id: &str,
         outcome: ExecutionOutcome,
     ) -> Result<(), EngineError> {
+        if self.fail_record_execution.load(Ordering::SeqCst) {
+            return Err(EngineError::Unavailable(
+                "the stub engine cannot record terminal execution".into(),
+            ));
+        }
         self.with(request_id, |row| match row.state {
             State::Reserved => {
                 row.state = State::Executed(outcome);

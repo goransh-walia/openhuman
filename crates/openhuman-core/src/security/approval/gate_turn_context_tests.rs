@@ -313,3 +313,52 @@ async fn supervised_write_runs_once_after_approval_and_records_the_exact_call() 
         ))
     );
 }
+
+#[tokio::test]
+async fn terminal_audit_failure_preserves_completed_result_and_denies_later_writes() {
+    let (mut gate, _dir) = test_gate();
+    gate.config.autonomy.auto_approve_all = true;
+    let gate = Arc::new(gate);
+    stub_of(&gate).fail_record_execution(true);
+    let mut run = OpenHumanRunContext::new();
+    run.approval = ApprovalTurnContext::chat(chat("t-audit-failure"));
+    let ctx = RunContext::new(RunConfig::new("audit-failure"), run);
+    let resolver = Arc::new(GateBackedResolver {
+        gate: gate.clone(),
+        security: ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
+            Box::new(Effectful) as Box<dyn Tool>
+        ])]),
+    });
+    let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
+    stack.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new("approval", resolver)));
+    let effects = Arc::new(AtomicUsize::new(0));
+    let base = CountingWrite {
+        effects: effects.clone(),
+    };
+
+    let mut first = call();
+    first.id = "call-audit-fails-after-execution".into();
+    let first_result = turn_origin::with_origin(web_origin_for("t-audit-failure"), async {
+        stack
+            .run_wrapped_tool(&ctx, &(), first, &base)
+            .await
+            .unwrap()
+            .into_result()
+    })
+    .await;
+    assert!(!first_result.is_error, "audit failure must not rewrite an executed result");
+    assert_eq!(effects.load(Ordering::SeqCst), 1);
+
+    let mut second = call();
+    second.id = "call-after-audit-failure".into();
+    let second_result = turn_origin::with_origin(web_origin_for("t-audit-failure"), async {
+        stack
+            .run_wrapped_tool(&ctx, &(), second, &base)
+            .await
+            .unwrap()
+            .into_result()
+    })
+    .await;
+    assert!(second_result.is_error, "later external write must fail closed");
+    assert_eq!(effects.load(Ordering::SeqCst), 1);
+}
