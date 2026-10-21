@@ -6416,7 +6416,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-definition"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6429,7 +6429,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-graph"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -6446,7 +6446,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-harness"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6485,7 +6485,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-harness-tools"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6504,7 +6504,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-hooks"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6521,7 +6521,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-live"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "serde_json",
  "tinyagents-harness",
@@ -6532,7 +6532,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-orchestration"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6558,7 +6558,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-registry"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6572,7 +6572,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-runtime"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6591,7 +6591,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-session"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6615,7 +6615,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-tasks"
-version = "2.2.0"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6968,7 +6968,7 @@ dependencies = [
 
 [[package]]
 name = "tinymcp-bus"
-version = "0.19.5"
+version = "0.20.0"
 dependencies = [
  "base64 0.23.1",
  "schemars 1.2.2",
@@ -6988,7 +6988,7 @@ dependencies = [
 
 [[package]]
 name = "tinymemory-api"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -7002,7 +7002,7 @@ dependencies = [
 
 [[package]]
 name = "tinymemory-integrations"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -7027,7 +7027,7 @@ dependencies = [
 
 [[package]]
 name = "tinymemory-tools"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -7047,7 +7047,7 @@ dependencies = [
 
 [[package]]
 name = "tinyredact"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "log",
  "regex",
@@ -7095,6 +7095,7 @@ dependencies = [
  "cap-std",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "thiserror 2.0.20",
  "tinyskills",
  "tinystoragedrivers-core",
@@ -7230,7 +7231,7 @@ dependencies = [
 
 [[package]]
 name = "tinytools"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7240,7 +7241,7 @@ dependencies = [
 
 [[package]]
 name = "tinytools-agent"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "regex",
  "serde",
@@ -7250,7 +7251,7 @@ dependencies = [
 
 [[package]]
 name = "tinytools-jev"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "tinytools",
@@ -7258,7 +7259,7 @@ dependencies = [
 
 [[package]]
 name = "tinytools-std"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
