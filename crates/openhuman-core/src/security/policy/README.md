@@ -7,9 +7,8 @@ always-forbidden system/credential paths, trusted roots, and the per-hour
 action budget. TinySecurity answers path, protected-floor, and command-policy
 questions. This folder holds the settings that module is given and the host's
 projection of its answers; it decides nothing and has no local fallback (see
-`native_commands.rs`, `native_paths.rs` and `module_gate.rs`). TinyBox's
-`CommandClass` remains a compatibility vocabulary used when projecting the
-module's answer; it does not own or evaluate command policy.
+`native_commands.rs`, `native_paths.rs` and `module_gate.rs`). Command classes
+come from TinySecurity's bus contract; TinyBox owns no command-policy vocabulary.
 
 ## Autonomy is off by default
 
@@ -63,15 +62,15 @@ impl in [`types.rs`](./types.rs).
 | [`command_checks.rs`](./command_checks.rs) | `parse_declared_class` |
 | [`native_commands.rs`](./native_commands.rs) | `SecurityPolicy::check_command` / `command_class_gate[_blocking]`, `CommandQuery`, `CommandFlow`, `CommandStage`, `CommandVerdict`, `Refusal`, the `CommandGateway` seam, and the translation to TinySecurity's command policy |
 | [`enforcement.rs`](./enforcement.rs) | `from_config`, `with_privacy_mode`, `openhuman_scratch_dir`/`ensure_openhuman_scratch_dir`, `validate_path_within_root` |
-| TinySecurity command-policy contract (`tinysecurity-bus`) | Command class, gate, risk and refusal category for one command under the host-registered policy; `tinysecurity_bus::CommandClass` is only the host-facing compatibility vocabulary |
+| TinySecurity command-policy contract (`tinysecurity-bus`) | Command class, gate, risk and refusal category for one command under the host-registered policy |
 
 ## Public surface
 
 `crate::security::policy` re-exports `SecurityPolicy`, `AutonomyLevel`,
 `GateDecision`, `PathKind`, `Budget`, `host_action_class`, `TrustedRoot`,
 `TrustedAccess`, the command gateway/query types, and path/scratch helpers.
-`CommandClass` comes from `tinybox_bus` as a compatibility vocabulary; policy
-markers come from `tinytools::status`. `crate::security` re-exports the commonly used policy
+`CommandClass` comes from `tinysecurity_bus`; policy markers come from
+`tinytools::status`. `crate::security` re-exports the commonly used policy
 types and path/scratch helpers, but not the command gateway/query types.
 
 `security/live_policy.rs` (a sibling of this directory) holds the current

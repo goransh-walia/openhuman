@@ -419,8 +419,8 @@ The subfolders register their own namespaces: `approval.*` ([`approval/`](./appr
   ownership to the loaded TinyBox module (`vendor/tinybox`).
 - Shell parsing, command classification and gating run inside the loaded
   TinySecurity module (`tinysecurity-bus` `CheckCommand` / `ClassifyCommand`).
-  TinyBox still reports generic structural facts (`analyze_command`), but the
-  host no longer applies policy to them. Which settings the module is given,
+  The host sends the command directly to TinySecurity; TinyBox has no shell
+  classification or authorization surface. Which settings the module is given,
   and what a refusal looks like to the agent, stay here.
 - Secret and PII scrubbers are TinyMemory's
   (`tinymemory_integrations::safety`, `vendor/tinymemory`); this folder only
