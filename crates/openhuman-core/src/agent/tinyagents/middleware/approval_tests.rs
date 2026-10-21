@@ -158,10 +158,8 @@ async fn ordinary_audit_terminal_writes_use_each_admitting_run_tenant() {
     let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
         Box::new(ExternalAuditTool) as Box<dyn Tool>,
     ])]);
-    let root = crate::core::runtime::CoreContext::for_test(
-        crate::core::runtime::DomainSet::full(),
-        None,
-    );
+    let root =
+        crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None);
     let tenant_a_core = root.derive_with(
         crate::core::runtime::ContextOverlay::new(
             crate::config::Config::default(),
@@ -226,7 +224,11 @@ async fn ordinary_audit_terminal_writes_use_each_admitting_run_tenant() {
             },
         );
         assert_eq!(
-            recorded_profiles.lock().unwrap().last().and_then(Option::as_deref),
+            recorded_profiles
+                .lock()
+                .unwrap()
+                .last()
+                .and_then(Option::as_deref),
             Some(expected_profile),
             "terminal audit must use the context that admitted this ticket"
         );

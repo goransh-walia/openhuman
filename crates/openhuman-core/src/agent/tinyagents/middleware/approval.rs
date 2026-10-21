@@ -276,9 +276,7 @@ impl ApprovalSecurityMiddleware {
             let event = crate::security::audit_record::HostAuditEvent::external_tool_execution(
                 &tool_name, outcome,
             );
-            self.record_external_terminal_with(gate, event, move |event| {
-                write(dispatch, event)
-            });
+            self.record_external_terminal_with(gate, event, move |event| write(dispatch, event));
         } else if let Some(gate) = gate {
             Self::record_terminal_on(gate, ticket, outcome);
         }
