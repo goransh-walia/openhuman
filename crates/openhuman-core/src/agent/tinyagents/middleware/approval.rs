@@ -379,9 +379,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
     /// Record the terminal audit row for an approved external-effect call
     /// (idempotent; a no-op when the id is unknown).
     fn record(&self, ticket: &str, result: &TaToolResult) {
-        if let Some(gate) = ApprovalGate::try_global() {
-            Self::record_terminal_on(&gate, ticket, ApprovalExecutionOutcome::Result(result));
-        }
+        self.record_terminal(ticket, ApprovalExecutionOutcome::Result(result));
     }
 
     fn record_terminal(&self, ticket: &str, outcome: ApprovalExecutionOutcome<'_>) {
