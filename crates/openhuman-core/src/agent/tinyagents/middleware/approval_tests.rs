@@ -152,6 +152,58 @@ async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
 }
 
 #[tokio::test]
+async fn ordinary_audit_ticket_retains_the_admitting_run_tenant() {
+    let _lock = AUDIT_TEST_LOCK.get_or_init(Default::default).lock().await;
+    let _reset_latch = ResetAuditFailureLatch;
+    let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
+        Box::new(ExternalAuditTool) as Box<dyn Tool>,
+    ])]);
+    let root = crate::core::runtime::CoreContext::for_test(
+        crate::core::runtime::DomainSet::full(),
+        None,
+    );
+    let tenant_core = root.derive_with(
+        crate::core::runtime::ContextOverlay::new(
+            crate::config::Config::default(),
+            crate::core::runtime::DomainSet::full(),
+            crate::tools::toolpacks::ToolGroups::none(),
+        )
+        .profile("audit-tenant-a"),
+    );
+    let ctx = RunContext::new(
+        RunConfig::new("ordinary-audit-tenant"),
+        OpenHumanRunContext::new().with_core(Some(tenant_core)),
+    );
+    let call = TaToolCall {
+        id: "call-ordinary-tenant".into(),
+        name: "send_external".into(),
+        arguments: serde_json::json!({"payload": "sensitive"}),
+        invalid: None,
+    };
+
+    let ApprovalResolution::Allow {
+        ticket: Some(ticket),
+    } = resolver.resolve_allowed(&ctx, &call).await
+    else {
+        panic!("an allowed external effect needs an audit ticket")
+    };
+    let admitted_dispatch = resolver
+        .audit_tickets
+        .lock()
+        .unwrap()
+        .get(&ticket)
+        .expect("ticket retains the run context")
+        .dispatch
+        .clone();
+
+    assert_eq!(
+        admitted_dispatch.tenant().unwrap().profile.as_deref(),
+        Some("audit-tenant-a"),
+        "terminal audit must be attributed to the run that admitted the tool"
+    );
+}
+
+#[tokio::test]
 async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions() {
     let _lock = AUDIT_TEST_LOCK.get_or_init(Default::default).lock().await;
     let _reset_latch = ResetAuditFailureLatch;
