@@ -55,24 +55,6 @@ pub fn data_class(desc: &EgressDescriptor) -> PrivacyClass {
     }
 }
 
-fn is_control_plane(desc: &EgressDescriptor) -> bool {
-    if desc.reason != EgressReason::Integration {
-        return false;
-    }
-    let path = desc.service.trim_start_matches('/');
-    let Some(subroute) = path.strip_prefix("agent-integrations/") else {
-        return true;
-    };
-    if subroute == "pricing" {
-        return true;
-    }
-    if let Some(rest) = subroute.strip_prefix("composio/") {
-        let head = rest.split(['/', '?']).next().unwrap_or(rest);
-        return matches!(head, "connections" | "authorize" | "tools" | "toolkits");
-    }
-    false
-}
-
 /// The assessed identification risk of the payload, if there is one. `Unknown`
 /// means it was not assessed.
 fn assessed_risk(desc: &EgressDescriptor) -> Option<(IdentificationRisk, &[String])> {
