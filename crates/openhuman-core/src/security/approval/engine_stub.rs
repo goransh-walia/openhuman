@@ -236,10 +236,16 @@ impl ApprovalEngine for StubEngine {
         if self.refuse.load(Ordering::SeqCst) {
             return Err(EngineError::Unavailable("the stub engine refuses".into()));
         }
+        let trusted_tool = self
+            .tool_trust
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(&(input.tenant.clone(), input.variant, input.tool.clone()));
         // The module refuses a scheduled job's external effect and an unlabelled call
-        // no grant covers, without parking either.
+        // no durable or posture grant covers, without parking either.
         if input.origin == CallOrigin::Cron
-            || (input.origin == CallOrigin::Unlabelled && automatic(&input, false, false).is_none())
+            || (input.origin == CallOrigin::Unlabelled
+                && automatic(&input, false, trusted_tool).is_none())
         {
             return Err(EngineError::Refused);
         }
@@ -250,11 +256,6 @@ impl ApprovalEngine for StubEngine {
                 .unwrap_or_else(PoisonError::into_inner)
                 .contains(&(flow.to_owned(), input.tool.clone()))
         });
-        let trusted_tool = self
-            .tool_trust
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains(&(input.tenant.clone(), input.variant, input.tool.clone()));
         let automatic = if self.always_pending.load(Ordering::SeqCst) {
             None
         } else {
