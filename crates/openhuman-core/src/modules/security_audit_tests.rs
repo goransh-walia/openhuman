@@ -119,6 +119,54 @@ async fn shell_rows_extend_the_subjects_one_ordered_stream() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn audit_record_uses_the_admitting_dispatch_tenant() {
+    use crate::core::runtime::{ContextOverlay, CoreContext, DispatchCtx, DomainSet};
+
+    let fixture = native_approval_fixture().await;
+    let config = Config {
+        workspace_dir: fixture.acting.path().join("workspace"),
+        ..Config::default()
+    };
+    std::fs::create_dir_all(&config.workspace_dir).unwrap();
+    let domains = DomainSet::full();
+    let make_context = |profile: &str| {
+        CoreContext::for_test(domains, None).derive_with(
+            ContextOverlay::new(
+                config.clone(),
+                domains,
+                crate::tools::toolpacks::ToolGroups::none(),
+            )
+            .profile(profile),
+        )
+    };
+    let admitted = DispatchCtx::new(make_context("tenant-a"));
+    let ambient_other = make_context("tenant-b");
+    let event = HostAuditEvent::command_execution("tool:shell", "ls", false, true, true, 1);
+
+    CoreContext::scope(ambient_other, async {
+        crate::security::audit_record::record(&admitted, Some(&config), event)
+            .await
+            .expect("audit row records for its admitted dispatch");
+    })
+    .await;
+
+    let tenant_a = subject("orchestrator");
+    let tenant_a = SubjectScope {
+        user: "tenant-a".into(),
+        workspace: config.workspace_dir.to_string_lossy().into_owned(),
+        ..tenant_a
+    };
+    let tenant_b = SubjectScope {
+        user: "tenant-b".into(),
+        workspace: config.workspace_dir.to_string_lossy().into_owned(),
+        ..subject("orchestrator")
+    };
+    assert_eq!(AuditStream::open(&config, tenant_a).await.unwrap().correlation(1).await.unwrap().expected_tail, 1);
+    assert_eq!(AuditStream::open(&config, tenant_b).await.unwrap().correlation(1).await.unwrap().expected_tail, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn a_row_the_module_cannot_commit_fails_instead_of_vanishing() {
     let fixture = native_approval_fixture().await;
     let config = Config {
