@@ -119,7 +119,7 @@ impl ApprovalGate {
 
     /// Whether the user has opted into "auto-approve everything" — a
     /// blanket bypass of the human approval prompt. Mirrors
-    /// [`Self::live_auto_approve`]'s live-policy-first, boot-config-
+    /// The live-policy-first, boot-config-
     /// fallback pattern so a toggle made this session (config save + live
     /// policy reload) takes effect on the very next tool call.
     ///

@@ -10,18 +10,21 @@ impl ApprovalGate {
         request_id: &str,
         dispatch_tenant: &crate::core::runtime::Tenant,
         requested_agent: Option<&str>,
-    ) -> anyhow::Result<Option<(crate::core::runtime::Tenant, Variant)>> {
-        let route = self.parked.request_routes.lock().get(request_id).cloned();
-        let Some(route) = route else {
-            return Ok(None);
-        };
+    ) -> anyhow::Result<(crate::core::runtime::Tenant, Variant)> {
+        let route = self
+            .parked
+            .request_routes
+            .lock()
+            .get(request_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("approval request is not parked in this host session"))?;
         validate_decision_tenant(
             dispatch_tenant,
             requested_agent,
             &route.tenant,
             request_id,
         )?;
-        Ok(Some((route.tenant, route.variant)))
+        Ok((route.tenant, route.variant))
     }
 
     /// Persist a whole-tool grant under the parked request's exact subject.
@@ -158,11 +161,9 @@ impl ApprovalGate {
                 anyhow::bail!("the approval engine could not apply the decision: {message}")
             }
         }
-        // `ApproveAlwaysForTool` persistence (append to `autonomy.auto_approve`
-        // + reload the live policy) is handled by the `approval_decide` RPC
-        // handler, which is async and owns the config save+reload path. The
-        // engine only records the decision for this one call; the next call
-        // reads the saved list as its posture.
+        // `ApproveAlwaysForTool` persistence is handled by the `approval_decide`
+        // RPC handler after this call has been released. The module records the
+        // whole-tool grant under the parked request's exact subject.
         if let Some(tx) = self.parked.take_waiter(request_id) {
             let _ = tx.send(decision);
         }

@@ -13,9 +13,11 @@
 //! `security-module`): it owns each request's durable lifecycle, its exact
 //! binding to the call, the 10-minute expiry and the audit trail, and the host
 //! serves the module's store, audit sink, prompt and human verification. The
-//! user's "Always allow" allowlist lives in `autonomy.auto_approve`; the gate reads
-//! it live and hands it to the engine as the posture of each call. Per-flow trust
-//! is the module's own durable state (`GrantFlowTool2`).
+//! Whole-tool grants live in TinySecurity's durable approval state and are bound
+//! to the exact user/workspace/agent approval scope. The legacy
+//! `autonomy.auto_approve` list is retained for config compatibility but is not
+//! replayed into the module, so revoking a durable grant remains effective.
+//! Per-flow trust is also module-owned (`GrantFlowTool2`).
 
 pub(crate) mod engine;
 #[cfg(test)]

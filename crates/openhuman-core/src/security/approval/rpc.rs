@@ -369,7 +369,7 @@ fn persist_tool_grant_after_decision(
             match gate.grant_tool_trust(&tenant, Variant::Standard, tool) {
                 Ok(()) => {
                     tracing::info!(
-                        tool,
+                        tool = tool,
                         agent_id = tenant.agent.as_deref().unwrap_or("<process>"),
                         "[rpc:approval_decide] durable whole-tool grant recorded"
                     );
@@ -379,7 +379,7 @@ fn persist_tool_grant_after_decision(
                 }
                 Err(err) => {
                     tracing::warn!(
-                        tool,
+                        tool = tool,
                         error = %err,
                         "[rpc:approval_decide] failed to persist whole-tool grant; later calls will prompt"
                     );
@@ -392,7 +392,7 @@ fn persist_tool_grant_after_decision(
         Some((_tenant, Variant::FlowStrict)) => {
             tracing::warn!(
                 request_id,
-                tool,
+                tool = tool,
                 "[rpc:approval_decide] strict-flow request cannot create a whole-tool grant"
             );
             Some(format!(
