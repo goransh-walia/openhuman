@@ -109,8 +109,22 @@ impl ApprovalSecurityMiddleware {
         name: &str,
         args: &serde_json::Value,
     ) -> bool {
-        self.has_external_effect(name, args)
-            && !self.desktop_approvals_disabled(dispatch, name).await
+        let external_effect = self.has_external_effect(name, args);
+        if !external_effect {
+            return false;
+        }
+        let audit_failed =
+            ApprovalGate::try_global().is_some_and(|gate| gate.audit_failure_latched());
+        let approvals_disabled = self.desktop_approvals_disabled(dispatch, name).await;
+        Self::requires_resolver(external_effect, audit_failed, approvals_disabled)
+    }
+
+    fn requires_resolver(
+        external_effect: bool,
+        audit_failed: bool,
+        approvals_disabled: bool,
+    ) -> bool {
+        external_effect && (audit_failed || !approvals_disabled)
     }
 }
 

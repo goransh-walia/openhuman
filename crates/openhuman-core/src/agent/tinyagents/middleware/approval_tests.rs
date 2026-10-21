@@ -69,6 +69,19 @@ fn the_desktop_exception_is_off_when_the_tool_is_unknown() {
 }
 
 #[test]
+fn a_latched_audit_failure_routes_external_tools_even_when_desktop_approvals_are_off() {
+    assert!(ApprovalSecurityMiddleware::requires_resolver(
+        true, true, true,
+    ));
+    assert!(!ApprovalSecurityMiddleware::requires_resolver(
+        true, false, true,
+    ));
+    assert!(!ApprovalSecurityMiddleware::requires_resolver(
+        false, true, false,
+    ));
+}
+
+#[test]
 fn a_required_approval_is_not_allowed_to_run_without_a_gate() {
     let resolution = ApprovalSecurityMiddleware::resolve_without_gate("composio_execute");
     match resolution {
