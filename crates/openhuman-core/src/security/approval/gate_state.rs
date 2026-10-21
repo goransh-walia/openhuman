@@ -367,8 +367,10 @@ impl ApprovalGate {
     pub fn insert_flow_trust(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<()> {
         let tenant = current_route_tenant();
         let (flow, tool) = (flow_id.to_owned(), tool_name.to_owned());
-        self.run_engine(|engine| async move { engine.grant_flow_trust(&tenant, &flow, &tool).await })?
-            .map_err(|error| anyhow::anyhow!("could not save the flow trust: {error}"))
+        self.run_engine(
+            |engine| async move { engine.grant_flow_trust(&tenant, &flow, &tool).await },
+        )?
+        .map_err(|error| anyhow::anyhow!("could not save the flow trust: {error}"))
     }
 
     /// Whether `(flow_id, tool_name)` currently holds "approve always for

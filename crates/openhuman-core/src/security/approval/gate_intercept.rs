@@ -369,7 +369,8 @@ impl ApprovalGate {
                     tool = tool_name,
                     "[approval::gate] approved by the user's configuration, skipping prompt"
                 );
-                self.reserved(request_id, tool_name, scope.as_deref(), track).await
+                self.reserved(request_id, tool_name, scope.as_deref(), track)
+                    .await
             }
             Checked::Pending {
                 request_id,
@@ -593,9 +594,10 @@ fn origin_class(origin: &AgentTurnOrigin) -> CallOrigin {
             ..
         }
         | AgentTurnOrigin::TrustedAutomation {
-            source: TrustedAutomationSource::Workflow {
-                require_approval: false,
-            },
+            source:
+                TrustedAutomationSource::Workflow {
+                    require_approval: false,
+                },
             ..
         } => CallOrigin::TrustedAutomation,
         AgentTurnOrigin::Cli | AgentTurnOrigin::DirectChat => CallOrigin::LocalOperator,
@@ -603,9 +605,10 @@ fn origin_class(origin: &AgentTurnOrigin) -> CallOrigin {
         AgentTurnOrigin::WebChat { .. }
         | AgentTurnOrigin::ExternalChannel { .. }
         | AgentTurnOrigin::TrustedAutomation {
-            source: TrustedAutomationSource::Workflow {
-                require_approval: true,
-            },
+            source:
+                TrustedAutomationSource::Workflow {
+                    require_approval: true,
+                },
             ..
         } => CallOrigin::Operator,
     }
