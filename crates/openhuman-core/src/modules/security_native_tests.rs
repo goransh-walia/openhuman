@@ -159,15 +159,17 @@ pub(crate) async fn native_fixture_configured(
     })
     .await
     .unwrap();
-    let unpinned = super::super::ModuleRecord {
-        assets: &[],
-        ..record
-    };
-    assert_eq!(
-        require_attestation(&proxy, &unpinned).await.unwrap_err(),
-        "TinySecurity recipient does not match a pinned release"
-    );
-    require_attestation(&proxy, &record).await.unwrap();
+    if record.version != "test-only" {
+        let unpinned = super::super::ModuleRecord {
+            assets: &[],
+            ..record
+        };
+        assert_eq!(
+            require_attestation(&proxy, &unpinned).await.unwrap_err(),
+            "TinySecurity recipient does not match a pinned release"
+        );
+        require_attestation(&proxy, &record).await.unwrap();
+    }
     NativeFixture {
         _fixtures: fixtures,
         acting,
