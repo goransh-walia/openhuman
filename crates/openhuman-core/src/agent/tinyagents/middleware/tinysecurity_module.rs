@@ -33,6 +33,7 @@ use tinytools::{PermissionLevel, Tool};
 use super::approval::{approval_tool_name, ApprovalSecurityMiddleware};
 use super::tinysecurity::{VerdictSource, SHELL_TOOL};
 use crate::agent::tinyagents::host::OpenHumanRunContext;
+#[cfg(test)]
 use crate::security::approval::ApprovalGate;
 use crate::security::policy::{CommandFlow, CommandStage, SecurityPolicy};
 use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
