@@ -360,7 +360,9 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
         }
         let gate = ApprovalGate::try_global();
         if self.audit_failure.load(Ordering::SeqCst)
-            || gate.as_ref().is_some_and(|gate| gate.audit_failure_latched())
+            || gate
+                .as_ref()
+                .is_some_and(|gate| gate.audit_failure_latched())
         {
             return Self::resolve_without_gate(&call.name);
         }

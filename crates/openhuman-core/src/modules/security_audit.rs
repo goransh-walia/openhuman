@@ -2,7 +2,7 @@
 //! `RecordAudit2`.
 //!
 //! The module appends approval, judge and sandbox events to a subject's stream
-//! itself. What only the host sees (a shell command's result) is recorded here:
+//! itself. What only the host sees (shell and external-effect tool results) is recorded here:
 //! the host reserves the next position of the subject's stream under the stream
 //! lock, hands the module the exact correlation, and the module sanitizes the
 //! row and appends it through the same `AuditSink2` callback. An answer without a

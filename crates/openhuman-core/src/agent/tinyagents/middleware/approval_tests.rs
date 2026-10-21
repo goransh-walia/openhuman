@@ -144,7 +144,10 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
     let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
         Box::new(ExternalAuditTool) as Box<dyn Tool>,
     ])]);
-    let ctx = RunContext::new(RunConfig::new("ordinary-audit-failure"), OpenHumanRunContext::new());
+    let ctx = RunContext::new(
+        RunConfig::new("ordinary-audit-failure"),
+        OpenHumanRunContext::new(),
+    );
     let call = TaToolCall {
         id: "call-audit-failure".into(),
         name: "send_external".into(),
@@ -170,10 +173,20 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
         },
     );
 
-    assert!(!result.is_error, "an audit failure cannot rewrite a completed result");
+    assert!(
+        !result.is_error,
+        "an audit failure cannot rewrite a completed result"
+    );
     assert!(resolver.audit_failure.load(Ordering::SeqCst));
-    let event = recorded.lock().unwrap().take().expect("audit event attempted");
-    assert_eq!(event.kind, crate::security::audit_record::HostAuditKind::Execution);
+    let event = recorded
+        .lock()
+        .unwrap()
+        .take()
+        .expect("audit event attempted");
+    assert_eq!(
+        event.kind,
+        crate::security::audit_record::HostAuditKind::Execution
+    );
     assert_eq!(event.attribution, "tool:send_external");
     let serialized = event.arguments.to_string();
     assert!(serialized.contains("success"));
