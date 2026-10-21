@@ -32,7 +32,7 @@ impl in [`types.rs`](./types.rs).
 
 - Build a `SecurityPolicy` from `AutonomyConfig` (`SecurityPolicy::from_config`).
 - Ask TinySecurity about a shell command (`check_command`) and project
-  its answer into a `GateDecision`, the compatibility `CommandClass` and the host's
+  its answer into a `GateDecision`, its `CommandClass` and the host's
   policy-blocked messages (`Refusal`). The autonomy tier table is the module's;
   every caller asks it (`command_class_gate`).
 - Ask the module whether filesystem paths are reachable, in one batch per
