@@ -59,7 +59,9 @@ use super::busy_guard::is_busy;
 use super::busy_guard::{busy, clear_busy_for_thread, TurnBusy};
 use super::completion_notice::build_undelivered_notice;
 use super::completion_owners;
-use super::delivery_drain::{run_drain, DrainFence, DrainOutcome, RECOVERY_BUSY_POLL};
+#[cfg(test)]
+use super::delivery_drain::{run_drain, DrainOutcome};
+use super::delivery_drain::{DrainFence, RECOVERY_BUSY_POLL};
 #[path = "delivery_events.rs"]
 mod delivery_events;
 use crate::core::runtime::CoreContext;

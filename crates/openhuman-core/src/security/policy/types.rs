@@ -206,7 +206,7 @@ pub fn tool_result_artifacts_dir(workspace_dir: &std::path::Path) -> PathBuf {
 
 /// Files directly under `workspace_dir` that hold secrets or persona config
 /// and must not be writable by agent tools.
-
+///
 /// Workspace-relative prefixes reserved for core-managed state.
 pub(super) const WORKSPACE_INTERNAL_PREFIXES: &[&str] =
     &["memory-", "memory_tree-", "session_raw-"];

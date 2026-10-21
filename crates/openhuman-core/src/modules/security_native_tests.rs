@@ -184,7 +184,8 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
         _broker_task: broker_task,
         proxy,
         record: _,
-        ..
+        client: _,
+        transport: _,
     } = native_fixture().await;
     let root = acting.path().canonicalize().unwrap();
     let action = root.join("action");
