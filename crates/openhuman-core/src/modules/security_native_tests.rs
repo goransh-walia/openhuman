@@ -55,7 +55,10 @@ pub(crate) async fn native_fixture_configured(
     std::fs::create_dir_all(&target).unwrap();
     let fixture_root = std::env::var_os("OPENHUMAN_TEST_SECURITY_FIXTURE_DIR")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| target.clone());
+        // Build output stays under target/. Native module copies are test
+        // fixtures, so place their private directory under the sticky temp
+        // root where TinyBus permits a shared ancestor.
+        .unwrap_or_else(std::env::temp_dir);
     assert!(
         fixture_root.is_absolute(),
         "native fixture root must be absolute"
