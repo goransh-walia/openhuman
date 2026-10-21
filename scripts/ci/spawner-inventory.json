@@ -67,26 +67,27 @@
     {
       "file": "crates/openhuman-core/src/doctor/checks/runtime.rs",
       "spawns": 1,
-      "trust": "unclassified",
-      "plan": "",
+      "trust": "host-probe",
+      "plan": "n/a",
       "executor": "n/a",
-      "test": ""
+      "test": "n/a"
     },
     {
       "file": "crates/openhuman-core/src/doctor/checks/sandbox.rs",
       "spawns": 1,
-      "trust": "unclassified",
-      "plan": "",
+      "trust": "host-probe",
+      "plan": "n/a",
       "executor": "n/a",
-      "test": ""
+      "test": "n/a"
     },
     {
       "file": "crates/openhuman-core/src/hooks/shell.rs",
       "spawns": 2,
-      "trust": "unclassified",
-      "plan": "",
-      "executor": "n/a",
-      "test": ""
+      "trust": "untrusted",
+      "plan": "operator-configured command hooks -> TinyBox shell selection, but the TinyAgents hook engine still creates the child process directly",
+      "executor": "direct",
+      "test": "pending",
+      "note": "TinyBox SelectShell chooses argv only; command hooks do not yet pass through the jailed process executor and remain migration backlog"
     },
     {
       "file": "crates/openhuman-core/src/inference/host_runtime/service/speech.rs",

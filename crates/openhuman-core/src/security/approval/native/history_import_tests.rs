@@ -140,7 +140,6 @@ fn seed_legacy(config: &Config) {
 }
 
 #[tokio::test]
-#[tokio::test]
 async fn a_workspace_with_no_legacy_file_has_nothing_to_import_and_records_nothing() {
     let (_dir, config) = workspace();
     let (_host, proxy) = absent_module().await;

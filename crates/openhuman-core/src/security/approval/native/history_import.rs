@@ -16,7 +16,7 @@
 //! existing row for a request it already holds and `Unchanged` for a live grant,
 //! so a run interrupted before the marker is safe to repeat.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 use sha2::{Digest, Sha256};
 use tinybus::Proxy;
