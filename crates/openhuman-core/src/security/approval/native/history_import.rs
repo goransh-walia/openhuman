@@ -17,7 +17,6 @@
 //! so a run interrupted before the marker is safe to repeat.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 use tinybus::Proxy;
@@ -41,14 +40,6 @@ pub(super) const HISTORY_LIMIT: usize = 500;
 
 /// How long a request lived when the legacy row recorded no expiry.
 const DEFAULT_WINDOW_MS: u64 = 600_000;
-
-/// The file that records a finished import.
-pub(super) fn marker_path(config: &Config) -> PathBuf {
-    config
-        .workspace_dir
-        .join("approval")
-        .join("module-history-imported")
-}
 
 /// The workspaces this process already tried, so the importer runs at most once
 /// per process (a failure is retried on the next start, not on every call).
@@ -166,27 +157,11 @@ async fn read(config: Config) -> Result<Option<LegacyHistory>, EngineError> {
         .map_err(|error| EngineError::Unavailable(format!("{error:#}")))
 }
 
-fn write_marker(path: &Path, report: Report) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(
-        path,
-        format!(
-            "history={} trust={} skipped={}\n",
-            report.history, report.trust, report.skipped
-        ),
-    )
-}
 
 pub(super) async fn run(
     engine: &NativeEngine,
     proxy: &Proxy,
 ) -> Result<Option<Report>, EngineError> {
-    let marker = marker_path(engine.config());
-    if marker.is_file() {
-        return Ok(None);
-    }
     let Some(history) = read(engine.config().clone()).await? else {
         return Ok(None);
     };
@@ -217,9 +192,6 @@ pub(super) async fn run(
             }
         }
     }
-    write_marker(&marker, report).map_err(|error| {
-        EngineError::Unavailable(format!("could not record the import: {error}"))
-    })?;
     Ok(Some(report))
 }
 
