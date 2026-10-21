@@ -25,29 +25,6 @@ async function gotoSettingsRoute(page: Page, hash: string): Promise<void> {
   await dismissWalkthroughIfPresent(page);
 }
 
-async function ensureRecoveryPhraseGenerateMode(page: Page): Promise<void> {
-  const copyButton = page.getByRole('button', { name: 'Copy to Clipboard' });
-  const replaceButton = page.getByRole('button', { name: 'Replace wallet' });
-
-  await expect
-    .poll(
-      async () => {
-        if (await copyButton.isVisible()) return 'generate';
-        if (await replaceButton.isVisible()) return 'configured';
-        return 'loading';
-      },
-      { timeout: 15_000 }
-    )
-    .not.toBe('loading');
-
-  if (await replaceButton.isVisible()) {
-    await replaceButton.click();
-    await page.getByRole('button', { name: 'I understand, replace my wallet' }).click();
-  }
-
-  await expect(copyButton).toBeVisible();
-}
-
 test.describe('Settings - Account Preferences', () => {
   test.beforeEach(async ({ page }) => {
     await bootAuthenticatedPage(page, 'pw-settings-account-user');
@@ -73,38 +50,6 @@ test.describe('Settings - Account Preferences', () => {
       .poll(async () => page.evaluate(() => window.location.hash))
       .toContain('/connections?tab=wallet');
     await expect(page.getByTestId('wallet-panel')).toBeVisible();
-  });
-
-  test.skip('saves a generated recovery phrase and exposes configured wallet state', async ({
-    page,
-  }) => {
-    await gotoSettingsRoute(page, '/settings/recovery-phrase');
-
-    await ensureRecoveryPhraseGenerateMode(page);
-    await page.locator('#mnemonic-confirm-checkbox').check();
-    await page.getByRole('button', { name: 'Save Recovery Phrase' }).click();
-
-    await expect(page.getByText('Recovery phrase saved')).toBeVisible();
-    await expect(page.getByText(/Multi-chain wallet identities are ready/)).toBeVisible();
-
-    await expect
-      .poll(async () => {
-        const wallet = await callCoreRpc<{
-          result?: { configured?: boolean; accounts?: unknown[] };
-        }>('openhuman.wallet_status', {});
-        return {
-          configured: Boolean(wallet.result?.configured),
-          accountCount: wallet.result?.accounts?.length ?? 0,
-        };
-      })
-      .toEqual({ configured: true, accountCount: expect.any(Number) });
-
-    const wallet = await callCoreRpc<{ result?: { configured?: boolean; accounts?: unknown[] } }>(
-      'openhuman.wallet_status',
-      {}
-    );
-    expect(wallet.result?.configured).toBe(true);
-    expect((wallet.result?.accounts ?? []).length).toBeGreaterThan(0);
   });
 
   test('persists the privacy analytics toggle to core config', async ({ page }) => {
@@ -167,23 +112,5 @@ test.describe('Settings - Account Preferences', () => {
     } finally {
       await callCoreRpc('openhuman.config_update_user_timezone', { timezone: original ?? null });
     }
-  });
-
-  test('opens the billing route and settles the redirect status copy', async ({ page }) => {
-    test.skip(
-      true,
-      'billing is exposed as an account-settings button; the retired nested route is covered by card-payment-flow'
-    );
-    await gotoSettingsRoute(page, '/settings/account');
-
-    await expect(page.getByRole('heading', { name: 'Billing', exact: true })).toBeVisible();
-    // Billing no longer auto-opens the browser; the panel explains billing
-    // moved to the web and offers an explicit open button.
-    await expect(
-      page.getByText(/Subscription changes, payment methods, credits, and invoices are now managed/)
-    ).toBeVisible();
-
-    await page.getByRole('button', { name: 'Back to settings' }).click();
-    await expect.poll(async () => page.evaluate(() => window.location.hash)).toContain('/settings');
   });
 });

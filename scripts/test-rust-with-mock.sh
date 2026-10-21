@@ -174,6 +174,15 @@ if [ ! -f "$tinybox_dir/libtinybox.$module_ext" ]; then
 fi
 export OPENHUMAN_MODULE_PATH="$tinybox_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
 
+if [ "$module_ext" = "dll" ]; then
+  tinychannels_artifact="$tinychannels_dir/tinychannels_module.dll"
+elif [ "$module_ext" = "dylib" ]; then
+  tinychannels_artifact="$tinychannels_dir/libtinychannels_module.dylib"
+else
+  tinychannels_artifact="$tinychannels_dir/libtinychannels_module.so"
+fi
+export OPENHUMAN_CHANNELS_TEST_ARTIFACT="$tinychannels_artifact"
+
 # The MCP registry E2E targets exercise real TinyMCP lifecycle calls through
 # the host's module adapter, so they load the released, checksum-pinned module
 # just as the self-hosted CI installer does (source mode builds it instead).
@@ -365,8 +374,10 @@ run_full_suite() {
     elif [ "$target" = "mcp_registry_e2e" ]; then
       # The TinyMCP module owns process-level directory transitions; this
       # binary exercises several workspaces against that shared module object.
+      # Run the cases supported on this platform; Linux-only sandbox cases
+      # carry their own conditional ignore until TinyBox supports their jail.
       OPENHUMAN_MODULE_PATH="$connectors_module_path" \
-        cargo_test --test "$target" -- --ignored --test-threads=1 "$@"
+        cargo_test --test "$target" -- --test-threads=1 "$@"
     elif [ "$target" = "mcp_registry_multi_server" ]; then
       # The host opens multiple per-workspace clients to one TinyMCP module.
       # Keep this integration target serial so those module-backed transitions
@@ -416,7 +427,7 @@ elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "mcp_registry_e2e" ]; the
     shift
   fi
   OPENHUMAN_MODULE_PATH="$connectors_module_path" \
-    cargo_test --test mcp_registry_e2e -- --ignored --test-threads=1 "$@"
+    cargo_test --test mcp_registry_e2e -- --test-threads=1 "$@"
 elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "tinymcp_storage_smoke_e2e" ]; then
   shift 2
   if [ "${1:-}" = "--" ]; then

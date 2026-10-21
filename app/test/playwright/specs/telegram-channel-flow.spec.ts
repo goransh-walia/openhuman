@@ -176,6 +176,4 @@ test.describe('Telegram channel - connect / disconnect RPC flow', () => {
     expect(status?.connected).toBe(true);
     expect(status?.hasCredentials ?? status?.has_credentials).toBe(true);
   });
-
-  test.skip('inbound message polling scenarios require a live listener restart in this lane', async () => {});
 });

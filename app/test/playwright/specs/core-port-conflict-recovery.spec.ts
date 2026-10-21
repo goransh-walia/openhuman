@@ -14,6 +14,4 @@ test.describe('Core port conflict recovery', () => {
       page.locator('[data-testid="chat-message-input"], [data-testid="onboarding-welcome-step"]')
     ).toBeVisible();
   });
-
-  test.skip('second instance surfaces clear conflict dialog once a visible banner exists', async () => {});
 });

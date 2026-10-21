@@ -362,6 +362,7 @@ when_to_use = "defaults"
     assert!(def.extensions.omit_memory_context);
     assert!(def.extensions.omit_safety_preamble);
     assert!(!def.extensions.searches_connected_mcp);
+    assert!(!def.extensions.refresh_prompt_on_resume);
     assert!(def.extensions.prompt_builder.is_none());
 }
 
@@ -373,12 +374,14 @@ id = "opted_in"
 when_to_use = "host flags"
 omit_identity = false
 searches_connected_mcp = true
+refresh_prompt_on_resume = true
 tokenjuice_compression = "light"
 "#,
     )
     .unwrap();
     assert!(!def.extensions.omit_identity);
     assert!(def.extensions.searches_connected_mcp);
+    assert!(def.extensions.refresh_prompt_on_resume);
     assert_eq!(
         def.extensions.tokenjuice_compression,
         tinyjuice_bus::types::AgentTokenjuiceCompression::Light

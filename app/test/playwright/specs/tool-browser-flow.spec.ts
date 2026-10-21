@@ -44,6 +44,4 @@ test.describe('System tools - Browser (open URL + automation registry)', () => {
       expect(defs.find(def => def?.id === retired)).toBeUndefined();
     }
   });
-
-  test.skip('future chat tool_calls drive browser_open end-to-end via deterministic mock LLM', async () => {});
 });

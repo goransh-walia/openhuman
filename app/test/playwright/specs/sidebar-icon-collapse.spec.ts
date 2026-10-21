@@ -46,7 +46,6 @@ const ICON_WIDTH_PX = 88;
 /** Mirrors `SIDEBAR_KEYBOARD_STEP` in `app/src/components/ui/Sidebar.tsx`. */
 const KEYBOARD_STEP_PX = 16;
 /** Mirrors `WINDOW_DRAG_BAR_HEIGHT` in `app/src/components/layout/shell/WindowDragBar.tsx`. */
-const DRAG_STRIP_HEIGHT_PX = 28;
 /** Mirrors `SIDEBAR_MIN_WIDTH` / `SIDEBAR_MAX_WIDTH` in `app/src/components/ui/Sidebar.tsx`. */
 const MIN_WIDTH_PX = 188;
 const MAX_WIDTH_PX = 420;
@@ -194,31 +193,6 @@ test.describe('Sidebar icon-collapse verification (#5676)', () => {
     // Reopen once more so later assertions see the expanded shell.
     await page.locator(REOPEN).click();
     await expect(sidebar).toHaveAttribute('data-state', 'expanded');
-  });
-
-  test.skip('collapsed rail reserves a traffic-light-clearing drag strip above its items', async ({
-    page,
-  }) => {
-    await bootOnChat(page);
-    await page.click(COLLAPSE_BUTTON);
-    await expect(page.locator(REOPEN)).toBeVisible();
-
-    const sidebarBox = await page.locator(SIDEBAR).boundingBox();
-    // The drag marker is on the full-height collapsed body; its first direct
-    // child is the fixed 28px spacer above the rail items.
-    const strip = page.locator(`${SIDEBAR} [data-tauri-drag-region="deep"] > div`).first();
-    const stripBox = await strip.boundingBox();
-    if (!sidebarBox || !stripBox) throw new Error('collapsed rail geometry missing');
-
-    // Full-width strip pinned to the top of the column, one title-bar tall.
-    expect(stripBox.height).toBe(DRAG_STRIP_HEIGHT_PX);
-    expect(stripBox.x).toBeCloseTo(sidebarBox.x, 0);
-    expect(stripBox.y).toBeCloseTo(sidebarBox.y, 0);
-    expect(stripBox.width).toBeGreaterThanOrEqual(ICON_WIDTH_PX - 1);
-
-    // Every interactive item starts below the strip, clear of the lights zone.
-    const reopenBox = await page.locator(REOPEN).boundingBox();
-    expect(reopenBox?.y ?? 0).toBeGreaterThanOrEqual(stripBox.y + stripBox.height - 1);
   });
 
   for (const combo of THEME_COMBOS) {

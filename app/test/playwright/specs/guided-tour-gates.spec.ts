@@ -18,12 +18,6 @@ async function tooltip(page: Page): Promise<Locator> {
   return page.locator('[role="alertdialog"]');
 }
 
-async function clickTourNext(page: Page): Promise<void> {
-  const panel = await tooltip(page);
-  await expect(panel).toBeVisible();
-  await panel.getByRole('button', { name: /Next|Let's go!/ }).click();
-}
-
 test.describe('Guided tour gates', () => {
   test.beforeEach(async ({ page }) => {
     // Tour coverage does not exercise the auth callback. Seed the authenticated
@@ -32,34 +26,6 @@ test.describe('Guided tour gates', () => {
     await dismissWalkthroughIfPresent(page);
     await page.goto('/#/home');
     await waitForAppReady(page);
-  });
-
-  test.skip('tour starts from home and can navigate forward to the connections step', async ({
-    page,
-  }) => {
-    // Joyride retains its internal step index after the automatically completed
-    // onboarding tour. Restarting the walkthrough on the mounted instance does
-    // not reliably reset it to step zero; the desktop E2E suite documents the
-    // same product gap. Re-enable when AppWalkthrough owns an explicit stepIndex.
-    await armWalkthrough(page);
-
-    const panel = await tooltip(page);
-    await expect(panel).toBeVisible();
-    await expect(page.locator('[data-walkthrough="home-card"]')).toBeVisible();
-
-    await clickTourNext(page);
-    await expect(page.locator('[data-walkthrough="home-cta"]')).toBeVisible();
-
-    await clickTourNext(page);
-    await expect.poll(async () => page.evaluate(() => window.location.hash)).toContain('/chat');
-    await expect(page.locator('[data-walkthrough="chat-agent-panel"]')).toBeVisible();
-
-    // Phase 2: step 4 navigates to /connections (was /skills)
-    await clickTourNext(page);
-    await expect
-      .poll(async () => page.evaluate(() => window.location.hash))
-      .toContain('/connections');
-    await expect(page.locator('[data-walkthrough="skills-grid"]')).toBeVisible();
   });
 
   test('skip hides the tour and marks walkthrough complete', async ({ page }) => {
@@ -78,20 +44,5 @@ test.describe('Guided tour gates', () => {
         }))
       )
       .toEqual({ completed: 'true', pending: null });
-  });
-
-  test.skip('pending walkthrough resumes after reload', async ({ page }) => {
-    await page.evaluate(() => {
-      localStorage.removeItem('openhuman:walkthrough_completed');
-      localStorage.setItem('openhuman:walkthrough_pending', 'true');
-    });
-
-    await page.reload();
-    await waitForAppReady(page);
-
-    const panel = await tooltip(page);
-    await expect(panel).toBeVisible();
-    await expect(panel.getByText('1 of 10')).toBeVisible();
-    await expect(page.locator('[data-walkthrough="home-card"]')).toBeVisible();
   });
 });

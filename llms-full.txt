@@ -1198,7 +1198,7 @@ Enable the named Embed `skills` feature for skill setters and registry access. L
 
 The example writes a bundle, registers an agent, checks the copied contents and verifies that the destination is not a symlink. Use the same directory layout for production bundles; do not depend on the fixture's temporary directory lifetime.
 
-A resumed session's prompt is frozen, so adding or editing a bundle does not rewrite an existing conversation's recorded prefix. Start a new session when you want updated instructions to become visible. See [turns and sessions](turns-sessions.md) and the generated [builder setters](../builder-setters.md) for runtime policy knobs.
+A resumed session's prompt is frozen, so adding or editing a bundle does not rewrite an existing conversation's recorded prefix. Start a new session when you want updated instructions to become visible, or build the agent with `AgentDefinitionSpec::refresh_prompt_on_resume(true)` so a resumed session is sent its current prompt. See [turns and sessions](turns-sessions.md) and the generated [builder setters](../builder-setters.md) for runtime policy knobs.
 
 <!-- Source: docs/gitbooks/en/developing/embed/concepts/testing.md -->
 ---
@@ -1416,7 +1416,7 @@ No local path is read, so attachments are accepted whatever the turn's origin, i
 
 The stream example checks that deltas precede the final result and that collected and streaming replies agree. A cancellation token passed to a turn is preserved by streaming; cancellation unblocks forwarding even when the consumer has stopped draining a full buffer.
 
-The harness derives transcript paths from the thread and agent IDs without a timestamp. Resumed sessions reuse their recorded system prompt and tool declarations; edits to prompts, skills or integrations apply to new sessions. Compaction seals a generation and opens a child instead of erasing history. See [observability](observability.md) for session IDs versus per-call turn IDs, and [API reference](../api-reference.md) for the session-store port.
+The harness derives transcript paths from the thread and agent IDs without a timestamp. Resumed sessions reuse their recorded system prompt and tool declarations; edits to prompts, skills or integrations apply to new sessions. An agent built with `AgentDefinitionSpec::refresh_prompt_on_resume(true)` sends a resumed thread its current prompt instead: when the prompt changed, the thread's transcript generation is sealed and its conversation carries into the next, at the cost of one uncached prompt per change, and that turn's message opens with a one-time note that the instructions changed, so the model does not hold to what it said under the old ones. Compaction seals a generation and opens a child instead of erasing history. See [observability](observability.md) for session IDs versus per-call turn IDs, and [API reference](../api-reference.md) for the session-store port.
 
 <!-- Source: docs/gitbooks/en/developing/embed/faq.md -->
 ---

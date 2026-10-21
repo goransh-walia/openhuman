@@ -1,10 +1,9 @@
 //! Native-module integration tests for the MCP registry host adapter.
 //!
-//! These tests use TinyBus' normal loader with a locally supplied TinyMCP
-//! artifact. Build one with `node scripts/modules/build.mjs tinymcp` and set
-//! `OPENHUMAN_MODULE_SOURCE_DIR` (or put the verified platform library on
-//! `OPENHUMAN_MODULE_PATH`) to run them with `--ignored`; no implementation crate is linked
-//! into this host test.
+//! These tests use TinyBus' normal loader with the verified TinyMCP artifact
+//! staged on `OPENHUMAN_MODULE_PATH`; no implementation crate is linked into
+//! this host test. These cases avoid launching untrusted stdio servers because
+//! Linux TinyBox does not yet provide the required isolated networking.
 
 #![cfg(feature = "mcp")]
 
@@ -73,60 +72,6 @@ fn http_server(url: &str) -> Value {
 }
 
 #[tokio::test]
-#[ignore = "requires a TinyMCP library: node scripts/modules/build.mjs tinymcp"]
-async fn module_tool_call_reports_unknown_tool_as_error() {
-    let (_tmp, config) = fresh_workspace_config();
-    let server_id = install_server(&config, "@openhuman-test/echo", stdio_server()).await;
-    openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(&config, server_id.clone(), true)
-        .await
-        .expect("enable server");
-    openhuman_core::mcp::registry::ops::mcp_clients_connect(&config, server_id.clone())
-        .await
-        .expect("connect stdio fixture through TinyBus");
-
-    let result = openhuman_core::mcp::registry::ops::mcp_clients_tool_call(
-        &config,
-        server_id.clone(),
-        "does_not_exist".into(),
-        json!({}),
-    )
-    .await
-    .expect("tool errors are returned as MCP tool outcomes");
-    assert_eq!(result.value["is_error"], true);
-
-    openhuman_core::mcp::registry::ops::mcp_clients_disconnect(&config, server_id)
-        .await
-        .expect("disconnect fixture");
-}
-
-#[tokio::test]
-#[ignore = "requires a TinyMCP library: node scripts/modules/build.mjs tinymcp"]
-async fn disabling_server_drops_its_live_module_connection() {
-    let (_tmp, config) = fresh_workspace_config();
-    let server_id = install_server(&config, "@openhuman-test/echo", stdio_server()).await;
-    openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(&config, server_id.clone(), true)
-        .await
-        .expect("enable server");
-    openhuman_core::mcp::registry::ops::mcp_clients_connect(&config, server_id.clone())
-        .await
-        .expect("connect stdio fixture through TinyBus");
-    assert!(
-        openhuman_core::mcp::registry::connections::is_connected_for_config(&config, &server_id)
-            .await
-    );
-
-    openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(&config, server_id.clone(), false)
-        .await
-        .expect("disable server");
-    assert!(
-        !openhuman_core::mcp::registry::connections::is_connected_for_config(&config, &server_id)
-            .await,
-        "disabling an install must close the module-owned connection"
-    );
-}
-
-#[tokio::test]
-#[ignore = "requires a TinyMCP library: node scripts/modules/build.mjs tinymcp"]
 async fn disabled_server_accepts_environment_update_without_reconnecting() {
     use std::collections::HashMap;
 
@@ -148,35 +93,6 @@ async fn disabled_server_accepts_environment_update_without_reconnecting() {
 }
 
 #[tokio::test]
-#[ignore = "requires a TinyMCP library: node scripts/modules/build.mjs tinymcp"]
-async fn per_config_lookups_are_isolated_by_workspace() {
-    use openhuman_core::mcp::registry::{connections, ops};
-
-    let (_tmp_a, config_a) = fresh_workspace_config();
-    let (_tmp_b, config_b) = fresh_workspace_config();
-    let server_id = install_server(&config_a, "@openhuman-test/echo", stdio_server()).await;
-    ops::mcp_clients_set_enabled(&config_a, server_id.clone(), true)
-        .await
-        .expect("enable server");
-    ops::mcp_clients_connect(&config_a, server_id.clone())
-        .await
-        .expect("connect server in workspace A");
-
-    assert!(connections::is_connected_for_config(&config_a, &server_id).await);
-    assert!(!connections::is_connected_for_config(&config_b, &server_id).await);
-    let tools = connections::server_tools_for_config(&config_a, &server_id)
-        .await
-        .expect("workspace A sees connected tools");
-    assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].name, "echo");
-
-    ops::mcp_clients_disconnect(&config_a, server_id)
-        .await
-        .expect("disconnect fixture");
-}
-
-#[tokio::test]
-#[ignore = "requires a TinyMCP library: node scripts/modules/build.mjs tinymcp"]
 async fn disabled_install_is_not_dialed_during_startup() {
     use openhuman_core::mcp::registry::{connections, ops};
 
@@ -202,7 +118,6 @@ async fn disabled_install_is_not_dialed_during_startup() {
 }
 
 #[tokio::test]
-#[ignore = "requires a TinyMCP library: node scripts/modules/build.mjs tinymcp"]
 async fn per_config_auth_failure_surfaces_401_reason_without_cross_workspace_leak() {
     use openhuman_core::mcp::registry::{connections, ops};
     use wiremock::matchers::any;

@@ -37,6 +37,4 @@ test.describe('Tauri commands', () => {
     expect(Array.isArray(payload)).toBe(true);
     expect((payload as unknown[]).length).toBeGreaterThan(0);
   });
-
-  test.skip('native window.__TAURI_INTERNALS__.invoke checks are desktop-only and not available in the web lane', async () => {});
 });

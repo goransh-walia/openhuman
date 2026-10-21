@@ -50,6 +50,54 @@ fn bare_prompt_is_verbatim_with_nothing_composed_around_it() {
 }
 
 #[test]
+fn refresh_prompt_on_resume_reaches_the_core_definition_and_is_off_by_default() {
+    let def = AgentDefinitionSpec::new()
+        .bare_prompt("Analyze.")
+        .refresh_prompt_on_resume(true)
+        .into_core("alpha")
+        .expect("definition");
+    assert!(def.extensions.refresh_prompt_on_resume);
+    let replays = AgentDefinitionSpec::new()
+        .bare_prompt("Analyze.")
+        .into_core("beta")
+        .expect("definition");
+    assert!(
+        !replays.extensions.refresh_prompt_on_resume,
+        "a resumed thread replays its recorded prompt unless the agent opts in"
+    );
+}
+
+#[test]
+fn refresh_prompt_on_resume_comes_from_a_template_or_base_unless_set() {
+    let template = AgentDefinitionSpec::new().refresh_prompt_on_resume(true);
+    let inherited = AgentDefinitionSpec::new()
+        .inherit(template.clone())
+        .unwrap()
+        .into_core("inherits")
+        .unwrap();
+    assert!(inherited.extensions.refresh_prompt_on_resume);
+    let overridden = AgentDefinitionSpec::new()
+        .refresh_prompt_on_resume(false)
+        .inherit(template)
+        .unwrap()
+        .into_core("overrides")
+        .unwrap();
+    assert!(!overridden.extensions.refresh_prompt_on_resume);
+
+    let mut base = AgentDefinitionSpec::new().into_core("custom-base").unwrap();
+    base.extensions.refresh_prompt_on_resume = true;
+    let keeps = AgentDefinitionSpec::from_base(base.clone())
+        .into_core("keeps-base")
+        .unwrap();
+    assert!(keeps.extensions.refresh_prompt_on_resume);
+    let clears = AgentDefinitionSpec::from_base(base)
+        .refresh_prompt_on_resume(false)
+        .into_core("clears-base")
+        .unwrap();
+    assert!(!clears.extensions.refresh_prompt_on_resume);
+}
+
+#[test]
 fn system_prompt_after_bare_prompt_is_wrapped_again() {
     let def = AgentDefinitionSpec::new()
         .bare_prompt("Analyze.")

@@ -1,7 +1,9 @@
 use super::*;
 use crate::hosted::test_support;
 use openhuman_embed::__host::memory_engines::Binding;
-use openhuman_embed::__host::security::credentials::session_support::BackendCredential;
+use openhuman_embed::__host::security::credentials::session_support::{
+    BackendCredential, SESSION_EXPIRES_AT_META, SESSION_ISSUING_BACKEND_META,
+};
 use openhuman_embed::__host::security::credentials::{
     AuthService, APP_SESSION_PROVIDER, DEFAULT_AUTH_PROFILE_NAME,
 };
@@ -197,15 +199,29 @@ fn store_session_with_metadata(
     token: &str,
     metadata: std::collections::HashMap<String, String>,
 ) {
-    AuthService::from_config(config)
-        .store_provider_token(
-            APP_SESSION_PROVIDER,
-            DEFAULT_AUTH_PROFILE_NAME,
-            token,
-            metadata,
-            true,
-        )
-        .expect("store selected session fixture");
+    let state_dir = config.config_path.parent().expect("config state directory");
+    std::fs::create_dir_all(state_dir).expect("create profile fixture directory");
+    let path = state_dir.join("auth-profiles.json");
+    let doc = json!({
+        "schema_version": 1,
+        "active_profiles": {},
+        "profiles": {
+            "app-session:default": {
+                "provider": "app-session",
+                "profile_name": "default",
+                "kind": "token",
+                "token": token,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+                "metadata": metadata,
+            }
+        }
+    });
+    std::fs::write(
+        path,
+        serde_json::to_vec(&doc).expect("serialize profile fixture"),
+    )
+    .expect("write profile fixture");
 }
 
 fn persistent_tree(
@@ -240,15 +256,41 @@ fn persistent_tree(
 
 #[tokio::test]
 async fn readonly_health_uses_the_selected_config_credential_and_endpoint() {
-    let _registry = crate::registry_test_lock();
+    let _registry = crate::registry_test_lock_async().await;
     let server_a = health_server(500).await;
     let server_b = health_server(200).await;
     let tmp_a = tempfile::tempdir().unwrap();
     let tmp_b = tempfile::tempdir().unwrap();
     let config_a = config_with_endpoint(&tmp_a, &server_a.uri());
     let config_b = config_with_endpoint(&tmp_b, &server_b.uri());
-    store_key(&config_a, "selected-a-token");
-    store_key(&config_b, "selected-b-token");
+    let mut config_a = config_a;
+    let mut config_b = config_b;
+    config_a.resolved_endpoints.control_plane_url = Some(server_a.uri());
+    config_b.resolved_endpoints.control_plane_url = Some(server_b.uri());
+    store_session_with_metadata(
+        &config_a,
+        "selected-a-token",
+        std::collections::HashMap::from([(
+            SESSION_ISSUING_BACKEND_META.to_owned(),
+            config_a
+                .resolved_endpoints
+                .control_plane_url
+                .clone()
+                .unwrap(),
+        )]),
+    );
+    store_session_with_metadata(
+        &config_b,
+        "selected-b-token",
+        std::collections::HashMap::from([(
+            SESSION_ISSUING_BACKEND_META.to_owned(),
+            config_b
+                .resolved_endpoints
+                .control_plane_url
+                .clone()
+                .unwrap(),
+        )]),
+    );
     let before_a = persistent_tree(config_a.config_path.parent().unwrap());
     let before_b = persistent_tree(config_b.config_path.parent().unwrap());
 
@@ -278,15 +320,26 @@ async fn readonly_health_uses_the_selected_config_credential_and_endpoint() {
 }
 
 #[tokio::test]
-async fn readonly_health_reports_down_without_exposing_backend_error_text() {
+async fn readonly_health_reports_degraded_without_exposing_backend_error_text() {
+    let _registry = crate::registry_test_lock_async().await;
     let server = health_server(500).await;
     let tmp = tempfile::tempdir().unwrap();
     let config = config_with_endpoint(&tmp, &server.uri());
-    store_key(&config, "health-down-token");
+    let mut config = config;
+    config.resolved_endpoints.control_plane_url = Some(server.uri());
+    store_session_with_metadata(
+        &config,
+        "health-down-token",
+        std::collections::HashMap::from([(
+            SESSION_ISSUING_BACKEND_META.to_owned(),
+            config.resolved_endpoints.control_plane_url.clone().unwrap(),
+        )]),
+    );
 
     let health = read_only_health_probe(config).await;
 
-    assert!(matches!(health, EngineHealth::Down(_)));
+    assert!(matches!(health, EngineHealth::Degraded(_)), "{health:?}");
+    assert!(!format!("{health:?}").contains("fixture secret"));
     assert_eq!(server.received_requests().await.unwrap().len(), 1);
 }
 
@@ -297,28 +350,32 @@ async fn expired_or_wrong_issuer_session_skips_network_and_preserves_credentials
         (
             "expired-session",
             std::collections::HashMap::from([(
-                openhuman_embed::__host::security::credentials::session_support::SESSION_EXPIRES_AT_META.to_owned(),
+                SESSION_EXPIRES_AT_META.to_owned(),
                 (chrono::Utc::now() - chrono::Duration::minutes(2)).to_rfc3339(),
             )]),
         ),
         (
             "wrong-issuer-session",
             std::collections::HashMap::from([(
-                "session_issuing_backend".to_owned(),
+                SESSION_ISSUING_BACKEND_META.to_owned(),
                 "https://other-backend.example.test".to_owned(),
             )]),
         ),
     ] {
         let tmp = tempfile::tempdir().unwrap();
         let mut config = config_with_endpoint(&tmp, &server.uri());
-        config.resolved_endpoints.control_plane_url = Some("https://selected-backend.example.test".into());
+        config.resolved_endpoints.control_plane_url =
+            Some("https://selected-backend.example.test".into());
         store_session_with_metadata(&config, token, metadata);
         let before = persistent_tree(config.config_path.parent().unwrap());
 
         let health = read_only_health_probe(config.clone()).await;
 
         assert!(matches!(health, EngineHealth::Down(_)));
-        assert_eq!(persistent_tree(config.config_path.parent().unwrap()), before);
+        assert_eq!(
+            persistent_tree(config.config_path.parent().unwrap()),
+            before
+        );
     }
     assert!(server.received_requests().await.unwrap().is_empty());
 }
