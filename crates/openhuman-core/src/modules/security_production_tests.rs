@@ -135,9 +135,29 @@ async fn sync_seam_redacts_through_the_released_archive_from_inside_and_outside_
 /// `ClassifyCommand`. The class gate is also asked from a plain thread and from
 /// a runtime worker through the sync seam, as the network and filesystem tool
 /// traits do.
-#[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
-async fn production_client_gates_shell_and_network_on_the_released_archive() {
+#[test]
+fn production_client_gates_shell_and_network_on_the_released_archive() {
+    // The debug-only released-module path has a deep async call chain. The
+    // Windows test harness gives its test thread a much smaller default stack
+    // than Unix, so run this integration check with an explicit stack budget.
+    std::thread::Builder::new()
+        .name("released-security-gates".to_owned())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(production_client_gates_shell_and_network_on_the_released_archive_inner());
+        })
+        .expect("test thread")
+        .join()
+        .expect("released security gate test thread");
+}
+
+async fn production_client_gates_shell_and_network_on_the_released_archive_inner() {
     use crate::security::policy::{CommandFlow, CommandQuery, CommandStage, Refusal};
     use crate::security::{AutonomyLevel, GateDecision, SecurityPolicy};
     use tinybox_bus::CommandClass;
