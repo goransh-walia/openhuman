@@ -447,6 +447,9 @@ async fn missing_module_denies_tools_without_an_explicit_inert_declaration() {
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "unclassified_observed", test_core(false)).await;
-    assert!(!result.contains("effect ran"), "unclassified tool ran: {result}");
+    assert!(
+        !result.contains("effect ran"),
+        "unclassified tool ran: {result}"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
