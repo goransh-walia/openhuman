@@ -28,14 +28,12 @@ const CLOSE: &str = contract::names::CLOSE;
 const SPAWN: &str = contract::names::SPAWN;
 const IS_RUNNING: &str = contract::names::IS_RUNNING;
 const CANCEL: &str = contract::names::CANCEL;
-const ANALYZE_SHELL: &str = contract::names::ANALYZE_SHELL;
 const RESERVE: &str = contract::names::RESERVE;
 const CAPABILITIES: &str = contract::names::CAPABILITIES;
 const SHUTDOWN: &str = contract::names::SHUTDOWN;
 const FORWARD: &str = contract::names::FORWARD;
 const CLOSE_FORWARD: &str = contract::names::CLOSE_FORWARD;
 const JAIL_STATUS: &str = contract::names::JAIL_STATUS;
-const ANALYZE_COMMAND: &str = contract::names::ANALYZE_COMMAND;
 const BEGIN_FILE_READ: &str = contract::names::BEGIN_FILE_READ;
 const READ_FILE_CHUNK: &str = contract::names::READ_FILE_CHUNK;
 const FINISH_FILE_READ: &str = contract::names::FINISH_FILE_READ;
@@ -349,22 +347,6 @@ pub async fn close_forward(
     request: contract::CloseForwardRequest,
 ) -> Result<(), String> {
     call(config, CLOSE_FORWARD, (request,), false).await
-}
-
-/// Ask TinyBox for structural shell facts; this is not an authorization check.
-pub async fn analyze_shell(
-    config: &Config,
-    command: String,
-) -> Result<contract::ShellAnalysis, String> {
-    call(config, ANALYZE_SHELL, (command,), false).await
-}
-
-/// Ask TinyBox for generic command facts; the caller still decides policy.
-pub async fn analyze_command(
-    config: &Config,
-    command: String,
-) -> Result<contract::CommandAnalysis, String> {
-    call(config, ANALYZE_COMMAND, (command,), false).await
 }
 
 /// Open a bounded workspace file reader.

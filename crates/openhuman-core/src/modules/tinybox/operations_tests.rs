@@ -60,16 +60,6 @@ impl Interface for MockTinyBox {
                 spawn_backends: vec!["docker".to_owned()],
             })
             .map_err(tinybus::Error::from),
-            ANALYZE_COMMAND => serde_json::to_value(contract::CommandAnalysis {
-                segments: Vec::new(),
-                hidden_execution: false,
-                redirection: false,
-                expansion: false,
-                tee: false,
-                background: false,
-                literal_words: vec!["printf".to_owned(), "hello".to_owned()],
-            })
-            .map_err(tinybus::Error::from),
             DOCKER_STATUS => serde_json::to_value(contract::DockerStatus { available: true })
                 .map_err(tinybus::Error::from),
             RUN_DOCKER | RUN_DOCKER_WITHOUT_WORKSPACE => {
@@ -150,25 +140,6 @@ fn host_and_module_contract_versions_must_cover_the_full_host_surface() {
         require_compatible((2, contract::CONTRACT_VERSION.1))
             .expect_err("different major is refused"),
         ModuleCallError::IncompatibleContract
-    );
-}
-
-#[tokio::test]
-async fn command_facts_use_contract_member_and_positional_arguments() {
-    let (_service, client, calls) = mock_client().await;
-    let command = "printf 'hello'".to_owned();
-    let facts: contract::CommandAnalysis =
-        call_with_client(&client, ANALYZE_COMMAND, (command.clone(),), false)
-            .await
-            .expect("typed command facts");
-
-    assert_eq!(facts.literal_words, ["printf", "hello"]);
-    assert_eq!(
-        calls.lock().expect("call log lock").as_slice(),
-        [
-            (CAPABILITIES.to_owned(), json!([])),
-            (ANALYZE_COMMAND.to_owned(), json!([command]))
-        ]
     );
 }
 
@@ -449,14 +420,12 @@ fn every_host_operation_is_a_member_of_the_canonical_contract() {
         SPAWN,
         IS_RUNNING,
         CANCEL,
-        ANALYZE_SHELL,
         RESERVE,
         CAPABILITIES,
         SHUTDOWN,
         FORWARD,
         CLOSE_FORWARD,
         JAIL_STATUS,
-        ANALYZE_COMMAND,
         BEGIN_FILE_READ,
         READ_FILE_CHUNK,
         FINISH_FILE_READ,
@@ -473,7 +442,9 @@ fn every_host_operation_is_a_member_of_the_canonical_contract() {
         CLEANUP_DOCKER,
         RUN_DOCKER_WITHOUT_WORKSPACE,
     ];
-    assert_eq!(methods, contract::METHODS[..methods.len()]);
+    assert!(methods
+        .iter()
+        .all(|method| contract::METHODS.contains(method)));
     assert!(contract::METHODS.contains(&SELECT_SHELL));
     assert!(contract::METHODS.contains(&START_NATIVE_SHELL_EXEC));
 }
@@ -489,14 +460,12 @@ fn every_member_the_host_calls_is_named_in_the_pinned_contract() {
         SPAWN,
         IS_RUNNING,
         CANCEL,
-        ANALYZE_SHELL,
         RESERVE,
         CAPABILITIES,
         SHUTDOWN,
         FORWARD,
         CLOSE_FORWARD,
         JAIL_STATUS,
-        ANALYZE_COMMAND,
         BEGIN_FILE_READ,
         READ_FILE_CHUNK,
         FINISH_FILE_READ,
