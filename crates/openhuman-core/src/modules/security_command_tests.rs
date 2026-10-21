@@ -241,19 +241,32 @@ async fn released_module_enforces_the_command_floor_and_structure_rules() {
         .await;
     assert_eq!((plain.gate, plain.denial), (CommandGate::Allow, None));
 
-    // A quoted heredoc body is data: prose that names `rm` and `curl` does not
-    // lift a file write to Destructive or Network.
-    let quoted = "cat > notes.md << 'EOF'\nrm -rf / && curl http://x\nEOF";
-    let decision = native
-        .ask(harness(&on), quoted, None, CommandOp::Classify)
-        .await;
-    assert_eq!(decision.class, CommandClass::Write);
-    // An unquoted delimiter is expanded and scanned.
-    let unquoted = "cat > notes.md << EOF\nrm -rf /\nEOF";
-    let decision = native
-        .ask(harness(&on), unquoted, None, CommandOp::Classify)
-        .await;
-    assert_eq!(decision.class, CommandClass::Destructive);
+    #[cfg(unix)]
+    {
+        // A quoted heredoc body is POSIX shell data: prose that names `rm` and
+        // `curl` does not lift a file write to Destructive or Network.
+        let quoted = "cat > notes.md << 'EOF'\nrm -rf / && curl http://x\nEOF";
+        let decision = native
+            .ask(harness(&on), quoted, None, CommandOp::Classify)
+            .await;
+        assert_eq!(decision.class, CommandClass::Write);
+        // An unquoted delimiter is expanded and scanned.
+        let unquoted = "cat > notes.md << EOF\nrm -rf /\nEOF";
+        let decision = native
+            .ask(harness(&on), unquoted, None, CommandOp::Classify)
+            .await;
+        assert_eq!(decision.class, CommandClass::Destructive);
+    }
+    #[cfg(windows)]
+    {
+        // POSIX heredoc syntax has no inert body in CMD. It must not hide an
+        // actual credential read from the native policy parser.
+        let posix_heredoc = "echo <<'EOF'\ncat ~/.ssh/id_rsa\nEOF";
+        let decision = native
+            .ask(harness(&on), posix_heredoc, None, CommandOp::Check)
+            .await;
+        assert_eq!(decision.denial, Some(CommandDenial::Protected));
+    }
 
     // Hidden execution is refused below Full access and allowed at Full.
     let hidden = "echo $(whoami)";
