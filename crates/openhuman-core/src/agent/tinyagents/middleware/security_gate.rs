@@ -51,10 +51,38 @@ impl ToolCallPolicy<OpenHumanRunContext> for CombinedPolicy {
     }
 }
 
+/// Feature-off policy: without TinySecurity, only inert reads may execute.
+struct MissingModulePolicy {
+    effects: ApprovalSecurityMiddleware,
+}
+
+#[async_trait::async_trait]
+impl ToolCallPolicy<OpenHumanRunContext> for MissingModulePolicy {
+    fn name(&self) -> &str {
+        "tinysecurity_unavailable"
+    }
+
+    async fn check(
+        &self,
+        _ctx: &RunContext<OpenHumanRunContext>,
+        call: &TaToolCall,
+    ) -> PolicyDecision {
+        let Some(tool) = self.effects.resolve_tool(&call.name) else {
+            return PolicyDecision::deny("security module unavailable for unknown tool");
+        };
+        if tool.permission_level_with_args(&call.arguments) > tinytools::PermissionLevel::ReadOnly
+            || tool.external_effect_with_args(&call.arguments)
+        {
+            PolicyDecision::deny("security module unavailable for acting tool")
+        } else {
+            PolicyDecision::Allow
+        }
+    }
+}
+
 /// The gate over `policy`, settling a required approval through `resolver`.
 /// Denials render in the structured `Blocked / Reason / Workaround` shape the
 /// rest of the host's policy boundaries use.
-#[cfg(feature = "security-module")]
 pub(crate) fn gate(
     policy: Arc<dyn tinyagents_harness::middleware::ToolCallPolicy<OpenHumanRunContext>>,
     resolver: Arc<dyn tinyagents_harness::middleware::ApprovalResolver<OpenHumanRunContext>>,
@@ -151,11 +179,33 @@ pub(crate) fn tool_middleware(
     #[cfg(not(feature = "security-module"))]
     {
         let _ = channel;
-        let _ = enforcement;
-        Arc::new(tinyagents_harness::middleware::ApprovalGateMiddleware::new(
-            "approval_security",
-            Arc::new(ApprovalSecurityMiddleware::new(tool_sets)),
-        ))
+        let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets.clone()));
+        let mut policies: Vec<Arc<dyn ToolCallPolicy<OpenHumanRunContext>>> =
+            vec![Arc::new(MissingModulePolicy {
+                effects: ApprovalSecurityMiddleware::new(tool_sets.clone()),
+            })];
+        if let Some(enforcement) = &enforcement {
+            policies.push(super::tool_policy::ToolPolicyMiddleware::builder_policy(
+                enforcement.policy.clone(),
+                tool_sets.clone(),
+            ));
+        }
+        let mut gate = gate(Arc::new(CombinedPolicy { policies }), resolver);
+        if let Some(enforcement) = enforcement {
+            gate = gate.with_session_ceiling(
+                super::tool_policy::ToolPolicyMiddleware::session_ceiling(
+                    enforcement.session.clone(),
+                    tool_sets.clone(),
+                    enforcement.channel.clone(),
+                ),
+            );
+            gate = gate.with_post_gate(super::tool_policy::ToolPolicyMiddleware::skill_post_gate(
+                enforcement.session,
+                tool_sets,
+                enforcement.channel,
+            ));
+        }
+        Arc::new(gate)
     }
 }
 
