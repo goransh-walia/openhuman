@@ -129,7 +129,9 @@ async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
 
     let admission = resolver.resolve_allowed(&ctx, &call).await;
     match admission {
-        ApprovalResolution::Allow { ticket: Some(ticket) } => {
+        ApprovalResolution::Allow {
+            ticket: Some(ticket),
+        } => {
             assert!(!ticket.is_empty());
         }
         other => panic!("an allowed external effect needs an audit ticket: {other:?}"),

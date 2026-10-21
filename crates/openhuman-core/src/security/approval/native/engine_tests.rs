@@ -567,14 +567,18 @@ async fn the_legacy_history_and_flow_trust_are_carried_into_the_module_once() {
     assert_eq!(decided(ApprovalDecision::Deny), 1);
     assert_eq!(decided(ApprovalDecision::ApproveAlwaysForFlow), 1);
 
-    // It records that it ran, so a later start does nothing.
-    assert!(history_import::marker_path(&world.config).is_file());
+    // The legacy import can be replayed after restart; the module returns its
+    // existing rows and unchanged grants without duplicating durable state.
+    let repeated = history_import::run(&world.engine, &world.fixture.proxy)
+        .await
+        .unwrap()
+        .expect("the legacy file is still present");
     assert_eq!(
-        history_import::run(&world.engine, &world.fixture.proxy)
-            .await
-            .unwrap(),
-        None
+        (repeated.history, repeated.trust, repeated.skipped),
+        (2, 1, 0)
     );
+    let history = world.engine.history(50).await.unwrap();
+    assert_eq!(history.len(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread")]

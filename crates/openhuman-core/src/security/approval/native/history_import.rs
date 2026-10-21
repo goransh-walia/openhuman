@@ -157,7 +157,6 @@ async fn read(config: Config) -> Result<Option<LegacyHistory>, EngineError> {
         .map_err(|error| EngineError::Unavailable(format!("{error:#}")))
 }
 
-
 pub(super) async fn run(
     engine: &NativeEngine,
     proxy: &Proxy,
