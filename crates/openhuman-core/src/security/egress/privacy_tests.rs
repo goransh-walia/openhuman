@@ -26,71 +26,10 @@ fn integration_class_comes_from_the_descriptor_not_backend_route_names() {
 }
 
 #[test]
-fn control_plane_exempts_non_tool_namespace() {
-    // A control-plane call re-homed onto an integration descriptor: anything not
-    // under /agent-integrations/ is exempt.
-    for path in [
-        "/teams/me/usage",
-        "/payments/stripe/currentPlan",
-        "/auth/refresh",
-    ] {
-        assert_eq!(
-            data_class(&EgressDescriptor::integration(path)),
-            PrivacyClass::ControlPlane,
-            "{path} must be treated as control-plane"
-        );
-    }
-}
-
-#[test]
-fn control_plane_exempts_composio_management_and_pricing() {
-    for path in [
-        "/agent-integrations/pricing",
-        "/agent-integrations/composio/connections",
-        // Per-connection delete rides the same `connections` head.
-        "/agent-integrations/composio/connections/conn_123",
-        "/agent-integrations/composio/authorize",
-        "/agent-integrations/composio/tools",
-        "/agent-integrations/composio/toolkits",
-    ] {
-        assert_eq!(
-            data_class(&EgressDescriptor::integration(path)),
-            PrivacyClass::ControlPlane,
-            "{path} must be exempt (control-plane)"
-        );
-    }
-}
-
-#[test]
-fn control_plane_does_not_exempt_user_data_paths() {
-    // composio/execute ships tool arguments; composio/triggers[/available] POST
-    // user-supplied slug/connectionId/triggerConfig; github/repos reveals
-    // user-adjacent data; the other tool namespaces ship queries and content.
-    // An unknown composio sub-route defaults to user data (fail-closed).
-    for path in [
-        "/agent-integrations/composio/execute",
-        "/agent-integrations/composio/triggers",
-        "/agent-integrations/composio/triggers/available",
-        "/agent-integrations/composio/github/repos",
-        "/agent-integrations/composio/some-future-write",
-        "/agent-integrations/parallel/research",
-        "/agent-integrations/tinyfish/fetch",
-        "/agent-integrations/file-storage/files",
-        "/agent-integrations/google-places/search",
-    ] {
-        assert_ne!(
-            data_class(&EgressDescriptor::integration(path)),
-            PrivacyClass::ControlPlane,
-            "{path} must NOT be exempt (ships user data)"
-        );
-    }
-}
-
-#[test]
 fn control_plane_only_applies_to_integration_reason() {
     // A network fetch whose host happens to spell a backend path is still a
     // user-data transfer, never control-plane.
-    let net = EgressDescriptor::network_fetch("agent-integrations");
+    let net = EgressDescriptor::network_fetch("api.example.com").with_control_plane(true);
     assert_eq!(net.reason, EgressReason::NetworkFetch);
     assert_eq!(data_class(&net), PrivacyClass::UserContent);
 }
@@ -197,7 +136,7 @@ mod with_module {
     async fn control_plane_and_local_runtime_facts_are_forwarded() {
         let stub = Arc::new(StubPort::allowing());
         let _port = install_port(stub.clone());
-        let pricing = EgressDescriptor::integration("/agent-integrations/pricing");
+        let pricing = EgressDescriptor::integration("pricing").with_control_plane(true);
         assert!(egress_blocks_message(PrivacyMode::LocalOnly, &pricing)
             .await
             .is_none());
