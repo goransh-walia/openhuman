@@ -13,7 +13,10 @@ fn input() -> CheckInput {
     CheckInput {
         tenant: Tenant::default(),
         variant: Variant::Standard,
-        posture: Posture::default(),
+        posture: Posture {
+            require_approval: true,
+            ..Posture::default()
+        },
         call_id: "00000001".into(),
         tool: "gmail_send".into(),
         args: serde_json::json!({}),
