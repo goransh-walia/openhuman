@@ -163,11 +163,14 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
     let result = TaToolResult::success("sensitive returned content");
     let recorded = Arc::new(std::sync::Mutex::new(None));
     let observed = recorded.clone();
+    let writes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let first_write = writes.clone();
     resolver.record_terminal_with(
         None,
         &ticket,
         ApprovalExecutionOutcome::Result(&result),
         move |event| {
+            first_write.fetch_add(1, Ordering::SeqCst);
             *observed.lock().unwrap() = Some(event);
             Err("audit stream unavailable".into())
         },
@@ -196,6 +199,22 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
         resolver.resolve_allowed(&ctx, &call).await,
         ApprovalResolution::Deny { .. }
     ));
+
+    let repeated_write = writes.clone();
+    resolver.record_terminal_with(
+        None,
+        &ticket,
+        ApprovalExecutionOutcome::Result(&result),
+        move |_| {
+            repeated_write.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        },
+    );
+    assert_eq!(
+        writes.load(Ordering::SeqCst),
+        1,
+        "a ticket records only once"
+    );
 }
 
 #[test]
