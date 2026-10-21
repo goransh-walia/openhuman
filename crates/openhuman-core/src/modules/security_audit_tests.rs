@@ -161,8 +161,26 @@ async fn audit_record_uses_the_admitting_dispatch_tenant() {
         workspace: config.workspace_dir.to_string_lossy().into_owned(),
         ..subject("orchestrator")
     };
-    assert_eq!(AuditStream::open(&config, tenant_a).await.unwrap().correlation(1).await.unwrap().expected_tail, 1);
-    assert_eq!(AuditStream::open(&config, tenant_b).await.unwrap().correlation(1).await.unwrap().expected_tail, 0);
+    assert_eq!(
+        AuditStream::open(&config, tenant_a)
+            .await
+            .unwrap()
+            .correlation(1)
+            .await
+            .unwrap()
+            .expected_tail,
+        1
+    );
+    assert_eq!(
+        AuditStream::open(&config, tenant_b)
+            .await
+            .unwrap()
+            .correlation(1)
+            .await
+            .unwrap()
+            .expected_tail,
+        0
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

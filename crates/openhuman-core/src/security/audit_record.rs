@@ -107,7 +107,9 @@ pub async fn record(
             &loaded
         }
     };
-    let tenant = ctx.tenant().map_err(|_| "no tenant scope for the audit row".to_owned())?;
+    let tenant = ctx
+        .tenant()
+        .map_err(|_| "no tenant scope for the audit row".to_owned())?;
     crate::modules::security::audit::record_for_tenant(config, &tenant, event).await
 }
 
