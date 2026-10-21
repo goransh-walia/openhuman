@@ -6,7 +6,8 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use tinyagents_harness::context::{RunConfig, RunContext};
 use tinyagents_harness::middleware::{
-    ApprovalResolution, ApprovalResolver, BoxToolFuture, MiddlewareStack, ToolBaseCall,
+    ApprovalResolution, ApprovalResolver, BoxToolFuture, MiddlewareStack, PolicyDecision,
+    ToolBaseCall, ToolCallPolicy,
 };
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinysecurity_bus::{DenialReason, Verdict};
@@ -17,6 +18,23 @@ use super::super::tinysecurity::{TinySecurityPolicy, VerdictSource};
 struct Module {
     answer: Result<Verdict, String>,
     asked: AtomicUsize,
+}
+
+struct BuilderPolicy(PolicyDecision);
+
+#[async_trait]
+impl ToolCallPolicy<OpenHumanRunContext> for BuilderPolicy {
+    fn name(&self) -> &str {
+        "test_builder_policy"
+    }
+
+    async fn check(
+        &self,
+        _ctx: &RunContext<OpenHumanRunContext>,
+        _call: &TaToolCall,
+    ) -> PolicyDecision {
+        self.0.clone()
+    }
 }
 
 #[async_trait]
@@ -205,6 +223,80 @@ async fn a_module_fault_denies_once_and_does_not_fall_back_to_a_human() {
         (0, 1, 0),
         "a fault denies with no retry and no approval path"
     );
+}
+
+async fn through_combined_gate(
+    module: Verdict,
+    builder: PolicyDecision,
+    human_answer: ApprovalResolution,
+) -> (ToolResult, usize, usize) {
+    let module = Arc::new(Module {
+        answer: Ok(module),
+        asked: AtomicUsize::new(0),
+    });
+    let human = Arc::new(Human::default());
+    *human.answer.lock().unwrap() = Some(human_answer);
+    let policies: Vec<Arc<dyn ToolCallPolicy<OpenHumanRunContext>>> = vec![
+        Arc::new(TinySecurityPolicy::new(module.clone())),
+        Arc::new(BuilderPolicy(builder)),
+    ];
+    let policy = Arc::new(CombinedPolicy { policies });
+    let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
+    stack.push_tool_middleware(Arc::new(gate(policy, human.clone())));
+    let runs = Arc::new(AtomicUsize::new(0));
+    let ctx = RunContext::new(
+        RunConfig::new("combined-security-gate"),
+        OpenHumanRunContext::new(),
+    );
+    let result = stack
+        .run_wrapped_tool(
+            &ctx,
+            &(),
+            TaToolCall {
+                id: "c1".into(),
+                name: "send_email".into(),
+                arguments: serde_json::json!({}),
+                invalid: None,
+            },
+            &Tool { runs: runs.clone() },
+        )
+        .await
+        .unwrap()
+        .into_result();
+    (
+        result,
+        runs.load(Ordering::SeqCst),
+        human.asked.load(Ordering::SeqCst),
+    )
+}
+
+#[tokio::test]
+async fn builder_approval_uses_the_shared_resolver_after_module_allows() {
+    let (result, runs, asks) = through_combined_gate(
+        Verdict::Allow,
+        PolicyDecision::require_approval("builder approval"),
+        ApprovalResolution::Allow {
+            ticket: Some("builder-ticket".into()),
+        },
+    )
+    .await;
+    assert!(!result.is_error);
+    assert_eq!((runs, asks), (1, 1));
+}
+
+#[tokio::test]
+async fn builder_deny_overrides_module_approval_without_prompting() {
+    let (result, runs, asks) = through_combined_gate(
+        Verdict::RequireApproval {
+            request_id: "module-request".into(),
+        },
+        PolicyDecision::deny("builder denial"),
+        ApprovalResolution::Allow { ticket: None },
+    )
+    .await;
+    assert!(result.is_error);
+    assert!(result.output().contains("builder denial"));
+    assert_eq!((runs, asks), (0, 0));
 }
 
 // The hosted root's own gate used to answer the read-only tier, the hourly budget
