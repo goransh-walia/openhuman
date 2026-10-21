@@ -55,6 +55,10 @@ fn approval_decisions_must_match_the_parked_profile_and_agent() {
         validate_decision_tenant(&process_projection, Some("agent-a"), &parked, "request-1",)
             .is_ok()
     );
+    assert!(
+        validate_decision_tenant(&process_projection, None, &parked, "request-1",).is_ok(),
+        "the authenticated process-scoped RPC may omit the legacy agent_id"
+    );
     assert!(matches!(
         validate_decision_tenant(
             &tenant(Some("mallory"), None),
@@ -66,10 +70,6 @@ fn approval_decisions_must_match_the_parked_profile_and_agent() {
     ));
     assert!(matches!(
         validate_decision_tenant(&process_projection, Some("agent-b"), &parked, "request-1",),
-        Err(ApprovalError::WrongAgent { .. })
-    ));
-    assert!(matches!(
-        validate_decision_tenant(&process_projection, None, &parked, "request-1",),
         Err(ApprovalError::WrongAgent { .. })
     ));
     assert!(validate_decision_tenant(&parked, None, &parked, "request-1",).is_ok());

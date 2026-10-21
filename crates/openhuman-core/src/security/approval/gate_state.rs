@@ -602,11 +602,10 @@ fn validate_decision_tenant(
             request_id: request_id.to_owned(),
         });
     }
-    if requested_agent.is_some_and(|agent| parked.agent.as_deref() != Some(agent))
-        || (dispatch.agent.is_none()
-            && parked.agent.is_some()
-            && requested_agent != parked.agent.as_deref())
-    {
+    // The legacy process-scoped RPC may omit `agent_id`. Its authenticated
+    // tenant is still checked above, and the decision and any durable grant
+    // remain bound to this exact parked route. An explicit target must match.
+    if requested_agent.is_some_and(|agent| parked.agent.as_deref() != Some(agent)) {
         return Err(ApprovalError::WrongAgent {
             request_id: request_id.to_owned(),
         });
