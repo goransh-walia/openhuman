@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet, Tenant};
-use crate::security::approval::GateOutcome;
 use crate::security::approval::engine_stub::StubEngine;
+use crate::security::approval::GateOutcome;
 use crate::security::turn_origin::{self, AgentTurnOrigin};
 use crate::tools::toolpacks::ToolGroups;
 use tempfile::TempDir;
@@ -98,7 +98,7 @@ async fn current_call_resolves_when_saving_a_whole_tool_grant_fails() {
     let warning = persist_tool_grant_after_decision(
         &gate,
         ApprovalDecision::ApproveAlwaysForTool,
-        Some((scope, Variant::Standard)),
+        (scope, Variant::Standard),
         &request_id,
         &row.tool_name,
     )
@@ -124,7 +124,7 @@ async fn whole_tool_grant_persists_only_after_the_current_call_is_approved() {
     let log = persist_tool_grant_after_decision(
         &gate,
         ApprovalDecision::ApproveAlwaysForTool,
-        Some((scope, Variant::Standard)),
+        (scope, Variant::Standard),
         &request_id,
         &row.tool_name,
     )

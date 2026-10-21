@@ -357,7 +357,7 @@ pub async fn approval_decide(
 fn persist_tool_grant_after_decision(
     gate: &ApprovalGate,
     decision: ApprovalDecision,
-    scope: Option<(crate::core::runtime::Tenant, Variant)>,
+    scope: (crate::core::runtime::Tenant, Variant),
     request_id: &str,
     tool: &str,
 ) -> Option<String> {
@@ -365,7 +365,7 @@ fn persist_tool_grant_after_decision(
         return None;
     }
     match scope {
-        Some((tenant, Variant::Standard)) => {
+        (tenant, Variant::Standard) => {
             match gate.grant_tool_trust(&tenant, Variant::Standard, tool) {
                 Ok(()) => {
                     tracing::info!(
@@ -389,7 +389,7 @@ fn persist_tool_grant_after_decision(
                 }
             }
         }
-        Some((_tenant, Variant::FlowStrict)) => {
+        (_tenant, Variant::FlowStrict) => {
             tracing::warn!(
                 request_id,
                 tool = tool,
@@ -399,7 +399,7 @@ fn persist_tool_grant_after_decision(
                 "[approval] WARNING: '{tool}' was approved for this call; strict workflow approvals are not granted globally"
             ))
         }
-        Some((_, Variant::Forced)) | None => None,
+        (_, Variant::Forced) => None,
     }
 }
 
