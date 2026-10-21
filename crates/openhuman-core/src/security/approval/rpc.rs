@@ -373,7 +373,9 @@ fn persist_tool_grant_after_decision(
                         agent_id = tenant.agent.as_deref().unwrap_or("<process>"),
                         "[rpc:approval_decide] durable whole-tool grant recorded"
                     );
-                    Some(format!("[approval] '{tool}' added to the Always-allow list"))
+                    Some(format!(
+                        "[approval] '{tool}' added to the Always-allow list"
+                    ))
                 }
                 Err(err) => {
                     tracing::warn!(
