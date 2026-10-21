@@ -118,10 +118,9 @@ impl ApprovalGate {
     }
 
     /// Whether the user has opted into "auto-approve everything" — a
-    /// blanket bypass of the human approval prompt. Mirrors
-    /// The live-policy-first, boot-config-
-    /// fallback pattern so a toggle made this session (config save + live
-    /// policy reload) takes effect on the very next tool call.
+    /// blanket bypass of the human approval prompt. Reads the live policy
+    /// first and falls back to boot-time config, so a setting changed this
+    /// session takes effect on the next tool call.
     ///
     /// Callers MUST still exclude `AgentTurnOrigin::Unknown` before trusting
     /// this flag — an unlabelled call never reaches the engine. This method only
