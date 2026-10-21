@@ -318,7 +318,8 @@ async fn keyring_round_trip_through_the_served_consent_callback() {
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn declined_keyring_consent_refuses_the_store_through_the_module() {
     use crate::security::keyring_consent::policy;
-    let config = crypto_config(fx_dir().path());
+    let directory = fx_dir();
+    let config = crypto_config(directory.path());
     let fx = super::super::native_tests::native_fixture_with(Some(config.clone())).await;
     crate::modules::security_host::install(
         &fx.client,
