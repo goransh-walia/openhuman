@@ -102,6 +102,7 @@ struct ObservedTool {
     family: Option<&'static str>,
     permission: PermissionLevel,
     external: bool,
+    classified_read: bool,
     calls: Arc<AtomicUsize>,
 }
 
@@ -132,7 +133,7 @@ impl Tool for ObservedTool {
     }
 
     fn policy(&self) -> tinytools::ToolPolicy {
-        if self.permission <= PermissionLevel::ReadOnly && !self.external {
+        if self.classified_read && self.permission <= PermissionLevel::ReadOnly && !self.external {
             tinytools::ToolPolicy::read_only()
         } else {
             tinytools::ToolPolicy::default()
@@ -201,6 +202,26 @@ fn governed_surface(
     action: ToolPolicyAction,
     builder_decision: PolicyDecision,
 ) -> (LiveToolSurface, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+    governed_surface_with_classification(
+        name,
+        family,
+        permission,
+        external,
+        action,
+        builder_decision,
+        true,
+    )
+}
+
+fn governed_surface_with_classification(
+    name: &'static str,
+    family: Option<&'static str>,
+    permission: PermissionLevel,
+    external: bool,
+    action: ToolPolicyAction,
+    builder_decision: PolicyDecision,
+    classified_read: bool,
+) -> (LiveToolSurface, Arc<AtomicUsize>, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let checks = Arc::new(AtomicUsize::new(0));
     let tools: Vec<Box<dyn Tool>> = vec![Box::new(ObservedTool {
@@ -208,6 +229,7 @@ fn governed_surface(
         family,
         permission,
         external,
+        classified_read,
         calls: calls.clone(),
     })];
     (
@@ -437,13 +459,14 @@ async fn missing_module_keeps_inert_live_reads_available() {
 #[cfg(not(feature = "security-module"))]
 #[tokio::test]
 async fn missing_module_denies_tools_without_an_explicit_inert_declaration() {
-    let (surface, calls, _) = governed_surface(
+    let (surface, calls, _) = governed_surface_with_classification(
         "unclassified_observed",
         None,
         PermissionLevel::None,
         false,
         ToolPolicyAction::Allow,
         PolicyDecision::Allow,
+        false,
     );
     let harness = assemble_live_tool_harness(surface);
     let result = run_live_tool(&harness, "unclassified_observed", test_core(false)).await;
