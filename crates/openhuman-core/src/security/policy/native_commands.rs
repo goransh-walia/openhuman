@@ -276,7 +276,7 @@ impl SecurityPolicy {
             &self.workspace_dir,
             policy,
             query.command,
-            query.declared.map(to_bus_class),
+            query.declared,
             CommandOp::Check,
         )
         .await;
@@ -294,7 +294,7 @@ impl SecurityPolicy {
             &self.workspace_dir,
             policy,
             "",
-            Some(to_bus_class(class)),
+            Some(class),
             CommandOp::Classify,
         )
         .await;
@@ -311,7 +311,7 @@ impl SecurityPolicy {
             &self.workspace_dir,
             policy,
             "",
-            Some(to_bus_class(class)),
+            Some(class),
             CommandOp::Classify,
         );
         project(&query, true, decision).map(|verdict| verdict.gate)
@@ -344,16 +344,6 @@ fn absolute(path: &std::path::Path) -> Result<PathBuf, Refusal> {
     std::env::current_dir()
         .map(|cwd| cwd.join(path))
         .map_err(|_| Refusal::Unavailable)
-}
-
-#[cfg(feature = "security-module")]
-pub(crate) fn to_bus_class(class: CommandClass) -> tinysecurity_bus::CommandClass {
-    class
-}
-
-#[cfg(feature = "security-module")]
-pub(crate) fn from_bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
-    class
 }
 
 /// The host's gate for a module gate.
@@ -413,7 +403,7 @@ pub(crate) fn project(
     }
     let gate = host_gate(decision.gate);
     Ok(CommandVerdict {
-        class: from_bus_class(decision.class),
+        class: decision.class,
         gate,
     })
 }
