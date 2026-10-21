@@ -82,6 +82,12 @@ impl ApprovalGate {
         self.audit_failure.load(Ordering::SeqCst)
     }
 
+    /// Fail closed after any required host or approval terminal audit write
+    /// could not be persisted.
+    pub(crate) fn latch_audit_failure(&self) {
+        self.audit_failure.store(true, Ordering::SeqCst);
+    }
+
     /// The park window the user asks for, if any. In debug builds
     /// `OPENHUMAN_APPROVAL_TTL_SECS` overrides the configured value per intercept
     /// so E2E tests can exercise the timeout path without waiting the module's

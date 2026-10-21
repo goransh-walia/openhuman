@@ -2,7 +2,13 @@
 //! OpenHuman's human-in-the-loop approval gate at the tool boundary.
 
 use crate::core::runtime::DispatchCtx;
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
 
 use async_trait::async_trait;
 
@@ -58,12 +64,20 @@ pub(crate) struct ApprovalSecurityMiddleware {
     /// The same `Arc`-shared tool sets the runner registers, used to resolve a
     /// call's OpenHuman `Tool` by name so `external_effect_with_args` can gate.
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+    /// Tickets for no-prompt external calls. Approval-engine tickets are not
+    /// stored here and continue to use RecordExecution2.
+    audit_tickets: Mutex<HashMap<String, String>>,
+    audit_failure: AtomicBool,
 }
 
 impl ApprovalSecurityMiddleware {
     /// Build the middleware over the runner's shared tool sets.
     pub(crate) fn new(tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>) -> Self {
-        Self { tool_sets }
+        Self {
+            tool_sets,
+            audit_tickets: Mutex::new(HashMap::new()),
+            audit_failure: AtomicBool::new(false),
+        }
     }
 
     /// Whether the named tool declares an external effect for these args.
@@ -113,8 +127,8 @@ impl ApprovalSecurityMiddleware {
         if !external_effect {
             return false;
         }
-        let audit_failed =
-            ApprovalGate::try_global().is_some_and(|gate| gate.audit_failure_latched());
+        let audit_failed = self.audit_failure.load(Ordering::SeqCst)
+            || ApprovalGate::try_global().is_some_and(|gate| gate.audit_failure_latched());
         let approvals_disabled = self.desktop_approvals_disabled(dispatch, name).await;
         Self::requires_resolver(external_effect, audit_failed, approvals_disabled)
     }
@@ -201,6 +215,56 @@ impl ApprovalSecurityMiddleware {
         // this terminal audit write cannot be persisted.
         let _ = gate.record_execution_required(ticket, execution, error.as_deref());
     }
+
+    fn record_external_terminal_with<F>(
+        &self,
+        gate: Option<&ApprovalGate>,
+        event: crate::security::audit_record::HostAuditEvent,
+        write: F,
+    ) where
+        F: FnOnce(crate::security::audit_record::HostAuditEvent) -> Result<(), String>,
+    {
+        if let Err(error) = write(event) {
+            self.audit_failure.store(true, Ordering::SeqCst);
+            if let Some(gate) = gate {
+                gate.latch_audit_failure();
+            }
+            tracing::error!(
+                error = %error,
+                "[tinyagents::mw] required external execution audit failed; later external admissions fail closed"
+            );
+        }
+    }
+
+    fn record_external_terminal(
+        &self,
+        gate: Option<&ApprovalGate>,
+        tool_name: &str,
+        outcome: ApprovalExecutionOutcome<'_>,
+    ) {
+        use ApprovalExecutionOutcome as Outcome;
+        let outcome = match outcome {
+            Outcome::Result(result) if result.is_error => "failure",
+            Outcome::Result(_) => "success",
+            Outcome::Failed(_) => "failure",
+            Outcome::Cancelled(_) | Outcome::Control(_) => "aborted",
+            // A dropped in-flight tool may already have produced effects.
+            Outcome::Abandoned => "abandoned",
+            _ => "aborted",
+        };
+        let event = crate::security::audit_record::HostAuditEvent::external_tool_execution(
+            tool_name, outcome,
+        );
+        let dispatch = DispatchCtx::ambient();
+        self.record_external_terminal_with(gate, event, move |event| {
+            crate::storage::block_on_anyhow(async move {
+                crate::security::audit_record::record(&dispatch, None, event)
+                    .await
+                    .map_err(anyhow::Error::msg)
+            })
+            .map_err(|error| error.to_string())
+        });
+    }
 }
 
 /// What the model is told when the approval prompt for `tool_name` expired
@@ -282,6 +346,30 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
         self.resolve_on(&gate, ctx, call).await
     }
 
+    async fn resolve_allowed(
+        &self,
+        _ctx: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
+        call: &TaToolCall,
+    ) -> ApprovalResolution {
+        if !self.has_external_effect(&call.name, &call.arguments) {
+            return ApprovalResolution::Allow { ticket: None };
+        }
+        let gate = ApprovalGate::try_global();
+        if self.audit_failure.load(Ordering::SeqCst)
+            || gate.as_ref().is_some_and(|gate| gate.audit_failure_latched())
+        {
+            return Self::resolve_without_gate(&call.name);
+        }
+        let ticket = format!("host-audit:{}", uuid::Uuid::new_v4());
+        self.audit_tickets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(ticket.clone(), call.name.clone());
+        ApprovalResolution::Allow {
+            ticket: Some(ticket),
+        }
+    }
+
     /// Record the terminal audit row for an approved external-effect call
     /// (idempotent; a no-op when the id is unknown).
     fn record(&self, ticket: &str, result: &TaToolResult) {
@@ -291,7 +379,15 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
     }
 
     fn record_terminal(&self, ticket: &str, outcome: ApprovalExecutionOutcome<'_>) {
-        if let Some(gate) = ApprovalGate::try_global() {
+        let tool_name = self
+            .audit_tickets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(ticket);
+        if let Some(tool_name) = tool_name {
+            let gate = ApprovalGate::try_global();
+            self.record_external_terminal(gate.as_deref(), &tool_name, outcome);
+        } else if let Some(gate) = ApprovalGate::try_global() {
             Self::record_terminal_on(&gate, ticket, outcome);
         }
     }
