@@ -15,9 +15,7 @@
 //! * no file of the workspace was modified, created or removed.
 //!
 //! Its own binary: it installs a storage backend into the process-wide slot and
-//! sets the keyring master key. Each driver is its own case
-//! (`support/storage_drivers.rs`), so the MongoDB case runs in the
-//! `storage-mongodb` workflow against the replica set.
+//! sets the keyring master key.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -29,17 +27,16 @@ use openhuman_core::storage::{rusqlite, DocumentStoreExt, Scope, ScopedStorage, 
 use sha2::Digest;
 use tinyagents_session::transcript::{session_stem, SessionRef, TranscriptMessage, TranscriptMeta};
 use tinyagents_session::turn_state::TurnState;
-use tinystoragedrivers_core::{Capability, Query};
+use tinystoragedrivers_core::Query;
 
 // The classic-transcript fixture writer, shared with the core's unit tests.
 #[path = "../crates/openhuman-core/src/util/classic_transcript_fixture.rs"]
 mod classic_transcript_fixture;
 
-#[macro_use]
-#[path = "support/storage_drivers.rs"]
-mod storage_drivers;
+#[path = "support/storage_case.rs"]
+mod storage_case;
 
-use storage_drivers::Case;
+use storage_case::Case;
 
 /// The committed tinyflows workspace (written by the retired tinyflows-sqlite
 /// writers): flows, revisions, runs, drafts, checkpoints and cron jobs.
@@ -331,7 +328,7 @@ fn desktop_workspace(workspace: &Path) -> Fixture {
     // x402 payment ledger: a payment that changed status appears twice.
     let payment = |id: &str, status: &str| {
         format!(
-            r#"{{"id":"{id}","url":"https://api.example/x","asset":"0xusdc","amountAtomic":2500,"amountDisplay":"0.002500 USDC","recipient":"0xpayee","network":"eip155:8453","txSignature":null,"status":"{status}","timestamp":"2026-10-12T10:00:00Z"}}"#
+            r#"{{"id":"{id}","url":"https://api.example/x","asset":"0xusdc","amountAtomic":2500,"amountDisplay":"0.002500 USDC","recipient":"0xpayee","network":"eip155:8453","txSignature":null,"status":"{status}","timestamp":"2026-10-12T10:00:00Z","sessionId":"s1"}}"#
         )
     };
     write(
@@ -436,27 +433,9 @@ async fn import_modules(workspace: &Path) {
     .await;
 }
 
-async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(case: Case) {
-    // TinyAgents' run ledger imports `sessions.db` (and appends to it) with
-    // checked batches, which a driver without `ValidatedBatch` refuses.
-    let local = case.backend().for_scope(&Scope::local()).unwrap();
-    if !local
-        .documents()
-        .capabilities()
-        .contains(Capability::ValidatedBatch)
-    {
-        // Written to the stderr handle, not with `eprintln!`, which the test
-        // harness captures for a passing test: the skip must show in the log.
-        use std::io::Write;
-        let _ = writeln!(
-            std::io::stderr(),
-            "skipped {}: the driver lacks the validated_batch capability the \
-             tinyagents run ledger needs to import sessions.db",
-            case.driver.name()
-        );
-        return;
-    }
-
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched() {
+    let case = Case::open();
     std::env::set_var("OPENHUMAN_KEYRING_BACKEND", "file");
     std::env::set_var("OPENHUMAN_KEYRING_MASTER_KEY", "33".repeat(32));
 
@@ -604,5 +583,3 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     // The user's files were only ever read.
     assert_eq!(tree(workspace), before, "the legacy files changed");
 }
-
-driver_cases!(async a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched);

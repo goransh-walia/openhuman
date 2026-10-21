@@ -40,6 +40,8 @@ mod contract_tests;
 
 mod records_computer;
 mod records_docs_wallet;
+#[cfg(feature = "inbound-queues")]
+mod records_eventqueues;
 mod records_extra;
 mod records_flows;
 mod records_mcp_connectors;
@@ -57,6 +59,8 @@ use records_computer::TINYCOMPUTER;
 use records_docs_wallet::TINYDOCS;
 #[cfg(feature = "web3")]
 use records_docs_wallet::TINYWALLET;
+#[cfg(feature = "inbound-queues")]
+use records_eventqueues::TINYEVENTQUEUES;
 #[cfg(feature = "modules")]
 use records_extra::TINYBOX;
 use records_extra::TINYCHANNELS;
@@ -74,8 +78,8 @@ use records_security::TINYSECURITY;
 use records_voice::TINYVOICE;
 
 /// Every module this build can load. The records whose contract crate is an
-/// optional dependency (`documents`, `web3`, `voice`, `hosting`, `tinymemes`) exist only when
-/// that gate is on; a product-feature build carries all thirteen.
+/// optional dependency (`documents`, `web3`, `voice`, `hosting`, `tinymemes`, `inbound-queues`) exist
+/// only when that gate is on; a product-feature build carries all fifteen.
 pub const ALL: &[ModuleRecord] = &[
     TINYCOMPUTER,
     TINYSEARCH,
@@ -96,6 +100,8 @@ pub const ALL: &[ModuleRecord] = &[
     TINYHOSTS,
     #[cfg(feature = "tinymemes")]
     TINYMEMES,
+    #[cfg(feature = "inbound-queues")]
+    TINYEVENTQUEUES,
     #[cfg(feature = "security-module")]
     TINYSECURITY,
 ];
@@ -139,6 +145,8 @@ pub const COMPONENT_OF: &[(&str, &str)] = &[
     ("tinyflows", "tinyflows"),
     ("tinyhosts", "hosting"),
     ("tinymemes", "memes"),
+    ("tinyeventqueues", "eventqueues"),
+    ("tinyeventqueues", "eventqueues"),
 ];
 
 /// The `[components]` name that owns module `id`, if the table knows it.

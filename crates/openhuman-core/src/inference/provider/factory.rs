@@ -52,8 +52,6 @@ mod subprocess_providers;
 mod tiers;
 mod turn_model;
 
-#[cfg(feature = "flows")]
-pub(crate) use access_gates::current_host_requires_session;
 pub(crate) use chat_model::resolves_to_managed_backend;
 pub use chat_model::{
     create_chat_model_from_string, create_chat_model_from_string_with_model_id,

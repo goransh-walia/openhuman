@@ -30,6 +30,7 @@ pub mod cron;
 pub mod fence;
 pub mod gateway;
 pub mod host;
+mod host_backend;
 pub mod layout;
 pub mod lease;
 pub mod lifecycle;

@@ -371,6 +371,18 @@ fn snapshot_config_json_redacts_the_storage_url_credentials() {
     );
 }
 
+#[test]
+fn snapshot_config_json_redacts_the_inbound_queue_url_credentials() {
+    let mut cfg = Config::default();
+    cfg.inbound.queue_url = Some("amqp://app:hunter2@broker.internal/vhost".into());
+    let snapshot = snapshot_config_json(&cfg).unwrap();
+    assert!(!snapshot.to_string().contains("hunter2"));
+    assert_eq!(
+        snapshot["config"]["inbound"]["queue_url"],
+        "amqp://***@broker.internal/vhost"
+    );
+}
+
 // ── agent_server_status ────────────────────────────────────────
 
 #[test]

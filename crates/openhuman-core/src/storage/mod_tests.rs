@@ -157,3 +157,21 @@ fn only_mongodb_and_sqlite_have_cross_process_cas() {
         assert!(!driver_has_cross_process_cas(driver), "{driver}");
     }
 }
+
+#[tokio::test]
+async fn the_driver_name_check_agrees_with_what_each_backend_claims() {
+    let dir = tempfile::tempdir().unwrap();
+    for url in [
+        "memory".to_string(),
+        format!("sqlite:{}", dir.path().join("cas.db").display()),
+        format!("file:{}", dir.path().join("files").display()),
+    ] {
+        let backend = open(&url).await.unwrap();
+        assert_eq!(
+            backend_has_cross_process_cas(backend.as_ref()),
+            driver_has_cross_process_cas(backend.driver()),
+            "{}",
+            backend.driver()
+        );
+    }
+}

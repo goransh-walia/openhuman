@@ -21,6 +21,9 @@ const WORKER_THREAD_CANARY: &str = "tool-e2e-worker-thread-canary";
 
 #[tokio::test]
 async fn spawn_subagent_tool_runs_child_agent_e2e() {
+    // nextest runs each test in its own process, so the registry the other
+    // tests in this file initialise is not there for this one.
+    let _ = AgentDefinitionRegistry::init_global_builtins();
     let workspace = tempfile::TempDir::new().expect("workspace");
     let provider = Arc::new(ScriptedModel::new(vec![(
         SPAWN_SUBAGENT_CANARY,

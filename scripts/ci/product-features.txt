@@ -36,7 +36,7 @@ media
 # permission checks execute through TinyComputer; `voice` requires this gate.
 inference
 
-# STT/TTS, dictation server, reply speech. Shipped MISSING from v0.58.19 to
+# STT/TTS, reply speech, and live voice. Shipped MISSING from v0.58.19 to
 # v0.61.x (#4901) — the reason this whole guard exists.
 voice
 
@@ -100,6 +100,12 @@ hosting
 # release can turn it on; still off at runtime until OPENHUMAN_TINYMEMES (or a
 # build-time OPENHUMAN_TINYMEMES_DEFAULT) enables it.
 tinymemes
+
+# Inbound event queues: Composio triggers and agent webhooks are ingested into
+# the tinyeventqueues module, which persists, deduplicates, filters and paces
+# them and calls the host back to run triage. Runtime switches:
+# [components] eventqueues and [inbound] enabled.
+inbound-queues
 
 # Storage driver for the default backend, `sqlite:<workspace>/storage`: every
 # store, the session store included, lives in it, and older installs' per-domain

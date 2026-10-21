@@ -147,6 +147,10 @@ fn a_telegram_message_is_answered_by_the_bound_runtime_agent() {
             let backend = stub_backend().await;
             let bot_api = telegram().await;
             let provider = provider().await;
+            // `start_channels` resolves the managed provider up front, and the
+            // core carries none of its own; supply it as the TinyHumans layer
+            // would, pointed at the mock backend.
+            common::PointedInference::install(&format!("{}/openai/v1", backend.uri()));
             // The Bot API base is read when the channel is built.
             std::env::set_var("OPENHUMAN_TELEGRAM_BOT_API_BASE", bot_api.uri());
 
@@ -154,6 +158,7 @@ fn a_telegram_message_is_answered_by_the_bound_runtime_agent() {
                 .config(offline_config())
                 .workspace(Workspace::Ephemeral)
                 .backend_url(backend.uri())
+                .api_key("sk-managed-fixture")
                 .build()
                 .await
                 .expect("runtime builds");

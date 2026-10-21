@@ -115,6 +115,10 @@ fn one_runtime_hosts_independently_configured_agents() {
             let skills = skills_fixture();
             let beta_action = tempfile::tempdir().expect("beta action dir");
 
+            // The core carries no hosted provider; supply the managed one the
+            // way the TinyHumans layer does, pointed at the mock.
+            common::PointedInference::install(&format!("{}/openai/v1", backend.uri()));
+
             let runtime = std::sync::Arc::new(
                 Runtime::builder()
                     .config(offline_config())
@@ -570,10 +574,13 @@ fn one_runtime_hosts_independently_configured_agents() {
             drop(withholding_agent);
             drop(gamma);
             drop(budget_agent);
-            assert_eq!(
-                runtime.agent_ids(),
-                vec!["alpha".to_string(), "beta".to_string()]
-            );
+            // The id is released once the dropped agent's deferred MCP cleanup
+            // completes (see `Agent`), so wait for it rather than assuming the
+            // drop is synchronous.
+            common::eventually("dropped agents to release their ids", || {
+                (runtime.agent_ids() == vec!["alpha".to_string(), "beta".to_string()]).then_some(())
+            })
+            .await;
             let _gamma_again = runtime
                 .agent(AgentSpec::new("gamma"))
                 .expect("id reusable after drop");

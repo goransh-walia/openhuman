@@ -55,56 +55,11 @@ export const HOSTED_GROUPS = [
   },
   { group: "rust-cov", lanes: ["rust-cov"], maxParallel: 1, container: true },
   { group: "tauri", lanes: ["tauri"], maxParallel: 1, container: true },
-  // The storage drivers build the core with features no other lane enables,
-  // so they get a runner (and a `target/`) of their own.
-  {
-    group: "storage",
-    lanes: ["storage-drivers"],
-    maxParallel: 1,
-    container: true,
-  },
   // pwsh ships on the bare ubuntu-latest image, not in the CI container.
   { group: "pester", lanes: ["pester"], maxParallel: 1, container: false },
 ];
 
 const CORE_PRODUCT = '"$(bash scripts/ci/product-features.sh --core)"';
-
-// The storage-drivers lane: the drivers it turns on, the root e2e targets that
-// run once per driver (tests/support/storage_drivers.rs), and the lib-test
-// filters of the domains that sit on the storage ports.
-const STORAGE_DRIVERS = "storage-sqlite,storage-file";
-const STORAGE_E2E_TARGETS = [
-  "storage_approvals_e2e",
-  "storage_domains_e2e",
-  "storage_flows_e2e",
-  "storage_secrets_e2e",
-  "storage_scope_e2e",
-  "storage_agent_scopes_e2e",
-  "storage_delegation_e2e",
-  "storage_default_import_e2e",
-  "storage_desktop_upgrade_e2e",
-  "storage_layout_migration_e2e",
-  "cli_storage_url_e2e",
-];
-const STORAGE_LIB_FILTERS = [
-  "storage::",
-  "cron::",
-  "flows::",
-  "security::approval::",
-  "security::devices::",
-  "security::secret_storage::",
-  "security::credentials::",
-  "desktop::notifications::",
-  "integrations::task_sources::",
-  "integrations::composio::file_store",
-  "agent::orchestration::",
-  "config::workspace::",
-  "desktop::app_state::",
-  "desktop::control::",
-  "platform::cost::",
-  "inference::tokenjuice::",
-  "config::schema::load::source::",
-];
 
 /**
  * Build the lane plan.
@@ -170,8 +125,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
 
   // Not run on pull requests: the core doctests (an uninstrumented core build
   // of their own) and the TinyJuice host-module regression (one test against
-  // the downloaded module). CI Lite runs both on every push to `main` that
-  // touches the Rust core (rust-coverage.sh and its rust-core-coverage job).
+  // the downloaded module). CI Lite, which ran both on pushes to `main`, is
+  // gone; today only the release pretest runs them (test-reusable.yml).
   // openhuman-tui's tests DO run on pull requests: the rust-core path filter
   // arms this job for any change under core, embed, tinyhumans, rpc, cli or
   // tui, which is every crate the TUI depends on.
@@ -203,6 +158,21 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           // the generated docs/storage-schema.md.
           name: "storage-schema",
           when: rust,
+          // ex63: build the dump example in the plain build target with that
+          // build's rustEnv and the core product features, which
+          // composio-stack-regression-uninstrumented also builds the cli with,
+          // so the core is not compiled again here (default target,
+          // incremental, full debuginfo). The schema depends only on gates
+          // that are in both feature sets, so the dump is unchanged.
+          ...(ex63
+            ? {
+                env: {
+                  ...rustEnv,
+                  CARGO_BUILD_TARGET_DIR: targetDir("build"),
+                  STORAGE_SCHEMA_FEATURES: "core-product",
+                },
+              }
+            : {}),
           run: "node scripts/ci/check-storage-schema.mjs",
         },
         {
@@ -349,7 +319,27 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: areas.docs,
           run: "pnpm docs:test",
         },
-        { name: "docs-drift", when: areas.docs, run: "pnpm docs:check" },
+        {
+          name: "docs-drift",
+          when: areas.docs,
+          // ex63: `docs:check` runs the storage schema dump and the embed
+          // capability report through cargo. Without the shared build target
+          // and rustEnv they compiled the core again in the plain target,
+          // incremental and with full debuginfo, so none of the shared build
+          // applied (315 s in EX63 run 39371566398). With them the dump is
+          // the storage-schema check's build and the report the embed
+          // examples'.
+          ...(ex63
+            ? {
+                env: {
+                  ...rustEnv,
+                  CARGO_BUILD_TARGET_DIR: targetDir("build"),
+                  STORAGE_SCHEMA_FEATURES: "core-product",
+                },
+              }
+            : {}),
+          run: "pnpm docs:check",
+        },
         {
           name: "security-module-dependencies",
           when: areas.scripts || rust,
@@ -404,12 +394,12 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         },
         {
           name: "test-modules",
-          when: core,
+          when: core || areas.storage,
           run: `bash scripts/ci/self-hosted/install-test-modules.sh "${modulesDir}" ${modulesEnvFile}`,
         },
         {
           name: "rust-core-coverage",
-          when: core,
+          when: core || areas.storage,
           needs: [
             "test-modules",
             ex63 ? "frontend:pnpm-install" : "pnpm-install",
@@ -425,6 +415,15 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             ...(ex63 ? { OH_COV_RUNNER: "nextest" } : {}),
           },
           run: withModules("bash scripts/ci/rust-coverage.sh"),
+        },
+        // ex63: lcov-core.info is written (even after a failed suite), so drop
+        // its ~90 GB of instrumented test executables and profiles before the
+        // next lanes build on the same 320 GB disk. No `needs`: it must run
+        // after a failure too.
+        {
+          name: "prune-coverage-binaries",
+          when: ex63 && (core || areas.storage),
+          run: "bash scripts/ci/self-hosted/prune-coverage-binaries.sh target/ci-private-coverage",
         },
       ],
     },
@@ -476,7 +475,10 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         {
           name: "embed-offline-examples",
           when: core,
-          run: "node scripts/run-embed-examples.mjs",
+          // Dev profile: the release-declared linux_fleet measurement then
+          // shares the plain dev build instead of a thin-LTO one nothing else
+          // can reuse (and that would need cleaning afterwards).
+          run: "node scripts/run-embed-examples.mjs --profile dev",
         },
         {
           name: "tinyhumans-clippy",
@@ -517,7 +519,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features" +
             " --features modules,mcp,e2e-test-support --lib --" +
             " modules::runtime:: modules::registry:: modules::storage_grant_tinywallet::" +
-            " modules::storage_grant_tinyconnectors::" +
+            " modules::storage_grant_tinyconnectors:: modules::tinyflows::" +
             " cron::bus_host::tests:: cron::documents_port::tests::" +
             " mcp::server::resources:: test_support::introspect:: --test-threads=1",
         },
@@ -562,52 +564,6 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
       ],
     },
     {
-      // The sqlite and file storage drivers, which no other lane compiles in:
-      // every `storage_*_e2e` target runs once per driver (memory, sqlite,
-      // file) and the stores that sit on the storage ports run their lib
-      // tests with the drivers on. The MongoDB driver needs a replica set and
-      // has its own workflow (storage-mongodb.yml). Armed by the `storage`
-      // area (.github/ci-paths-filter.yml).
-      name: "storage-drivers",
-      // Compiles the core crate with its own feature set: holds one of the
-      // VM's heavy-compile slots (lanes.mjs). Lower number = served first.
-      heavy: 2,
-      targetDir: targetDir("storage"),
-      env: { ...rustEnv, RUST_MIN_STACK: "16777216" },
-      checks: [
-        {
-          name: "storage-e2e",
-          when: areas.storage,
-          run:
-            `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS}` +
-            STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join(""),
-        },
-        {
-          name: "storage-lib-tests",
-          when: areas.storage,
-          run:
-            `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
-            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("") +
-            " --skip cron::bus_host::tests:: --skip cron::documents_port::tests::",
-        },
-        {
-          // TinyFlows owns a process-global module host during these tests.
-          // Keep them out of the broad storage test process, where unrelated
-          // cron tests can replace handlers while a callback is executing.
-          name: "cron-module-tests",
-          when: areas.storage,
-          run:
-            `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
-            " cron::bus_host::tests:: cron::documents_port::tests:: --test-threads=1",
-        },
-        {
-          name: "storage-session-store-tests",
-          when: areas.storage,
-          run: `cargo test -p openhuman-rpc --features session-store,${STORAGE_DRIVERS} --lib -- session_store::`,
-        },
-      ],
-    },
-    {
       name: "pester",
       checks: [
         {
@@ -622,23 +578,14 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
   // Coverage replaces each existing plain suite only for the private profile.
   // Preserve the original package, features, target list, and libtest substring
   // filters; union those filters in nextest's expression syntax. --no-report
-  // retains prior instrumentation implicitly; each suite then writes its report.
+  // retains prior instrumentation implicitly. A suite writes no report of its
+  // own: every `cargo llvm-cov report` re-merges ALL profiles in the shared
+  // coverage target (rust-cov's included), so each lane ends with one report
+  // check per workspace instead of one per suite. A report check has no
+  // `needs`, so it still reports after a failed suite; the suite keeps its
+  // own failure status.
   // Do not also pass --no-clean: the pinned cargo-llvm-cov rejects that pair.
   if (ex63) {
-    const lintLane = lanes.find((lane) => lane.name === "rust-lint");
-    const examplesIndex = lintLane.checks.findIndex(
-      (check) => check.name === "embed-offline-examples",
-    );
-    // linux_fleet alone builds release artifacts. Once the complete examples
-    // group succeeds, later checks need only debug and coverage products.
-    // Cargo scopes this cleanup to the ordinary release profile, preserving
-    // those other targets and the independent Tinymold compiler store.
-    lintLane.checks.splice(examplesIndex + 1, 0, {
-      name: "release-example-cleanup",
-      when: core,
-      needs: ["embed-offline-examples"],
-      run: "bash scripts/ci-cancel-aware.sh cargo clean --profile release --target-dir target/ci-private-build",
-    });
     // This target has cfg(not(coverage)): instrumentation makes its large
     // binary fail to link and would remove its deliberately small-stack test.
     // Run that distinct regression once in the ordinary build target, keeping
@@ -650,11 +597,18 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         when: core,
         run: `bash scripts/ci/nextest-coverage.sh composio-stack-uninstrumented cargo nextest run --profile ci --no-tests=fail --no-fail-fast -p openhuman-cli --features ${CORE_PRODUCT} --test composio_list_tools_stack_overflow_regression`,
       });
-    const coverageSuite = (args, output, manifest = "Cargo.toml") =>
-      `rc=0; bash scripts/ci/nextest-coverage.sh ${output.replace(/^lcov-|\.info$/g, "")} cargo llvm-cov nextest --profile ci --no-fail-fast --no-tests=fail --no-report ${args} || rc=$?; ` +
-      `cargo llvm-cov report --manifest-path ${manifest} --lcov --output-path ci-out/lcov/${output} || { report_rc=$?; if [ "$rc" -eq 0 ]; then rc=$report_rc; fi; }; exit "$rc"`;
+    const coverageSuite = (args, suite) =>
+      `bash scripts/ci/nextest-coverage.sh ${suite} cargo llvm-cov nextest --profile ci --no-fail-fast --no-tests=fail --no-report ${args}`;
+    const coverageReport = (name, output, when, manifest) => ({
+      name,
+      when,
+      env: { ...covEnv, CARGO_BUILD_TARGET_DIR: "target/ci-private-coverage" },
+      run:
+        "unset RUSTFLAGS; " +
+        `cargo llvm-cov report --manifest-path ${manifest} --lcov --output-path ci-out/lcov/${output}`,
+    });
     for (const lane of lanes) {
-      if (!["rust-gates-off", "storage-drivers"].includes(lane.name)) continue;
+      if (lane.name !== "rust-gates-off") continue;
       for (const check of lane.checks) {
         if (!check.run.startsWith("cargo test ")) continue;
         const [cargoArgs, filters] = check.run
@@ -680,21 +634,17 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           ...covEnv,
           CARGO_BUILD_TARGET_DIR: "target/ci-private-coverage",
         };
-        check.run = coverageSuite(
-          `${args}${expression}${serial}`,
-          `lcov-${check.name}.info`,
-        );
-        if (check.name === "storage-e2e") {
-          // Every explicitly selected storage target must report tests; a
-          // nonempty aggregate alone would hide an accidentally empty target.
-          check.env.NEXTEST_EXPECTED_TARGETS =
-            "ci-out/nextest/storage-e2e-expected-targets.txt";
-          check.run =
-            'mkdir -p "$(dirname "$NEXTEST_EXPECTED_TARGETS")" || exit $?; ' +
-            `printf '%s\\n' ${STORAGE_E2E_TARGETS.map((target) => `'${target}'`).join(" ")} > "$NEXTEST_EXPECTED_TARGETS" || exit $?; ` +
-            check.run;
-        }
+        check.run = coverageSuite(`${args}${expression}${serial}`, check.name);
       }
+      // One merge of the shared profiles for every gates-off suite above.
+      lane.checks.push(
+        coverageReport(
+          "gates-off-coverage-report",
+          "lcov-gates-off.info",
+          gateSmoke,
+          "Cargo.toml",
+        ),
+      );
     }
     const tauriLane = lanes.find((l) => l.name === "tauri");
     // Clippy emits metadata only; a real uninstrumented link proves that
@@ -713,9 +663,17 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
       "unset RUSTFLAGS; " +
       coverageSuite(
         "--manifest-path crates/openhuman-app/Cargo.toml",
-        "lcov-tauri.info",
-        "crates/openhuman-app/Cargo.toml",
+        "tauri", // the nextest report name this suite always had
       );
+    // The app is a separate workspace, so its report is a second merge.
+    tauriLane.checks.push(
+      coverageReport(
+        "tauri-coverage-report",
+        "lcov-tauri.info",
+        areas.rustTauri,
+        "crates/openhuman-app/Cargo.toml",
+      ),
+    );
   }
 
   for (const lane of lanes) {

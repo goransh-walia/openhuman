@@ -16,7 +16,7 @@ fn allowed(
 
 #[test]
 fn every_row_has_a_valid_generated_grant() {
-    for row in &ROWS {
+    for row in ROWS {
         let grant =
             declared(row.module).unwrap_or_else(|| panic!("{} declares storage", row.module));
         grant
@@ -36,7 +36,7 @@ fn every_row_has_a_valid_generated_grant() {
 
 #[test]
 fn the_registry_ids_exist() {
-    for row in &ROWS {
+    for row in ROWS {
         assert!(
             crate::modules::registry::ALL
                 .iter()
@@ -85,7 +85,26 @@ fn tinymcp_reaches_its_v2_collections_stream_and_secrets() {
 #[test]
 fn tinyjuice_reaches_only_its_blob_prefix() {
     let grant = declared("tinyjuice").unwrap();
-    assert!(grant.collections.is_empty());
+    assert_eq!(
+        grant
+            .collections
+            .iter()
+            .map(|collection| collection.name.as_str())
+            .collect::<Vec<_>>(),
+        ["juice.savings"]
+    );
+    assert!(allowed(
+        &grant,
+        Object::Documents,
+        "Get",
+        json!({"collection": "juice.savings", "id": "x"})
+    ));
+    assert!(!allowed(
+        &grant,
+        Object::Documents,
+        "Get",
+        json!({"collection": "unrelated.collection", "id": "x"})
+    ));
     assert!(allowed(
         &grant,
         Object::Blobs,

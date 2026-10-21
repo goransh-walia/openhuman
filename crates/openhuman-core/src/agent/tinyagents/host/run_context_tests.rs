@@ -132,32 +132,6 @@ fn root_context_is_owned_and_children_inherit_thread() {
 }
 
 #[test]
-fn dispatch_guard_refuses_pause_and_budget_without_a_task_scope() {
-    let paused = TurnDispatchState::new(Some(std::time::Duration::from_secs(60)));
-    paused.record_pause_requested(15, 15);
-    assert_eq!(
-        paused.check(),
-        DispatchDecision::RefusePaused {
-            completed_model_calls: 15,
-            cap: 15,
-        }
-    );
-
-    // A zero budget makes the time relationship deterministic: after an
-    // observed child, any check is strictly short of that child's duration.
-    let exhausted = TurnDispatchState::new(Some(std::time::Duration::ZERO));
-    exhausted.record_subagent_elapsed(std::time::Duration::from_secs(1));
-    assert!(matches!(
-        exhausted.check(),
-        DispatchDecision::RefuseBudget {
-            observed_max_ms: 1_000,
-            observed_samples: 1,
-            ..
-        }
-    ));
-}
-
-#[test]
 fn child_ledgers_are_isolated_and_parent_keeps_completed_child_totals() {
     let root = OpenHumanRunContext::new();
     let left = root.child();
@@ -203,28 +177,6 @@ fn failed_outer_run_promotes_completed_nested_usage_once() {
     outer.promote_completed_descendant_usage();
     assert_eq!(root.subagent_usage_entries().len(), 1);
     assert_eq!(root.subagent_usage_entries()[0].task_id, "nested");
-}
-
-#[test]
-fn detached_children_reset_turn_accounting_and_cancellation() {
-    let mut root = OpenHumanRunContext::new();
-    root.thread_id = Some("thread-a".into());
-    let dispatch = Arc::new(TurnDispatchState::new(Some(std::time::Duration::ZERO)));
-    dispatch.record_subagent_elapsed(std::time::Duration::from_secs(1));
-    root.dispatch = Some(dispatch);
-    let detached = root.detached_child();
-
-    assert_eq!(detached.thread_id.as_deref(), Some("thread-a"));
-    assert!(detached.dispatch.is_none());
-    root.cancellation.cancel();
-    assert!(!detached.cancellation.is_cancelled());
-    detached.record_completed_subagent_usage(SubagentUsageEntry {
-        task_id: "background".into(),
-        agent_id: "archivist".into(),
-        usage: Default::default(),
-    });
-    assert!(root.subagent_usage_entries().is_empty());
-    assert_eq!(detached.subagent_usage_entries().len(), 1);
 }
 
 #[test]
@@ -592,32 +544,36 @@ async fn the_approval_context_survives_await_points_and_a_move_between_tasks() {
 /// an environment without one leaves the run's own alone.
 #[test]
 fn the_memory_identity_rides_the_run_and_its_children() {
-    use crate::memory::scope::MemoryIdentity;
-
     let mut context = OpenHumanRunContext::new();
     assert_eq!(context.memory_identity, None);
 
     let env = crate::agent::turn_env::HostTurnEnv {
-        memory_identity: Some(MemoryIdentity::team_member("acme", "lead")),
+        memory_identity: Some(tinymemory_tools::layout::identity::Identity::team_member(
+            "acme", "lead",
+        )),
         ..Default::default()
     };
     context = context.with_host_env(&env);
     assert_eq!(
         context.memory_identity,
-        Some(MemoryIdentity::team_member("acme", "lead"))
+        Some(tinymemory_tools::layout::identity::Identity::team_member(
+            "acme", "lead"
+        ))
     );
 
     let child = context.child();
     assert_eq!(child.memory_identity, context.memory_identity);
     assert_eq!(
         child.memory_identity.unwrap().child("scout"),
-        MemoryIdentity::team_member("acme", "scout")
+        tinymemory_tools::layout::identity::Identity::team_member("acme", "scout")
     );
 
     let unchanged = context.with_host_env(&crate::agent::turn_env::HostTurnEnv::default());
     assert_eq!(
         unchanged.memory_identity,
-        Some(MemoryIdentity::team_member("acme", "lead"))
+        Some(tinymemory_tools::layout::identity::Identity::team_member(
+            "acme", "lead"
+        ))
     );
 }
 
@@ -708,12 +664,13 @@ fn the_turns_still_in_the_prompt_reach_the_runs_tools() {
     let mut host = OpenHumanRunContext::new();
     host.memory_turn = Some(std::sync::Arc::new(
         crate::memory::lifecycle::hooks::MemoryTurn {
-            identity: crate::memory::scope::MemoryIdentity::agent("a").resolve(&config),
+            identity: tinymemory_tools::layout::identity::Identity::agent("a")
+                .resolve(&crate::memory::scope::identity_pins(&config)),
             config: std::sync::Arc::new(config),
             thread_id: "thread-long".into(),
             pack: None,
             in_prompt_from: std::sync::Arc::new(
-                crate::memory::lifecycle::window::InPromptFrom::new(12, 20),
+                tinymemory_tools::lifecycle::window::InPromptFrom::new(12, 20),
             ),
             core: None,
         },

@@ -20,18 +20,19 @@ is mounted as a submodule of [`load/dirs.rs`](./load/dirs.rs) via `#[path]`.
 | `[agent]`, `[orchestrator]`, `[teams.*]`, `[agents.*]` | [`agent.rs`](./agent.rs) | `AgentConfig`, `OrchestratorModelConfig`, `TeamModelConfig`, `DelegateAgentConfig` |
 | `[autonomy]` | [`autonomy.rs`](./autonomy.rs) | `AutonomyConfig`: feeds `security::SecurityPolicy` |
 | `[[capability_providers]]` | [`capability_providers.rs`](./capability_providers.rs) | `CapabilityProviderConfig` |
-| `[channels_config]`, `[sandbox]` | [`channels.rs`](./channels.rs) | `ChannelsConfig` and per-provider configs re-exported from `tinychannels_bus`; `SandboxConfig`, `ResourceLimitsConfig`, and `SecurityConfig` (only `DaemonConfig` embeds the last one) |
+| `[channels_config]` | [`channels.rs`](./channels.rs) | `ChannelsConfig` and per-provider configs re-exported from `tinychannels_bus` |
+| `[security]`, `[sandbox]` | [`security.rs`](./security.rs) | `SecurityConfig`, approval settings, and `SandboxConfig` |
 | `[claude_agent_sdk]` | [`claude_agent_sdk.rs`](./claude_agent_sdk.rs) | `ClaudeAgentSdkConfig` |
 | `[[cloud_providers]]`, `primary_cloud`, `*_provider` slugs | [`cloud_providers.rs`](./cloud_providers.rs) | `CloudProviderCreds`, `AuthStyle` |
 | `[context]` | [`context.rs`](./context.rs) | `ContextConfig` |
 | `[cost]` | [`identity_cost.rs`](./identity_cost.rs) | `CostConfig`, `ModelPricing` |
 | `[dashboard]` | [`dashboard.rs`](./dashboard.rs) | `DashboardConfig`, `DiagramViewerConfig`, `EventStreamConfig`, `ModelHealthConfig` |
-| `[dictation]` | [`dictation.rs`](./dictation.rs) | `DictationConfig`, `DictationActivationMode` |
 | `[ephemeral_route]` | [`ephemeral_route.rs`](./ephemeral_route.rs) | `EphemeralRoute` |
 | `[cron]` | [`cron.rs`](./cron.rs) | `CronConfig` |
 | `[hooks]` | [`hooks.rs`](./hooks.rs) | `HooksConfig` |
 | `[hosting]` | [`hosting.rs`](./hosting.rs) | `HostingConfig` |
 | `[learning]` | `learning.rs` | `LearningConfig`, `ReflectionSource` |
+| `[inbound_debounce]` (+ `by_channel.<name>`) | [`inbound_debounce.rs`](./inbound_debounce.rs) | `InboundDebounceConfig`, `InboundDebounceOverride`: per-conversation batching of inbound channel messages before a turn |
 | `[local_ai]` | [`local_ai.rs`](./local_ai.rs) | `LocalAiConfig`, `LocalAiUsage` |
 | `[modules]` | [`modules.rs`](./modules.rs) | `ModulesConfig`, `ModuleOverride`: controls only whether compiled-in modules load. The loadable *set* is fixed by `crate::modules::registry` |
 | `[observability]` | [`observability.rs`](./observability.rs) | `ObservabilityConfig`, `AgentTracingConfig` |
@@ -46,7 +47,7 @@ is mounted as a submodule of [`load/dirs.rs`](./load/dirs.rs) via `#[path]`.
 | `[tokenjuice]` | [`tokenjuice.rs`](./tokenjuice.rs) | `TokenjuiceConfig` |
 | tool-related sections (see below) | `tools/` | (multiple structs) |
 | `[update]` | [`update.rs`](./update.rs) | `UpdateConfig`, `UpdateRestartStrategy` |
-| `[voice_server]` | [`voice_server.rs`](./voice_server.rs) | `VoiceServerConfig`, `SttEngine`, `VoiceActivationMode` |
+| `[voice_server]` | [`voice_server.rs`](./voice_server.rs) | `VoiceServerConfig`, `SttEngine` |
 | `[[voice_providers]]`, `stt_provider` / `tts_provider` | [`voice_providers.rs`](./voice_providers.rs) | `VoiceProviderCreds`, `BuiltinVoiceProvider`, `BUILTIN_VOICE_PROVIDERS` |
 | top-level `Config` and its scalar keys | `types.rs` (+ `types/config.rs`, `types/model_ids.rs`) | `Config`, `ModelRegistryEntry`, `MODEL_*` / `DEFAULT_MODEL` constants |
 | built-in defaults | [`defaults.rs`](./defaults.rs) | `impl Default for Config` and per-field `default_*` fns |
@@ -110,7 +111,7 @@ sandbox policy contract described under Workspace/identity helpers below.
    (`migrate_legacy_inference_url`, `migrate_cloud_provider_slugs`).
 4. Apply environment-variable overrides through `Config::apply_env_overrides_from`
    in [`load/env_overlay.rs`](./load/env_overlay.rs), split into submodules under [`load/env_overlay/`](./load/env_overlay/)
-   (`dictation_context.rs`, `learning_memory.rs`, `observability.rs`,
+   (`context.rs`, `learning_memory.rs`, `observability.rs`,
    `proxy.rs`, `runtime.rs`, `search.rs`);
    [`load/env.rs`](./load/env.rs) is only the `EnvLookup` seam that lets tests supply a fake
    environment.

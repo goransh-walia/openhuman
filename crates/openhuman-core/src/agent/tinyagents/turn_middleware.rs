@@ -96,6 +96,9 @@ pub(super) struct TurnMiddlewareInputs {
     /// plan-order middleware read it. `None` for a turn with no workspace or
     /// without the `todo` tool.
     pub(super) todo_store: Option<Arc<dyn tinyagents_harness::store::Store>>,
+    /// Called when the turn starts summarizing earlier conversation, so the
+    /// client can show it. `None` for a turn nobody watches.
+    pub(super) compaction_notice: Option<super::context_wiring::CompactionNotice>,
 }
 
 /// The handles the run loop reads after the drive returns.
@@ -147,6 +150,7 @@ pub(super) fn install_turn_middleware(
         provider_usage_carry,
         tool_outcome_sink,
         todo_store,
+        compaction_notice,
     } = inputs;
     let super::host::HarnessHostPolicy {
         stop_hooks,
@@ -308,12 +312,7 @@ pub(super) fn install_turn_middleware(
                         "[stop_hooks] hook voted to stop the turn — pausing run: {}",
                         report.reason
                     );
-                    *summary
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(format!(
-                        "Stopping after {} model call(s): {}",
-                        report.iteration, report.reason
-                    ));
+                    record_stop_summary(&summary, report.iteration, &report.reason);
                 }),
         ));
     }
@@ -451,6 +450,7 @@ pub(super) fn install_turn_middleware(
         pause_at_cap && subagent_scope.is_none(),
         &tool_outcome_sink,
         memory_turn,
+        compaction_notice,
     );
     let is_subagent = subagent_scope.is_some();
     let agent_id = tool_policy.as_ref().map(|p| p.agent_definition_id.as_str());
@@ -607,7 +607,7 @@ pub(super) fn install_turn_middleware(
     }
     // The turn's memory pack rides every request of the turn, after every
     // reduction step and after the transcript snapshot, so it is never
-    // compacted, trimmed or persisted (`memory::lifecycle::hooks::pre_turn`).
+    // compacted, trimmed or persisted (`memory::lifecycle::prefetch::pre_turn`).
     harness.push_middleware(Arc::new(middleware::memory_pack::memory_pack_middleware()));
 
     TurnWiring {
@@ -617,3 +617,15 @@ pub(super) fn install_turn_middleware(
         prompt_cache_guard,
     }
 }
+
+fn record_stop_summary(summary: &HaltSummarySlot, iteration: u32, reason: &str) {
+    *summary
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(format!(
+        "Stopping after {iteration} model call(s): {reason}"
+    ));
+}
+
+#[cfg(test)]
+#[path = "turn_middleware_tests.rs"]
+mod tests;

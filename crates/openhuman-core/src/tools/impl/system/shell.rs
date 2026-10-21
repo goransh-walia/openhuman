@@ -289,7 +289,7 @@ impl ShellTool {
         // budget; this is the call that admits the run (and spends one action
         // of the hourly budget), and it keeps direct and workflow execution on
         // the same contract. A module that disappeared after approval denies.
-        if let Err(reason) = self
+        let execution_verdict = self
             .security
             .check_command(CommandQuery {
                 command,
@@ -297,9 +297,19 @@ impl ShellTool {
                 flow: CommandFlow::Harness,
                 stage: CommandStage::Execute,
             })
-            .await
-        {
-            return (false, ToolResult::error(reason.to_string()));
+            .await;
+        match execution_verdict {
+            Ok(verdict) if verdict.gate == crate::security::GateDecision::Allow => {}
+            Ok(_) => {
+                return (
+                    false,
+                    ToolResult::error(format!(
+                        "{} command blocked by security policy: the TinySecurity execution gate did not Allow",
+                        tinytools::status::POLICY_BLOCKED_MARKER
+                    )),
+                );
+            }
+            Err(reason) => return (false, ToolResult::error(reason.to_string())),
         }
 
         let _cwd = self.effective_action_dir_for_context(context);

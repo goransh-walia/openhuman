@@ -212,6 +212,7 @@ pub mod audit;
 // ordinary dependency, and the startup path calls `host::init` without a `cfg`
 // of its own. Gating this would break the build with the domain turned off.
 pub mod host;
+pub(crate) mod host_sandbox;
 pub mod registry;
 pub mod server;
 #[cfg(feature = "mcp")]

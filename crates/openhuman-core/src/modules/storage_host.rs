@@ -412,7 +412,49 @@ impl StorageHost {
                 .await
                 .map_err(|_| BindError::Backend(StorageKind::Backend))?;
         }
+        // A broker queue backend replaces the scope's queue port before the
+        // server takes it; the default keeps the queues in the scope's documents.
+        let storage = match (&grant.queues, &grant.queue_backend) {
+            (Some(_), Some(backend)) if *backend != tinystoragedrivers::QueueConfig::Storage => {
+                tinystoragedrivers::open_queues(backend, storage, None)
+                    .await
+                    .map_err(|error| {
+                        tracing::warn!(
+                            target: "openhuman::storage_host",
+                            module,
+                            backend = %backend,
+                            %error,
+                            "[storage_host] could not open the granted queue backend"
+                        );
+                        BindError::Backend(StorageKind::Backend)
+                    })?
+            }
+            _ => storage,
+        };
         let mut server = StorageServer::new(storage.clone());
+        if let Some(manifest) = &grant.queues {
+            // The queue port of a document backend keeps its messages in the
+            // storage layer's own collections; declare them on this scope
+            // before the server takes its first `Queues` call.
+            tinystoragedrivers::queue::ensure(&storage)
+                .await
+                .map_err(|error| {
+                    tracing::warn!(
+                        target: "openhuman::storage_host",
+                        module,
+                        %error,
+                        "[storage_host] could not declare the queue collections"
+                    );
+                    BindError::Backend(StorageKind::Backend)
+                })?;
+            tracing::debug!(
+                target: "openhuman::storage_host",
+                module,
+                queues = manifest.queues.len(),
+                "[storage_host] serving the granted queue manifest"
+            );
+            server = server.with_queue_manifest(Arc::clone(manifest));
+        }
         if !grant.secret_prefixes.is_empty() {
             // A key-provider failure is retryable, so refuse the bind rather
             // than cache a server that silently lacks secrets.

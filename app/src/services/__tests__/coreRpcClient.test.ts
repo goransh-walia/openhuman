@@ -860,6 +860,24 @@ describe('classifyRpcError', () => {
     expect(classifyRpcError('GET /teams/me/usage failed (401 Unauthorized)')).toBe('auth_expired');
   });
 
+  // #8081: TinyMemory words a hosted 403 (memory not in the plan) as "the
+  // session expired or the API key was rejected (HTTP 403 …)". Matching it as
+  // auth_expired signed a valid user out on opening a Memory tab.
+  test('a memory plan refusal or 403 is never auth_expired', () => {
+    for (const message of [
+      "unauthorized: [MEMORY_PLAN_REQUIRED] memory API memory/scopes on api.tinyhumans.ai: the session expired or the API key was rejected (HTTP 403 Forbidden); re-authenticate — memory is not included in this account's plan",
+      "plan required: [MEMORY_PLAN_REQUIRED] memory API memory/scopes on api.tinyhumans.ai: memory is not included in this account's plan (HTTP 403 Forbidden)",
+      'unauthorized: [FORBIDDEN] memory API memory/scopes on api.tinyhumans.ai: the session expired or the API key was rejected (HTTP 403 Forbidden); re-authenticate',
+    ]) {
+      expect(classifyRpcError(message)).not.toBe('auth_expired');
+    }
+    expect(
+      classifyRpcError(
+        'unauthorized: [UNAUTHORIZED] memory API memory/scopes on api.tinyhumans.ai: the session expired or the API key was rejected (HTTP 401 Unauthorized); re-authenticate'
+      )
+    ).toBe('auth_expired');
+  });
+
   test('http status 429 wins over message text', () => {
     expect(classifyRpcError('anything', 429)).toBe('rate_limited');
   });
@@ -1319,14 +1337,24 @@ describe('getCoreRpcToken (cloud-mode persistence)', () => {
     expect(headers.Authorization).toBe('Bearer cloud-token-abc');
   });
 
-  test('honours the host-injected notch core token before the cache/store', async () => {
-    // The notch / overlay WKWebViews have no Tauri IPC; the Rust host injects
-    // the bearer as a global, which must win ahead of the resolution cache.
+  test('uses the normal sidecar token even when a legacy notch token global exists', async () => {
     (globalThis as { __OPENHUMAN_NOTCH_CORE_TOKEN__?: string }).__OPENHUMAN_NOTCH_CORE_TOKEN__ =
-      'notch-bearer-xyz';
+      'stale-notch-token';
+    vi.doMock('../../utils/configPersistence', () => ({
+      peekStoredRpcUrl: () => null,
+      getStoredCoreToken: () => null,
+      normalizeRpcUrl: normalizeMockRpcUrl,
+    }));
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === 'core_rpc_endpoint') {
+        return { url: 'http://127.0.0.1:7788/rpc', token: 'normal-sidecar-token' };
+      }
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
     try {
       const { getCoreRpcToken } = await import('../coreRpcClient');
-      await expect(getCoreRpcToken()).resolves.toBe('notch-bearer-xyz');
+      await expect(getCoreRpcToken()).resolves.toBe('normal-sidecar-token');
     } finally {
       delete (globalThis as { __OPENHUMAN_NOTCH_CORE_TOKEN__?: string })
         .__OPENHUMAN_NOTCH_CORE_TOKEN__;

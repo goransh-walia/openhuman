@@ -150,35 +150,17 @@ Secrets with a backend installed are encrypted documents in the current storage 
 
 ## Tests and CI
 
-Every storage test target runs the same body once per driver, and each run is a separate test case named after the driver (`memory::…`, `sqlite::…`, `file::…`, `mongodb::…`), so a failure says which driver broke. The shared helper is `tests/support/storage_drivers.rs`.
+The host's storage tests run on SQLite only. They test the host's wiring on a configured backend (which domain stores land in it, which scope they use, what a second process reads back), not the drivers. The shared helper is `tests/support/storage_case.rs`: it opens a SQLite backend on a temp directory and takes a lock on the process-wide storage slot, so the tests of one binary take turns.
 
-| Driver           | Runs                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `memory`         | Always                                                                                                  |
-| `sqlite`, `file` | When `storage-sqlite` or `storage-file` is compiled in, on temp directories                             |
-| `mongodb`        | When `storage-mongodb` is compiled in and `TSD_MONGO_URL` is set. Each case uses a database of its own. |
+Whether each driver honours the storage ports is proven upstream, in `tinystoragedrivers`. Its `conformance` module runs the same checks against every driver (nested scope isolation, compare-and-swap and leases across processes via `run_shared` for drivers that claim `Capability::SharedAcrossProcesses`, fencing, document secrets and migrations), and its CI runs them against a MongoDB replica set as well. The host asks a backend for `Capability::SharedAcrossProcesses` rather than hardcoding driver names where it can (`storage::backend_has_cross_process_cas`); the boot guard judges a URL before anything is opened, so it keeps a name check that a test pins to the real drivers.
 
-The targets are `storage_approvals_e2e`, `storage_domains_e2e`, `storage_flows_e2e`, `storage_secrets_e2e`, `storage_scope_e2e`, `storage_agent_scopes_e2e`, `storage_delegation_e2e` and `cli_storage_url_e2e`. Run one locally with the drivers you want:
+The targets are `storage_approvals_e2e`, `storage_domains_e2e`, `storage_flows_e2e`, `storage_secrets_e2e`, `storage_scope_e2e`, `storage_agent_scopes_e2e`, `storage_delegation_e2e`, `storage_desktop_upgrade_e2e` and `cli_storage_url_e2e`. Run one locally:
 
 ```bash
-cargo test -p openhuman-cli --features storage-sqlite,storage-file --test storage_approvals_e2e
+cargo test -p openhuman-cli --features storage-sqlite --test storage_approvals_e2e
 ```
 
-For MongoDB, start a single-node replica set and set the URL (a replica set is what lets the driver report and exercise transactions):
-
-```bash
-# the script lives in the tinystoragedrivers repo (tag v0.11.0); fetch the pinned copy first
-curl -fsSL -o start-mongo-replset.sh \
-  https://raw.githubusercontent.com/tinyhumansai/tinystoragedrivers/9eeef54aea403ac07461a612189bdf4982782823/.github/scripts/start-mongo-replset.sh
-bash start-mongo-replset.sh 27017
-export TSD_MONGO_URL='mongodb://127.0.0.1:27017/tsd_test?directConnection=true'
-cargo test -p openhuman-cli --features storage-mongodb --test storage_approvals_e2e
-```
-
-CI has two lanes for this:
-
-- The `storage-drivers` lane in `scripts/ci/self-hosted/lanes-plan.mjs` builds with `storage-sqlite,storage-file`. It runs every storage target plus the lib tests of the domains on the ports. The `storage` area in `.github/ci-paths-filter.yml` arms it when storage, cron, flows, approvals, devices, notifications, task sources, keyring or credentials, orchestration, the cost tracker, app and desktop-control state or the rpc session store change.
-- `.github/workflows/storage-mongodb.yml` builds with `storage-mongodb` against a real replica set. It runs on pull requests that touch the same paths, nightly on `main` and on demand.
+CI runs these targets, with the lib tests of the domains on the ports, in the core coverage suite (`scripts/ci/rust-coverage.sh`). The `storage` area in `.github/ci-paths-filter.yml` arms it when storage, cron, flows, approvals, devices, notifications, task sources, keyring or credentials, orchestration, the cost tracker, app and desktop-control state or the rpc session store change. There is no separate driver lane and no MongoDB workflow in this repository. The `storage-mongodb` and `storage-file` features still ship in the product.
 
 ## Where to read next
 
@@ -188,7 +170,7 @@ CI has two lanes for this:
 
 ## Schema, boot and migration
 
-Every crate that stores records exports `storage_schema()` (collections named `<owner>.<entity>`, streams, blob and secret prefixes, each with a scope class and the v1 to v2 steps that bring older data forward). The host composes them in `storage::schema` (`Registry::compose`: harness, session, graph, tasks, flows and cron, skills, and with `modules` the mcp, channels, connectors, box and juice owners, with `web3` the wallet, with `tinymemes` the memes owner). The composed result is documented in [`docs/storage-schema.md`](../../../../storage-schema.md), generated by `scripts/ci/check-storage-schema.mjs` (`pnpm docs:generate`), which also lints names, casing, `*_ms` time fields and single ownership in `pnpm rust:layout`.
+Every crate that stores records exports `storage_schema()` (collections named `<owner>.<entity>`, streams, blob and secret prefixes, each with a scope class and the v1 to v2 steps that bring older data forward). The host composes them in `storage::schema` (`Registry::compose`: harness, session, graph, tasks, flows and cron, skills, and with `modules` the mcp, channels, connectors, box and juice owners, with `web3` the wallet, with `tinymemes` the memes owner, with `inbound-queues` the `teq` owner of the inbound event queues). The composed result is documented in [`docs/storage-schema.md`](../../../../storage-schema.md), generated by `scripts/ci/check-storage-schema.mjs` (`pnpm docs:generate`), which also lints names, casing, `*_ms` time fields and single ownership in `pnpm rust:layout`.
 
 `storage::open` runs `storage::boot::prepare_and_migrate` on the raw backend before the lease fence wraps it:
 

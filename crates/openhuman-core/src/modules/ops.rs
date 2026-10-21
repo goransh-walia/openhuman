@@ -300,6 +300,12 @@ fn module_config(config: &Config, id: &str) -> serde_json::Value {
     if id == super::desktop::MODULE_ID {
         return super::desktop::module_config(config);
     }
+    // The queue manifest and pipeline the inbound event queues run; the
+    // storage host declares the same manifest on the module's scope.
+    #[cfg(feature = "inbound-queues")]
+    if id == super::event_queues::MODULE_ID {
+        return crate::inbound::module_config(config);
+    }
     if id == super::connectors::MODULE_ID {
         // The connector module takes its route and credential from here and
         // reads one from nowhere else. A configuration that cannot be built —

@@ -2,6 +2,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::agent::tinyagents::host::OpenHumanRunContext;
+use tinyagents_harness::context::{RunConfig, RunContext};
+use tinyagents_harness::middleware::{BoxToolFuture, MiddlewareStack, ToolBaseCall, ToolMiddleware};
+use tinyinference_llm::tool::ToolCall;
+use tinytools::ToolResult;
+
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
@@ -9,13 +14,8 @@ use crate::modules::tinybox::host_runtime::{NativeRuntime, RuntimeAdapter};
 use crate::security::SecurityPolicy;
 use crate::tools;
 use crate::tools::native_ops_types::{ExecuteToolOutcome, RuntimeToolSummary};
-use tinyagents_harness::context::{RunConfig, RunContext};
-use tinyagents_harness::middleware::{
-    BoxToolFuture, MiddlewareStack, ToolBaseCall, ToolMiddleware,
-};
 use tinybox_bus::CommandClass;
-use tinyinference_llm::tool::ToolCall;
-use tinytools::{Tool, ToolCallOptions, ToolResult, ToolScope};
+use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolScope};
 use tracing::{debug, trace};
 
 fn tool_scope_label(scope: ToolScope) -> &'static str {
@@ -53,30 +53,47 @@ fn classify_shell_tool_call(args: &serde_json::Value) -> CommandClass {
     class
 }
 
-/// The command class of one tool call. `shell` is classified from its declared
-/// category (the invocation path runs the module's exact command analysis before
-/// approval and execution); every other tool is classified by the module from its
-/// permission level and external effect (`ClassifyHostAction2`).
-async fn command_class_for_tool(
-    tool: &dyn Tool,
-    args: &serde_json::Value,
-) -> Result<CommandClass, String> {
+fn command_class_for_tool(tool: &dyn Tool, args: &serde_json::Value) -> CommandClass {
     if tool.name() == "shell" {
-        return Ok(classify_shell_tool_call(args));
+        return classify_shell_tool_call(args);
     }
-    crate::security::policy::host_action_class(
-        tool.permission_level_with_args(args),
-        tool.external_effect_with_args(args),
-    )
-    .await
+
+    let permission = tool.permission_level_with_args(args);
+    match permission {
+        PermissionLevel::None | PermissionLevel::ReadOnly => {
+            if tool.external_effect_with_args(args) {
+                CommandClass::Network
+            } else {
+                CommandClass::Read
+            }
+        }
+        PermissionLevel::Write | PermissionLevel::Execute => {
+            if tool.external_effect_with_args(args) {
+                CommandClass::Network
+            } else {
+                CommandClass::Write
+            }
+        }
+        PermissionLevel::Dangerous => CommandClass::Destructive,
+    }
 }
 
 pub fn build_runtime_tools(config: &Config) -> Result<Vec<Box<dyn Tool>>, String> {
+    // Keep the config's privacy posture on the same policy snapshot as the
+    // autonomy settings. `from_config` alone defaults privacy to Standard.
+    let security = Arc::new(SecurityPolicy::from_full_config(config));
+    build_runtime_tools_with_security(config, security)
+}
+
+/// Builds native tools with a caller-resolved policy snapshot.
+pub fn build_runtime_tools_with_security(
+    config: &Config,
+    security: Arc<SecurityPolicy>,
+) -> Result<Vec<Box<dyn Tool>>, String> {
     debug!(
         workspace = %config.workspace_dir.display(),
         "[native_ops] build_runtime_tools: start"
     );
-    let security = Arc::new(SecurityPolicy::from_full_config(config));
     let runtime: Arc<dyn RuntimeAdapter> = Arc::new(NativeRuntime::new());
     trace!("[native_ops] build_runtime_tools: tools::ops::all_tools_with_runtime");
     let built = tools::ops::all_tools_with_runtime(
@@ -108,13 +125,28 @@ pub fn list_tools(config: &Config) -> Result<Vec<RuntimeToolSummary>, String> {
     Ok(summaries)
 }
 
-pub async fn classify_tool_call(
+pub fn classify_tool_call(
     config: &Config,
     tool_name: &str,
     args: &serde_json::Value,
 ) -> Result<CommandClass, String> {
+    let security = Arc::new(SecurityPolicy::from_config(
+        &config.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    ));
+    classify_tool_call_with_security(config, security, tool_name, args)
+}
+
+/// Classifies a native call using the same policy snapshot that will execute it.
+pub fn classify_tool_call_with_security(
+    config: &Config,
+    security: Arc<SecurityPolicy>,
+    tool_name: &str,
+    args: &serde_json::Value,
+) -> Result<CommandClass, String> {
     debug!(tool_name, "[native_ops] classify_tool_call: start");
-    let tools = build_runtime_tools(config)?;
+    let tools = build_runtime_tools_with_security(config, security)?;
     let tool = tools
         .into_iter()
         .find(|tool| tool.name() == tool_name)
@@ -122,7 +154,7 @@ pub async fn classify_tool_call(
             debug!(tool_name, "[native_ops] classify_tool_call: tool not found");
             format!("unknown tool `{tool_name}`")
         })?;
-    let class = command_class_for_tool(tool.as_ref(), args).await?;
+    let class = command_class_for_tool(tool.as_ref(), args);
     debug!(
         tool_name,
         ?class,
@@ -133,13 +165,23 @@ pub async fn classify_tool_call(
     Ok(class)
 }
 
-/// Run one registered tool on behalf of a direct caller (the JS and RPC tool
-/// runs, workflow `tool_call` nodes). The call passes the same security gate a
-/// harness turn installs (`middleware::security_gate`), so a tool the policy
-/// refuses never runs here either, and a call that needs a human settles through
-/// the same approval resolver.
 pub async fn execute_tool(
     config: &Config,
+    tool_name: &str,
+    args: serde_json::Value,
+    prefer_markdown: bool,
+) -> Result<ExecuteToolOutcome, String> {
+    let tools: Arc<Vec<Box<dyn Tool>>> = Arc::new(build_runtime_tools(config)?);
+    let gate = crate::agent::tinyagents::middleware::security_gate::tool_middleware(
+        vec![Arc::clone(&tools)], None,
+    );
+    run_gated(&tools, gate, tool_name, args, prefer_markdown).await
+}
+
+/// Executes a native call using the same policy snapshot used for its gate.
+pub async fn execute_tool_with_security(
+    config: &Config,
+    security: Arc<SecurityPolicy>,
     tool_name: &str,
     args: serde_json::Value,
     prefer_markdown: bool,
@@ -148,17 +190,74 @@ pub async fn execute_tool(
         tool_name,
         prefer_markdown, "[native_ops] execute_tool: start"
     );
-    let tools: Arc<Vec<Box<dyn Tool>>> = Arc::new(build_runtime_tools(config)?);
+    let tools = build_runtime_tools_with_security(config, security)?;
     trace!(
         tool_count = tools.len(),
         tool_name,
         "[native_ops] execute_tool: runtime tools built"
     );
-    let gate = crate::agent::tinyagents::middleware::security_gate::tool_middleware(
-        vec![Arc::clone(&tools)],
-        None,
+    let tool = tools
+        .into_iter()
+        .find(|tool| tool.name() == tool_name)
+        .ok_or_else(|| {
+            debug!(tool_name, "[native_ops] execute_tool: tool not found");
+            format!("unknown tool `{tool_name}`")
+        })?;
+
+    let started = Instant::now();
+    debug!(
+        tool_name,
+        "[native_ops] execute_tool: publish ToolExecutionStarted"
     );
-    run_gated(&tools, gate, tool_name, args, prefer_markdown).await
+    BUS.publish(DomainEvent::ToolExecutionStarted {
+        tool_name: tool_name.to_string(),
+        session_id: "javascript".to_string(),
+    });
+
+    trace!(
+        tool_name,
+        "[native_ops] execute_tool: dispatch execute_with_options"
+    );
+    let execution = tool
+        .execute_with_options(args, ToolCallOptions { prefer_markdown })
+        .await
+        .map_err(|error| {
+            debug!(
+                tool_name,
+                error = %error,
+                "[native_ops] execute_tool: tool execution failed"
+            );
+            format!("tool `{tool_name}` failed: {error:#}")
+        });
+
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+    let success = execution
+        .as_ref()
+        .map(|result| !result.is_error)
+        .unwrap_or(false);
+    debug!(
+        tool_name,
+        success, elapsed_ms, "[native_ops] execute_tool: publish ToolExecutionCompleted"
+    );
+    BUS.publish(DomainEvent::ToolExecutionCompleted {
+        tool_name: tool_name.to_string(),
+        session_id: "javascript".to_string(),
+        success,
+        elapsed_ms,
+    });
+
+    let result = execution?;
+    trace!(
+        tool_name,
+        success = !result.is_error,
+        elapsed_ms,
+        "[native_ops] execute_tool: returning outcome"
+    );
+    Ok(ExecuteToolOutcome {
+        tool_name: tool_name.to_string(),
+        elapsed_ms,
+        result,
+    })
 }
 
 /// The tool, run once the middleware has judged the call. The base of the
@@ -289,6 +388,7 @@ pub(crate) async fn run_gated(
         result,
     })
 }
+
 
 #[cfg(all(test, feature = "security-module"))]
 #[path = "native_ops_tests.rs"]

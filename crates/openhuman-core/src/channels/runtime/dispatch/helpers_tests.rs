@@ -107,10 +107,18 @@ async fn typing_task_runs_under_the_handed_context_not_the_active_one() {
     let channel = Arc::new(ProbeTyping(std::sync::Mutex::new(Some(sender))));
     let cancellation = tokio_util::sync::CancellationToken::new();
     // The caller's own scope is Ravi's; the typing task was handed Asha's.
+    // The scope intentionally yields the typing task handle; it is awaited below.
+    #[allow(clippy::async_yields_async)]
     let waiter = CoreContext::scope(ravi, async {
-        spawn_typing_task(&asha, channel, "recipient".into(), cancellation.clone())
+        Some(spawn_typing_task(
+            &asha,
+            channel,
+            "recipient".into(),
+            cancellation.clone(),
+        ))
     })
-    .await;
+    .await
+    .expect("typing task was started");
     let seen = tokio::time::timeout(std::time::Duration::from_secs(2), receiver)
         .await
         .unwrap()

@@ -1,9 +1,12 @@
 use crate::config::PrivacyMode;
+use parking_lot::Mutex;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
+use tokio::sync::OnceCell;
 
 /// How much autonomy the agent has
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -32,8 +35,8 @@ pub enum TrustedAccess {
 /// A directory outside the workspace the agent is explicitly granted access to.
 /// Takes precedence over `workspace_only` and `forbidden_paths` for its subtree,
 /// except for credential stores and workspace-internal application state (see
-/// the TinySecurity protected-path floor and
-/// the module's internal-state reservation).
+/// `SecurityPolicy::is_always_forbidden` and
+/// `SecurityPolicy::is_workspace_internal_path`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct TrustedRoot {
     /// Absolute path (a leading `~` is expanded to the user's home).
@@ -43,9 +46,17 @@ pub struct TrustedRoot {
     pub access: TrustedAccess,
 }
 
+/// Risk score for shell command execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandRiskLevel {
+    Low,
+    Medium,
+    High,
+}
+
 /// What the harness should do with an acting tool call of a given
 /// [`CommandClass`] under the session's [`AutonomyLevel`]. Computed by
-/// [`SecurityPolicy::command_class_gate`] (the module's gate); the harness translates `Prompt` into an
+/// [`SecurityPolicy::gate_decision`]; the harness translates `Prompt` into an
 /// `ApprovalGate` round-trip *before* the tool's `execute()` runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GateDecision {
@@ -56,6 +67,74 @@ pub enum GateDecision {
     /// Refuse outright — no in-tier prompt can authorize it (e.g. any act in
     /// read-only mode).
     Block,
+}
+
+/// Classifies whether a tool operation is read-only or side-effecting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolOperation {
+    Read,
+    Act,
+}
+
+/// Sliding-window action tracker for rate limiting.
+#[derive(Debug)]
+pub struct ActionTracker {
+    /// Timestamps of recent actions (kept within the last hour).
+    actions: Arc<Mutex<Vec<Instant>>>,
+}
+
+impl Default for ActionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ActionTracker {
+    pub fn new() -> Self {
+        Self {
+            actions: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// Record an action and return the current count within the window.
+    pub fn record(&self) -> usize {
+        let mut actions = self.actions.lock();
+        let cutoff = Instant::now()
+            .checked_sub(std::time::Duration::from_secs(3600))
+            .unwrap_or_else(Instant::now);
+        actions.retain(|t| *t > cutoff);
+        actions.push(Instant::now());
+        actions.len()
+    }
+
+    /// Count of actions in the current window without recording.
+    pub fn count(&self) -> usize {
+        let mut actions = self.actions.lock();
+        let cutoff = Instant::now()
+            .checked_sub(std::time::Duration::from_secs(3600))
+            .unwrap_or_else(Instant::now);
+        actions.retain(|t| *t > cutoff);
+        actions.len()
+    }
+
+    /// Shares the action history with a short-lived policy derived from this
+    /// tracker. Ordinary `Clone` intentionally snapshots history for separate
+    /// policies; live flow gates use this handle so rebuilding the tier view
+    /// does not reset one run's action budget.
+    pub(crate) fn shared_clone(&self) -> Self {
+        Self {
+            actions: Arc::clone(&self.actions),
+        }
+    }
+}
+
+impl Clone for ActionTracker {
+    fn clone(&self) -> Self {
+        let actions = self.actions.lock();
+        Self {
+            actions: Arc::new(Mutex::new(actions.clone())),
+        }
+    }
 }
 
 /// Subdirectories under `workspace_dir` that hold internal application state
@@ -99,16 +178,12 @@ pub(super) const WORKSPACE_INTERNAL_DIRS: &[&str] = &[
     "tinyplace",
 ];
 
-/// Per-profile internal-state directory families under the workspace.
-pub(super) const WORKSPACE_INTERNAL_PREFIXES: &[&str] =
-    &["memory-", "memory_tree-", "session_raw-"];
-
 /// The artifact store under `workspace_dir`. Its per-artifact directories are
-/// internal state (see the internal-state reservation); only
+/// internal state (see `is_workspace_internal_path`); only
 /// [`ARTIFACT_TOOL_RESULTS_DIR`] inside it stays agent-readable.
 pub(super) const ARTIFACTS_DIR: &str = "artifacts";
 /// The account config file, stored beside `workspace_dir` (see
-/// the internal-state reservation).
+/// `is_workspace_internal_path`).
 pub(super) const ACCOUNT_CONFIG_FILE: &str = "config.toml";
 /// Where oversized tool outputs are persisted for the agent to read back.
 pub(super) const ARTIFACT_TOOL_RESULTS_DIR: &str = "tool-results";
@@ -120,7 +195,7 @@ pub(super) const ARTIFACT_TOOL_RESULTS_DIR: &str = "tool-results";
 /// directory is often a project the agent is editing, and a tool output saved
 /// there becomes a stray file in that project (picked up by `git add -A`, shown
 /// in the diff). This is the one subdirectory of the internal `artifacts/` store
-/// agent file tools may read (the internal-state reservation), and `from_config`
+/// agent file tools may read (`is_workspace_internal_path`), and `from_config`
 /// grants it as a read-only root so the absolute pointer the store hands out
 /// stays readable when `workspace_only` refuses other absolute paths.
 pub fn tool_result_artifacts_dir(workspace_dir: &std::path::Path) -> PathBuf {
@@ -131,6 +206,11 @@ pub fn tool_result_artifacts_dir(workspace_dir: &std::path::Path) -> PathBuf {
 
 /// Files directly under `workspace_dir` that hold secrets or persona config
 /// and must not be writable by agent tools.
+
+/// Workspace-relative prefixes reserved for core-managed state.
+pub(super) const WORKSPACE_INTERNAL_PREFIXES: &[&str] =
+    &["memory-", "memory_tree-", "session_raw-"];
+
 pub(super) const WORKSPACE_INTERNAL_FILES: &[&str] = &[
     "core.token",
     "dev-keychain.json",
@@ -155,7 +235,7 @@ pub struct SecurityPolicy {
     /// allowlist, the hourly action budget, `workspace_only`, `forbidden_paths`
     /// and the workspace-internal boundary are all skipped.
     ///
-    /// the TinySecurity protected-path floor still applies either way: credential
+    /// [`Self::is_always_forbidden`] still applies either way: credential
     /// stores (`~/.ssh`, `~/.gnupg`, `~/.aws`, …) and system roots stay
     /// unreachable. That is a deliberate floor, not an oversight — it has never
     /// blocked legitimate agent work, and removing it is a one-line change if
@@ -190,6 +270,7 @@ pub struct SecurityPolicy {
     pub allowed_commands: Vec<String>,
     pub forbidden_paths: Vec<String>,
     pub max_actions_per_hour: u32,
+    pub max_cost_per_day_cents: u32,
     pub require_approval_for_medium_risk: bool,
     pub block_high_risk_commands: bool,
     /// Directories outside the workspace the agent may access (read or read-write).
@@ -218,19 +299,44 @@ pub struct SecurityPolicy {
     /// without a `pending_approvals` audit row (openhuman#5634, accepted).
     /// Sourced from `autonomy.auto_approve_all`;
     /// observed live via `live_policy`. Does not affect
-    /// the protected-path floor, the internal-state reservation, or
+    /// `is_always_forbidden`, `is_workspace_internal_path`, or
     /// `ToolPolicyMiddleware`, which are independent code paths.
     pub auto_approve_all: bool,
-    /// Who answers shell-command questions for this policy. `None` is the
-    /// TinySecurity module and is the only value production code sets; the
-    /// gateway trait is sealed, so only this crate's test double can be
-    /// installed.
+    pub tracker: ActionTracker,
+    /// Gateway used by the module-owned command adapter. Production leaves
+    /// this unset; the sealed interface admits only fail-closed test doubles.
     pub command_gateway: Option<super::native_commands::SharedCommandGateway>,
+    /// Lazily-cached canonical form of [`workspace_dir`].
+    ///
+    /// `validate_path` / `validate_parent_path` use the canonical workspace
+    /// root to check resolved paths against `forbidden_paths`. Without a cache
+    /// each call invokes `tokio::fs::canonicalize(&workspace_dir)` — one
+    /// `stat(2)` + symlink walk on the same path on every file op. A single
+    /// agent turn doing tens of read/edit/shell-path validations hits this
+    /// repeatedly with identical input.
+    ///
+    /// `workspace_dir` is effectively immutable for a given `SecurityPolicy`
+    /// (a config update builds a *new* policy via `from_config` and swaps the
+    /// `Arc` in [`live_policy`]), so caching the resolved value is safe and
+    /// stays correct across config updates.
+    ///
+    /// `Arc<OnceCell<_>>` so the struct stays `Clone` (clone the `Arc`) and
+    /// init happens lazily on the first async call site without blocking
+    /// constructors. Fallback (raw `workspace_dir` if canonicalize fails)
+    /// matches the previous inline behavior exactly.
+    ///
+    /// Visibility is `pub` to match every other field on the struct: external
+    /// crates (Cargo examples, downstream consumers) construct
+    /// `SecurityPolicy` with the `..SecurityPolicy::default()` functional-update
+    /// spread, and Rust requires every field of the target struct to be
+    /// visible to the caller in that syntax — even fields supplied by the
+    /// default. `pub(crate)` was an over-tight first cut that broke
+    /// `examples/mouse_smoke.rs` with E0451.
+    pub canonical_workspace: Arc<OnceCell<PathBuf>>,
 }
 
 impl Default for SecurityPolicy {
     fn default() -> Self {
-        let shipped = crate::config::AutonomyConfig::default();
         Self {
             // Deliberately the opposite of `AutonomyConfig::default()`, which is
             // `false`. That one is the *shipped* default, chosen once, from
@@ -246,14 +352,88 @@ impl Default for SecurityPolicy {
             workspace_dir: PathBuf::from("."),
             action_dir: PathBuf::from("."),
             workspace_only: true,
-            // The shipped lists, so the two defaults cannot drift. The module
-            // enforces them; the host only carries them.
-            allowed_commands: shipped.allowed_commands,
-            forbidden_paths: shipped.forbidden_paths,
+            // When adding a new entry to this allowlist, re-audit
+            // `DANGEROUS_ENV_PREFIXES` (see below). Every newly-allowed binary
+            // may introduce its own env-driven subprocess hooks (pager, editor,
+            // loader override, SSH/diff helper, preprocessor) — those names
+            // must be added to the prefix denylist so that the
+            // `KEY=cmd <allowed-binary>` shape cannot bypass allowlisting via
+            // `skip_env_assignments` in `is_command_allowed`. Cross-ref #2636.
+            allowed_commands: vec![
+                // Version control
+                "git".into(),
+                // Package managers / build systems
+                "npm".into(),
+                "pnpm".into(),
+                "yarn".into(),
+                "cargo".into(),
+                "make".into(),
+                "cmake".into(),
+                // Directory / file inspection (read-only, low-risk)
+                "ls".into(),
+                "cat".into(),
+                "grep".into(),
+                "find".into(),
+                "echo".into(),
+                "pwd".into(),
+                "wc".into(),
+                "head".into(),
+                "tail".into(),
+                "date".into(),
+                "sort".into(),
+                "uniq".into(),
+                "diff".into(),
+                "which".into(),
+                "uname".into(),
+                "basename".into(),
+                "dirname".into(),
+                "tr".into(),
+                "cut".into(),
+                "realpath".into(),
+                "readlink".into(),
+                "stat".into(),
+                "file".into(),
+                // Filesystem mutations (medium-risk — require approval in Supervised mode)
+                "mkdir".into(),
+                "touch".into(),
+                "cp".into(),
+                "mv".into(),
+                "ln".into(),
+                // Windows read-only equivalents for the same basic
+                // inspection workflows as ls/cat/grep/which.
+                "dir".into(),
+                "type".into(),
+                "where".into(),
+                "findstr".into(),
+                "more".into(),
+            ],
+            forbidden_paths: vec![
+                // System directories (blocked even when workspace_only=false)
+                "/etc".into(),
+                "/root".into(),
+                "/home".into(),
+                "/usr".into(),
+                "/bin".into(),
+                "/sbin".into(),
+                "/lib".into(),
+                "/opt".into(),
+                "/boot".into(),
+                "/dev".into(),
+                "/proc".into(),
+                "/sys".into(),
+                "/var".into(),
+                "/tmp".into(),
+                // Sensitive dotfiles
+                "~/.ssh".into(),
+                "~/.gnupg".into(),
+                "~/.aws".into(),
+                "~/.config".into(),
+            ],
             // Effectively unlimited — matches AutonomyConfig::default_max_actions_per_hour().
             // The rate-limiter check is `count <= max`, so u32::MAX is functionally
             // infinite without requiring an Option sentinel on the field type.
             max_actions_per_hour: u32::MAX,
+            max_cost_per_day_cents: 500,
             require_approval_for_medium_risk: true,
             block_high_risk_commands: true,
             trusted_roots: Vec::new(),
@@ -263,6 +443,8 @@ impl Default for SecurityPolicy {
             auto_approve: Vec::new(),
             auto_approve_all: false,
             command_gateway: None,
+            tracker: ActionTracker::new(),
+            canonical_workspace: Arc::new(OnceCell::new()),
         }
     }
 }

@@ -76,6 +76,34 @@ pub async fn load_declared_modules(config: &Config) {
     }
 
     warm_connector_catalogs(config);
+    #[cfg(feature = "inbound-queues")]
+    warm_inbound_queues(config);
+}
+
+/// Load the inbound event queues in the background when inbound events are
+/// routed through them. The module runs its own pass timer, so loading it is
+/// what resumes delivering the work a previous run left queued — a deferral
+/// waiting for its time, a retry in back-off — instead of waiting for the
+/// next inbound event to load it. Off the boot path, like the connector
+/// warm-up; a failed load is logged and the next event tries again.
+#[cfg(feature = "inbound-queues")]
+fn warm_inbound_queues(config: &Config) {
+    if !crate::inbound::active(config) {
+        log::debug!("[modules] inbound event queues warm-up skipped: routing is off");
+        return;
+    }
+    // Unit tests share one process-wide module slot (see the connector warm-up).
+    if cfg!(test) {
+        return;
+    }
+    let config = config.clone();
+    // Loading a module is process-wide; the host's own context carries it.
+    crate::core::runtime::DispatchCtx::host_default().spawn(async move {
+        log::debug!("[modules] inbound event queues warm-up starting");
+        if let Err(reason) = ops::ensure_loaded(&config, super::event_queues::MODULE_ID).await {
+            log::warn!("[modules] inbound event queues did not load at boot: {reason}");
+        }
+    });
 }
 
 /// Read the connector module's curated catalogs into the host in the

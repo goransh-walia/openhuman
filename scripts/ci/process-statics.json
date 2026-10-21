@@ -528,5 +528,25 @@
     "category": "B",
     "reason": "The canonical TinyMCP client table is keyed by the resolved agent directory. Host completion and exact-client eviction preserve the same directory fence across close and purge; no runtime guard is retained in the table.",
     "verification": "mcp/module_client_owner_tests.rs: orphaned_shutdown_cleanup_keeps_a_host_directory_reservation_until_confirmed; mcp/module_client/cleanup_tests.rs: a_pending_close_fences_the_folder_under_another_spelling"
+  },
+  {
+    "file": "crates/openhuman-core/src/inbound/settings.rs",
+    "scope": "",
+    "name": "LAST_RESOLUTION",
+    "type": "RwLock<Option<Arc<Resolved>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "The inbound event queues' configuration (queue manifest, pipeline, queue backend) resolved from [inbound] when the process-wide tinyeventqueues module is loaded; the storage host reads it to grant the module's queues. It is process configuration for the one module instance and carries no tenant data.",
+    "verification": "inbound/settings_tests.rs: the_module_config_is_what_the_storage_grant_declares"
+  },
+  {
+    "file": "crates/openhuman-core/src/inbound/settings.rs",
+    "scope": "",
+    "name": "SHIPPED",
+    "type": "std::sync::OnceLock<Arc<Resolved>>",
+    "count": 1,
+    "category": "A",
+    "reason": "The module's shipped queues.json and pipeline.json, parsed once; immutable process configuration with no tenant data.",
+    "verification": "inbound/settings_tests.rs: the_defaults_resolve_to_the_shipped_files_in_storage"
   }
 ]

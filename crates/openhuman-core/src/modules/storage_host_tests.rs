@@ -73,6 +73,8 @@ fn grant(collection: &str) -> StorageGrant {
         blob_prefixes: vec!["files/".into()],
         secret_prefixes: vec!["token.".into()],
         writable: true,
+        queues: None,
+        queue_backend: None,
     }
 }
 
@@ -694,6 +696,9 @@ async fn every_call_is_audited_without_its_payload() {
 
 #[path = "storage_host_bus_tests.rs"]
 mod bus;
+
+#[path = "storage_host_queues_tests.rs"]
+mod queues;
 
 #[path = "storage_host_cdylib_tests.rs"]
 mod cdylib;

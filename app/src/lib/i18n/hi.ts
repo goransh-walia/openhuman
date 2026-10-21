@@ -583,6 +583,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'लंबित डेस्कटॉप अनुमोदन लोड नहीं हो सके। फिर कोशिश करने के लिए रीफ़्रेश करें।',
   'desktop.unsupported': 'इस रनटाइम में डेस्कटॉप नियंत्रण उपलब्ध नहीं है।',
+  'desktop.unsupportedWindows':
+    'Windows पर डेस्कटॉप नियंत्रण अभी उपलब्ध नहीं है। ब्राउज़र नियंत्रण Windows पर अभी काम करता है।',
   'desktop.localOnly': 'यह सेटिंग केवल इस कंप्यूटर पर लागू होती है।',
   'desktop.permissions': 'सिस्टम अनुमतियाँ',
   'desktop.openSettings': 'सेटिंग्स खोलें',
@@ -602,6 +604,10 @@ const messages: TranslationMap = {
     'अभी मेमोरी तक नहीं पहुँचा जा सकता। संग्रहीत कुछ भी खोया नहीं है; थोड़ी देर में फिर से कोशिश करें।',
   'memory.outOfCredits.title': 'क्रेडिट खत्म हो गए',
   'memory.outOfCredits.action': 'टॉप अप करें',
+  'memory.error.planRequired':
+    'आपके मौजूदा प्लान में मेमोरी शामिल नहीं है, इसलिए OpenHuman जो सीखता है उसे न सहेज सकता है, न खोज सकता है। मेमोरी चालू करने के लिए अपग्रेड करें, या सेटिंग्स में कोई दूसरा मेमोरी विकल्प चुनें।',
+  'memory.planRequired.title': 'मेमोरी आपके प्लान का हिस्सा नहीं है',
+  'memory.planRequired.action': 'प्लान देखें',
   'alerts.title': 'अलर्ट',
   'alerts.empty': 'अभी कोई अलर्ट नहीं',
   'alerts.markAllRead': 'सभी पढ़ा हुआ मार्क करें',
@@ -668,7 +674,6 @@ const messages: TranslationMap = {
     'उपकरण सूची, नीति मुद्रा, MCP अनुमतिसूची, और हाल के ब्लॉक',
   'devOptions.toolPolicyDiagnostics.loading': 'लोड...',
   'devOptions.toolPolicyDiagnostics.unavailable': 'अनुपलब्ध',
-  'voice.pushToTalk': 'पुश टू टॉक',
   'misc.somethingWentWrong': 'कुछ गड़बड़ हो गई',
   'misc.beta':
     'OpenHuman अभी अर्ली बीटा में है। फीडबैक शेयर करें या कोई बग मिले तो रिपोर्ट करें: हर रिपोर्ट हमें तेज़ी से काम करने में मदद करती है।',
@@ -1182,13 +1187,9 @@ const messages: TranslationMap = {
   'mnemonic.createANewWallet': 'नया वॉलेट बनाएं',
   'mnemonic.importWallet': 'वॉलेट आयात करें',
   'team.deleting': 'हटाया जा रहा है...',
-  'voice.tapToToggle': 'टॉगल के लिए टैप करें',
   'voice.settingsSaved': 'वॉइस सेटिंग्स सेव हो गईं।',
   'voice.failedToLoadSettings': 'ध्वनि सेटिंग लोड करने में विफल',
   'voice.failedToSaveSettings': 'ध्वनि सेटिंग सहेजने में विफल',
-  'voice.debug.alwaysOn': 'हमेशा-चालू सुनना',
-  'voice.debug.alwaysOnDesc':
-    'माइक्रोफ़ोन खुला रखें और आप जो कहते हैं वह बिना हॉटकी के स्वचालित रूप से एजेंट को भेजें। स्क्रीन लॉक होने पर रुक जाता है।',
   'voice.providers.saved': 'ध्वनि प्रदाता सहेजे गए.',
   'voice.providers.failedToSave': 'ध्वनि प्रदाताओं को सहेजने में विफल',
   'voice.mode.start': 'वॉइस चैट शुरू करें',
@@ -1254,27 +1255,6 @@ const messages: TranslationMap = {
   'voice.routing.elevenlabsVoiceIdAria': 'ElevenLabs वॉयस ID (कस्टम)',
   'voice.routing.elevenlabsVoiceDesc':
     'एक क्यूरेटेड वॉयस चुनें या अपने ElevenLabs डैशबोर्ड से कस्टम वॉयस ID पेस्ट करें।',
-  'pttSettings.title': 'दबाकर बोलें',
-  'pttSettings.description':
-    'जब आप किसी दूसरे ऐप में हों तब OpenHuman से बात करने के लिए कोई कुंजी दबाए रखें। कुंजी छोड़ने पर रिकॉर्डिंग भेजी जाती है; अगर «उत्तर बोलकर सुनाएँ» चालू है तो OpenHuman उत्तर बोलकर सुनाता है।',
-  'pttSettings.shortcutLabel': 'हॉटकी',
-  'pttSettings.shortcutPlaceholder': 'कोई कुंजी दबाएँ (जैसे F13)',
-  'pttSettings.shortcutUnsetHint': 'दबाकर बोलें बंद है: चालू करने के लिए कोई हॉटकी चुनें।',
-  'pttSettings.speakRepliesLabel': 'एजेंट के उत्तर ज़ोर से सुनाएँ',
-  'pttSettings.showOverlayLabel': 'दबाए रखने के दौरान ओवरले दिखाएँ',
-  'pttSettings.errorConflictsWithDictation':
-    'यह शॉर्टकट पहले से डिक्टेशन में उपयोग हो रहा है। कोई दूसरी कुंजी चुनें।',
-  'pttSettings.errorModifierOnly':
-    'कोई सामान्य कुंजी चुनें (जैसे F13): केवल मॉडिफ़ायर वाले शॉर्टकट दबाकर बोलें के लिए काम नहीं करते।',
-  'pttSettings.errorEmpty': 'बाँधने के लिए कोई कुंजी चुनें।',
-  'pttSettings.errorAccessibility':
-    'इस शॉर्टकट के लिए macOS को एक्सेसिबिलिटी अनुमति चाहिए। System Settings → Privacy & Security → Accessibility खोलें और OpenHuman को सक्षम करें।',
-  'pttSettings.errorShortcutInUse':
-    'कोई दूसरा ऐप पहले से इस शॉर्टकट का उपयोग कर रहा है। कोई दूसरा चुनें।',
-  'pttSettings.errorUnsupportedWayland':
-    'Wayland सत्र अभी OpenHuman में ग्लोबल शॉर्टकट का समर्थन नहीं करते: X11 सत्र पर जाएँ या ऐप के अंदर डिक्टेशन टॉगल का उपयोग करें।',
-  'pttOverlay.listening': 'सुन रहा है…',
-  'pttOverlay.idle': 'निष्क्रिय',
   'composio.triageTitle': 'इंटीग्रेशन ट्रिगर',
   'composio.triageDesc':
     'एक्टिव होने पर, हर आने वाला Composio ट्रिगर AI triage स्टेप से गुज़रता है जो इवेंट क्लासीफाई करता है और ऑटोमेटेड एक्शन शुरू कर सकता है: प्रति ट्रिगर एक लोकल LLM टर्न। मैन्युअल रिव्यू पसंद हो तो ग्लोबली या per-integration डिसेबल करें। अगर एनवायरनमेंट वेरिएबल',
@@ -1324,6 +1304,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'मैसेज लोड नहीं हो पाए',
   'chat.thinkingDots': 'सोच रहा है...',
   'chat.status.thinkingElapsed': 'सोच रहा है · {elapsed}',
+  'chat.status.compacting': 'पिछली बातचीत का सारांश बना रहा है…',
+  'chat.status.compactingElapsed': 'पिछली बातचीत का सारांश बना रहा है · {elapsed}',
   'chat.status.waitingApproval': 'आपकी स्वीकृति की प्रतीक्षा',
   'chat.status.waitingReview': 'आपकी समीक्षा की प्रतीक्षा',
   'chat.status.waitingAnswer': 'आपके उत्तर की प्रतीक्षा',
@@ -2365,10 +2347,6 @@ const messages: TranslationMap = {
   'oauth.button.loopbackTimeout':
     'साइन-इन का समय समाप्त हो गया: ब्राउज़र ने OAuth पुनर्निर्देशन पूरा नहीं किया। कृपया पुनः प्रयास करें।',
   'openhuman.team_list_teams': 'टीम सूची टीमें',
-  'overlay.ariaAttention': 'ध्यान संदेश',
-  'overlay.ariaOrb': 'OpenHuman ओवरले',
-  'overlay.ariaVoiceActive': 'वॉइस इनपुट एक्टिव',
-  'overlay.orbTitle': 'मूव करने के लिए खींचें · पोज़िशन रीसेट के लिए डबल-क्लिक करें',
   'pages.settings.account.migration': 'इम्पोर्ट',
   'pages.settings.account.migrationDesc':
     'OpenClaw (और जल्द ही Hermes) से मेमोरी और नोट्स इस वर्कस्पेस में माइग्रेट करें।',
@@ -3249,27 +3227,6 @@ const messages: TranslationMap = {
   'skills.install.urlLabel': 'स्किल URL',
   'skills.install.urlPlaceholder': 'https://raw.githubusercontent.com/owner/repo/main/SKILL.md',
   'skills.search.placeholder': 'प्लेसहोल्डर',
-  'skills.setup.voice.activation': 'एक्टिवेशन',
-  'skills.setup.voice.activeDescPrefix': 'एफ.एन',
-  'skills.setup.voice.activeDescSuffix': 'एफ.एन',
-  'skills.setup.voice.activeTitle': 'Voice Intelligence एक्टिव है',
-  'skills.setup.voice.customizeSettings': 'सेटिंग्स कस्टमाइज़ करें',
-  'skills.setup.voice.downloadSttBtn': 'वॉयस सेटिंग्स खोलें',
-  'skills.setup.voice.enableDesc': 'सक्षम विवरण',
-  'skills.setup.voice.hotkey': 'हॉटकी',
-  'skills.setup.voice.startBtn': 'शुरू हो रहा है...',
-  'skills.setup.voice.startError': 'वॉइस सर्वर शुरू नहीं हो पाया',
-  'skills.setup.voice.starting': 'शुरू हो रहा है...',
-  'skills.setup.voice.stepEnable': 'वॉइस सर्वर शुरू करें',
-  'skills.setup.voice.stepSetup': 'स्पीच-टू-टेक्स्ट सेटअप आवश्यक है',
-  'skills.setup.voice.stepSuccess': 'तैयार है',
-  'skills.setup.voice.sttNotReady': 'Speech-to-text मॉडल तैयार नहीं है',
-  'skills.setup.voice.sttNotReadyDesc':
-    'Voice Intelligence को एक चालू वाक्-से-पाठ इंजन चाहिए। सेटिंग्स › वॉइस में जाकर एक चुनें।',
-  'skills.setup.voice.sttReady': 'Speech-to-text मॉडल तैयार है',
-  'skills.setup.voice.sttReturnHint':
-    'वॉयस सेटिंग्स में स्पीच-टू-टेक्स्ट इंजन कॉन्फ़िगर करें, फिर वॉयस शुरू करने के लिए यहाँ लौटें।',
-  'skills.setup.voice.title': 'वॉइस इंटेलिजेंस',
   'skills.uninstall.description':
     'यह स्किल डायरेक्टरी और उसके सभी बंडल किए गए संसाधनों को स्थायी रूप से हटा देता है। एजेंट अगले टर्न पर इसे देखना बंद कर देगा।',
   'upsell.global.limitMessage': 'जारी रखने के लिए अपना प्लान अपग्रेड करें या क्रेडिट टॉप अप करें',
@@ -3542,8 +3499,6 @@ const messages: TranslationMap = {
     'एक OPENHUMAN_APPROVAL_GATE=0 ओवरराइड का पता चला लेकिन अनदेखा कर दिया गया: डेस्कटॉप ऐप अनुमोदन गेट को हमेशा चालू रखता है।',
 
   // Run queue
-  'notch.ready': 'तैयार',
-  'notch.listening': 'सुन रहा हूं…',
 
   'orchestration.detail.stop': 'रोकें',
 
@@ -3726,7 +3681,6 @@ const messages: TranslationMap = {
   'voice.routing.testOk': 'काम जारी है',
   'voice.routing.testFailed': 'विफल',
   'voice.routing.unsaved': 'असहेजे बदलाव',
-  'pttSettings.clearShortcut': 'क्लियर करें',
   'flows.allRuns.tableTitle': 'रन',
   'flows.allRuns.columnStatus': 'स्थिति',
   'flows.allRuns.columnWorkflow': 'वर्कफ़्लो',
@@ -3780,7 +3734,7 @@ const messages: TranslationMap = {
   'settings.embeddings.modelCardTitle': 'मॉडल और आयाम',
   'mcp.rows.searchPlaceholder': 'सर्वर खोजें...',
   'mcp.tab.section.clients': 'ग्राहक',
-  'voice.pageDesc': 'भाषण इंजन, कैसे वे रूट किए जाते हैं, और पुश-टू-टॉक करते हैं।',
+  'voice.pageDesc': 'स्पीच इंजन और प्रदाता रूटिंग।',
   'voice.providers.cardDesc':
     'आप जिस इंजन का उपयोग करना चाहते हैं उसे चालू करें। कुंजी इस डिवाइस पर रहते हैं।',
   'voice.providers.cap.stt': 'पाठ का भाषण',

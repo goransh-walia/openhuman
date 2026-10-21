@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use super::defaults::default_true;
 
 /// Names of every toggleable component, in declaration order.
-pub const COMPONENT_NAMES: [&str; 16] = [
+pub const COMPONENT_NAMES: [&str; 17] = [
     "flows",
     "tinyflows",
     "memes",
@@ -37,6 +37,7 @@ pub const COMPONENT_NAMES: [&str; 16] = [
     "channels",
     "skills",
     "voice",
+    "eventqueues",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -92,6 +93,11 @@ pub struct ComponentsConfig {
     /// Voice (tinyvoice).
     #[serde(default = "default_true")]
     pub voice: bool,
+    /// Inbound event queues (tinyeventqueues): Composio triggers and agent
+    /// webhooks are queued, deduplicated and paced before triage. Off, they
+    /// take the direct triage path.
+    #[serde(default = "default_true")]
+    pub eventqueues: bool,
 }
 
 impl Default for ComponentsConfig {
@@ -113,6 +119,7 @@ impl Default for ComponentsConfig {
             channels: true,
             skills: true,
             voice: true,
+            eventqueues: true,
         }
     }
 }
@@ -137,6 +144,7 @@ impl ComponentsConfig {
             "channels" => self.channels,
             "skills" => self.skills,
             "voice" => self.voice,
+            "eventqueues" => self.eventqueues,
             _ => return None,
         })
     }
@@ -160,6 +168,7 @@ impl ComponentsConfig {
             "channels" => &mut self.channels,
             "skills" => &mut self.skills,
             "voice" => &mut self.voice,
+            "eventqueues" => &mut self.eventqueues,
             _ => return false,
         };
         *slot = value;

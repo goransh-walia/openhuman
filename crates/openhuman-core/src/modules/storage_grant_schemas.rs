@@ -18,47 +18,83 @@
 //! importers write the module's v1 shapes and the owner's steps carry them
 //! forward (`ensure_migrated` in `storage_host`).
 
+use std::sync::Arc;
+
+use tinystoragedrivers::queue::QueueManifest;
+
 use super::storage_grants::StorageGrant;
 use crate::storage::schema::module_items;
 
 /// One module's row: its registry id, the schema owner that declares its
-/// storage, and secret prefixes the schema cannot name.
+/// storage, secret prefixes the schema cannot name, and the queue manifest the
+/// host declares for it (`None`: the module gets no `Queues` object).
 struct Row {
     module: &'static str,
     owner: &'static str,
     secrets: &'static [&'static str],
+    queues: QueueManifestSource,
 }
 
-const ROWS: [Row; 6] = [
+/// Where a row's queue grant comes from, read when the grant is built (at
+/// bind), so a manifest the host loads from configuration is current.
+pub(super) type QueueManifestSource = Option<fn() -> Option<QueueGrant>>;
+
+/// The queues a module is granted: the manifest the host declares on its
+/// scope, and where they live.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct QueueGrant {
+    /// The queues the module may use; the storage server refuses any other.
+    pub manifest: Arc<QueueManifest>,
+    /// `Storage` keeps them in the scope's documents; a broker URL moves them.
+    pub backend: tinystoragedrivers::QueueConfig,
+}
+
+const ROWS: &[Row] = &[
     Row {
         module: tinychannels::MODULE_ID,
         owner: "channels",
         secrets: &[],
+        queues: None,
     },
     Row {
         module: tinymcp::MODULE_ID,
         owner: "mcp",
         secrets: &["mcp_client_env/", "mcp_cache_fingerprint_key"],
+        queues: None,
     },
     Row {
         module: tinyconnectors::MODULE_ID,
         owner: "connectors",
         secrets: &[],
+        queues: None,
     },
     Row {
         module: tinywallet::MODULE_ID,
         owner: "wallet",
         secrets: &[],
+        queues: None,
     },
     Row {
         module: tinybox::MODULE_ID,
         owner: "box",
         secrets: &[],
+        queues: None,
     },
     Row {
         module: tinyjuice::MODULE_ID,
         owner: "juice",
         secrets: &[],
+        queues: None,
+    },
+    // The inbound event queues keep their pipeline state in `teq.*`
+    // collections and their work in the queues the configured manifest
+    // declares (the shipped `queues.json` unless `[inbound] queues_path`).
+    #[cfg(feature = "inbound-queues")]
+    Row {
+        module: tinyeventqueues::MODULE_ID,
+        owner: tinyeventqueues_bus::storage::OWNER,
+        secrets: &[],
+        queues: Some(crate::inbound::queue_grant),
     },
 ];
 
@@ -94,6 +130,7 @@ pub(super) async fn migrate_imported(ctx: &crate::core::runtime::DispatchCtx, mo
 /// The grant generated for `module_id`, or `None` for a module with no row.
 pub(super) fn grant_for(module_id: &str) -> Option<StorageGrant> {
     let row = ROWS.iter().find(|row| row.module == module_id)?;
+    let queues = row.queues.and_then(|source| source());
     let items = module_items(row.owner);
     let mut secret_prefixes: Vec<String> = row.secrets.iter().map(|s| (*s).to_owned()).collect();
     secret_prefixes.extend(items.secrets);
@@ -103,6 +140,8 @@ pub(super) fn grant_for(module_id: &str) -> Option<StorageGrant> {
         blob_prefixes: items.blobs,
         secret_prefixes,
         writable: true,
+        queues: queues.as_ref().map(|grant| Arc::clone(&grant.manifest)),
+        queue_backend: queues.map(|grant| grant.backend),
     })
 }
 
@@ -132,6 +171,11 @@ pub(super) mod tinybox {
     pub(crate) const MODULE_ID: &str = "tinybox";
     /// The v1 jail-index collection the importer writes.
     pub(crate) const JAIL_INDEX_COLLECTION: &str = "tinybox_jail_index";
+}
+
+#[cfg(feature = "inbound-queues")]
+pub(super) mod tinyeventqueues {
+    pub(crate) const MODULE_ID: &str = "tinyeventqueues";
 }
 
 pub(super) mod tinyjuice {

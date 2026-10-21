@@ -290,3 +290,42 @@ fn shell_safe_env_vars_includes_essentials() {
         );
     }
 }
+
+#[tokio::test]
+async fn shell_block_verdict_never_reaches_the_runtime() {
+    use crate::security::GateDecision;
+    use tinybox_bus::CommandClass;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let marker = tmp.path().join("ran");
+    let tool = ShellTool::new(
+        gated_security(
+            AutonomyLevel::ReadOnly,
+            StubGateway::gate(CommandClass::Write, GateDecision::Block),
+        ),
+        test_runtime(),
+    );
+    let result = tool
+        .execute(json!({"command": format!("touch {}", marker.display())}))
+        .await
+        .unwrap();
+    assert!(result.is_error, "a Block verdict must reject execution");
+    assert!(result.output().contains("blocked by security policy"));
+    assert!(!marker.exists(), "a Block verdict must not run the command");
+}
+
+#[tokio::test]
+async fn shell_prompt_verdict_never_runs_without_a_bound_approval() {
+    let tmp = tempfile::tempdir().unwrap();
+    let marker = tmp.path().join("ran");
+    let tool = ShellTool::new(
+        gated_security(AutonomyLevel::Supervised, StubGateway::prompt()),
+        test_runtime(),
+    );
+    let result = tool
+        .execute(json!({"command": format!("touch {}", marker.display())}))
+        .await
+        .unwrap();
+    assert!(result.is_error, "Prompt has no in-tool approval proof");
+    assert!(!marker.exists(), "a Prompt verdict must not run the command");
+}

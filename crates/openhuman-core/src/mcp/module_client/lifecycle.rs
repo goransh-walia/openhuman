@@ -112,7 +112,10 @@ impl McpConfiguredClient {
             .to_owned();
         Ok(Self::with_port(
             data_dir,
-            Box::new(TinyMcpPort::new(crate::modules::client(config.clone()))),
+            Box::new(
+                TinyMcpPort::new(crate::modules::client(config.clone()))
+                    .with_host_config(config.clone()),
+            ),
         ))
     }
 

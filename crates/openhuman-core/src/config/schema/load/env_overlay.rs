@@ -4,8 +4,9 @@
 //! config section's overrides live in a submodule below.
 
 mod components;
-mod dictation_context;
+mod context;
 mod embeddings;
+mod inbound_debounce;
 mod modules;
 mod observability;
 mod proxy;
@@ -247,12 +248,12 @@ impl Config {
         self.apply_search_env(env);
         self.apply_proxy_env(env);
         self.apply_runtime_env(env);
+        self.apply_inbound_debounce_env(env);
         self.apply_observability_env(env);
         self.apply_embedding_env(env);
         self.apply_update_env(env);
         self.apply_modules_env(env);
         self.apply_components_env(env);
-        self.apply_dictation_env(env);
         self.apply_context_env(env);
 
         // Not an env override: the one load step every config passes through,

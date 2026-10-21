@@ -72,3 +72,22 @@ test('the rendering is stable and lists every owner', () => {
   assert.ok(text.indexOf('## a') < text.indexOf('## b'));
   assert.equal(render(dump), text);
 });
+
+test('the dump example builds with web3 by default and with an override that keeps it', async () => {
+  const { dumpFeatures, dumpSchema } = await import('../ci/check-storage-schema.mjs');
+  assert.equal(dumpFeatures({}), 'web3');
+  assert.equal(dumpFeatures({ STORAGE_SCHEMA_FEATURES: 'web3,flows' }), 'web3,flows');
+  assert.throws(() => dumpFeatures({ STORAGE_SCHEMA_FEATURES: 'flows' }), /web3/);
+  const product = dumpFeatures({ STORAGE_SCHEMA_FEATURES: 'core-product' });
+  assert.ok(product.split(',').includes('web3'));
+  let args;
+  const dump = dumpSchema(undefined, {
+    env: { STORAGE_SCHEMA_FEATURES: 'core-product' },
+    run: (_cmd, argv) => {
+      args = argv;
+      return { status: 0, stdout: '{"owners":[]}', stderr: '' };
+    },
+  });
+  assert.deepEqual(dump, { owners: [] });
+  assert.equal(args[args.indexOf('--features') + 1], product);
+});

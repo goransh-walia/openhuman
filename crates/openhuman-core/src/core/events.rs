@@ -22,21 +22,6 @@
 //! path the event is published at, so the broker can filter by domain and never
 //! wake a process for events it did not ask for.
 
-/// Voice-domain events.
-#[non_exhaustive]
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum VoiceEvent {
-    /// A PTT session committed a transcript to a thread. Carries only
-    /// length/timing — never the raw text, per the PII-safe logging rule.
-    PttTranscriptCommitted {
-        thread_id: String,
-        session_id: u64,
-        text_len: usize,
-        held_ms: u64,
-        finalized_by_watchdog: bool,
-    },
-}
-
 /// A tool call made while answering a committed turn: name and id only.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ConversationToolCall {
@@ -384,13 +369,8 @@ pub enum DomainEvent {
         job_id: String,
         success: bool,
         output: String,
-    },
-    /// A cron job requests delivery of its output to a channel.
-    CronDeliveryRequested {
-        job_id: String,
-        channel: String,
-        target: String,
-        output: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tenant: Option<crate::core::runtime::Tenant>,
     },
 
     /// A proactive message (morning briefing, welcome, cron output, etc.)
@@ -986,6 +966,39 @@ pub enum DomainEvent {
         routed: bool,
     },
 
+    // ── Inbound event queues ────────────────────────────────────────────
+    /// The inbound event queues ended an event without delivering it: a
+    /// redelivery of an event already taken, a gate or noise filter, or an
+    /// invalid envelope. `source` is the module source (`composio:<toolkit>`,
+    /// `webhook:<tunnel>`); `event_id` is the source's own id.
+    InboundEventDropped {
+        source: String,
+        event_id: String,
+        /// The module's reason, snake case (e.g. `duplicate`, `noise`).
+        reason: String,
+    },
+    /// Triage of a queued inbound event asked to run again later; the queue
+    /// redelivers it at `defer_until_ms` instead of dropping it.
+    InboundDeferred {
+        source: String,
+        event_id: String,
+        /// Unix epoch milliseconds the triage asked to run again at.
+        defer_until_ms: i64,
+        /// Already scrubbed; safe to log.
+        reason: String,
+    },
+    /// A queued inbound event will not be delivered: triage reached a terminal
+    /// state, or the delivery ran out of attempts. It is parked in the
+    /// dead-letter queue (`inbound.dead`, `inbound.redrive`).
+    InboundDeadLettered {
+        source: String,
+        event_id: String,
+        /// The delivery attempt that gave up.
+        attempt: u32,
+        /// Already scrubbed; safe to log.
+        detail: String,
+    },
+
     // ── Device pairing ──────────────────────────────────────────────────
     /// A mobile device completed the X25519 handshake and is now paired.
     DevicePaired {
@@ -1270,10 +1283,6 @@ pub enum DomainEvent {
         tenant: Option<crate::core::runtime::Tenant>,
     },
 
-    // ── Voice ────────────────────────────────────────────────────────────
-    /// A voice domain event (PTT, transcription lifecycle, etc.).
-    Voice(VoiceEvent),
-
     // ── Task sources ─────────────────────────────────────────────────────
     /// A task source completed a fetch pass.
     TaskSourceFetched {
@@ -1386,7 +1395,6 @@ impl DomainEvent {
 
             Self::CronJobTriggered { .. }
             | Self::CronJobCompleted { .. }
-            | Self::CronDeliveryRequested { .. }
             | Self::ProactiveMessageRequested { .. }
             | Self::CronSystemJobDue { .. }
             | Self::FlowRunProgress { .. }
@@ -1425,6 +1433,10 @@ impl DomainEvent {
 
             Self::NotificationIngested { .. } | Self::NotificationTriaged { .. } => "notification",
 
+            Self::InboundEventDropped { .. }
+            | Self::InboundDeferred { .. }
+            | Self::InboundDeadLettered { .. } => "inbound",
+
             Self::DevicePaired { .. }
             | Self::DeviceRevoked { .. }
             | Self::DevicePeerOnline { .. }
@@ -1456,8 +1468,6 @@ impl DomainEvent {
             | Self::ThreadTodosChanged { .. }
             | Self::ThreadRunModeChanged { .. } => "agent",
 
-            Self::Voice(_) => "voice",
-
             Self::ApprovalRequested { .. }
             | Self::ApprovalDecided { .. }
             | Self::ApprovalGateOverrideIgnored { .. }
@@ -1482,124 +1492,6 @@ impl DomainEvent {
             | Self::McpServerReconnected { .. }
             | Self::McpServerReconnectFailed { .. }
             | Self::McpServerParked { .. } => "mcp_client",
-        }
-    }
-
-    /// Stable variant name without payload (avoids Debug format coupling).
-    pub fn variant_name(&self) -> &'static str {
-        match self {
-            Self::AgentTurnStarted { .. } => "AgentTurnStarted",
-            Self::AgentTurnCompleted { .. } => "AgentTurnCompleted",
-            Self::ConversationTurnCommitted { .. } => "ConversationTurnCommitted",
-            Self::AgentError { .. } => "AgentError",
-            Self::SubagentSpawned { .. } => "SubagentSpawned",
-            Self::SubagentCompleted { .. } => "SubagentCompleted",
-            Self::SubagentFailed { .. } => "SubagentFailed",
-            Self::SubagentAwaitingUser { .. } => "SubagentAwaitingUser",
-            Self::AgentOrchestrationSpawned { .. } => "AgentOrchestrationSpawned",
-            Self::AgentOrchestrationCompleted { .. } => "AgentOrchestrationCompleted",
-            Self::AgentOrchestrationFailed { .. } => "AgentOrchestrationFailed",
-            Self::AgentOrchestrationClosed { .. } => "AgentOrchestrationClosed",
-            Self::RunQueueMessageQueued { .. } => "RunQueueMessageQueued",
-            Self::RunQueueFollowupDispatched { .. } => "RunQueueFollowupDispatched",
-            Self::RunQueueInterrupted { .. } => "RunQueueInterrupted",
-            Self::RunQueueMessageDelivered { .. } => "RunQueueMessageDelivered",
-            Self::RunQueueSteerRequeued { .. } => "RunQueueSteerRequeued",
-            Self::MonitorStatusChanged { .. } => "MonitorStatusChanged",
-            Self::MonitorLine { .. } => "MonitorLine",
-            Self::MemoryStored { .. } => "MemoryStored",
-            Self::MemoryRecalled { .. } => "MemoryRecalled",
-            Self::ChannelInboundMessage { .. } => "ChannelInboundMessage",
-            Self::ChannelMessageReceived { .. } => "ChannelMessageReceived",
-            Self::ChannelMessageProcessed { .. } => "ChannelMessageProcessed",
-            Self::ChannelReactionReceived { .. } => "ChannelReactionReceived",
-            Self::ChannelReactionSent { .. } => "ChannelReactionSent",
-            Self::ChannelConnected { .. } => "ChannelConnected",
-            Self::ChannelDisconnected { .. } => "ChannelDisconnected",
-            Self::CronJobTriggered { .. } => "CronJobTriggered",
-            Self::CronJobCompleted { .. } => "CronJobCompleted",
-            Self::CronDeliveryRequested { .. } => "CronDeliveryRequested",
-            Self::ProactiveMessageRequested { .. } => "ProactiveMessageRequested",
-            Self::CronSystemJobDue { .. } => "CronSystemJobDue",
-            Self::FlowRunProgress { .. } => "FlowRunProgress",
-            Self::FlowRunStarted { .. } => "FlowRunStarted",
-            Self::FlowRunFinished { .. } => "FlowRunFinished",
-            Self::FlowChanged { .. } => "FlowChanged",
-            Self::WorkflowLoaded { .. } => "WorkflowLoaded",
-            Self::WorkflowStopped { .. } => "WorkflowStopped",
-            Self::WorkflowStartFailed { .. } => "WorkflowStartFailed",
-            Self::WorkflowExecuted { .. } => "WorkflowExecuted",
-            Self::WorkflowsChanged { .. } => "WorkflowsChanged",
-            Self::ToolExecutionStarted { .. } => "ToolExecutionStarted",
-            Self::ToolExecutionCompleted { .. } => "ToolExecutionCompleted",
-            Self::WorkspacePrepared { .. } => "WorkspacePrepared",
-            Self::WorkspaceViolation { .. } => "WorkspaceViolation",
-            Self::WorkspaceCleanup { .. } => "WorkspaceCleanup",
-            Self::WebhookIncomingRequest { .. } => "WebhookIncomingRequest",
-            Self::WebhookReceived { .. } => "WebhookReceived",
-            Self::WebhookRegistered { .. } => "WebhookRegistered",
-            Self::WebhookUnregistered { .. } => "WebhookUnregistered",
-            Self::WebhookProcessed { .. } => "WebhookProcessed",
-            Self::ComposioTriggerReceived { .. } => "ComposioTriggerReceived",
-            Self::ComposioConnectionCreated { .. } => "ComposioConnectionCreated",
-            Self::ComposioConnectionDeleted { .. } => "ComposioConnectionDeleted",
-            Self::ComposioIntegrationsChanged { .. } => "ComposioIntegrationsChanged",
-            Self::ComposioActionExecuted { .. } => "ComposioActionExecuted",
-            Self::ComposioConfigChanged { .. } => "ComposioConfigChanged",
-            Self::TriggerEvaluated { .. } => "TriggerEvaluated",
-            Self::TriggerEscalated { .. } => "TriggerEscalated",
-            Self::TriggerEscalationFailed { .. } => "TriggerEscalationFailed",
-            Self::NotificationIngested { .. } => "NotificationIngested",
-            Self::NotificationTriaged { .. } => "NotificationTriaged",
-            Self::DevicePaired { .. } => "DevicePaired",
-            Self::DeviceRevoked { .. } => "DeviceRevoked",
-            Self::DevicePeerOnline { .. } => "DevicePeerOnline",
-            Self::DevicePeerOffline { .. } => "DevicePeerOffline",
-            Self::DeviceTunnelFrame { .. } => "DeviceTunnelFrame",
-            Self::SystemStartup { .. } => "SystemStartup",
-            Self::SystemShutdown { .. } => "SystemShutdown",
-            Self::SystemRestartRequested { .. } => "SystemRestartRequested",
-            Self::SystemShutdownRequested { .. } => "SystemShutdownRequested",
-            Self::AutonomyConfigChanged => "AutonomyConfigChanged",
-            Self::AgentPathsChanged => "AgentPathsChanged",
-            Self::ActiveWorkspaceChanged { .. } => "ActiveWorkspaceChanged",
-            Self::HealthChanged { .. } => "HealthChanged",
-            Self::HealthRestarted { .. } => "HealthRestarted",
-            Self::KeyringConsentRequired => "KeyringConsentRequired",
-            Self::KeyringDecryptFailed { .. } => "KeyringDecryptFailed",
-            Self::SessionExpired { .. } => "SessionExpired",
-            Self::CredentialChanged { .. } => "CredentialChanged",
-            Self::ApprovalRequested { .. } => "ApprovalRequested",
-            Self::ApprovalDecided { .. } => "ApprovalDecided",
-            Self::FlowApprovalRequested { .. } => "FlowApprovalRequested",
-            Self::PlanReviewRequested { .. } => "PlanReviewRequested",
-            Self::PlanReviewDecided { .. } => "PlanReviewDecided",
-            Self::ExternalTransferPending { .. } => "ExternalTransferPending",
-            Self::ApprovalGateOverrideIgnored { .. } => "ApprovalGateOverrideIgnored",
-            Self::ApprovalGateDisabled { .. } => "ApprovalGateDisabled",
-            Self::ArtifactReady { .. } => "ArtifactReady",
-            Self::ArtifactFailed { .. } => "ArtifactFailed",
-            Self::ArtifactPending { .. } => "ArtifactPending",
-            Self::McpServerInstalled { .. } => "McpServerInstalled",
-            Self::McpServerConnected { .. } => "McpServerConnected",
-            Self::McpServerDisconnected { .. } => "McpServerDisconnected",
-            Self::McpClientToolExecuted { .. } => "McpClientToolExecuted",
-            Self::McpToolRejected { .. } => "McpToolRejected",
-            Self::McpServerProbeTimedOut { .. } => "McpServerProbeTimedOut",
-            Self::McpServerTransportDropped { .. } => "McpServerTransportDropped",
-            Self::McpServerReconnected { .. } => "McpServerReconnected",
-            Self::McpServerReconnectFailed { .. } => "McpServerReconnectFailed",
-            Self::McpServerParked { .. } => "McpServerParked",
-            Self::EmbeddingModelUnhealthy { .. } => "EmbeddingModelUnhealthy",
-            Self::ProviderApiKeyRejected { .. } => "ProviderApiKeyRejected",
-            Self::TaskSourceFetched { .. } => "TaskSourceFetched",
-            Self::TaskSourceTaskIngested { .. } => "TaskSourceTaskIngested",
-            Self::TaskSourceFetchFailed { .. } => "TaskSourceFetchFailed",
-            Self::ThreadGoalUpdated { .. } => "ThreadGoalUpdated",
-            Self::ThreadGoalCleared { .. } => "ThreadGoalCleared",
-            Self::ThreadTodosChanged { .. } => "ThreadTodosChanged",
-            Self::ThreadRunModeChanged { .. } => "ThreadRunModeChanged",
-            Self::Voice(_) => "Voice",
         }
     }
 
@@ -1788,6 +1680,8 @@ impl DomainEvent {
         }
     }
 }
+
+mod variant_names;
 
 #[cfg(test)]
 #[path = "events_tests.rs"]

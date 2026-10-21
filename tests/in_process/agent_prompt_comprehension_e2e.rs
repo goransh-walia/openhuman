@@ -452,6 +452,10 @@ impl Drop for Stack {
 }
 
 async fn boot_stack(extra_config: &str) -> Stack {
+    // The managed chat provider is installed by the TinyHumans layer; without
+    // it every turn ends in `chat_error.inference` and no request reaches the
+    // scripted upstream.
+    crate::tinyhumans_boot::boot();
     AGENT_DEF_REGISTRY_INIT.get_or_init(|| {
         AgentDefinitionRegistry::init_global_builtins()
             .expect("AgentDefinitionRegistry::init_global_builtins must not fail");

@@ -164,39 +164,36 @@ async fn ambient_config_follows_the_explicit_context() {
     );
 }
 
-#[cfg(feature = "mcp")]
+#[cfg(feature = "modules")]
 #[test]
-fn operators_own_servers_are_trusted_and_the_stdio_jail_requires_isolation() {
-    let temp = tempfile::tempdir().expect("tempdir");
+fn registry_stdio_servers_get_the_host_jail_and_are_never_operator_trusted() {
+    let tmp = tempfile::tempdir().unwrap();
     let mut config = Config::default();
-    config.workspace_dir = temp.path().to_path_buf();
-    let mut server = populated_server();
-    server.server.enabled = true;
-    config.mcp_client.servers.push(server);
+    config.workspace_dir = tmp.path().to_path_buf();
+    config.mcp_client.servers.push(populated_server());
 
     let converted = client_config(&config);
-    assert!(
-        converted.servers[0].operator_trusted,
-        "a server from the operator's own config keeps its direct spawn"
-    );
     let sandbox = converted
         .stdio_sandbox
-        .expect("registry servers get a jail");
-    assert!(sandbox.require_process_isolation);
+        .as_ref()
+        .expect("tinymcp refuses stdio servers without a stdio_sandbox");
+    assert!(std::path::Path::new(&sandbox.workspace).is_dir());
+    assert!(sandbox.workspace.starts_with(
+        &tmp.path()
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+    ));
     assert_eq!(
-        std::path::Path::new(&sandbox.workspace),
-        temp.path().join("mcp").join("stdio")
+        sandbox.require_process_isolation,
+        super::super::host_sandbox::require_process_isolation(false)
     );
-}
-
-#[cfg(feature = "mcp")]
-#[test]
-fn a_flag_written_in_the_config_file_does_not_decide_trust() {
-    // The host decides trust from where the server was declared, so a file
-    // entry cannot opt a SaaS tenant (or anyone) out of that decision.
-    let mut config = Config::default();
-    let mut server = populated_server();
-    server.server.operator_trusted = false;
-    config.mcp_client.servers.push(server);
-    assert!(client_config(&config).servers[0].operator_trusted);
+    assert!(
+        converted
+            .servers
+            .iter()
+            .all(|server| !server.operator_trusted),
+        "the host must not vouch for servers it did not configure as trusted"
+    );
 }

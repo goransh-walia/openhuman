@@ -64,9 +64,8 @@ pub(crate) struct RefusingEngine {
 impl RefusingEngine {
     /// The hosted engine's refusal for an exhausted credit balance (HTTP 402).
     pub(crate) fn out_of_credits() -> Self {
-        Self::with(tinymemory_api::Error::Engine(
-            "[USER_INSUFFICIENT_CREDITS] memory API fetch on api.example: the account has \
-             insufficient credits (HTTP 402)"
+        Self::with(tinymemory_api::Error::InsufficientCredits(
+            "memory API fetch on api.example: the account has insufficient credits (HTTP 402)"
                 .into(),
         ))
     }
@@ -149,6 +148,11 @@ pub(crate) struct RecordingEngine {
     /// `"erase"` / `"forget"`, in call order.
     pub(crate) calls: std::sync::Mutex<Vec<&'static str>>,
     erase_unsupported: bool,
+    fail_next_store: std::sync::atomic::AtomicBool,
+    fail_next_forget: std::sync::atomic::AtomicBool,
+    pause_next_store: std::sync::atomic::AtomicBool,
+    store_paused: tokio::sync::Notify,
+    release_store: tokio::sync::Notify,
 }
 
 impl RecordingEngine {
@@ -158,6 +162,11 @@ impl RecordingEngine {
             inner: ReferenceEngine::new(),
             calls: std::sync::Mutex::new(Vec::new()),
             erase_unsupported: false,
+            fail_next_store: std::sync::atomic::AtomicBool::new(false),
+            fail_next_forget: std::sync::atomic::AtomicBool::new(false),
+            pause_next_store: std::sync::atomic::AtomicBool::new(false),
+            store_paused: tokio::sync::Notify::new(),
+            release_store: tokio::sync::Notify::new(),
         }
     }
 
@@ -177,6 +186,34 @@ impl RecordingEngine {
     /// The recorded calls.
     pub(crate) fn calls(&self) -> Vec<&'static str> {
         self.calls.lock().unwrap().clone()
+    }
+
+    /// Makes the next store fail, then resumes normal behavior.
+    pub(crate) fn fail_next_store(&self) {
+        self.fail_next_store
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Makes the next forget fail, then resumes normal behavior.
+    pub(crate) fn fail_next_forget(&self) {
+        self.fail_next_forget
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Pauses the next store until [`Self::release_paused_store`] is called.
+    pub(crate) fn pause_next_store(&self) {
+        self.pause_next_store
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Waits until the paused store has reached the barrier.
+    pub(crate) async fn wait_for_paused_store(&self) {
+        self.store_paused.notified().await;
+    }
+
+    /// Releases a store paused by [`Self::pause_next_store`].
+    pub(crate) fn release_paused_store(&self) {
+        self.release_store.notify_one();
     }
 }
 
@@ -208,6 +245,21 @@ impl MemoryEngine for RecordingEngine {
         &self,
         item: tinymemory_api::StoreItem,
     ) -> tinymemory_api::Result<tinymemory_api::StoreReceipt> {
+        if self
+            .pause_next_store
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            self.store_paused.notify_one();
+            self.release_store.notified().await;
+        }
+        if self
+            .fail_next_store
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(tinymemory_api::Error::Engine(
+                "injected store failure".into(),
+            ));
+        }
         self.inner.store(item).await
     }
 
@@ -216,6 +268,14 @@ impl MemoryEngine for RecordingEngine {
         target: tinymemory_api::ForgetTarget,
     ) -> tinymemory_api::Result<tinymemory_api::ForgetReport> {
         self.calls.lock().unwrap().push("forget");
+        if self
+            .fail_next_forget
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(tinymemory_api::Error::Engine(
+                "injected forget failure".into(),
+            ));
+        }
         self.inner.forget(target).await
     }
 

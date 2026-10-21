@@ -165,6 +165,7 @@ Generate the complete local Rust API reference with `cargo doc -p openhuman-embe
 - [`events`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`fanout`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`identity`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
+- [`inbound`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`memory`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`modules`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
 - [`observe`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-embed/src/lib.rs)
@@ -197,6 +198,7 @@ The compiled capability report describes this build:
     "flows": true,
     "hosting": false,
     "http-server": true,
+    "inbound-queues": true,
     "inference": false,
     "mcp": true,
     "media": true,
@@ -210,8 +212,7 @@ The compiled capability report describes this build:
     "storage-sqlite": true,
     "tinymemes": true,
     "voice": false,
-    "web3": false,
-    "whatsapp-web": false
+    "web3": false
   },
   "domains": [
     "agent",

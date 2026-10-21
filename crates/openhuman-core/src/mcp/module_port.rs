@@ -5,6 +5,8 @@ use tinybus::module::ModuleObjectClient;
 
 pub(super) struct TinyMcpPort {
     root: ModuleClient,
+    /// The host config the stdio sandbox's toolchain grants resolve against.
+    host_config: Option<crate::config::Config>,
     #[cfg(feature = "modules")]
     pinned: tokio::sync::OnceCell<ModuleObjectClient>,
 }
@@ -13,9 +15,17 @@ impl TinyMcpPort {
     pub(super) fn new(root: ModuleClient) -> Self {
         Self {
             root,
+            host_config: None,
             #[cfg(feature = "modules")]
             pinned: tokio::sync::OnceCell::new(),
         }
+    }
+
+    /// Resolves the stdio sandbox's toolchain grants against `config` when the
+    /// configured client is opened.
+    pub(super) fn with_host_config(mut self, config: crate::config::Config) -> Self {
+        self.host_config = Some(config);
+        self
     }
 
     #[cfg(feature = "modules")]
@@ -64,11 +74,15 @@ impl McpModulePort for TinyMcpPort {
         data_dir: &str,
         config: &McpClientConfig,
     ) -> Result<OpenConfiguredResponse, ModuleCallError> {
+        let mut client = config.clone();
+        if let (Some(host), Some(sandbox)) = (&self.host_config, client.stdio_sandbox.as_mut()) {
+            crate::mcp::host_sandbox::with_toolchain_grants(host, sandbox).await;
+        }
         self.root_call(
             names::methods::OPEN_CONFIGURED,
             (OpenConfiguredRequest {
                 data_dir: data_dir.to_owned(),
-                client: config.clone(),
+                client,
             },),
             true,
         )

@@ -587,6 +587,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'Не удалось загрузить ожидающие подтверждения действий на рабочем столе. Обновите страницу и повторите попытку.',
   'desktop.unsupported': 'Управление рабочим столом недоступно в этой среде.',
+  'desktop.unsupportedWindows':
+    'Управление рабочим столом пока недоступно в Windows. Управление браузером в Windows уже работает.',
   'desktop.localOnly': 'Эта настройка действует только на этом компьютере.',
   'desktop.permissions': 'Системные разрешения',
   'desktop.openSettings': 'Открыть настройки',
@@ -606,6 +608,10 @@ const messages: TranslationMap = {
     'Сейчас не удаётся связаться с памятью. Ничего из сохранённого не потеряно; повторите попытку чуть позже.',
   'memory.outOfCredits.title': 'Кредиты закончились',
   'memory.outOfCredits.action': 'Пополнить',
+  'memory.error.planRequired':
+    'Ваш текущий тариф не включает память, поэтому OpenHuman не может сохранять то, что узнаёт, и обращаться к этому. Перейдите на более высокий тариф, чтобы включить память, или выберите другой вариант памяти в настройках.',
+  'memory.planRequired.title': 'Память не входит в ваш тариф',
+  'memory.planRequired.action': 'Посмотреть тарифы',
   'alerts.title': 'Оповещения',
   'alerts.empty': 'Оповещений пока нет',
   'alerts.markAllRead': 'Отметить всё прочитанным',
@@ -676,7 +682,6 @@ const messages: TranslationMap = {
     'Инвентаризация инструментов, положение политики, белые списки MCP и недавние блокировки',
   'devOptions.toolPolicyDiagnostics.loading': 'Загрузка…',
   'devOptions.toolPolicyDiagnostics.unavailable': 'Диагностика недоступна',
-  'voice.pushToTalk': 'Нажми и говори',
   'misc.somethingWentWrong': 'Что-то пошло не так',
   'misc.beta':
     'OpenHuman находится в стадии раннего бета-тестирования. Делись отзывами и сообщай об ошибках: каждый репорт помогает нам двигаться быстрее.',
@@ -1189,13 +1194,9 @@ const messages: TranslationMap = {
   'mnemonic.createANewWallet': 'Создать новый кошелек',
   'mnemonic.importWallet': 'Импортировать кошелек',
   'team.deleting': 'Удаление...',
-  'voice.tapToToggle': 'Нажать для переключения',
   'voice.settingsSaved': 'Настройки голоса сохранены.',
   'voice.failedToLoadSettings': 'Не удалось загрузить голосовые настройки.',
   'voice.failedToSaveSettings': 'Не удалось сохранить голосовые настройки.',
-  'voice.debug.alwaysOn': 'Постоянное прослушивание',
-  'voice.debug.alwaysOnDesc':
-    'Держит микрофон включённым и автоматически отправляет сказанное агенту без горячей клавиши. Приостанавливается при блокировке экрана.',
   'voice.providers.saved': 'Поставщики голосовой связи сохранены.',
   'voice.providers.failedToSave': 'Не удалось сохранить поставщиков голосовой связи.',
   'voice.mode.start': 'Начать голосовой чат',
@@ -1261,28 +1262,6 @@ const messages: TranslationMap = {
   'voice.routing.elevenlabsVoiceIdAria': 'ID голоса ElevenLabs (пользовательский)',
   'voice.routing.elevenlabsVoiceDesc':
     'Выберите подобранный голос или вставьте пользовательский ID голоса из вашей панели ElevenLabs.',
-  'pttSettings.title': 'Нажми и говори',
-  'pttSettings.description':
-    'Удерживайте клавишу, чтобы говорить с OpenHuman, пока вы находитесь в другом приложении. При отпускании запись отправляется; если включён параметр «Озвучивать ответы», OpenHuman озвучит ответ.',
-  'pttSettings.shortcutLabel': 'Сочетание клавиш',
-  'pttSettings.shortcutPlaceholder': 'Нажмите клавишу (например, F13)',
-  'pttSettings.shortcutUnsetHint':
-    'Нажми и говори выключено: выберите сочетание клавиш, чтобы включить.',
-  'pttSettings.speakRepliesLabel': 'Озвучивать ответы агента',
-  'pttSettings.showOverlayLabel': 'Показывать наложение во время удержания',
-  'pttSettings.errorConflictsWithDictation':
-    'Это сочетание уже используется диктовкой. Выберите другую клавишу.',
-  'pttSettings.errorModifierOnly':
-    'Выберите обычную клавишу (например, F13): сочетания только из модификаторов не работают для «нажми и говори».',
-  'pttSettings.errorEmpty': 'Выберите клавишу для назначения.',
-  'pttSettings.errorAccessibility':
-    'macOS требует разрешения «Универсальный доступ» для этого сочетания. Откройте Системные настройки → Конфиденциальность и безопасность → Универсальный доступ и включите OpenHuman.',
-  'pttSettings.errorShortcutInUse':
-    'Это сочетание уже использует другое приложение. Выберите другое.',
-  'pttSettings.errorUnsupportedWayland':
-    'Сессии Wayland пока не поддерживают глобальные сочетания клавиш в OpenHuman: перейдите на сессию X11 или используйте встроенный переключатель диктовки.',
-  'pttOverlay.listening': 'Слушаю…',
-  'pttOverlay.idle': 'Ожидание',
   'composio.triageTitle': 'Триггеры интеграций',
   'composio.triageDesc':
     'Когда активно, каждый входящий триггер Composio проходит через шаг AI-сортировки, который классифицирует событие и может запустить автоматические действия: один локальный LLM-запрос на триггер. Отключи глобально или для конкретных интеграций, если предпочитаешь ручной просмотр. Если переменная окружения',
@@ -1332,6 +1311,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'Не удалось загрузить сообщения',
   'chat.thinkingDots': 'Думаю...',
   'chat.status.thinkingElapsed': 'Думаю · {elapsed}',
+  'chat.status.compacting': 'Резюмирую предыдущий разговор…',
+  'chat.status.compactingElapsed': 'Резюмирую предыдущий разговор · {elapsed}',
   'chat.status.waitingApproval': 'Ожидает вашего одобрения',
   'chat.status.waitingReview': 'Ожидает вашей проверки',
   'chat.status.waitingAnswer': 'Ожидает вашего ответа',
@@ -2388,10 +2369,6 @@ const messages: TranslationMap = {
   'oauth.button.loopbackTimeout':
     'Время входа истекло: браузер не завершил перенаправление OAuth. Пожалуйста, попробуйте снова.',
   'openhuman.team_list_teams': 'Список команд',
-  'overlay.ariaAttention': 'Сообщение',
-  'overlay.ariaOrb': 'Оверлей OpenHuman',
-  'overlay.ariaVoiceActive': 'Голосовой ввод активен',
-  'overlay.orbTitle': 'Перетащи для перемещения · Двойной клик для сброса позиции',
   'pages.settings.account.migration': 'Импорт',
   'pages.settings.account.migrationDesc':
     'Перенесите память и заметки из OpenClaw (а вскоре и Hermes) в это рабочее пространство.',
@@ -3284,27 +3261,6 @@ const messages: TranslationMap = {
   'skills.install.urlLabel': 'URL навыка',
   'skills.install.urlPlaceholder': 'https://raw.githubusercontent.com/owner/repo/main/SKILL.md',
   'skills.search.placeholder': 'Поиск',
-  'skills.setup.voice.activation': 'Активация',
-  'skills.setup.voice.activeDescPrefix': 'Fn',
-  'skills.setup.voice.activeDescSuffix': 'Fn',
-  'skills.setup.voice.activeTitle': 'Голосовой интеллект активен',
-  'skills.setup.voice.customizeSettings': 'Настроить параметры',
-  'skills.setup.voice.downloadSttBtn': 'Открыть настройки голоса',
-  'skills.setup.voice.enableDesc': 'Включить',
-  'skills.setup.voice.hotkey': 'Горячая клавиша',
-  'skills.setup.voice.startBtn': 'Запуск...',
-  'skills.setup.voice.startError': 'Не удалось запустить голосовой сервер',
-  'skills.setup.voice.starting': 'Запуск...',
-  'skills.setup.voice.stepEnable': 'Запустить голосовой сервер',
-  'skills.setup.voice.stepSetup': 'Требуется настройка распознавания речи',
-  'skills.setup.voice.stepSuccess': 'Готово к работе',
-  'skills.setup.voice.sttNotReady': 'Модель распознавания речи не готова',
-  'skills.setup.voice.sttNotReadyDesc':
-    'Голосовому интеллекту нужен работающий движок распознавания речи. Выберите его в разделе «Настройки › Голос».',
-  'skills.setup.voice.sttReady': 'Модель распознавания речи готова',
-  'skills.setup.voice.sttReturnHint':
-    'Настройте движок распознавания речи в настройках голоса, затем вернитесь сюда, чтобы запустить голос.',
-  'skills.setup.voice.title': 'Голосовой интеллект',
   'skills.uninstall.description':
     'Это навсегда удалит каталог навыка и все его ресурсы. Агент перестанет видеть его на следующем ходу.',
   'upsell.global.limitMessage': 'Улучши план или пополни кредиты для продолжения',
@@ -3582,8 +3538,6 @@ const messages: TranslationMap = {
     'Обнаружено переопределение OPENHUMAN_APPROVAL_GATE=0, но оно проигнорировано: настольное приложение всегда держит шлюз одобрения включённым.',
 
   // Run queue
-  'notch.ready': 'Готово',
-  'notch.listening': 'Слушаю…',
 
   'orchestration.detail.stop': 'Остановить',
 
@@ -3768,7 +3722,6 @@ const messages: TranslationMap = {
   'voice.routing.testOk': 'Выполняется',
   'voice.routing.testFailed': 'Сбой',
   'voice.routing.unsaved': 'Несохранённые изменения',
-  'pttSettings.clearShortcut': 'Очистить',
   'flows.allRuns.tableTitle': 'Запуски',
   'flows.allRuns.columnStatus': 'Статус',
   'flows.allRuns.columnWorkflow': 'Рабочий процесс',
@@ -3823,7 +3776,7 @@ const messages: TranslationMap = {
   'settings.embeddings.modelCardTitle': 'Модель и размеры',
   'mcp.rows.searchPlaceholder': 'Поисковые серверы...',
   'mcp.tab.section.clients': 'Клиенты',
-  'voice.pageDesc': 'Речевые движки, как они маршрутизируются и толкают к разговору.',
+  'voice.pageDesc': 'Речевые движки и маршрутизация провайдеров.',
   'voice.providers.cardDesc':
     'Включите двигатели, которые вы хотите использовать. Ключи остаются на этом устройстве.',
   'voice.providers.cap.stt': 'Речь к тексту',

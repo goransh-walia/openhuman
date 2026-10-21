@@ -3,6 +3,7 @@
 
 use crate::config::Config;
 use crate::security::policy::{CommandFlow, CommandQuery, CommandStage, Refusal};
+use crate::security::GateDecision;
 use crate::security::SecurityPolicy;
 use tinyflows_bus::schedule::types::CronJob;
 use tokio::time::Duration;
@@ -36,7 +37,7 @@ async fn ask_module(
     command: &str,
     stage: CommandStage,
 ) -> Result<(), String> {
-    security
+    let verdict = security
         .check_command(CommandQuery {
             command,
             declared: None,
@@ -44,7 +45,6 @@ async fn ask_module(
             stage,
         })
         .await
-        .map(|_| ())
         .map_err(|refusal| {
             log::debug!("[cron][shell] command refused stage={stage:?} reason={refusal:?}");
             match refusal {
@@ -53,7 +53,14 @@ async fn ask_module(
                 Refusal::Unavailable => "Command analysis is unavailable.".to_owned(),
                 _ => "blocked by security policy: command not allowed".to_owned(),
             }
-        })
+        })?;
+    match verdict.gate {
+        GateDecision::Allow => Ok(()),
+        GateDecision::Prompt => Err(
+            "blocked by security policy: scheduled commands cannot wait for interactive approval".to_owned(),
+        ),
+        GateDecision::Block => Err("blocked by security policy: command rejected".to_owned()),
+    }
 }
 
 pub(super) async fn run_job_command(
@@ -73,7 +80,7 @@ pub(super) async fn run_job_command(
 }
 
 pub(super) async fn run_job_command_with_timeout(
-    ctx: &crate::core::runtime::DispatchCtx,
+    _ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     security: &SecurityPolicy,
     job: &CronJob,

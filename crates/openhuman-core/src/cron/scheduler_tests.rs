@@ -105,6 +105,8 @@ fn next_user_error(
     }
 }
 
+#[path = "scheduler_announce_delivery_tests.rs"]
+mod announce_delivery_tests;
 #[path = "scheduler_classifier_and_delivery_tests.rs"]
 mod classifier_and_delivery_tests;
 #[path = "scheduler_dispatch_tests.rs"]
@@ -172,7 +174,16 @@ async fn retryable_shell_failure_consumes_the_whole_retry_budget() {
     config.reliability.provider_backoff_ms = 200;
 
     let counter = tmp.path().join("retryable-attempts.log");
-    let job = test_job(&counting_failure_command(&counter));
+    let command = counting_failure_command(&counter);
+    let job = cron::add_shell_job(
+        &config,
+        None,
+        tinyflows_bus::schedule::types::Schedule::Every {
+            every_ms: 3_600_000,
+        },
+        &command,
+    )
+    .unwrap();
 
     let (success, output) = execute_job_now(
         &crate::core::runtime::DispatchCtx::ambient(),
@@ -226,7 +237,16 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     config.autonomy.level = AutonomyLevel::ReadOnly;
 
     let counter = tmp.path().join("blocked-attempts.log");
-    let job = test_job(&counting_failure_command(&counter));
+    let command = counting_failure_command(&counter);
+    let job = cron::add_shell_job(
+        &config,
+        None,
+        tinyflows_bus::schedule::types::Schedule::Every {
+            every_ms: 3_600_000,
+        },
+        &command,
+    )
+    .unwrap();
     let security =
         SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
     // Fixture guard: if the policy still permits acting, the command would run
@@ -367,4 +387,33 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
         "`false | true` is a success under a plain `-lc`; pipefail would make it \
          a failure and re-status every existing job with a pipeline in it: {output}"
     );
+}
+
+#[tokio::test]
+async fn scheduled_shell_requires_an_allow_verdict_before_jail_execution() {
+    use crate::security::policy::native_commands_stub::StubGateway;
+    use crate::security::{GateDecision, SecurityPolicy};
+    use tinybox_bus::CommandClass;
+
+    let tmp = TempDir::new().unwrap();
+    let config = test_config(&tmp).await;
+    let marker = tmp.path().join("scheduled-shell-ran");
+    let job = test_job(&format!("touch {}", marker.display()));
+
+    for gate in [GateDecision::Block, GateDecision::Prompt] {
+        let security = SecurityPolicy::default().with_gateway(StubGateway::gate(
+            CommandClass::Write,
+            gate,
+        ));
+        let (success, output) = run_job_command(
+            &crate::core::runtime::DispatchCtx::host_default(),
+            &config,
+            &security,
+            &job,
+        )
+        .await;
+        assert!(!success, "{gate:?} must not start scheduled code");
+        assert!(output.contains("blocked by security policy"), "{output}");
+        assert!(!marker.exists(), "{gate:?} must not execute the command");
+    }
 }

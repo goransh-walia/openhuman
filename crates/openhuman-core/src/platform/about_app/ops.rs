@@ -27,6 +27,7 @@ pub fn apply_components(capability: Capability, components: &ComponentSet) -> Ca
     let component = match capability.id {
         "security.sandbox_backends" => Some("sandbox"),
         "conversation.reply_remix" => Some("memes"),
+        "automation.inbound_event_queues" => Some("eventqueues"),
         // Scheduled jobs run in the tinyflows module.
         "automation.view_cron_jobs"
         | "automation.set_job_intervals"

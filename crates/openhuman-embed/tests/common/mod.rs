@@ -5,6 +5,8 @@
 
 #![allow(dead_code)]
 
+pub mod gated_provider;
+
 use openhuman_core::config::Config;
 use openhuman_core::core::runtime::{AGENT_WORKER_STACK_BYTES, MAX_BLOCKING_THREADS};
 use serde_json::json;

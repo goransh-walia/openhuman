@@ -162,6 +162,7 @@
     "events",
     "fanout",
     "identity",
+    "inbound",
     "memory",
     "modules",
     "observe",
@@ -457,6 +458,7 @@
       "flows": true,
       "hosting": false,
       "http-server": true,
+      "inbound-queues": true,
       "inference": false,
       "mcp": true,
       "media": true,
@@ -470,8 +472,7 @@
       "storage-sqlite": true,
       "tinymemes": true,
       "voice": false,
-      "web3": false,
-      "whatsapp-web": false
+      "web3": false
     },
     "domains": [
       "agent",

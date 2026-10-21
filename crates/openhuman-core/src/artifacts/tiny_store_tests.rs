@@ -275,7 +275,6 @@ fn a_working_folder_that_contains_the_workspace_is_not_trusted() {
 }
 
 #[test]
-#[cfg(feature = "security-module")]
 fn a_protected_location_is_refused_under_its_macos_canonical_name() {
     // `/etc` canonicalizes to `/private/etc` on macOS.
     assert!(refused_path(Path::new("/private/etc/hosts")).is_some());
@@ -287,7 +286,23 @@ fn a_protected_location_is_refused_under_its_macos_canonical_name() {
 }
 
 #[test]
-#[cfg(not(feature = "security-module"))]
-fn an_artifact_path_is_refused_without_the_security_module() {
-    assert!(refused_path(Path::new("/workspace/notes.md")).is_some());
+fn a_stored_file_key_resolves_under_the_version_files_folder_and_an_absolute_one_stays() {
+    let workspace = Path::new("/ws");
+    let kept = tiny_artifacts::FileRef {
+        key: "artifacts/files/a1/v2.pptx".into(),
+        size_bytes: 1,
+        media_type: None,
+    };
+    assert_eq!(
+        stored_file_path(workspace, &kept),
+        version_files_dir(workspace).join("artifacts/files/a1/v2.pptx")
+    );
+    let legacy = tiny_artifacts::FileRef {
+        key: "/elsewhere/old.pptx".into(),
+        ..kept
+    };
+    assert_eq!(
+        stored_file_path(workspace, &legacy),
+        PathBuf::from("/elsewhere/old.pptx")
+    );
 }

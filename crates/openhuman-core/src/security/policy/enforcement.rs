@@ -170,6 +170,7 @@ impl SecurityPolicy {
             allowed_commands: autonomy_config.allowed_commands.clone(),
             forbidden_paths: autonomy_config.forbidden_paths.clone(),
             max_actions_per_hour: autonomy_config.max_actions_per_hour,
+            max_cost_per_day_cents: 0,
             require_approval_for_medium_risk: autonomy_config.require_approval_for_medium_risk,
             block_high_risk_commands: autonomy_config.block_high_risk_commands,
             trusted_roots,
@@ -178,6 +179,8 @@ impl SecurityPolicy {
             allow_tool_install: autonomy_config.allow_tool_install,
             auto_approve: autonomy_config.auto_approve.clone(),
             auto_approve_all: autonomy_config.auto_approve_all,
+            tracker: super::types::ActionTracker::new(),
+            canonical_workspace: Arc::new(tokio::sync::OnceCell::new()),
             command_gateway: None,
         }
     }

@@ -11,6 +11,8 @@ pub(crate) mod native_commands_stub;
 #[cfg(feature = "security-module")]
 mod native_paths;
 mod path_checks;
+#[cfg(any(feature = "modules", test))]
+pub(crate) use path_checks::home_credential_stores;
 
 mod types;
 

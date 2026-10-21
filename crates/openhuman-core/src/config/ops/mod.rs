@@ -1,6 +1,7 @@
 //! JSON-RPC / CLI controller surface for persisted config and runtime flags.
 
 mod agent;
+mod agent_paths;
 mod loader;
 mod model;
 mod privacy;
@@ -9,15 +10,72 @@ mod search;
 mod tool_dispatcher;
 mod ui;
 
+pub(crate) fn config_save_error(error: anyhow::Error) -> String {
+    config_save_error_with_retryability(error, true)
+}
+
+pub(crate) fn config_save_error_with_retryability(error: anyhow::Error, retryable: bool) -> String {
+    if let Some(conflict) = config_save_conflict(&error, retryable) {
+        return conflict.encode();
+    }
+    error.to_string()
+}
+
+pub(crate) fn config_save_error_with_context(
+    error: anyhow::Error,
+    context: &str,
+    retryable: bool,
+) -> String {
+    if let Some(conflict) = config_save_conflict(&error, retryable) {
+        return conflict.encode();
+    }
+    format!("{context}: {error}")
+}
+
+pub(crate) fn config_save_error_with_full_context(
+    error: anyhow::Error,
+    context: &str,
+    retryable: bool,
+) -> String {
+    if let Some(conflict) = config_save_conflict(&error, retryable) {
+        return conflict.encode();
+    }
+    format!("{context}: {error:#}")
+}
+
+pub(crate) fn config_save_conflict(
+    error: &anyhow::Error,
+    retryable: bool,
+) -> Option<crate::core::StructuredRpcError> {
+    let conflict = error.chain().any(|cause| {
+        cause
+            .downcast_ref::<tinystoragedrivers::StorageError>()
+            .is_some_and(|error| error.kind() == tinystoragedrivers::ErrorKind::Conflict)
+    });
+    if !conflict {
+        return None;
+    }
+    Some(crate::core::StructuredRpcError {
+        message: "Configuration changed on another instance; reload it and retry".into(),
+        data: Some(serde_json::json!({
+            "kind": "ConfigConflict",
+            "code": "CONFIG_CONFLICT",
+            "retryable": retryable,
+        })),
+        expected_user_state: true,
+    })
+}
+
 // ── Public re-exports (preserving the flat external API) ─────────────────────
 
-pub use agent::redact_home;
 pub use agent::{
-    add_auto_approve_tool, apply_agent_paths_settings, apply_agent_settings,
-    apply_autonomy_settings, ensure_agent_dirs, ensure_usable_cwd, expand_tilde, get_agent_paths,
-    get_agent_settings, get_autonomy_settings, load_and_apply_agent_paths_settings,
-    load_and_apply_agent_settings, load_and_apply_autonomy_settings, AgentPathsPatch,
-    AgentSettingsPatch, AutonomySettingsPatch,
+    add_auto_approve_tool, apply_agent_settings, apply_autonomy_settings, get_agent_settings,
+    get_autonomy_settings, load_and_apply_agent_settings, load_and_apply_autonomy_settings,
+    AgentPathsPatch, AgentSettingsPatch, AutonomySettingsPatch,
+};
+pub use agent_paths::{
+    apply_agent_paths_settings, ensure_agent_dirs, ensure_usable_cwd, expand_tilde,
+    get_agent_paths, load_and_apply_agent_paths_settings, redact_home,
 };
 
 pub use loader::{
@@ -75,13 +133,11 @@ pub use search::{
     search_settings_json, SearchProviderPatch, SearchSettingsPatch,
 };
 pub use ui::{
-    apply_analytics_settings, apply_browser_settings, apply_user_timezone, get_dictation_settings,
-    get_onboarding_completed, get_voice_server_settings, load_and_apply_analytics_settings,
-    load_and_apply_browser_settings, load_and_apply_dictation_settings,
-    load_and_apply_user_timezone, load_and_apply_voice_server_settings, set_onboarding_completed,
-    user_timezone_json, workspace_onboarding_flag_exists, workspace_onboarding_flag_resolve,
+    apply_analytics_settings, apply_browser_settings, apply_user_timezone,
+    get_onboarding_completed, load_and_apply_analytics_settings, load_and_apply_browser_settings,
+    load_and_apply_user_timezone, set_onboarding_completed, user_timezone_json,
+    workspace_onboarding_flag_exists, workspace_onboarding_flag_resolve,
     workspace_onboarding_flag_set, AnalyticsSettingsPatch, BrowserSettingsPatch,
-    DictationSettingsPatch, VoiceServerSettingsPatch,
 };
 
 #[cfg(test)]

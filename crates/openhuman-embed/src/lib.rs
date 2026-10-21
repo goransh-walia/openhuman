@@ -129,6 +129,7 @@ mod error;
 pub mod fanout;
 mod harness;
 pub mod identity;
+pub mod inbound;
 pub mod memory;
 pub mod modules;
 mod permission;
@@ -221,7 +222,7 @@ pub mod seams {
     pub use tinyagents_hooks::tool::{
         HookIdentity, ToolHook, ToolHookContext, ToolHookDecision, ToolHookEvent,
     };
-    /// Product cost snapshot passed to harness-owned stop policies.
+    /// Product cost snapshot passed to TinyAgents stop policies.
     pub type TurnState<'a> = tinyagents_hooks::stop::TurnState<'a, TurnCost>;
     pub use openhuman_core::core::all::{ControllerExtension, DomainGroup};
     pub use openhuman_core::core::server_launcher::{HostBoot, ServeRequest, ServerLauncher};
@@ -261,7 +262,9 @@ pub mod session_store {
 }
 pub use complete::{
     ChatMessage, Completer, CompletionObserver, CompletionRequest, CompletionResponse,
-    CompletionTrace, CompletionUsage,
+    CompletionTrace, CompletionUsage, PhysicalDispatchMetadata, PhysicalDispatchObserver,
+    PhysicalDispatchOutcome, PhysicalDispatchStatus, PhysicalDispatchTerminal,
+    PhysicalDispatchUsage,
 };
 pub use session_store::{InMemorySessionStores, SessionStoreProvider};
 pub use turn::{absolute, Route, Turn, TurnOutcome, TurnRequest};

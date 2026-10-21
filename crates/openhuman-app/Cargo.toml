@@ -63,6 +63,9 @@ serde_json = "1"
 # - `hosting` — registration stays credential-gated in tools/ops.rs.
 # - `tinymemes` — compiled in; still off at runtime until `OPENHUMAN_TINYMEMES`
 #   (or a build-time `OPENHUMAN_TINYMEMES_DEFAULT`) turns it on.
+# - `inbound-queues` — Composio triggers and agent webhooks go through the
+#   `tinyeventqueues` module (durable, deduplicated, paced); without it a
+#   deferred triage is dropped as before.
 #
 # `scripts/ci/check-feature-forwarding.mjs` fails CI when the product gates
 # here drift from `scripts/ci/product-features.txt` (#4919) — do not
@@ -92,6 +95,7 @@ openhuman-rpc = { path = "../openhuman-rpc", default-features = false, features 
     "file-logging",
     "hosting",
     "tinymemes",
+    "inbound-queues",
     "storage-sqlite",
 ] }
 # The widget scheme reduces CSP origins with `tinymcp_bus::ui`'s pure rules.
@@ -109,7 +113,6 @@ tauri = { version = "2.11", default-features = false, features = [
     "webview-data-url",
 ] }
 tauri-plugin-deep-link = "2.0.0"
-tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 # Prevents a second launch from racing into CEF init and hitting the
@@ -357,11 +360,6 @@ tinyinference-embeddings = { path = "../../vendor/tinyagents/vendor/tinyinferenc
 tinyinference-llm = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm" }
 tinyinference-local = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-local" }
 tinyinference-voice = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-voice" }
-# TinyFlows and TinyChannels are vendored beside TinyAgents so integration
-# work can test crate changes against OpenHuman before publishing.
-tinyflows = { path = "../../vendor/tinyflows/crates/tinyflows" }
-
-
 [dev-dependencies]
 # `test-util` enables `#[tokio::test(start_paused = true)]` for the
 # idle-watchdog unit tests in `cdp/session.rs` (#1213).

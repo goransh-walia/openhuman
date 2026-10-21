@@ -12,7 +12,9 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 failure-output = "final"
 success-output = "never"
 status-level = "fail"
-final-status-level = "fail"
+# List slow passing tests in the final summary too, so a run shows where its
+# time went, not only what failed.
+final-status-level = "slow"
 
 # agent_harness_e2e changes process- and filesystem-wide test seams (HOME,
 # keyring storage, and the RPC token bootstrap). Its in-binary mutex provides

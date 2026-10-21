@@ -591,6 +591,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'Nie udało się wczytać oczekujących zgód na dostęp do pulpitu. Odśwież, aby spróbować ponownie.',
   'desktop.unsupported': 'Sterowanie pulpitem jest niedostępne w tym środowisku.',
+  'desktop.unsupportedWindows':
+    'Sterowanie pulpitem nie jest jeszcze dostępne w systemie Windows. Sterowanie przeglądarką już działa w systemie Windows.',
   'desktop.localOnly': 'To ustawienie dotyczy tylko tego komputera.',
   'desktop.permissions': 'Uprawnienia systemowe',
   'desktop.openSettings': 'Otwórz ustawienia',
@@ -610,6 +612,10 @@ const messages: TranslationMap = {
     'Nie można teraz połączyć się z pamięcią. Nic z zapisanych danych nie zostało utracone; spróbuj ponownie za chwilę.',
   'memory.outOfCredits.title': 'Brak kredytów',
   'memory.outOfCredits.action': 'Doładuj',
+  'memory.error.planRequired':
+    'Twój obecny plan nie obejmuje pamięci, więc OpenHuman nie może zapisywać ani wyszukiwać tego, czego się uczy. Ulepsz plan, aby włączyć pamięć, lub przełącz się na inną opcję pamięci w Ustawieniach.',
+  'memory.planRequired.title': 'Pamięć nie wchodzi w skład Twojego planu',
+  'memory.planRequired.action': 'Zobacz plany',
   'alerts.title': 'Alerty',
   'alerts.empty': 'Brak alertów',
   'alerts.markAllRead': 'Oznacz wszystkie jako przeczytane',
@@ -680,7 +686,6 @@ const messages: TranslationMap = {
     'Inwentarz narzędzi, postawa polityki, listy dozwolonych MCP i ostatnie blokady',
   'devOptions.toolPolicyDiagnostics.loading': 'Ładowanie…',
   'devOptions.toolPolicyDiagnostics.unavailable': 'Diagnostyka niedostępna',
-  'voice.pushToTalk': 'Naciśnij i mów',
   'misc.somethingWentWrong': 'Coś poszło nie tak',
   'misc.beta':
     'OpenHuman jest we wczesnej fazie beta. Chętnie poznamy Twoje uwagi: każdy zgłoszony błąd pomaga nam szybciej wydać poprawki.',
@@ -1195,13 +1200,9 @@ const messages: TranslationMap = {
   'mnemonic.createANewWallet': 'Utwórz nowy portfel',
   'mnemonic.importWallet': 'Importuj portfel',
   'team.deleting': 'Usuwanie...',
-  'voice.tapToToggle': 'Dotknij, aby przełączyć',
   'voice.settingsSaved': 'Ustawienia głosu zapisane.',
   'voice.failedToLoadSettings': 'Nie udało się załadować ustawień głosu',
   'voice.failedToSaveSettings': 'Nie udało się zapisać ustawień głosu',
-  'voice.debug.alwaysOn': 'Ciągłe nasłuchiwanie',
-  'voice.debug.alwaysOnDesc':
-    'Utrzymuje mikrofon włączony i automatycznie wysyła to, co mówisz, do agenta, bez skrótu. Wstrzymuje się, gdy ekran jest zablokowany.',
   'voice.providers.saved': 'Zapisano dostawców głosu.',
   'voice.providers.failedToSave': 'Nie udało się zapisać dostawców głosu',
   'voice.mode.start': 'Rozpocznij czat głosowy',
@@ -1266,27 +1267,6 @@ const messages: TranslationMap = {
   'voice.routing.elevenlabsVoiceIdAria': 'Identyfikator głosu ElevenLabs (niestandardowy)',
   'voice.routing.elevenlabsVoiceDesc':
     'Wybierz wybrany głos lub wklej własne ID głosu z panelu ElevenLabs.',
-  'pttSettings.title': 'Naciśnij, aby mówić',
-  'pttSettings.description':
-    'Przytrzymaj klawisz, aby mówić do OpenHuman, gdy korzystasz z innej aplikacji. Zwolnienie klawisza wysyła nagranie; jeśli opcja „Czytaj odpowiedzi" jest włączona, OpenHuman odczyta odpowiedź na głos.',
-  'pttSettings.shortcutLabel': 'Skrót klawiszowy',
-  'pttSettings.shortcutPlaceholder': 'Naciśnij klawisz (np. F13)',
-  'pttSettings.shortcutUnsetHint':
-    'Naciśnij, aby mówić jest wyłączone: wybierz skrót, aby je włączyć.',
-  'pttSettings.speakRepliesLabel': 'Czytaj odpowiedzi agenta na głos',
-  'pttSettings.showOverlayLabel': 'Pokazuj nakładkę podczas przytrzymania',
-  'pttSettings.errorConflictsWithDictation':
-    'Ten skrót jest już używany przez dyktowanie. Wybierz inny klawisz.',
-  'pttSettings.errorModifierOnly':
-    'Wybierz zwykły klawisz (np. F13): skróty złożone tylko z modyfikatorów nie działają dla naciśnij, aby mówić.',
-  'pttSettings.errorEmpty': 'Wybierz klawisz do przypisania.',
-  'pttSettings.errorAccessibility':
-    'macOS wymaga uprawnienia Dostępność dla tego skrótu. Otwórz Ustawienia systemowe → Prywatność i bezpieczeństwo → Dostępność i włącz OpenHuman.',
-  'pttSettings.errorShortcutInUse': 'Inna aplikacja używa już tego skrótu. Wybierz inny.',
-  'pttSettings.errorUnsupportedWayland':
-    'Sesje Wayland nie obsługują jeszcze globalnych skrótów w OpenHuman: przełącz się na sesję X11 lub użyj przełącznika dyktowania w aplikacji.',
-  'pttOverlay.listening': 'Słucham…',
-  'pttOverlay.idle': 'Gotowy',
   'composio.triageTitle': 'Wyzwalacze integracji',
   'composio.triageDesc':
     'Gdy włączone, każdy przychodzący wyzwalacz Composio przechodzi przez krok klasyfikacji AI: jedna tura lokalnego LLM na wyzwalacz. Wyłącz globalnie lub dla wybranych integracji, jeśli wolisz ręczny przegląd. Jeśli zmienna środowiskowa',
@@ -1336,6 +1316,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'Nie udało się wczytać wiadomości',
   'chat.thinkingDots': 'Myślę...',
   'chat.status.thinkingElapsed': 'Myślę · {elapsed}',
+  'chat.status.compacting': 'Podsumowuję wcześniejszą rozmowę…',
+  'chat.status.compactingElapsed': 'Podsumowuję wcześniejszą rozmowę · {elapsed}',
   'chat.status.waitingApproval': 'Czeka na Twoją zgodę',
   'chat.status.waitingReview': 'Czeka na Twoją ocenę',
   'chat.status.waitingAnswer': 'Czeka na Twoją odpowiedź',
@@ -2396,10 +2378,6 @@ const messages: TranslationMap = {
   'oauth.button.loopbackTimeout':
     'Logowanie przekroczyło limit czasu: przeglądarka nie ukończyła przekierowania OAuth. Spróbuj ponownie.',
   'openhuman.team_list_teams': 'Lista zespołów',
-  'overlay.ariaAttention': 'Wiadomość uwagi',
-  'overlay.ariaOrb': 'Nakładka OpenHuman',
-  'overlay.ariaVoiceActive': 'Wejście głosowe aktywne',
-  'overlay.orbTitle': 'Przeciągnij, aby przesunąć · Kliknij dwukrotnie, aby zresetować pozycję',
   'pages.settings.account.migration': 'Importuj',
   'pages.settings.account.migrationDesc':
     'Przenieś pamięć i notatki z OpenClaw (a wkrótce również Hermes) do tej przestrzeni roboczej.',
@@ -3292,27 +3270,6 @@ const messages: TranslationMap = {
   'skills.install.urlLabel': 'URL umiejętności',
   'skills.install.urlPlaceholder': 'https://raw.githubusercontent.com/owner/repo/main/SKILL.md',
   'skills.search.placeholder': 'Szukaj umiejętności...',
-  'skills.setup.voice.activation': 'Aktywacja',
-  'skills.setup.voice.activeDescPrefix': 'Fn',
-  'skills.setup.voice.activeDescSuffix': 'Fn',
-  'skills.setup.voice.activeTitle': 'Inteligencja głosowa jest aktywna',
-  'skills.setup.voice.customizeSettings': 'Dostosuj ustawienia',
-  'skills.setup.voice.downloadSttBtn': 'Otwórz ustawienia głosu',
-  'skills.setup.voice.enableDesc': 'Włącz dyktowanie głosowe i odpowiedzi głosowe.',
-  'skills.setup.voice.hotkey': 'Skrót klawiszowy',
-  'skills.setup.voice.startBtn': 'Uruchamianie...',
-  'skills.setup.voice.startError': 'Nie udało się uruchomić serwera głosowego',
-  'skills.setup.voice.starting': 'Uruchamianie...',
-  'skills.setup.voice.stepEnable': 'Uruchom serwer głosowy',
-  'skills.setup.voice.stepSetup': 'Wymagana konfiguracja zamiany mowy na tekst',
-  'skills.setup.voice.stepSuccess': 'Gotowe',
-  'skills.setup.voice.sttNotReady': 'Model speech-to-text niegotowy',
-  'skills.setup.voice.sttNotReadyDesc':
-    'Inteligencja głosowa wymaga działającego silnika rozpoznawania mowy. Wybierz go w Ustawieniach › Głos.',
-  'skills.setup.voice.sttReady': 'Model speech-to-text gotowy',
-  'skills.setup.voice.sttReturnHint':
-    'Skonfiguruj silnik zamiany mowy na tekst w ustawieniach głosu, a następnie wróć tutaj, aby uruchomić głos.',
-  'skills.setup.voice.title': 'Inteligencja głosowa',
   'skills.uninstall.description':
     'Permanentnie usuwa katalog umiejętności i wszystkie dołączone zasoby. Agent przestanie je widzieć w następnej turze.',
   'upsell.global.limitMessage': 'Podnieś plan lub doładuj kredyty, aby kontynuować',
@@ -3592,8 +3549,6 @@ const messages: TranslationMap = {
     'Wykryto nadpisanie OPENHUMAN_APPROVAL_GATE=0, ale je zignorowano: aplikacja desktopowa zawsze utrzymuje bramkę zatwierdzania włączoną.',
 
   // Run queue
-  'notch.ready': 'Gotowe',
-  'notch.listening': 'Słucham…',
 
   'orchestration.detail.stop': 'Zatrzymaj',
 
@@ -3781,7 +3736,6 @@ const messages: TranslationMap = {
   'voice.routing.testOk': 'Pracuje',
   'voice.routing.testFailed': 'Niepowodzenie',
   'voice.routing.unsaved': 'Niezapisane zmiany',
-  'pttSettings.clearShortcut': 'Wyczyść',
   'flows.allRuns.tableTitle': 'Uruchomienia',
   'flows.allRuns.columnStatus': 'Stan',
   'flows.allRuns.columnWorkflow': 'Przepływ pracy',
@@ -3834,7 +3788,7 @@ const messages: TranslationMap = {
   'settings.embeddings.modelCardTitle': 'Wzór i wymiary',
   'mcp.rows.searchPlaceholder': 'Wyszukiwanie serwerów...',
   'mcp.tab.section.clients': 'Klienci',
-  'voice.pageDesc': 'Silniki mowy, jak są kierowane, i pchać-to-talk.',
+  'voice.pageDesc': 'Silniki mowy i routing dostawców.',
   'voice.providers.cardDesc':
     'Włącz silniki, których chcesz użyć. Kluczyki zostają na tym urządzeniu.',
   'voice.providers.cap.stt': 'Przemówienie do tekstu',

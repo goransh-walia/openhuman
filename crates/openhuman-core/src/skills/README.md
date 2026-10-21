@@ -121,12 +121,22 @@ session for a match is not implemented.
 ### Bundled skills
 
 [`bundled/mod.rs`](./bundled/mod.rs) holds the compiled-in `BUNDLED` table: `desktop-control`
-(behind `modules`) and the flows `FLOW_AUTHORING` manual (behind `flows`).
-`install_bundled_skills` materializes them under
-`<workspace>/.openhuman/builtin-skills/`, and discovery accepts a directory
-there only while its bytes still match the binary
-(`is_current_materialization`). Nothing on the boot path calls
-`install_bundled_skills` today; only tests do.
+(behind `modules`). `install_bundled_skills` materializes those static entries
+under `<workspace>/.openhuman/builtin-skills/`, and discovery accepts a
+directory there only while its bytes still match the binary
+(`is_current_materialization`).
+
+The `flow-authoring` skill is owned by TinyFlows Copilot. When `skills`,
+`flows`, `tinyflows`, and the relevant domains are enabled, core and channel
+startup schedule its bounded preflight in the background, outside ordinary
+chat startup. Direct prompt inspection awaits the same bounded preflight.
+Session discovery schedules a retry when no current snapshot is ready. The
+preflight requests its files through the Copilot bus contract and materializes
+them under a separate, tenant/config-scoped
+`<workspace>/.openhuman/builtin-flow-skills/` root with `tinyskills`' atomic
+writer. Synchronous discovery includes it only while the current snapshot,
+module lifecycle, and TinySkills-validated files agree. Missing modules leave
+the optional skill hidden and ordinary chat available.
 
 ## Layout
 
@@ -157,9 +167,7 @@ there only while its bytes still match the binary
 - `Workflow`, `WorkflowScope` ([`ops_types.rs`](./ops_types.rs)): the discovered skill and its
   scope (`Builtin`, `Legacy`, `User`, `Project`, `Profile`, `Flow`).
 - `load_workflow_metadata`, `discover_workflows`, `discover_automations`,
-  `is_workspace_trusted`, `init_workflows_dir` ([`ops_discover/api.rs`](./ops_discover/api.rs)).
-  `config/workspace/ops.rs` calls `init_workflows_dir` during workspace
-  bootstrap.
+  `is_workspace_trusted` ([`ops_discover/api.rs`](./ops_discover/api.rs)).
 - `read_workflow_resource` ([`ops_discover/resource.rs`](./ops_discover/resource.rs)): wraps
   `tinyskills::resolve_skill` and `read_resource`, which enforce traversal,
   symlink, size (`MAX_WORKFLOW_RESOURCE_BYTES`, 128 KiB) and UTF-8 checks.
@@ -214,7 +222,8 @@ rather than re-implementing it:
 | `remove_bundle` | Root search order, error wording, the `WorkflowsChanged` publish |
 | Install URL normalization, the guarded `fetch_skill_document` (HTTPS only, non-public addresses refused, pinned connections, re-validated redirects, size cap, timeout), document validation, `write_installed_document`, `redact_url` | `Retry-After` and rate-limit messages, Sentry reporting |
 | `TriggerPattern` grammar and matching | `TriggeredWorkflowIndex` and the bus subscriber |
-| Bundled-skill validate, digest, install, `is_current_materialization` | The `BUNDLED` table and the builtin root |
+| Bundled-skill validate, digest, install, `is_current_materialization` | The static `BUNDLED` table and its builtin root |
+| TinyFlows Copilot `ListResources` | The scoped flow-authoring snapshot, separate materialization root, and cache/read verification |
 
 Other owners: the orchestrator prompt renders the catalog
 (`agent_registry/agents/orchestrator/prompt.rs`), channel turns render their
@@ -227,8 +236,8 @@ flows domain contributes `Flow`-scope entries (`flows/catalogue.rs`).
 - The `skills` Cargo feature (default on) gates every behavioral submodule.
   `pub mod skills` itself always compiles as a facade: when the feature is off,
   [`stub.rs`](./stub.rs) supplies the functions always-on callers use with empty or no-op
-  bodies (`load_workflow_metadata` returns `[]`, `init_workflows_dir` returns
-  `Ok(())`, the controller aggregators return nothing), so callers need no
+  bodies (`load_workflow_metadata` returns `[]`, the controller aggregators
+  return nothing), so callers need no
   `#[cfg]`. [`types.rs`](./types.rs) and `ops_types.rs` stay compiled in both builds because
   agent-harness and prompt signatures name them; the stub re-exports them
   rather than redeclaring them. [`catalog`](./catalog) and [`runtime`](./runtime) are facade and stub

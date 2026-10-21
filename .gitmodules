@@ -70,3 +70,7 @@
 [submodule "vendor/tiny-artifacts"]
 	path = vendor/tiny-artifacts
 	url = https://github.com/tinyhumansai/tiny-artifacts
+[submodule "vendor/tinyeventqueues"]
+	path = vendor/tinyeventqueues
+	url = https://github.com/tinyhumansai/tinyeventqueues
+	branch = main

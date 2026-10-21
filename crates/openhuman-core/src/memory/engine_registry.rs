@@ -90,11 +90,9 @@ pub fn bound_engine(
     endpoint: impl Into<String>,
     engine: Arc<dyn MemoryEngine>,
 ) -> BoundEngine {
-    BoundEngine {
-        id: id.into(),
-        endpoint: endpoint.into(),
-        engine: super::guard::ScrubbingEngine::wrap(engine),
-    }
+    let mut bound = super::engine::bind_external(engine, endpoint);
+    bound.id = id.into();
+    bound
 }
 
 #[cfg(test)]

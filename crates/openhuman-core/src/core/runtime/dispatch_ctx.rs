@@ -112,7 +112,7 @@ impl DispatchCtx {
     /// under, if any. See [`CoreContext::embedder_config`].
     pub fn embedder_config(&self) -> Option<crate::config::Config> {
         self.resolved()
-            .and_then(|core| core.embedder_config().cloned())
+            .and_then(|core| core.latest_embedder_config())
     }
 
     /// Loads the config this call runs against: the bound context's embedder
@@ -158,6 +158,20 @@ impl DispatchCtx {
     /// The security policy of the agent this call runs for, if it carries one.
     pub fn agent_policy(&self) -> Option<Arc<crate::security::SecurityPolicy>> {
         self.resolved().and_then(|core| core.agent_policy())
+    }
+
+    /// Source binding for live autonomy-tier decisions under this dispatch.
+    pub fn autonomy_tier_source(&self) -> super::AutonomyTierSource {
+        self.resolved()
+            .map_or(super::AutonomyTierSource::Captured, |core| {
+                core.autonomy_tier_source()
+            })
+    }
+
+    /// Fixed autonomy ceiling inherited by this dispatch, if any.
+    pub fn autonomy_tier_ceiling(&self) -> Option<crate::security::AutonomyLevel> {
+        self.resolved()
+            .and_then(|core| core.autonomy_tier_ceiling())
     }
 
     /// Whether the interactive approval gate is off for the agent this call

@@ -17,10 +17,19 @@
 //! module's own `EnsureCollection` is answered without touching the backend
 //! when it repeats the declared spec, and refused otherwise. `DropCollection`
 //! is never allowed.
+//!
+//! Queues are host-declared too. A grant with a [`QueueManifest`] serves the
+//! `Queues` object: the host declares the manifest's queues on the module's
+//! scope, and the bound server refuses any queue the manifest does not name
+//! (`NotFound`) and any `EnsureQueue` that disagrees with the declared spec
+//! (`Conflict`). A grant without one still answers `Features` (all false), so
+//! every module's storage connect succeeds, and refuses every other selector.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use serde_json::Value;
+use tinystoragedrivers::queue::QueueManifest;
 use tinystoragedrivers::CollectionSpec;
 
 pub(crate) use tinystoragedrivers_client::Object;
@@ -33,6 +42,7 @@ pub(crate) fn is_selector(object: Object, selector: &str) -> bool {
         Object::Streams => wire::is_streams_selector(selector),
         Object::Blobs => wire::is_blobs_selector(selector),
         Object::Secrets => wire::is_secrets_selector(selector),
+        Object::Queues => wire::is_queues_selector(selector),
     }
 }
 
@@ -104,11 +114,22 @@ pub struct StorageGrant {
     pub secret_prefixes: Vec<String>,
     /// Whether the module may write; `false` makes every grant read-only.
     pub writable: bool,
+    /// The queues the module may use, as a manifest the host declares on the
+    /// module's scope when it binds; `None` grants no `Queues` object.
+    pub queues: Option<Arc<QueueManifest>>,
+    /// Where the granted queues live: `None` (or `QueueConfig::Storage`) keeps
+    /// them in the module scope's own documents; a broker URL moves them
+    /// there when the host binds. Meaningless without [`Self::queues`].
+    pub queue_backend: Option<tinystoragedrivers::QueueConfig>,
 }
 
 /// Collection names no grant may hold: the encrypted secret documents and the
 /// storage layer's own `_`-prefixed records.
 const RESERVED_COLLECTIONS: [&str; 1] = [tinystoragedrivers::secrets::DEFAULT_COLLECTION];
+
+/// The storage layer's own collections (queue messages, leases, migrations).
+/// A module reaches the queue collections only through the `Queues` object.
+const RESERVED_COLLECTION_PREFIX: &str = "tsd.";
 
 impl StorageGrant {
     /// The schema the host ensures when it binds the module.
@@ -127,6 +148,7 @@ impl StorageGrant {
         for spec in &self.collections {
             if spec.name.is_empty()
                 || spec.name.starts_with('_')
+                || spec.name.starts_with(RESERVED_COLLECTION_PREFIX)
                 || RESERVED_COLLECTIONS.contains(&spec.name.as_str())
             {
                 return Err("a granted collection name is empty or reserved".into());
@@ -143,6 +165,11 @@ impl StorageGrant {
         if prefixes.into_iter().any(String::is_empty) {
             return Err("a granted prefix is empty".into());
         }
+        if let Some(manifest) = &self.queues {
+            manifest
+                .validate()
+                .map_err(|_| String::from("the granted queue manifest is invalid"))?;
+        }
         Ok(())
     }
 
@@ -152,6 +179,7 @@ impl StorageGrant {
             Object::Streams => !self.stream_prefixes.is_empty(),
             Object::Blobs => !self.blob_prefixes.is_empty(),
             Object::Secrets => !self.secret_prefixes.is_empty(),
+            Object::Queues => self.queues.is_some(),
         }
     }
 
@@ -226,8 +254,17 @@ pub(crate) fn authorize(
                 "ttl": false,
                 "max_key_len": 0,
             }))),
-            Object::Streams | Object::Secrets => Err(Denied::Object),
+            Object::Streams | Object::Secrets | Object::Queues => Err(Denied::Object),
         };
+    }
+    // `BusStorage::connect` asks every module's host for queue features, so a
+    // module with no queue grant still connects: it learns it has no features
+    // and every other `Queues` selector is refused below.
+    if object == Object::Queues && selector == "Features" && !grant.has_object(object) {
+        return Ok(Plan::Answer(
+            serde_json::to_value(tinystoragedrivers_bus::QueueFeaturesReply::default())
+                .map_err(|_| Denied::Malformed)?,
+        ));
     }
     if !grant.has_object(object) {
         return Err(Denied::Object);
@@ -241,6 +278,7 @@ pub(crate) fn authorize(
         Object::Streams => streams(grant, selector, request),
         Object::Blobs => blobs(grant, selector, request),
         Object::Secrets => secrets(grant, selector, request),
+        Object::Queues => queues(selector, request),
     }?;
     Ok(match plan {
         Plan::Forward { target, filter, .. } => Plan::Forward {
@@ -264,6 +302,17 @@ fn is_write(object: Object, selector: &str) -> bool {
             "Append" | "AppendBatch" | "AppendBatchIfOffset" | "TruncateBefore" | "DeleteStream"
         ) | (Object::Blobs, "Put" | "PutStream" | "Delete" | "PresignPut")
             | (Object::Secrets, "Set" | "Delete")
+            | (
+                Object::Queues,
+                "EnsureQueue"
+                    | "Enqueue"
+                    | "Receive"
+                    | "Ack"
+                    | "Nack"
+                    | "Extend"
+                    | "Redrive"
+                    | "Purge"
+            )
     )
 }
 
@@ -424,6 +473,19 @@ pub(crate) fn filter_reply(grant: &StorageGrant, filter: ReplyFilter, reply: Val
     }
 }
 
+/// `Queues` selectors. The target is the request's queue; the bound server
+/// (holding the grant's manifest) refuses a queue the manifest does not name.
+fn queues(selector: &str, request: &Value) -> Result<Plan, Denied> {
+    match selector {
+        "Features" => Ok(forward("")),
+        _ => Ok(forward(text(request, "queue")?)),
+    }
+}
+
 #[cfg(test)]
 #[path = "storage_grants_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "storage_grants_queues_tests.rs"]
+mod queues_tests;

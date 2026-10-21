@@ -344,36 +344,6 @@ fn env_overlay_analytics_enabled_parses_truthy_falsy() {
 }
 
 #[test]
-fn env_overlay_dictation_activation_mode_only_toggle_or_push() {
-    let mut cfg = Config::default();
-
-    cfg.apply_env_overlay_with(
-        &HashMapEnv::new().with("OPENHUMAN_DICTATION_ACTIVATION_MODE", "toggle"),
-    );
-    assert_eq!(
-        cfg.dictation.activation_mode,
-        crate::config::DictationActivationMode::Toggle
-    );
-
-    cfg.apply_env_overlay_with(
-        &HashMapEnv::new().with("OPENHUMAN_DICTATION_ACTIVATION_MODE", "push"),
-    );
-    assert_eq!(
-        cfg.dictation.activation_mode,
-        crate::config::DictationActivationMode::Push
-    );
-
-    // Unknown — retains previous value (Push).
-    cfg.apply_env_overlay_with(
-        &HashMapEnv::new().with("OPENHUMAN_DICTATION_ACTIVATION_MODE", "wave"),
-    );
-    assert_eq!(
-        cfg.dictation.activation_mode,
-        crate::config::DictationActivationMode::Push
-    );
-}
-
-#[test]
 fn env_overlay_auto_update_interval_parses_u32() {
     let mut cfg = Config::default();
     cfg.apply_env_overlay_with(
@@ -582,4 +552,35 @@ fn legacy_disable_channel_listeners_env_folds_into_channels_component() {
         .with("OPENHUMAN_COMPONENT_CHANNELS", "1");
     cfg.apply_env_overlay_with(&env);
     assert!(cfg.components.channels, "explicit component env wins");
+}
+
+#[test]
+fn env_overlay_inbound_debounce_applies_and_ignores_garbage() {
+    let mut cfg = Config::default();
+    cfg.apply_env_overlay_with(
+        &HashMapEnv::new()
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_ENABLED", "false")
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_MS", "800")
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_MEDIA_MS", " 3000 ")
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_MAX_WAIT_MS", "9000"),
+    );
+    assert!(!cfg.inbound_debounce.enabled);
+    assert_eq!(cfg.inbound_debounce.debounce_ms, 800);
+    assert_eq!(cfg.inbound_debounce.media_debounce_ms, 3000);
+    assert_eq!(cfg.inbound_debounce.max_wait_ms, 9000);
+
+    cfg.apply_env_overlay_with(
+        &HashMapEnv::new()
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_ENABLED", "maybe")
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_MS", "-1")
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_MEDIA_MS", "")
+            .with("OPENHUMAN_INBOUND_DEBOUNCE_MAX_WAIT_MS", "soon"),
+    );
+    assert!(!cfg.inbound_debounce.enabled);
+    assert_eq!(cfg.inbound_debounce.debounce_ms, 800);
+    assert_eq!(cfg.inbound_debounce.media_debounce_ms, 3000);
+    assert_eq!(cfg.inbound_debounce.max_wait_ms, 9000);
+
+    cfg.apply_env_overlay_with(&HashMapEnv::new().with("OPENHUMAN_INBOUND_DEBOUNCE_ENABLED", "on"));
+    assert!(cfg.inbound_debounce.enabled);
 }

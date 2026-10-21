@@ -86,9 +86,28 @@ path = "../../tests/tinydocs_linked_e2e.rs"
 required-features = ["linked-modules", "documents"]
 
 [[test]]
+name = "inbound_linked_e2e"
+path = "../../tests/inbound_linked_e2e.rs"
+required-features = ["linked-modules", "inbound-queues"]
+
+[[test]]
 name = "tinysearch_module_e2e"
 path = "../../tests/tinysearch_module_e2e.rs"
 required-features = ["modules"]
+
+[[test]]
+# Manually runs the normal host prompt path against a caller-supplied published
+# TinyFlows native module library; see the test's module-level instructions.
+name = "tinyflows_published_prompt_e2e"
+path = "../../tests/tinyflows_published_prompt_e2e.rs"
+required-features = ["flows"]
+
+[[test]]
+# Runs the checksum-verified published TinyFlows module through host Runs,
+# CapsHost, and scoped CatalogStorage adapters.
+name = "tinyflows_published_runs_e2e"
+path = "../../tests/tinyflows_published_runs_e2e.rs"
+required-features = ["flows"]
 
 [[test]]
 # Reproduction of the removed spend cap: needs its own process because the
@@ -216,7 +235,7 @@ name = "json_rpc_e2e"
 path = "../../tests/json_rpc_e2e.rs"
 # `openhuman_tinyhumans::voice::reply_speech::{test_seam, TEST_SEAM_ENV}` — the
 # reply-speech seam only exists with the voice feature (hosted TTS provider).
-required-features = ["voice"]
+required-features = ["voice", "http-server"]
 
 [[test]]
 name = "raw_coverage_all"
@@ -256,6 +275,12 @@ name = "storage_default_import_e2e"
 path = "../../tests/storage_default_import_e2e.rs"
 # Without the SQLite driver the stores keep the legacy tables.
 required-features = ["storage-sqlite"]
+
+[[test]]
+# Boots the shipped host on a legacy voice config and proves old listeners stay off.
+name = "legacy_voice_config_boot_e2e"
+path = "../../tests/legacy_voice_config_boot_e2e.rs"
+required-features = ["voice", "http-server"]
 
 [[test]]
 # Builds a whole pre-storage desktop workspace (every legacy per-domain DB and
@@ -377,6 +402,7 @@ uuid = { version = "1", features = ["v4"] }
 openhuman-core = { path = "../openhuman-core", package = "openhuman", default-features = false }
 openhuman-embed = { workspace = true }
 openhuman-tinyhumans = { workspace = true }
+tinymemory-tools = { path = "../../vendor/tinymemory/crates/tinymemory-tools" }
 aes-gcm = "0.10"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
@@ -387,7 +413,8 @@ tinyinference-llm = { path = "../../vendor/tinyagents/vendor/tinyinference/crate
 # The owning PII safety contract, for the shared security redaction corpus.
 tinymemory-api = { path = "../../vendor/tinymemory/crates/tinymemory-api", features = ["local-safety"] }
 # The document-port contract for failure injection in cron storage regressions.
-tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v0.11.0" }
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
+tinystoragedrivers = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0", default-features = false, features = ["sqlite"] }
 # The shell command-class vocabulary, for the security policy characterization.
 tinybox-bus = { path = "../../vendor/tinybox/crates/tinybox-bus" }
 tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools" }
@@ -413,6 +440,8 @@ tinyagents-harness = { path = "../../vendor/tinyagents/crates/tinyagents-harness
 tinyagents-definition = { path = "../../vendor/tinyagents/crates/tinyagents-definition" }
 tinyagents-session = { path = "../../vendor/tinyagents/crates/tinyagents-session" }
 tinydocs-bus = { path = "../../vendor/tinydocs/crates/tinydocs-bus" }
+# `inbound_linked_e2e` names the ingest dispositions from the contract.
+tinyeventqueues-bus = { path = "../../vendor/tinyeventqueues/crates/tinyeventqueues-bus" }
 tinysearch-bus = { path = "../../vendor/tinysearch/crates/tinysearch-bus" }
 tinybus = { path = "../../vendor/tinybus/crates/tinybus", default-features = false, features = ["macros", "uds"] }
 tinychannels = { version = "0.1", features = ["relay-websocket", "email"] }
@@ -452,6 +481,7 @@ default = [
     "security-module",
     "jev",
     "tinymemes",
+    "inbound-queues",
     "storage-sqlite",
 ]
 # Every gate forwards to `openhuman-rpc` alone (chain: rpc -> tinyhumans ->
@@ -463,6 +493,7 @@ inference = ["openhuman-rpc/inference"]
 documents = ["openhuman-rpc/documents"]
 hosting = ["openhuman-rpc/hosting"]
 tinymemes = ["openhuman-rpc/tinymemes"]
+inbound-queues = ["openhuman-rpc/inbound-queues"]
 modules = ["openhuman-rpc/modules"]
 security-module = ["openhuman-rpc/security-module"]
 voice = ["openhuman-rpc/voice"]
@@ -477,7 +508,6 @@ flows = ["openhuman-rpc/flows"]
 skills = ["openhuman-rpc/skills"]
 mcp = ["openhuman-rpc/mcp"]
 channels = ["openhuman-rpc/channels"]
-whatsapp-web = ["openhuman-rpc/whatsapp-web"]
 e2e-test-support = ["openhuman-rpc/e2e-test-support"]
 file-logging = ["openhuman-rpc/file-logging"]
 scheduler-gate = ["openhuman-rpc/scheduler-gate"]

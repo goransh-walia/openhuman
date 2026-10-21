@@ -38,6 +38,7 @@ pub mod evaluator;
 pub mod events;
 pub mod origin;
 pub mod routing;
+pub mod runner;
 pub mod trigger_reactor_prompt;
 pub mod trigger_triage_prompt;
 
@@ -47,3 +48,4 @@ pub use escalation::apply_decision;
 pub use evaluator::{run_triage, TriageOutcome, TriageResolutionPath, TriageRun};
 pub use origin::{local_trigger_origin, remote_trigger_origin};
 pub use routing::{build_local_provider_with_config, ResolvedProvider};
+pub use runner::{RemoteTriage, TriageRunner};

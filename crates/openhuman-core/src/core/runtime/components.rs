@@ -35,6 +35,7 @@ pub struct ComponentSet {
     pub channels: bool,
     pub skills: bool,
     pub voice: bool,
+    pub eventqueues: bool,
 }
 
 impl Default for ComponentSet {
@@ -68,6 +69,7 @@ impl ComponentSet {
             channels: c.channels,
             skills: c.skills,
             voice: c.voice,
+            eventqueues: c.eventqueues,
         }
     }
 
@@ -95,6 +97,7 @@ impl ComponentSet {
             channels: self.channels,
             skills: self.skills,
             voice: self.voice,
+            eventqueues: self.eventqueues,
         }
     }
 

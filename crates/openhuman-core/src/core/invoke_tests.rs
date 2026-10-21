@@ -212,6 +212,37 @@ fn local_offline_credential_does_not_publish_backend_session_expiry() {
     }
 }
 
+/// #8081: a Memory tab on a plan without memory got `403 MEMORY_PLAN_REQUIRED`
+/// from the hosted engine, whose message said "the session expired", and the
+/// user was signed out. Neither that nor a plain memory 403 may publish
+/// `SessionExpired`; a hosted memory 401 still does.
+#[test]
+fn memory_plan_refusal_and_403_do_not_publish_session_expiry() {
+    for signed_in in [false, true] {
+        for error in [
+            // As pinned tinymemory words it today (wire capture, 2026-10-19).
+            "unauthorized: [MEMORY_PLAN_REQUIRED] memory API memory/scopes on api.tinyhumans.ai: \
+             the session expired or the API key was rejected (HTTP 403 Forbidden); \
+             re-authenticate — memory is not included in this account's plan; nothing was processed",
+            // As tinymemory words it once its fix is pinned.
+            "engine error: [MEMORY_PLAN_REQUIRED] memory API memory/scopes on api.tinyhumans.ai: \
+             memory is not included in this account's plan (HTTP 403 Forbidden)",
+            "unauthorized: [FORBIDDEN] memory API memory/scopes on api.tinyhumans.ai: the session \
+             expired or the API key was rejected (HTTP 403 Forbidden); re-authenticate",
+        ] {
+            assert!(!is_session_expired_error(error), "{error}");
+            assert!(
+                !should_publish_session_expired(error, !signed_in),
+                "{error}"
+            );
+        }
+    }
+    let expired = "unauthorized: [UNAUTHORIZED] memory API memory/scopes on api.tinyhumans.ai: \
+                   the session expired or the API key was rejected (HTTP 401 Unauthorized); \
+                   re-authenticate";
+    assert!(should_publish_session_expired(expired, false));
+}
+
 #[tokio::test]
 async fn invoke_method_rejects_array_params_for_registered_method() {
     // Registered controllers expect named-argument style (JSON object).
@@ -274,6 +305,30 @@ async fn invoke_method_unknown_method_returns_unknown_error() {
     .await
     .expect_err("unknown methods must error");
     assert!(err.contains("unknown method"));
+}
+
+#[tokio::test]
+async fn invoke_retired_dictation_settings_method_returns_unknown_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = crate::config::Config::default();
+    config.config_path = tmp.path().join("config.toml");
+    config.workspace_dir = tmp.path().join("workspace");
+    let ctx = crate::core::runtime::CoreContext::for_test_with_config(
+        crate::core::runtime::DomainSet::full(),
+        config,
+    );
+    let err = invoke_method(
+        DispatchCtx::new(ctx),
+        default_state(),
+        "openhuman.config_get_dictation_settings",
+        json!({}),
+    )
+    .await
+    .expect_err("retired dictation settings method must be unknown");
+    assert!(
+        err.starts_with(crate::core::dispatch::UNKNOWN_METHOD_PREFIX),
+        "got: {err}"
+    );
 }
 
 #[tokio::test]

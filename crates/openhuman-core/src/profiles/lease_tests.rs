@@ -259,3 +259,96 @@ async fn file_leases_keep_two_hosts_on_one_root_apart() {
         other => panic!("expected HeldElsewhere, got {other:?}"),
     }
 }
+
+/// Wraps a lease store; once armed, the next `renew` completes in the inner
+/// store (which then holds only the renewed grant), signals `entered` and
+/// waits for `go` before returning, so the heartbeat has renewed but not yet
+/// stored the new grant in the slot.
+struct PausingRenewals {
+    inner: Arc<dyn LeaseStore>,
+    armed: std::sync::atomic::AtomicBool,
+    entered: tokio::sync::Notify,
+    go: tokio::sync::Notify,
+}
+
+#[async_trait::async_trait]
+impl LeaseStore for PausingRenewals {
+    async fn acquire(&self, key: &str, now_ms: u64) -> Result<LeaseGrant, LeaseError> {
+        self.inner.acquire(key, now_ms).await
+    }
+
+    async fn renew(&self, grant: &LeaseGrant, now_ms: u64) -> Result<LeaseGrant, LeaseError> {
+        let renewed = self.inner.renew(grant, now_ms).await;
+        if self.armed.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            self.entered.notify_one();
+            self.go.notified().await;
+        }
+        renewed
+    }
+
+    async fn release(&self, grant: LeaseGrant) -> Result<(), LeaseError> {
+        self.inner.release(grant).await
+    }
+
+    async fn holder(&self, key: &str) -> Result<Option<LeaseRecord>, LeaseError> {
+        self.inner.holder(key).await
+    }
+}
+
+/// An operator release that lands while the heartbeat is renewing the same
+/// profile must release the renewed grant, not fail with "lease lost" on
+/// the one the renewal just superseded.
+#[tokio::test]
+async fn a_release_during_a_heartbeat_renewal_releases_the_renewed_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = shared();
+    let mut a = ProfileHost::with_backend(
+        saas(tmp.path(), "node-a"),
+        CoreContext::for_test(DomainSet::full(), None),
+        Some(Arc::clone(&backend)),
+    )
+    .unwrap();
+    let pausing = Arc::new(PausingRenewals {
+        inner: Arc::clone(&a.leases),
+        armed: std::sync::atomic::AtomicBool::new(false),
+        entered: tokio::sync::Notify::new(),
+        go: tokio::sync::Notify::new(),
+    });
+    a.leases = Arc::clone(&pausing) as Arc<dyn LeaseStore>;
+    let a = Arc::new(a);
+    let b = node(tmp.path(), "node-b", Some(&backend));
+    let alice = profile("alice");
+    a.provision(&alice).await.unwrap();
+    drop(a.open(&alice).await.unwrap());
+
+    // The heartbeat renews alice and stops before storing the new grant...
+    pausing
+        .armed
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let heartbeat = tokio::spawn({
+        let a = Arc::clone(&a);
+        async move { renew_once(&a).await }
+    });
+    pausing.entered.notified().await;
+    // ...while the operator releases alice.
+    let release = tokio::spawn({
+        let (a, alice) = (Arc::clone(&a), alice.clone());
+        async move { a.release(&alice).await }
+    });
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+    pausing.go.notify_one();
+
+    let report = heartbeat.await.unwrap();
+    assert!(report.fenced.is_empty(), "{report:?}");
+    assert_eq!(release.await.unwrap(), Ok(true));
+    assert!(!a.is_open(&alice));
+    let record = a.leases().holder(alice.as_str()).await.unwrap().unwrap();
+    assert!(
+        record.released,
+        "the record is released cleanly: {record:?}"
+    );
+    let taken = b.open(&alice).await.unwrap();
+    assert_eq!(taken.id, alice);
+}

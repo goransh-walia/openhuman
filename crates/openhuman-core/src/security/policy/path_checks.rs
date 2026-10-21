@@ -1,9 +1,39 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(not(feature = "security-module"))]
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 use super::types::SecurityPolicy;
+
+/// Credential-store path segments, matched case-insensitively at any depth.
+pub(crate) const SENSITIVE_COMPONENTS: &[&str] =
+    &[".ssh", ".gnupg", ".aws", ".azure", ".kube", "keychains"];
+/// Single-file credential stores have no protected parent directory.
+pub(crate) const SENSITIVE_FILES: &[&str] = &[".netrc", ".git-credentials", ".pgpass", ".npmrc"];
+/// Consecutive segments used by Docker, Cargo, and Windows DPAPI stores.
+pub(crate) const SENSITIVE_PAIRS: &[[&str; 2]] = &[
+    [".docker", "config.json"],
+    [".cargo", "credentials.toml"],
+    ["microsoft", "protect"],
+    ["microsoft", "credentials"],
+    ["microsoft", "crypto"],
+    ["microsoft", "vault"],
+];
+
+/// Credential stores under a user's home, for jail backends that deny paths.
+#[cfg(any(feature = "modules", test))]
+pub(crate) fn home_credential_stores(home: &Path) -> Vec<PathBuf> {
+    let components = SENSITIVE_COMPONENTS.iter().map(|segment| match *segment {
+        "keychains" => home.join("Library").join("Keychains"),
+        segment => home.join(segment),
+    });
+    let files = SENSITIVE_FILES.iter().map(|file| home.join(file));
+    let pairs = SENSITIVE_PAIRS
+        .iter()
+        .filter(|[dir, _]| dir.starts_with('.'))
+        .map(|[dir, file]| home.join(dir).join(file));
+    components.chain(files).chain(pairs).collect()
+}
 
 impl SecurityPolicy {
     /// Validate a path for file I/O: string checks, canonicalize, workspace containment,
