@@ -418,7 +418,7 @@ fn render_installed_skills(
             // chars / instruction fences) and cap so a single installed
             // skill can't bloat the prompt or smuggle routing instructions;
             // full details stay one `describe_workflow` call away.
-            tinytools::sanitize::sanitize_for_llm(&skill.description, SKILL_DESCRIPTION_CHARS)
+            tinytools_std::sanitize::sanitize_for_llm(&skill.description, SKILL_DESCRIPTION_CHARS)
                 .replace(['\n', '\t'], " ")
                 .trim()
                 .to_string()
@@ -505,7 +505,7 @@ fn format_connected_mcp_block(
         let capability = if capability_raw.is_empty() {
             String::new()
         } else {
-            tinytools::sanitize::sanitize_for_llm(capability_raw, 120)
+            tinytools_std::sanitize::sanitize_for_llm(capability_raw, 120)
                 .replace(['\n', '\t'], " ")
                 .trim()
                 .to_string()
