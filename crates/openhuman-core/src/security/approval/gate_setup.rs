@@ -117,16 +117,6 @@ impl ApprovalGate {
         self.ttl
     }
 
-    /// The user's "Always allow" tool list. Prefers the agent or process-global
-    /// live policy (so a grant made this session is seen immediately) and falls
-    /// back to the gate's boot-time config snapshot.
-    fn live_auto_approve(&self, ctx: &crate::core::runtime::DispatchCtx) -> Vec<String> {
-        if let Some(policy) = crate::security::live_policy::effective_in(ctx) {
-            return policy.auto_approve.clone();
-        }
-        self.config.autonomy.auto_approve.clone()
-    }
-
     /// Whether the user has opted into "auto-approve everything" — a
     /// blanket bypass of the human approval prompt. Mirrors
     /// [`Self::live_auto_approve`]'s live-policy-first, boot-config-
@@ -156,14 +146,9 @@ impl ApprovalGate {
         Posture {
             require_approval: !ctx.approvals_disabled(),
             auto_approve_all: self.is_auto_approve_all_enabled(ctx),
-            // A workflow whose flow requires approval is never auto-allowed by
-            // the global tool list. Its per-flow trust is the module's own
-            // durable state, so it is not part of the posture.
-            tool_grants: if variant == Variant::Standard {
-                self.live_auto_approve(ctx)
-            } else {
-                Vec::new()
-            },
+            // Whole-tool grants are durable TinySecurity state. Replaying the
+            // legacy config list here would resurrect grants after revocation.
+            tool_grants: Vec::new(),
         }
     }
 

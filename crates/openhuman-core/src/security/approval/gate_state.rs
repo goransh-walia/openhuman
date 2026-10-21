@@ -1,6 +1,45 @@
 use crate::core::runtime::DispatchCtx;
 
 impl ApprovalGate {
+    /// Check the authenticated dispatch against the live parked request before
+    /// allowing an approval decision. A process-scoped UI may project into one
+    /// agent's request only by naming that exact agent; an agent-scoped
+    /// dispatch cannot decide for another agent or the process.
+    pub(crate) fn validate_decision_context(
+        &self,
+        request_id: &str,
+        dispatch_tenant: &crate::core::runtime::Tenant,
+        requested_agent: Option<&str>,
+    ) -> anyhow::Result<Option<(crate::core::runtime::Tenant, Variant)>> {
+        let route = self.parked.request_routes.lock().get(request_id).cloned();
+        let Some(route) = route else {
+            return Ok(None);
+        };
+        validate_decision_tenant(
+            dispatch_tenant,
+            requested_agent,
+            &route.tenant,
+            request_id,
+        )?;
+        Ok(Some((route.tenant, route.variant)))
+    }
+
+    /// Persist a whole-tool grant under the parked request's exact subject.
+    /// Called only after `decide` has resolved the current request.
+    pub(crate) fn grant_tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        tool: &str,
+    ) -> anyhow::Result<()> {
+        let tenant = tenant.clone();
+        let tool = tool.to_owned();
+        self.run_engine(|engine| async move {
+            engine.grant_tool_trust(&tenant, variant, &tool).await
+        })?
+        .map_err(|error| anyhow::anyhow!("could not save the whole-tool grant: {error}"))
+    }
+
     /// Run an engine call from synchronous code. The decision side of the gate is
     /// synchronous by contract (the embedding API, an agent's teardown, the
     /// harness's record hook), so the engine's async call runs on the shared
@@ -544,4 +583,32 @@ impl ApprovalGate {
             .get(request_id)
             .is_some_and(|route| route.detached)
     }
+}
+
+fn validate_decision_tenant(
+    dispatch: &crate::core::runtime::Tenant,
+    requested_agent: Option<&str>,
+    parked: &crate::core::runtime::Tenant,
+    request_id: &str,
+) -> Result<(), ApprovalError> {
+    if dispatch.profile != parked.profile {
+        return Err(ApprovalError::WrongTenant {
+            request_id: request_id.to_owned(),
+        });
+    }
+    if dispatch.agent.is_some() && dispatch.agent != parked.agent {
+        return Err(ApprovalError::WrongAgent {
+            request_id: request_id.to_owned(),
+        });
+    }
+    if requested_agent.is_some_and(|agent| parked.agent.as_deref() != Some(agent))
+        || (dispatch.agent.is_none()
+            && parked.agent.is_some()
+            && requested_agent != parked.agent.as_deref())
+    {
+        return Err(ApprovalError::WrongAgent {
+            request_id: request_id.to_owned(),
+        });
+    }
+    Ok(())
 }

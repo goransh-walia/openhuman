@@ -145,6 +145,7 @@ impl PromptSurface for Surface {
                     tool_call_id: ctx.tool_call_id.clone(),
                     forced: ctx.forced,
                     agent_id: ctx.agent_id.clone(),
+                    variant: ctx.variant,
                     approval_scope: ctx.approval_scope.clone(),
                     thread_key: ctx.thread_key.clone(),
                     detached: ctx.detached,

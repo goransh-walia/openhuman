@@ -222,6 +222,15 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
         limit: usize,
     ) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError>;
 
+    /// Durably trust one tool under the exact posture scope the request belongs
+    /// to. The host calls this only after resolving the current parked request.
+    async fn grant_tool_trust(
+        &self,
+        tenant: &Tenant,
+        variant: Variant,
+        tool: &str,
+    ) -> Result<(), EngineError>;
+
     /// Durably trust `tool` inside `flow_id` for the tenant: the engine keeps the
     /// grant across restarts and approves that exact tool in that exact flow
     /// without a prompt. Granting a live pair changes nothing.
@@ -323,6 +332,14 @@ impl ApprovalEngine for UnavailableEngine {
         _limit: usize,
     ) -> Result<Vec<super::types::ApprovalAuditEntry>, EngineError> {
         Ok(Vec::new())
+    }
+    async fn grant_tool_trust(
+        &self,
+        _tenant: &Tenant,
+        _variant: Variant,
+        _tool: &str,
+    ) -> Result<(), EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
     }
     async fn grant_flow_trust(
         &self,

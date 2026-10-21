@@ -70,6 +70,9 @@ pub enum ApprovalError {
     /// The request was parked by a different agent than the one deciding it.
     #[error("approval request {request_id} belongs to another agent")]
     WrongAgent { request_id: String },
+    /// The decision came from a different profile than the parked request.
+    #[error("approval request {request_id} belongs to another tenant")]
+    WrongTenant { request_id: String },
 }
 
 /// The key `thread_to_request` files a parked chat thread under, keyed by
@@ -275,6 +278,7 @@ pub(crate) struct RequestRoute {
     pub(crate) tool_call_id: Option<String>,
     pub(crate) forced: bool,
     pub(crate) agent_id: Option<String>,
+    pub(crate) variant: Variant,
     /// Instance barrier captured at registration, independent of decision context.
     pub(crate) approval_scope: Option<Arc<super::ApprovalScope>>,
     /// The [`thread_route_key`] the request was parked under, so a decision
@@ -334,6 +338,7 @@ struct ParkContext {
     chat_client_id: Option<String>,
     tool_call_id: Option<String>,
     forced: bool,
+    variant: Variant,
     agent_id: Option<String>,
     approval_scope: Option<Arc<super::ApprovalScope>>,
     thread_key: Option<String>,

@@ -279,6 +279,17 @@ pub(super) async fn by_stream(stream_id: &str) -> Option<Arc<ScopeEntry>> {
     host().scopes.lock().await.by_stream.get(stream_id).cloned()
 }
 
+/// Find the scope the module already registered for this exact subject.
+pub(super) async fn existing(subject: &SubjectScope) -> Option<Arc<ScopeEntry>> {
+    host()
+        .scopes
+        .lock()
+        .await
+        .by_subject
+        .get(&subject_key(subject))
+        .cloned()
+}
+
 /// The registered subject a module callback names by its handle.
 pub(super) async fn by_handle(handle: &SubjectScope) -> Option<Arc<ScopeEntry>> {
     host()
