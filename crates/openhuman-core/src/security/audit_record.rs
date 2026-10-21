@@ -99,10 +99,18 @@ pub async fn record(
     config: Option<&crate::config::Config>,
     event: HostAuditEvent,
 ) -> Result<(), String> {
-    let proxy = crate::modules::security::scoped_client::serving_proxy()
-        .await
-        .ok_or_else(|| crate::modules::security_audit::NOT_SERVING.to_owned())?;
-    record_with_proxy(ctx, config, event, &proxy).await
+    let loaded;
+    let config = match config {
+        Some(config) => config,
+        None => {
+            loaded = ctx.load_config().await?;
+            &loaded
+        }
+    };
+    let tenant = ctx
+        .tenant()
+        .map_err(|_| "no tenant scope for the audit row".to_owned())?;
+    crate::modules::security::audit::record_for_tenant(config, &tenant, event).await
 }
 
 /// Record through an explicit module connection, retaining the dispatch's tenant.
@@ -125,7 +133,7 @@ pub(crate) async fn record_with_proxy(
     let tenant = ctx
         .tenant()
         .map_err(|_| "no tenant scope for the audit row".to_owned())?;
-    crate::modules::security_audit::record_for_tenant_with(proxy, config, &tenant, event).await
+    crate::modules::security::audit::record_for_tenant_with(proxy, config, &tenant, event).await
 }
 
 /// Without the module there is no audit stream; the row is reported, not kept.
