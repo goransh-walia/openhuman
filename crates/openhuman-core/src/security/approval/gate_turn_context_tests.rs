@@ -7,6 +7,7 @@ use super::*;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::middleware::approval::ApprovalSecurityMiddleware;
 use async_trait::async_trait;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tinyagents_harness::context::{RunConfig, RunContext};
 use tinyagents_harness::middleware::{
     ApprovalExecutionOutcome, ApprovalGateMiddleware, ApprovalResolution, ApprovalResolver,
@@ -14,7 +15,6 @@ use tinyagents_harness::middleware::{
 };
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::{PermissionLevel, Tool, ToolResult};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct Effectful;
 
@@ -256,14 +256,12 @@ async fn supervised_write_runs_once_after_approval_and_records_the_exact_call() 
     let ctx = RunContext::new(RunConfig::new("supervised-write"), run);
     let resolver = Arc::new(GateBackedResolver {
         gate: gate.clone(),
-        security: ApprovalSecurityMiddleware::new(vec![Arc::new(vec![Box::new(Effectful)
-            as Box<dyn Tool>])]),
+        security: ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
+            Box::new(Effectful) as Box<dyn Tool>
+        ])]),
     });
     let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
-    stack.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new(
-        "approval",
-        resolver,
-    )));
+    stack.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new("approval", resolver)));
     let effects = Arc::new(AtomicUsize::new(0));
     let base = CountingWrite {
         effects: effects.clone(),
@@ -289,13 +287,24 @@ async fn supervised_write_runs_once_after_approval_and_records_the_exact_call() 
         .into_iter()
         .find(|pending| pending.request_id == request_id)
         .expect("the supervised write is persisted while parked");
-    assert_eq!(pending.tool_call_id.as_deref(), Some("call-supervised-write"));
-    assert_eq!(effects.load(Ordering::SeqCst), 0, "a parked write has no effect");
+    assert_eq!(
+        pending.tool_call_id.as_deref(),
+        Some("call-supervised-write")
+    );
+    assert_eq!(
+        effects.load(Ordering::SeqCst),
+        0,
+        "a parked write has no effect"
+    );
 
     gate.decide(&request_id, ApprovalDecision::ApproveOnce)
         .unwrap();
     let result = task.await.unwrap();
-    assert!(!result.is_error, "approved write should complete: {}", result.output());
+    assert!(
+        !result.is_error,
+        "approved write should complete: {}",
+        result.output()
+    );
     assert_eq!(effects.load(Ordering::SeqCst), 1);
     assert_eq!(
         stub_of(&gate).state(&request_id),

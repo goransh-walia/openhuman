@@ -269,11 +269,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
     /// (idempotent; a no-op when the id is unknown).
     fn record(&self, ticket: &str, result: &TaToolResult) {
         if let Some(gate) = ApprovalGate::try_global() {
-            Self::record_terminal_on(
-                &gate,
-                ticket,
-                ApprovalExecutionOutcome::Result(result),
-            );
+            Self::record_terminal_on(&gate, ticket, ApprovalExecutionOutcome::Result(result));
         }
     }
 
