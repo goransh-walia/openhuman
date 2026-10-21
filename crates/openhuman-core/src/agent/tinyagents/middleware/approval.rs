@@ -162,6 +162,7 @@ impl ApprovalSecurityMiddleware {
             reason: refused_approval_text(tool_name, "approval gate unavailable"),
         }
     }
+
 }
 
 /// What the model is told when the approval prompt for `tool_name` expired
