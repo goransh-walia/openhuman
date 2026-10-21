@@ -85,7 +85,10 @@ async fn the_users_configuration_reaches_the_engine_as_the_calls_posture() {
     assert_eq!(seen.variant, Variant::Standard);
     assert!(seen.posture.require_approval);
     assert!(!seen.posture.auto_approve_all);
-    assert!(seen.posture.tool_grants.iter().any(|t| t == tool));
+    assert!(
+        seen.posture.tool_grants.is_empty(),
+        "legacy config grants must not be replayed into TinySecurity posture"
+    );
     assert_eq!(seen.tool, "not_on_the_list");
     assert_eq!(seen.origin, CallOrigin::Operator);
     assert_eq!(seen.thread.as_deref(), Some("t-test"));
