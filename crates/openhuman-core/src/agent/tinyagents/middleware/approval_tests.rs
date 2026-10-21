@@ -5,7 +5,7 @@ use tinyagents_harness::context::{RunConfig, RunContext};
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
-static AUDIT_TEST_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+static AUDIT_TEST_LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
 
 struct ResetAuditFailureLatch;
 
@@ -127,10 +127,7 @@ fn a_latched_audit_failure_routes_external_tools_even_when_desktop_approvals_are
 
 #[tokio::test]
 async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
-    let _lock = AUDIT_TEST_LOCK
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap();
+    let _lock = AUDIT_TEST_LOCK.get_or_init(Default::default).lock().await;
     let _reset_latch = ResetAuditFailureLatch;
     let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
         Box::new(ExternalAuditTool) as Box<dyn Tool>,
@@ -156,10 +153,7 @@ async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
 
 #[tokio::test]
 async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions() {
-    let _lock = AUDIT_TEST_LOCK
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap();
+    let _lock = AUDIT_TEST_LOCK.get_or_init(Default::default).lock().await;
     let _reset_latch = ResetAuditFailureLatch;
     let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
         Box::new(ExternalAuditTool) as Box<dyn Tool>,
