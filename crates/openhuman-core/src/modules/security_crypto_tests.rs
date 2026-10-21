@@ -263,8 +263,7 @@ async fn module_refuses_payloads_over_the_configured_limit() {
 }
 
 fn fx_dir() -> tempfile::TempDir {
-    let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
-    tempfile::tempdir_in(target.canonicalize().unwrap()).unwrap()
+    tempfile::tempdir_in(std::env::temp_dir()).unwrap()
 }
 
 /// Keyring round trip through the module's encrypted-file backend, with the
