@@ -16,6 +16,9 @@ use tinysecurity_bus::{
 use crate::security::keyring_consent::types::PolicyDecision;
 
 const LOG_PREFIX: &str = "[security-crypto]";
+#[cfg(test)]
+pub(crate) static KEYRING_CONSENT_TEST_LOCK: tokio::sync::Mutex<()> =
+    tokio::sync::Mutex::const_new(());
 /// Argon2id derivation (64 MiB, 3 passes) can queue behind two other
 /// derivations and a cold start, so password calls outlive the 2 s policy budget.
 const PASSWORD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
