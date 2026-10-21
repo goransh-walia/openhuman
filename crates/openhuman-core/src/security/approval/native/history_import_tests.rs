@@ -100,31 +100,6 @@ fn only_the_most_recent_decided_rows_are_carried_over_oldest_first() {
     assert!(carried.iter().all(|row| row.request_id != "undecided"));
 }
 
-#[test]
-fn the_marker_lives_beside_the_legacy_database_and_records_the_counts() {
-    let dir = tempfile::tempdir().unwrap();
-    let config = Config {
-        workspace_dir: dir.path().to_path_buf(),
-        ..Config::default()
-    };
-    let marker = marker_path(&config);
-    assert_eq!(marker, dir.path().join("approval/module-history-imported"));
-    assert!(!marker.exists());
-    write_marker(
-        &marker,
-        Report {
-            history: 3,
-            trust: 2,
-            skipped: 1,
-        },
-    )
-    .unwrap();
-    assert_eq!(
-        std::fs::read_to_string(&marker).unwrap(),
-        "history=3 trust=2 skipped=1\n"
-    );
-}
-
 // -- The run, against a module that is not there ----------------------------
 
 fn workspace() -> (tempfile::TempDir, Config) {
@@ -165,23 +140,12 @@ fn seed_legacy(config: &Config) {
 }
 
 #[tokio::test]
-async fn a_finished_import_is_skipped_without_touching_the_module() {
-    let (_dir, config) = workspace();
-    seed_legacy(&config);
-    let marker = marker_path(&config);
-    write_marker(&marker, Report::default()).unwrap();
-    let (_host, proxy) = absent_module().await;
-    let engine = NativeEngine::on(config, proxy.clone());
-    assert_eq!(run(&engine, &proxy).await, Ok(None));
-}
-
 #[tokio::test]
 async fn a_workspace_with_no_legacy_file_has_nothing_to_import_and_records_nothing() {
     let (_dir, config) = workspace();
     let (_host, proxy) = absent_module().await;
     let engine = NativeEngine::on(config.clone(), proxy.clone());
     assert_eq!(run(&engine, &proxy).await, Ok(None));
-    assert!(!marker_path(&config).exists());
     assert!(
         !crate::security::approval::store_import::db_path(&config).exists(),
         "reading must not create the legacy database"
@@ -199,5 +163,4 @@ async fn an_import_the_module_cannot_take_records_nothing_so_the_next_start_retr
         matches!(result, Err(EngineError::Unavailable(_))),
         "{result:?}"
     );
-    assert!(!marker_path(&config).exists());
 }

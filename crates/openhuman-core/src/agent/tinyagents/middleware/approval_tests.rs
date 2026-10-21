@@ -1,4 +1,37 @@
 use super::*;
+use async_trait::async_trait;
+use tinyagents_harness::context::{RunConfig, RunContext};
+use tinyinference_llm::tool::ToolCall as TaToolCall;
+use tinytools::{PermissionLevel, Tool, ToolResult};
+
+struct ExternalAuditTool;
+
+#[async_trait]
+impl Tool for ExternalAuditTool {
+    fn name(&self) -> &str {
+        "send_external"
+    }
+
+    fn description(&self) -> &str {
+        "test external effect"
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        serde_json::json!({ "type": "object" })
+    }
+
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::Write
+    }
+
+    fn external_effect(&self) -> bool {
+        true
+    }
+
+    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
+        unreachable!("the audit admission test does not execute the tool")
+    }
+}
 
 /// A refused approval must reach the model as a refusal it can read. Passed on
 /// as the gate's own `[policy-denied] User denied ...` text it carried a policy
@@ -79,6 +112,28 @@ fn a_latched_audit_failure_routes_external_tools_even_when_desktop_approvals_are
     assert!(!ApprovalSecurityMiddleware::requires_resolver(
         false, true, false,
     ));
+}
+
+#[tokio::test]
+async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
+    let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
+        Box::new(ExternalAuditTool) as Box<dyn Tool>,
+    ])]);
+    let ctx = RunContext::new(RunConfig::new("ordinary-audit"), OpenHumanRunContext::new());
+    let call = TaToolCall {
+        id: "call-ordinary".into(),
+        name: "send_external".into(),
+        arguments: serde_json::json!({"payload": "sensitive"}),
+        invalid: None,
+    };
+
+    let admission = resolver.resolve_allowed(&ctx, &call).await;
+    match admission {
+        ApprovalResolution::Allow { ticket: Some(ticket) } => {
+            assert!(!ticket.is_empty());
+        }
+        other => panic!("an allowed external effect needs an audit ticket: {other:?}"),
+    }
 }
 
 #[test]
