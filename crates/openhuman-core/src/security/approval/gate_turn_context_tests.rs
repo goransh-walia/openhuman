@@ -118,6 +118,13 @@ async fn a_turn_parks_its_approval_on_the_chat_its_run_context_carries() {
     let request_id = parked(&gate, "t-turn").await;
     // A park with a chat context is attached to the turn, not a detached card.
     assert!(!gate.request_is_detached(&request_id));
+    let pending = gate
+        .list_pending()
+        .unwrap()
+        .into_iter()
+        .find(|pending| pending.request_id == request_id)
+        .expect("the parked approval is persisted");
+    assert_eq!(pending.tool_call_id.as_deref(), Some("c1"));
     gate.decide(&request_id, ApprovalDecision::ApproveOnce)
         .unwrap();
     assert!(matches!(
