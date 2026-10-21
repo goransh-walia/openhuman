@@ -348,26 +348,12 @@ fn absolute(path: &std::path::Path) -> Result<PathBuf, Refusal> {
 
 #[cfg(feature = "security-module")]
 pub(crate) fn to_bus_class(class: CommandClass) -> tinysecurity_bus::CommandClass {
-    use tinysecurity_bus::CommandClass as Bus;
-    match class {
-        CommandClass::Read => Bus::Read,
-        CommandClass::Write => Bus::Write,
-        CommandClass::Network => Bus::Network,
-        CommandClass::Install => Bus::Install,
-        CommandClass::Destructive => Bus::Destructive,
-    }
+    class
 }
 
 #[cfg(feature = "security-module")]
 pub(crate) fn from_bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
-    use tinysecurity_bus::CommandClass as Bus;
-    match class {
-        Bus::Read => CommandClass::Read,
-        Bus::Write => CommandClass::Write,
-        Bus::Network => CommandClass::Network,
-        Bus::Install => CommandClass::Install,
-        Bus::Destructive => CommandClass::Destructive,
-    }
+    class
 }
 
 /// The host's gate for a module gate.
