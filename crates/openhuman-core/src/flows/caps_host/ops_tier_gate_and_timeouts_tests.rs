@@ -61,9 +61,12 @@ fn code_node_tier_gate_blocks_readonly_allows_full() {
         "code"
     )
     .is_ok());
-    assert!(
-        super::enforce_node_tier_gate(&policy(AutonomyLevel::Full), CommandClass::Write, "code").is_ok()
-    );
+    assert!(super::enforce_node_tier_gate(
+        &policy(AutonomyLevel::Full),
+        CommandClass::Write,
+        "code"
+    )
+    .is_ok());
 }
 
 /// A long-lived code capability must observe a tier downgrade at the same
@@ -254,7 +257,10 @@ async fn composio_unknown_slug_prompts_under_supervised_tier() {
             .expect("Network-class is prompted, not blocked, under Supervised"),
         GateDecision::Prompt
     );
-    assert!(super::enforce_node_tier_gate(&policy(AutonomyLevel::ReadOnly), class, "tool_call").is_err());
+    assert!(
+        super::enforce_node_tier_gate(&policy(AutonomyLevel::ReadOnly), class, "tool_call")
+            .is_err()
+    );
 }
 
 /// A `Prompt` tier decision on a default (`require_approval: false`)

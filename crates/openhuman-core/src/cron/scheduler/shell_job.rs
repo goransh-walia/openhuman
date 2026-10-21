@@ -57,7 +57,8 @@ async fn ask_module(
     match verdict.gate {
         GateDecision::Allow => Ok(()),
         GateDecision::Prompt => Err(
-            "blocked by security policy: scheduled commands cannot wait for interactive approval".to_owned(),
+            "blocked by security policy: scheduled commands cannot wait for interactive approval"
+                .to_owned(),
         ),
         GateDecision::Block => Err("blocked by security policy: command rejected".to_owned()),
     }

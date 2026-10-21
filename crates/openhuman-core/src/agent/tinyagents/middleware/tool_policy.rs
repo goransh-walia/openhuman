@@ -176,7 +176,11 @@ fn session_policy_host(
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
     channel: String,
 ) -> Arc<ToolPolicyHostState> {
-    Arc::new(ToolPolicyHostState { session, tool_sets, channel })
+    Arc::new(ToolPolicyHostState {
+        session,
+        tool_sets,
+        channel,
+    })
 }
 
 fn builder_policy(
@@ -453,11 +457,7 @@ impl ToolCallPolicy<OpenHumanRunContext> for SessionCeilingPolicy {
         _ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> PolicyDecision {
-        if self
-            .host
-            .session
-            .decision_for(&call.name)
-            .action
+        if self.host.session.decision_for(&call.name).action
             == tinytools::ToolPolicyAction::RequireApproval
         {
             return PolicyDecision::require_approval("session policy requires approval");

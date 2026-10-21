@@ -160,9 +160,9 @@ impl ApprovalCallbacks {
                             Some(ManifestClass {
                                 name: format!("{class:?}"),
                                 blocked: security
-                            .command_class_gate_blocking(class)
-                            .map(|decision| decision == GateDecision::Block)
-                            .unwrap_or(true),
+                                    .command_class_gate_blocking(class)
+                                    .map(|decision| decision == GateDecision::Block)
+                                    .unwrap_or(true),
                                 skip: class == CommandClass::Read,
                             })
                         }

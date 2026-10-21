@@ -73,7 +73,7 @@ impl std::fmt::Debug for StorageConfig {
                 &self
                     .url
                     .as_deref()
-            .map(crate::security::redact::endpoint_origin),
+                    .map(crate::security::redact::endpoint_origin),
             )
             .field("journal_retention_days", &self.journal_retention_days)
             .field("auto_migrate_layout", &self.auto_migrate_layout)

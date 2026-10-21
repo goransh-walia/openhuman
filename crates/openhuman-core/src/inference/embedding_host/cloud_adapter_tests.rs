@@ -73,4 +73,3 @@ fn env_workspace_scope_is_the_config_dir_not_the_raw_workspace() {
         "returning the raw workspace dir is the regression this guards against"
     );
 }
-

@@ -15,8 +15,8 @@ use parking_lot::Mutex;
 #[cfg(test)]
 use tinychannels::host::{
     AllowlistStore, ApprovalDecision, ApprovalGate, ConversationMessage, ConversationStore,
-    EventSink, LifecycleRegistry, ShutdownHook,
-    Transcriber, TranscriptionRequest, TranscriptionResult,
+    EventSink, LifecycleRegistry, ShutdownHook, Transcriber, TranscriptionRequest,
+    TranscriptionResult,
 };
 
 use crate::config::Config;

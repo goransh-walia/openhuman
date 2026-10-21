@@ -327,5 +327,8 @@ async fn shell_prompt_verdict_never_runs_without_a_bound_approval() {
         .await
         .unwrap();
     assert!(result.is_error, "Prompt has no in-tool approval proof");
-    assert!(!marker.exists(), "a Prompt verdict must not run the command");
+    assert!(
+        !marker.exists(),
+        "a Prompt verdict must not run the command"
+    );
 }

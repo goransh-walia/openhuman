@@ -221,7 +221,10 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
     let effective =
         tier_policy_from_config(&capped_ctx, &captured, Some(&parent_file), &baseline).unwrap();
     assert_eq!(effective.autonomy, AutonomyLevel::Supervised);
-    assert_eq!(module_tier_gate(&effective, CommandClass::Write), GateDecision::Prompt);
+    assert_eq!(
+        module_tier_gate(&effective, CommandClass::Write),
+        GateDecision::Prompt
+    );
 
     capped_overlay.autonomy_tier_ceiling = Some(AutonomyLevel::Full);
     let full_ceiling_ctx =
@@ -249,7 +252,10 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
     let host_only =
         tier_policy_from_config(&host_only_ctx, &captured, Some(&parent_file), &baseline).unwrap();
     assert_eq!(host_only.autonomy, AutonomyLevel::ReadOnly);
-    assert_eq!(module_tier_gate(&host_only, CommandClass::Write), GateDecision::Block);
+    assert_eq!(
+        module_tier_gate(&host_only, CommandClass::Write),
+        GateDecision::Block
+    );
 }
 
 #[tokio::test]

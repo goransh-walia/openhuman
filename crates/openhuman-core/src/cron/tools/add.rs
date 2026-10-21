@@ -190,7 +190,8 @@ impl Tool for CronAddTool {
                 };
 
                 if let Err(reason) = super::super::scheduler::shell_job::authorize_shell_command(
-                    &self.security, command,
+                    &self.security,
+                    command,
                 )
                 .await
                 {

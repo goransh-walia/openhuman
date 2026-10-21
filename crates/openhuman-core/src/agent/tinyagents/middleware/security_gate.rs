@@ -15,11 +15,11 @@
 
 use std::sync::Arc;
 
-use tinyagents_harness::runtime::AgentHarness;
-use tinytools::Tool;
 use tinyagents_harness::context::RunContext;
 use tinyagents_harness::middleware::{PolicyDecision, ToolCallPolicy};
+use tinyagents_harness::runtime::AgentHarness;
 use tinyinference_llm::tool::ToolCall as TaToolCall;
+use tinytools::Tool;
 
 use super::approval::ApprovalSecurityMiddleware;
 use crate::agent::tinyagents::host::OpenHumanRunContext;
@@ -140,13 +140,11 @@ pub(crate) fn tool_middleware(
                     enforcement.channel.clone(),
                 ),
             );
-            gate = gate.with_post_gate(
-                super::tool_policy::ToolPolicyMiddleware::skill_post_gate(
-                    enforcement.session,
-                    tool_sets,
-                    enforcement.channel,
-                ),
-            );
+            gate = gate.with_post_gate(super::tool_policy::ToolPolicyMiddleware::skill_post_gate(
+                enforcement.session,
+                tool_sets,
+                enforcement.channel,
+            ));
         }
         Arc::new(gate)
     }

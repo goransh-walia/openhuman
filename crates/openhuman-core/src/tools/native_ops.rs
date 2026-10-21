@@ -3,7 +3,9 @@ use std::time::Instant;
 
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 use tinyagents_harness::context::{RunConfig, RunContext};
-use tinyagents_harness::middleware::{BoxToolFuture, MiddlewareStack, ToolBaseCall, ToolMiddleware};
+use tinyagents_harness::middleware::{
+    BoxToolFuture, MiddlewareStack, ToolBaseCall, ToolMiddleware,
+};
 use tinyinference_llm::tool::ToolCall;
 use tinytools::ToolResult;
 
@@ -173,7 +175,8 @@ pub async fn execute_tool(
 ) -> Result<ExecuteToolOutcome, String> {
     let tools: Arc<Vec<Box<dyn Tool>>> = Arc::new(build_runtime_tools(config)?);
     let gate = crate::agent::tinyagents::middleware::security_gate::tool_middleware(
-        vec![Arc::clone(&tools)], None,
+        vec![Arc::clone(&tools)],
+        None,
     );
     run_gated(&tools, gate, tool_name, args, prefer_markdown).await
 }
@@ -388,7 +391,6 @@ pub(crate) async fn run_gated(
         result,
     })
 }
-
 
 #[cfg(all(test, feature = "security-module"))]
 #[path = "native_ops_tests.rs"]

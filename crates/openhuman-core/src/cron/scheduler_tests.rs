@@ -401,10 +401,8 @@ async fn scheduled_shell_requires_an_allow_verdict_before_jail_execution() {
     let job = test_job(&format!("touch {}", marker.display()));
 
     for gate in [GateDecision::Block, GateDecision::Prompt] {
-        let security = SecurityPolicy::default().with_gateway(StubGateway::gate(
-            CommandClass::Write,
-            gate,
-        ));
+        let security =
+            SecurityPolicy::default().with_gateway(StubGateway::gate(CommandClass::Write, gate));
         let (success, output) = run_job_command(
             &crate::core::runtime::DispatchCtx::host_default(),
             &config,

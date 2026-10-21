@@ -265,7 +265,10 @@ async fn desktop_approval_bypass_keeps_external_metadata_and_fails_closed_on_mod
     assert_eq!(answer, Err("module unavailable".into()));
     assert_eq!(
         module.asked(),
-        vec![(vec![host_action(ToolPermission::ReadOnly, true, false)], true)]
+        vec![(
+            vec![host_action(ToolPermission::ReadOnly, true, false)],
+            true
+        )]
     );
 }
 

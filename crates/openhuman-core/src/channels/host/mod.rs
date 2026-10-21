@@ -9,9 +9,7 @@ pub(crate) mod remote_control;
 
 pub(crate) use adapters::{ConfigAllowlistStore, OpenHumanEventSink, VoiceTranscriber};
 #[cfg(test)]
-pub use adapters::{
-    ConversationHistoryStore, CoreApprovalGate, CoreShutdownRegistry,
-};
+pub use adapters::{ConversationHistoryStore, CoreApprovalGate, CoreShutdownRegistry};
 pub use channel_events::{ChannelApprovalSurfaceSubscriber, ChannelTurnStateSubscriber};
 
 #[cfg(test)]
