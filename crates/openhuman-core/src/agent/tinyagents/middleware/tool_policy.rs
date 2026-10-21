@@ -70,16 +70,9 @@ impl ToolPolicyMiddleware {
         tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
         channel: String,
     ) -> Self {
-        let host = Arc::new(ToolPolicyHostState {
-            session,
-            tool_sets,
-            channel,
-        });
-        let desktop_policy = Arc::new(DesktopApprovalPolicy {
-            policy,
-            tool_sets: host.tool_sets.clone(),
-        });
-        let session_ceiling = Arc::new(SessionCeilingPolicy { host: host.clone() });
+        let host = session_policy_host(session, tool_sets, channel);
+        let desktop_policy = builder_policy(policy, host.tool_sets.clone());
+        let session_ceiling = session_ceiling_policy(host.clone());
         let denial: DenialRenderer = Arc::new(|call, policy, decision| {
             let (action, reason) = match decision {
                 PolicyDecision::RequireApproval { reason } => {
@@ -108,13 +101,10 @@ impl ToolPolicyMiddleware {
                 PolicyDecision::Allow => String::new(),
             }
         });
-        let post_host = host.clone();
         let gate = ToolPolicyGateMiddleware::new(desktop_policy)
             .with_session_ceiling(session_ceiling)
             .with_denial_renderer(denial)
-            .with_post_gate(Arc::new(move |_ctx, call| {
-                post_host.render_skill_for_session(call)
-            }));
+            .with_post_gate(skill_post_gate(host.clone()));
         Self {
             gate,
             #[cfg(test)]
@@ -156,6 +146,56 @@ impl ToolPolicyMiddleware {
     ) -> tinyagents_harness::tool::packs::NoSuchPackTool<'a> {
         self.host.no_such_pack_tool(pack, tool)
     }
+
+    pub(crate) fn builder_policy(
+        policy: Arc<dyn ToolCallPolicy<OpenHumanRunContext>>,
+        tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+    ) -> Arc<dyn ToolCallPolicy<OpenHumanRunContext>> {
+        builder_policy(policy, tool_sets)
+    }
+
+    pub(crate) fn session_ceiling(
+        session: tinytools::ToolPolicySession,
+        tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+        channel: String,
+    ) -> Arc<dyn ToolCallPolicy<OpenHumanRunContext>> {
+        session_ceiling_policy(session_policy_host(session, tool_sets, channel))
+    }
+
+    pub(crate) fn skill_post_gate(
+        session: tinytools::ToolPolicySession,
+        tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+        channel: String,
+    ) -> tinyagents_harness::middleware::ToolPolicyPostGate<OpenHumanRunContext> {
+        skill_post_gate(session_policy_host(session, tool_sets, channel))
+    }
+}
+
+fn session_policy_host(
+    session: tinytools::ToolPolicySession,
+    tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+    channel: String,
+) -> Arc<ToolPolicyHostState> {
+    Arc::new(ToolPolicyHostState { session, tool_sets, channel })
+}
+
+fn builder_policy(
+    policy: Arc<dyn ToolCallPolicy<OpenHumanRunContext>>,
+    tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
+) -> Arc<dyn ToolCallPolicy<OpenHumanRunContext>> {
+    Arc::new(DesktopApprovalPolicy { policy, tool_sets })
+}
+
+fn session_ceiling_policy(
+    host: Arc<ToolPolicyHostState>,
+) -> Arc<dyn ToolCallPolicy<OpenHumanRunContext>> {
+    Arc::new(SessionCeilingPolicy { host })
+}
+
+fn skill_post_gate(
+    host: Arc<ToolPolicyHostState>,
+) -> tinyagents_harness::middleware::ToolPolicyPostGate<OpenHumanRunContext> {
+    Arc::new(move |_ctx, call| host.render_skill_for_session(call))
 }
 
 impl ToolPolicyHostState {
@@ -410,20 +450,10 @@ impl ToolCallPolicy<OpenHumanRunContext> for SessionCeilingPolicy {
 
     async fn check(
         &self,
-        ctx: &RunContext<OpenHumanRunContext>,
+        _ctx: &RunContext<OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> PolicyDecision {
-        #[cfg(feature = "modules")]
-        let approvals_disabled = if let Some(tool) = self.host.resolve_tool(&call.name) {
-            crate::desktop::control::approvals_disabled_for(&ctx.data.dispatch_ctx(), tool.as_ref())
-                .await
-        } else {
-            false
-        };
-        #[cfg(not(feature = "modules"))]
-        let approvals_disabled = false;
-
-        match self.host.channel_permission_block(call, approvals_disabled) {
+        match self.host.channel_permission_block(call, false) {
             Some(reason) => PolicyDecision::deny(reason),
             None => PolicyDecision::Allow,
         }
