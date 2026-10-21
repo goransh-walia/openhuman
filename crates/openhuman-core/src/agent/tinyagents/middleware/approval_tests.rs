@@ -178,11 +178,11 @@ async fn ordinary_audit_terminal_writes_use_each_admitting_run_tenant() {
     );
     let ctx_a = RunContext::new(
         RunConfig::new("ordinary-audit-tenant-a"),
-        OpenHumanRunContext::new().with_core(Some(tenant_a_core)),
+        OpenHumanRunContext::new().with_core(Some(tenant_a_core.clone())),
     );
     let ctx_b = RunContext::new(
         RunConfig::new("ordinary-audit-tenant-b"),
-        OpenHumanRunContext::new().with_core(Some(tenant_b_core)),
+        OpenHumanRunContext::new().with_core(Some(tenant_b_core.clone())),
     );
     let call = TaToolCall {
         id: "call-ordinary-tenant".into(),
