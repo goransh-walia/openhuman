@@ -9,10 +9,10 @@
 //! * Every mode asks the module. `Standard` adds no privacy restriction, but a
 //!   missing, faulted or slow module still **refuses** the transfer; the host
 //!   never assumes an external effect is permitted.
-//! * What the host contributes is the one thing only it knows: whether a backend
-//!   route is a control-plane round trip (session, auth, team, billing and the
-//!   read-only connection-management routes) or carries user content
-//!   ([`data_class`]).
+//! * What the host contributes is the one thing only it knows: whether an
+//!   integration descriptor represents a control-plane round trip
+//!   ([`data_class`]). The TinyHumans adapter classifies its backend routes and
+//!   carries that fact on the descriptor; core does not parse backend paths.
 //!
 //! The mode is the live session policy's
 //! ([`current_privacy_mode`](crate::security::live_policy::current_privacy_mode));
@@ -37,24 +37,12 @@ pub enum PrivacyClass {
 
 /// The class of the transfer `desc` describes.
 ///
-/// Only [`EgressReason::Integration`] descriptors are ever control-plane:
-/// inference, composio tool calls, cloud embeddings and agent network fetches all
-/// ship the user's data. For an integration the descriptor's `service` is the
-/// backend endpoint path (query stripped), and two shapes are control-plane:
-///
-/// 1. Any path outside the user-data tool namespace (`/agent-integrations/`):
-///    session, auth, team and billing round trips. Exempting them defensively means
-///    a control-plane call re-homed onto a descriptor can never brick sign-in.
-/// 2. `pricing`, and the read-only composio connection-management routes
-///    (`connections`, `authorize`, `tools`, `toolkits`), which set up or describe an
-///    integration without shipping or mutating user content.
-///
-/// Everything else under `/agent-integrations/` (composio `execute`, triggers,
-/// `github/repos`, any unknown sub-route) ships user data and is not exempt: the
-/// boundary is fail-closed for user data.
+/// Only integration descriptors carrying the TinyHumans adapter's explicit
+/// control-plane classification receive that class. Unclassified integrations
+/// default to metadata or user content based on their declared data kinds.
 #[must_use]
 pub fn data_class(desc: &EgressDescriptor) -> PrivacyClass {
-    if is_control_plane(desc) {
+    if desc.reason == EgressReason::Integration && desc.control_plane {
         PrivacyClass::ControlPlane
     } else if desc
         .data_kinds
