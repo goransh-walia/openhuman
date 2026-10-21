@@ -22,6 +22,11 @@ use tinytools::ToolResult as TaToolResult;
 use crate::security::approval::{summarize_action, ApprovalGate, ExecutionOutcome, GateOutcome};
 use tinytools::Tool;
 
+/// Shared fallback latch for hosts that deliberately boot without an
+/// `ApprovalGate`. The gate has its own latch when installed; this one ensures
+/// a failed ordinary RecordAudit2 write still blocks later resolver instances.
+static REQUIRED_AUDIT_FAILURE: AtomicBool = AtomicBool::new(false);
+
 /// `wrap_tool`: route OpenHuman's human-in-the-loop **approval gate** through a
 /// named tinyagents tool middleware (issue #4249, Phase 1). A tool with an
 /// external effect intercepts through the global [`ApprovalGate`]; a denial
@@ -67,7 +72,6 @@ pub(crate) struct ApprovalSecurityMiddleware {
     /// Tickets for no-prompt external calls. Approval-engine tickets are not
     /// stored here and continue to use RecordExecution2.
     audit_tickets: Mutex<HashMap<String, String>>,
-    audit_failure: AtomicBool,
 }
 
 impl ApprovalSecurityMiddleware {
@@ -76,7 +80,6 @@ impl ApprovalSecurityMiddleware {
         Self {
             tool_sets,
             audit_tickets: Mutex::new(HashMap::new()),
-            audit_failure: AtomicBool::new(false),
         }
     }
 
@@ -127,7 +130,7 @@ impl ApprovalSecurityMiddleware {
         if !external_effect {
             return false;
         }
-        let audit_failed = self.audit_failure.load(Ordering::SeqCst)
+        let audit_failed = REQUIRED_AUDIT_FAILURE.load(Ordering::SeqCst)
             || ApprovalGate::try_global().is_some_and(|gate| gate.audit_failure_latched());
         let approvals_disabled = self.desktop_approvals_disabled(dispatch, name).await;
         Self::requires_resolver(external_effect, audit_failed, approvals_disabled)
@@ -225,7 +228,7 @@ impl ApprovalSecurityMiddleware {
         F: FnOnce(crate::security::audit_record::HostAuditEvent) -> Result<(), String>,
     {
         if let Err(error) = write(event) {
-            self.audit_failure.store(true, Ordering::SeqCst);
+            REQUIRED_AUDIT_FAILURE.store(true, Ordering::SeqCst);
             if let Some(gate) = gate {
                 gate.latch_audit_failure();
             }
@@ -359,7 +362,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
             return ApprovalResolution::Allow { ticket: None };
         }
         let gate = ApprovalGate::try_global();
-        if self.audit_failure.load(Ordering::SeqCst)
+        if REQUIRED_AUDIT_FAILURE.load(Ordering::SeqCst)
             || gate
                 .as_ref()
                 .is_some_and(|gate| gate.audit_failure_latched())

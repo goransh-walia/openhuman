@@ -5,6 +5,16 @@ use tinyagents_harness::context::{RunConfig, RunContext};
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
+static AUDIT_TEST_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
+struct ResetAuditFailureLatch;
+
+impl Drop for ResetAuditFailureLatch {
+    fn drop(&mut self) {
+        REQUIRED_AUDIT_FAILURE.store(false, Ordering::SeqCst);
+    }
+}
+
 struct ExternalAuditTool;
 
 #[async_trait]
@@ -117,6 +127,11 @@ fn a_latched_audit_failure_routes_external_tools_even_when_desktop_approvals_are
 
 #[tokio::test]
 async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
+    let _lock = AUDIT_TEST_LOCK
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap();
+    let _reset_latch = ResetAuditFailureLatch;
     let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
         Box::new(ExternalAuditTool) as Box<dyn Tool>,
     ])]);
@@ -141,6 +156,11 @@ async fn an_allowed_external_effect_gets_a_terminal_audit_ticket() {
 
 #[tokio::test]
 async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions() {
+    let _lock = AUDIT_TEST_LOCK
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap();
+    let _reset_latch = ResetAuditFailureLatch;
     let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
         Box::new(ExternalAuditTool) as Box<dyn Tool>,
     ])]);
@@ -180,7 +200,7 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
         !result.is_error,
         "an audit failure cannot rewrite a completed result"
     );
-    assert!(resolver.audit_failure.load(Ordering::SeqCst));
+    assert!(REQUIRED_AUDIT_FAILURE.load(Ordering::SeqCst));
     let event = recorded
         .lock()
         .unwrap()
@@ -195,8 +215,12 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
     assert!(serialized.contains("success"));
     assert!(!serialized.contains("sensitive"));
 
+    let another_resolver =
+        ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
+            Box::new(ExternalAuditTool) as Box<dyn Tool>
+        ])]);
     assert!(matches!(
-        resolver.resolve_allowed(&ctx, &call).await,
+        another_resolver.resolve_allowed(&ctx, &call).await,
         ApprovalResolution::Deny { .. }
     ));
 
