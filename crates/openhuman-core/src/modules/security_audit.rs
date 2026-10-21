@@ -19,18 +19,7 @@ use crate::security::audit_record::{HostAuditEvent, HostAuditKind};
 
 const LOG: &str = "[security][audit]";
 
-/// Record `event` for the calling tenant's subject.
-pub(crate) async fn record_for_tenant(
-    config: &Config,
-    tenant: &crate::core::runtime::Tenant,
-    event: HostAuditEvent,
-) -> Result<(), String> {
-    let proxy = super::scoped_client::serving_proxy()
-        .await
-        .ok_or_else(|| NOT_SERVING.to_owned())?;
-    record_for_tenant_with(&proxy, config, tenant, event).await
-}
-
+/// Record `event` for the calling tenant's subject through `proxy`.
 pub(crate) async fn record_for_tenant_with(
     proxy: &tinybus::Proxy,
     config: &Config,
@@ -39,7 +28,7 @@ pub(crate) async fn record_for_tenant_with(
 ) -> Result<(), String> {
     let saas = crate::core::runtime::is_saas();
     let subject = super::policy_translation::subject_scope(tenant, &config.workspace_dir, saas)?;
-    record_with(&proxy, config, subject, event).await
+    record_with(proxy, config, subject, event).await
 }
 
 /// The error a row gets when no module is serving; the row is reported, not kept.
