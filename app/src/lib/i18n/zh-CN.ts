@@ -3591,7 +3591,8 @@ const messages: TranslationMap = {
   'settings.approvalHistory.tableDesc': '每一个同意或否认的人,都用工具以及要求它做什么。',
   'settings.approvalHistory.autoJev': '已由 Jev 自动批准',
   'settings.approvalHistory.autoPolicy': '已按策略自动批准',
-  'settings.approvalHistory.judgeScores': '意图 {intent} · 可逆性 {reversible} · 数据外泄 {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    '意图 {intent} · 可逆性 {reversible} · 数据外泄 {exfiltrate}',
   'settings.approvalHistory.judgeCached': '缓存的判定',
   'settings.approvalHistory.judgeExpires': '授权到期时间 {time}',
   'settings.approvalHistory.column.time': '时间',

@@ -3726,7 +3726,8 @@ const messages: TranslationMap = {
   'settings.approvalHistory.tableDesc': 'كل موافقة أو رفض مع الأداة وما طُلب منها فعله',
   'settings.approvalHistory.autoJev': 'وافق Jev تلقائيًا',
   'settings.approvalHistory.autoPolicy': 'تمت الموافقة تلقائيًا بموجب السياسة',
-  'settings.approvalHistory.judgeScores': 'النية {intent} · قابلية التراجع {reversible} · التسريب {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'النية {intent} · قابلية التراجع {reversible} · التسريب {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'حكم مخزّن مؤقتًا',
   'settings.approvalHistory.judgeExpires': 'تنتهي صلاحية الإذن {time}',
   'settings.approvalHistory.column.time': 'الوقت',

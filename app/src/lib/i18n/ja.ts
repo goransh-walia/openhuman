@@ -3502,7 +3502,8 @@ const messages: TranslationMap = {
   'settings.approvalHistory.decision.deny': '拒否',
   'settings.approvalHistory.autoJev': 'Jev が自動承認しました',
   'settings.approvalHistory.autoPolicy': 'ポリシーにより自動承認されました',
-  'settings.approvalHistory.judgeScores': '意図 {intent} · 可逆性 {reversible} · 情報流出 {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    '意図 {intent} · 可逆性 {reversible} · 情報流出 {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'キャッシュされた判定',
   'settings.approvalHistory.judgeExpires': '許可の有効期限 {time}',
   'settings.approvalHistory.column.time': '時刻',

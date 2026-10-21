@@ -3183,7 +3183,8 @@ const messages: TranslationMap = {
   'settings.approvalHistory.decision.deny': 'Reddedildi',
   'settings.approvalHistory.autoJev': 'Jev tarafından otomatik onaylandı',
   'settings.approvalHistory.autoPolicy': 'Politika tarafından otomatik onaylandı',
-  'settings.approvalHistory.judgeScores': 'Niyet {intent} · Geri alınabilirlik {reversible} · Sızdırma {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'Niyet {intent} · Geri alınabilirlik {reversible} · Sızdırma {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'Önbellekteki karar',
   'settings.approvalHistory.judgeExpires': 'İzin sona erer {time}',
   'settings.approvalHistory.column.time': 'Zaman',

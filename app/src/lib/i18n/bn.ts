@@ -3798,7 +3798,8 @@ const messages: TranslationMap = {
   'settings.approvalHistory.tableDesc': 'প্রত্যেক অনুমতি বা অস্বীকার, যা করার কথা ছিল।',
   'settings.approvalHistory.autoJev': 'Jev দ্বারা স্বয়ংক্রিয়ভাবে অনুমোদিত',
   'settings.approvalHistory.autoPolicy': 'নীতি দ্বারা স্বয়ংক্রিয়ভাবে অনুমোদিত',
-  'settings.approvalHistory.judgeScores': 'অভিপ্রায় {intent} · পূর্বাবস্থায় ফেরানো যায় {reversible} · তথ্য ফাঁস {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'অভিপ্রায় {intent} · পূর্বাবস্থায় ফেরানো যায় {reversible} · তথ্য ফাঁস {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'ক্যাশ করা সিদ্ধান্ত',
   'settings.approvalHistory.judgeExpires': 'অনুমতির মেয়াদ শেষ হবে {time}',
   'settings.approvalHistory.column.time': 'সময়',

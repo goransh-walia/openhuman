@@ -3484,7 +3484,8 @@ const en: TranslationMap = {
   'settings.approvalHistory.decision.deny': 'Denied',
   'settings.approvalHistory.autoJev': 'Auto-approved by Jev',
   'settings.approvalHistory.autoPolicy': 'Auto-approved by policy',
-  'settings.approvalHistory.judgeScores': 'Intent {intent} · Reversible {reversible} · Exfiltration {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'Intent {intent} · Reversible {reversible} · Exfiltration {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'Cached verdict',
   'settings.approvalHistory.judgeExpires': 'Grant expires {time}',
   'settings.approvalHistory.column.time': 'Time',

@@ -3846,7 +3846,8 @@ const messages: TranslationMap = {
     'Каждый одобряет или отрицает с помощью инструмента и того, что ему было предложено сделать.',
   'settings.approvalHistory.autoJev': 'Автоматически одобрено Jev',
   'settings.approvalHistory.autoPolicy': 'Автоматически одобрено политикой',
-  'settings.approvalHistory.judgeScores': 'Намерение {intent} · Обратимость {reversible} · Утечка {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'Намерение {intent} · Обратимость {reversible} · Утечка {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'Вердикт из кэша',
   'settings.approvalHistory.judgeExpires': 'Разрешение истекает {time}',
   'settings.approvalHistory.column.time': 'Время',

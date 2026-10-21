@@ -3871,7 +3871,8 @@ const messages: TranslationMap = {
     'Ogni approvazione o negare, con lo strumento e ciò che è stato chiesto di fare.',
   'settings.approvalHistory.autoJev': 'Approvato automaticamente da Jev',
   'settings.approvalHistory.autoPolicy': 'Approvato automaticamente dalla policy',
-  'settings.approvalHistory.judgeScores': 'Intento {intent} · Reversibile {reversible} · Esfiltrazione {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'Intento {intent} · Reversibile {reversible} · Esfiltrazione {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'Verdetto in cache',
   'settings.approvalHistory.judgeExpires': 'La concessione scade {time}',
   'settings.approvalHistory.column.time': 'Tempo',

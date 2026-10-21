@@ -3832,7 +3832,8 @@ const messages: TranslationMap = {
     'Setiap persetujuan atau penolakan, dengan alat dan apa yang diminta untuk dilakukan.',
   'settings.approvalHistory.autoJev': 'Disetujui otomatis oleh Jev',
   'settings.approvalHistory.autoPolicy': 'Disetujui otomatis oleh kebijakan',
-  'settings.approvalHistory.judgeScores': 'Niat {intent} · Dapat dibalik {reversible} · Eksfiltrasi {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'Niat {intent} · Dapat dibalik {reversible} · Eksfiltrasi {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'Putusan dari cache',
   'settings.approvalHistory.judgeExpires': 'Izin berakhir {time}',
   'settings.approvalHistory.column.time': 'Waktu',

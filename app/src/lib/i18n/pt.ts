@@ -3858,7 +3858,8 @@ const messages: TranslationMap = {
     'Todos aprovam ou negam, com a ferramenta e o que lhe foi pedido para fazer.',
   'settings.approvalHistory.autoJev': 'Aprovado automaticamente pelo Jev',
   'settings.approvalHistory.autoPolicy': 'Aprovado automaticamente pela política',
-  'settings.approvalHistory.judgeScores': 'Intenção {intent} · Reversível {reversible} · Exfiltração {exfiltrate}',
+  'settings.approvalHistory.judgeScores':
+    'Intenção {intent} · Reversível {reversible} · Exfiltração {exfiltrate}',
   'settings.approvalHistory.judgeCached': 'Veredito em cache',
   'settings.approvalHistory.judgeExpires': 'A concessão expira {time}',
   'settings.approvalHistory.column.time': 'Tempo',
