@@ -136,6 +136,7 @@ async fn released_module_command_class_table_is_the_pinned_one() {
     }
 }
 
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn released_module_treats_quoted_heredoc_bodies_as_data() {
@@ -159,6 +160,21 @@ async fn released_module_treats_quoted_heredoc_bodies_as_data() {
     // `<<<` takes no body; nothing after it may be blanked out.
     assert!(m.gated_ok(&sup, "cat <<< 'plain'").await);
     assert!(!m.gated_ok(&sup, "cat <<< \"$(whoami)\"").await);
+}
+
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn released_module_does_not_treat_posix_heredoc_bodies_as_windows_data() {
+    let mut m = Module::start().await;
+    let sup = policy(AutonomyLevel::Supervised);
+    // `<<` is not a heredoc in the native Windows shell dialect. Treating this
+    // POSIX-shaped input as data would hide the credential read from policy.
+    let command = "echo <<'EOF'\ncat ~/.ssh/id_rsa\nEOF";
+    let decision = m
+        .ask(&sup, CommandFlow::Harness, command, CommandOp::Check)
+        .await;
+    assert_eq!(decision.denial, Some(CommandDenial::Protected));
 }
 
 #[tokio::test(flavor = "multi_thread")]
