@@ -1,17 +1,17 @@
 //! The one security gate every agent path installs as its outermost tool
 //! middleware (issue #7328, phase 6).
 //!
-//! With the `security-module` feature the gate is the harness
-//! [`ToolPolicyGateMiddleware`] over [`TinySecurityPolicy`]: the module's
-//! decision is mapped onto the harness decision (deny beats require-approval
-//! beats allow, a module fault denies with no retry) and a required approval
-//! settles through OpenHuman's approval resolver. Without the feature there is
-//! no module, so the resolver gate alone remains.
+//! With the `security-module` feature, module, builder, and session verdicts
+//! are combined before the harness [`ToolPolicyGateMiddleware`] invokes the
+//! single approval resolver. Deny beats require-approval, which beats allow;
+//! a module fault denies without retry. Without the feature, explicitly
+//! classified inert reads may pass, while acting and unclassified tools fail
+//! closed before reaching the resolver.
 //!
 //! Turns (hosted roots included), sub-agents, flows and the live voice harness all
 //! install it through [`install`], so no path carries its own copy of the wiring.
-//! A session with a channel tool policy adds one more verdict source for the
-//! channel's "ask a human first" tools ([`super::tinysecurity_channel`]).
+//! A session with a channel tool policy adds its verdict to this same gate for
+//! the channel's "ask a human first" tools ([`super::tinysecurity_channel`]).
 
 use std::sync::Arc;
 
