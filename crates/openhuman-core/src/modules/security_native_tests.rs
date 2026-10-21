@@ -401,7 +401,15 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
     broker_task.abort();
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+fn restrict_native_fixture(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+        .expect("native fixture directory must be private");
+}
+
+#[cfg(not(any(unix, windows)))]
 fn restrict_native_fixture(_path: &std::path::Path) {}
 
 #[cfg(windows)]
