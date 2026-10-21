@@ -131,6 +131,14 @@ impl Tool for ObservedTool {
         self.external
     }
 
+    fn policy(&self) -> tinytools::ToolPolicy {
+        if self.permission <= PermissionLevel::ReadOnly && !self.external {
+            tinytools::ToolPolicy::read_only()
+        } else {
+            tinytools::ToolPolicy::default()
+        }
+    }
+
     async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(ToolResult::success("effect ran"))
@@ -424,4 +432,21 @@ async fn missing_module_keeps_inert_live_reads_available() {
         "inert read should remain available: {result}"
     );
     assert_eq!(calls.load(Ordering::SeqCst), 1, "inert read runs once");
+}
+
+#[cfg(not(feature = "security-module"))]
+#[tokio::test]
+async fn missing_module_denies_tools_without_an_explicit_inert_declaration() {
+    let (surface, calls, _) = governed_surface(
+        "unclassified_observed",
+        None,
+        PermissionLevel::None,
+        false,
+        ToolPolicyAction::Allow,
+        PolicyDecision::Allow,
+    );
+    let harness = assemble_live_tool_harness(surface);
+    let result = run_live_tool(&harness, "unclassified_observed", test_core(false)).await;
+    assert!(!result.contains("effect ran"), "unclassified tool ran: {result}");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
 }

@@ -52,10 +52,12 @@ impl ToolCallPolicy<OpenHumanRunContext> for CombinedPolicy {
 }
 
 /// Feature-off policy: without TinySecurity, only inert reads may execute.
+#[cfg(not(feature = "security-module"))]
 struct MissingModulePolicy {
     effects: ApprovalSecurityMiddleware,
 }
 
+#[cfg(not(feature = "security-module"))]
 #[async_trait::async_trait]
 impl ToolCallPolicy<OpenHumanRunContext> for MissingModulePolicy {
     fn name(&self) -> &str {
@@ -70,7 +72,19 @@ impl ToolCallPolicy<OpenHumanRunContext> for MissingModulePolicy {
         let Some(tool) = self.effects.resolve_tool(&call.name) else {
             return PolicyDecision::deny("security module unavailable for unknown tool");
         };
-        if tool.permission_level_with_args(&call.arguments) > tinytools::PermissionLevel::ReadOnly
+        let declaration = tool.policy();
+        let effects = declaration.side_effects;
+        let explicitly_inert = declaration.classified
+            && effects.read_only
+            && !effects.writes_files
+            && !effects.network
+            && !effects.installs_dependencies
+            && !effects.destructive
+            && !effects.external_service
+            && !effects.payment;
+        if !explicitly_inert
+            || tool.permission_level_with_args(&call.arguments)
+                > tinytools::PermissionLevel::ReadOnly
             || tool.external_effect_with_args(&call.arguments)
         {
             PolicyDecision::deny("security module unavailable for acting tool")
