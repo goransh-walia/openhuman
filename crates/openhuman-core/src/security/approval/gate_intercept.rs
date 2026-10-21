@@ -48,6 +48,16 @@ impl ApprovalGate {
         tool_call_id: Option<&str>,
         mode: Mode,
     ) -> (GateOutcome, Option<String>) {
+        if self.audit_failure_latched() {
+            return (
+                GateOutcome::Deny {
+                    reason: format!(
+                        "{POLICY_DENIED_MARKER} Required approval audit is unavailable; refusing external-effect tool '{tool_name}'."
+                    ),
+                },
+                None,
+            );
+        }
         let Mode { forced, track } = mode;
         // Origin tells us who scheduled this turn. Entry points (web channel,
         // channel runtime, cron, background jobs, CLI) scope a typed

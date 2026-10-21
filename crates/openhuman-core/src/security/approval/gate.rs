@@ -31,6 +31,7 @@
 //! so the security invariant is preserved without auto-purging.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -322,6 +323,9 @@ pub struct ApprovalGate {
     ttl: Option<Duration>,
     engine: SharedEngine,
     parked: Arc<Parked>,
+    /// Once a required terminal audit write fails, external effects fail closed
+    /// for the rest of this process. Already completed tool results are untouched.
+    audit_failure: AtomicBool,
 }
 
 /// What the prompt surface knows about the call it shows requests for.

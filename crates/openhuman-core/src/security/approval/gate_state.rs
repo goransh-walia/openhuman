@@ -19,11 +19,9 @@ impl ApprovalGate {
     /// Write the *terminal* status of a tool call onto its approval
     /// audit row: how the call the gate reserved ended.
     ///
-    /// Logs (but does not propagate) write errors: the tool has
-    /// already run, so audit-log loss should never bubble up as a
-    /// tool execution failure to the agent. If durable audit storage
-    /// is required for compliance, callers wire it via a stronger
-    /// guarantee than this best-effort hook.
+    /// Logs (but does not propagate) write errors to preserve the result of a
+    /// tool that has already run. A failed write also latches the gate closed
+    /// for later external admissions.
     ///
     /// `error` is the (already sanitized) failure text of the call. The
     /// engine records the outcome class only; the text is never stored, which
@@ -34,28 +32,43 @@ impl ApprovalGate {
         outcome: ExecutionOutcome,
         error: Option<&str>,
     ) {
+        let _ = self.record_execution_required(request_id, outcome, error);
+    }
+
+    /// Record a terminal result required by the security audit contract.
+    /// Failure is returned to internal callers and permanently fails closed
+    /// for later external-effect admissions in this process.
+    pub(crate) fn record_execution_required(
+        &self,
+        request_id: &str,
+        outcome: ExecutionOutcome,
+        error: Option<&str>,
+    ) -> anyhow::Result<()> {
         let id = request_id.to_owned();
         let recorded = self
             .run_engine(|engine| async move { engine.record_execution(&id, outcome).await })
-            .unwrap_or_else(|bridge| Err(EngineError::Unavailable(bridge.to_string())));
+            .map_err(|bridge| anyhow::anyhow!("approval audit engine bridge failed: {bridge}"))
+            .and_then(|result| result.map_err(anyhow::Error::from));
         match recorded {
-            Ok(()) => tracing::debug!(
+            Ok(()) => {
+                tracing::debug!(
                 request_id = %request_id,
                 outcome = outcome.as_str(),
                 had_error = error.is_some(),
                 "[approval::gate] recorded terminal execution"
-            ),
-            Err(EngineError::NotPending) => tracing::warn!(
-                request_id = %request_id,
-                outcome = outcome.as_str(),
-                "[approval::gate] record_execution found no matching reserved request"
-            ),
-            Err(err) => tracing::error!(
-                request_id = %request_id,
-                outcome = outcome.as_str(),
-                error = %err,
-                "[approval::gate] record_execution write failed"
-            ),
+                );
+                Ok(())
+            }
+            Err(err) => {
+                self.audit_failure.store(true, Ordering::SeqCst);
+                tracing::error!(
+                    request_id = %request_id,
+                    outcome = outcome.as_str(),
+                    error = %err,
+                    "[approval::gate] required terminal audit write failed; later external admissions fail closed"
+                );
+                Err(err)
+            }
         }
     }
 

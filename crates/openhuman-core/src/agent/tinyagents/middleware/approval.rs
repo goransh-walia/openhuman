@@ -182,7 +182,10 @@ impl ApprovalSecurityMiddleware {
             | ApprovalExecutionOutcome::Abandoned => (ExecutionOutcome::Aborted, None),
             _ => (ExecutionOutcome::Aborted, None),
         };
-        gate.record_execution(ticket, execution, error.as_deref());
+        // The harness callback cannot fail an already-returned tool result.
+        // The gate's required recorder latches future external admissions if
+        // this terminal audit write cannot be persisted.
+        let _ = gate.record_execution_required(ticket, execution, error.as_deref());
     }
 }
 

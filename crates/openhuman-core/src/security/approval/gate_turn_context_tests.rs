@@ -346,7 +346,10 @@ async fn terminal_audit_failure_preserves_completed_result_and_denies_later_writ
             .into_result()
     })
     .await;
-    assert!(!first_result.is_error, "audit failure must not rewrite an executed result");
+    assert!(
+        !first_result.is_error,
+        "audit failure must not rewrite an executed result"
+    );
     assert_eq!(effects.load(Ordering::SeqCst), 1);
 
     let mut second = call();
@@ -359,6 +362,9 @@ async fn terminal_audit_failure_preserves_completed_result_and_denies_later_writ
             .into_result()
     })
     .await;
-    assert!(second_result.is_error, "later external write must fail closed");
+    assert!(
+        second_result.is_error,
+        "later external write must fail closed"
+    );
     assert_eq!(effects.load(Ordering::SeqCst), 1);
 }

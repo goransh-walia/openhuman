@@ -73,7 +73,13 @@ impl ApprovalGate {
             ttl,
             engine,
             parked: Arc::new(Parked::default()),
+            audit_failure: AtomicBool::new(false),
         }
+    }
+
+    /// Whether a required terminal audit write has failed during this process.
+    pub(crate) fn audit_failure_latched(&self) -> bool {
+        self.audit_failure.load(Ordering::SeqCst)
     }
 
     /// The park window the user asks for, if any. In debug builds
