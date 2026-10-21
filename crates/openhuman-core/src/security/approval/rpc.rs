@@ -8,8 +8,8 @@ use anyhow::anyhow;
 
 use crate::core::Outcome;
 
-use super::gate::{try_boot_state, ApprovalGate, ApprovalGateBootState, DecideMiss};
 use super::engine::Variant;
+use super::gate::{try_boot_state, ApprovalGate, ApprovalGateBootState, DecideMiss};
 use super::types::{
     ApprovalAuditEntry, ApprovalDecision, ApprovalSourceContext, FlowPreauthorizationResult,
     PendingApproval,
@@ -216,11 +216,8 @@ pub async fn approval_decide(
     let dispatch_tenant = ctx
         .tenant()
         .map_err(|error| anyhow!("approval decision has no tenant: {error}"))?;
-    let tool_grant_scope = gate.validate_decision_context(
-        request_id,
-        &dispatch_tenant,
-        agent_id,
-    )?;
+    let tool_grant_scope =
+        gate.validate_decision_context(request_id, &dispatch_tenant, agent_id)?;
     let decided = match agent_id {
         Some(agent) => gate.decide_for_agent(agent, request_id, decision),
         None => gate.decide(request_id, decision),

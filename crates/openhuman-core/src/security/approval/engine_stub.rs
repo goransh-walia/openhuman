@@ -199,8 +199,7 @@ fn automatic(input: &CheckInput, trusted_flow: bool, trusted_tool: bool) -> Opti
         CallOrigin::LocalOperator => return Some("auto:local-operator"),
         // Only a whole-tool grant approves an unlabelled call.
         CallOrigin::Unlabelled => {
-            return (trusted_tool
-                || posture.tool_grants.iter().any(|t| t == &input.tool))
+            return (trusted_tool || posture.tool_grants.iter().any(|t| t == &input.tool))
                 .then_some("auto:tool-grant");
         }
         _ => {}
@@ -240,8 +239,7 @@ impl ApprovalEngine for StubEngine {
         // The module refuses a scheduled job's external effect and an unlabelled call
         // no grant covers, without parking either.
         if input.origin == CallOrigin::Cron
-            || (input.origin == CallOrigin::Unlabelled
-                && automatic(&input, false, false).is_none())
+            || (input.origin == CallOrigin::Unlabelled && automatic(&input, false, false).is_none())
         {
             return Err(EngineError::Refused);
         }

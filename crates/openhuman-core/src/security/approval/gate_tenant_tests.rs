@@ -51,13 +51,10 @@ fn profile_route_keys_are_distinct_per_profile_and_from_the_desktop() {
 fn approval_decisions_must_match_the_parked_profile_and_agent() {
     let parked = tenant(Some("alice"), Some("agent-a"));
     let process_projection = tenant(Some("alice"), None);
-    assert!(validate_decision_tenant(
-        &process_projection,
-        Some("agent-a"),
-        &parked,
-        "request-1",
-    )
-    .is_ok());
+    assert!(
+        validate_decision_tenant(&process_projection, Some("agent-a"), &parked, "request-1",)
+            .is_ok()
+    );
     assert!(matches!(
         validate_decision_tenant(
             &tenant(Some("mallory"), None),
@@ -68,30 +65,14 @@ fn approval_decisions_must_match_the_parked_profile_and_agent() {
         Err(ApprovalError::WrongTenant { .. })
     ));
     assert!(matches!(
-        validate_decision_tenant(
-            &process_projection,
-            Some("agent-b"),
-            &parked,
-            "request-1",
-        ),
+        validate_decision_tenant(&process_projection, Some("agent-b"), &parked, "request-1",),
         Err(ApprovalError::WrongAgent { .. })
     ));
     assert!(matches!(
-        validate_decision_tenant(
-            &process_projection,
-            None,
-            &parked,
-            "request-1",
-        ),
+        validate_decision_tenant(&process_projection, None, &parked, "request-1",),
         Err(ApprovalError::WrongAgent { .. })
     ));
-    assert!(validate_decision_tenant(
-        &parked,
-        None,
-        &parked,
-        "request-1",
-    )
-    .is_ok());
+    assert!(validate_decision_tenant(&parked, None, &parked, "request-1",).is_ok());
 }
 
 fn park_as(
