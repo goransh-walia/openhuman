@@ -150,7 +150,9 @@ fn production_client_gates_shell_and_network_on_the_released_archive() {
                 .enable_all()
                 .build()
                 .expect("test runtime");
-            runtime.block_on(production_client_gates_shell_and_network_on_the_released_archive_inner());
+            runtime.block_on(
+                production_client_gates_shell_and_network_on_the_released_archive_inner(),
+            );
         })
         .expect("test thread")
         .join()
