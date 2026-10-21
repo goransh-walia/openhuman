@@ -107,7 +107,8 @@ pub async fn record(
             &loaded
         }
     };
-    crate::modules::security::audit::record_for_tenant(config, event).await
+    let tenant = ctx.tenant().map_err(|_| "no tenant scope for the audit row".to_owned())?;
+    crate::modules::security::audit::record_for_tenant(config, &tenant, event).await
 }
 
 /// Without the module there is no audit stream; the row is reported, not kept.

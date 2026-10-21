@@ -22,12 +22,11 @@ const LOG: &str = "[security][audit]";
 /// Record `event` for the calling tenant's subject.
 pub(crate) async fn record_for_tenant(
     config: &Config,
+    tenant: &crate::core::runtime::Tenant,
     event: HostAuditEvent,
 ) -> Result<(), String> {
     let saas = crate::core::runtime::is_saas();
-    let tenant = crate::core::runtime::tenant::current_tenant()
-        .map_err(|_| "no tenant scope for the audit row".to_owned())?;
-    let subject = super::policy_translation::subject_scope(&tenant, &config.workspace_dir, saas)?;
+    let subject = super::policy_translation::subject_scope(tenant, &config.workspace_dir, saas)?;
     let proxy = super::scoped_client::serving_proxy()
         .await
         .ok_or_else(|| NOT_SERVING.to_owned())?;
