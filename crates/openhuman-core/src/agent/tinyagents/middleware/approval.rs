@@ -42,6 +42,11 @@ static REQUIRED_AUDIT_FAILURE: AtomicBool = AtomicBool::new(false);
 const COMPOSIO_EXECUTE_TOOL: &str = "composio_execute";
 const INVALID_COMPOSIO_APPROVAL_NAME: &str = "composio_execute:<invalid-action>";
 
+struct OrdinaryAuditTicket {
+    tool_name: String,
+    dispatch: DispatchCtx,
+}
+
 /// Stable identity used by persistent approval grants.
 ///
 /// `composio_execute` multiplexes every Composio action through one outer tool
@@ -71,7 +76,7 @@ pub(crate) struct ApprovalSecurityMiddleware {
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
     /// Tickets for no-prompt external calls. Approval-engine tickets are not
     /// stored here and continue to use RecordExecution2.
-    audit_tickets: Mutex<HashMap<String, String>>,
+    audit_tickets: Mutex<HashMap<String, OrdinaryAuditTicket>>,
 }
 
 impl ApprovalSecurityMiddleware {
@@ -246,14 +251,18 @@ impl ApprovalSecurityMiddleware {
         outcome: ApprovalExecutionOutcome<'_>,
         write: F,
     ) where
-        F: FnOnce(crate::security::audit_record::HostAuditEvent) -> Result<(), String>,
+        F: FnOnce(DispatchCtx, crate::security::audit_record::HostAuditEvent) -> Result<(), String>,
     {
-        let tool_name = self
+        let ticket_data = self
             .audit_tickets
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(ticket);
-        if let Some(tool_name) = tool_name {
+        if let Some(OrdinaryAuditTicket {
+            tool_name,
+            dispatch,
+        }) = ticket_data
+        {
             use ApprovalExecutionOutcome as Outcome;
             let outcome = match outcome {
                 Outcome::Result(result) if result.is_error => "failure",
@@ -267,7 +276,9 @@ impl ApprovalSecurityMiddleware {
             let event = crate::security::audit_record::HostAuditEvent::external_tool_execution(
                 &tool_name, outcome,
             );
-            self.record_external_terminal_with(gate, event, write);
+            self.record_external_terminal_with(gate, event, move |event| {
+                write(dispatch, event)
+            });
         } else if let Some(gate) = gate {
             Self::record_terminal_on(gate, ticket, outcome);
         }
@@ -355,7 +366,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
 
     async fn resolve_allowed(
         &self,
-        _ctx: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
+        ctx: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
         call: &TaToolCall,
     ) -> ApprovalResolution {
         if !self.has_external_effect(&call.name, &call.arguments) {
@@ -373,7 +384,13 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
         self.audit_tickets
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(ticket.clone(), call.name.clone());
+            .insert(
+                ticket.clone(),
+                OrdinaryAuditTicket {
+                    tool_name: call.name.clone(),
+                    dispatch: ctx.data.dispatch_ctx(),
+                },
+            );
         ApprovalResolution::Allow {
             ticket: Some(ticket),
         }
@@ -387,8 +404,7 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
 
     fn record_terminal(&self, ticket: &str, outcome: ApprovalExecutionOutcome<'_>) {
         let gate = ApprovalGate::try_global();
-        let dispatch = DispatchCtx::ambient();
-        self.record_terminal_with(gate.as_deref(), ticket, outcome, move |event| {
+        self.record_terminal_with(gate.as_deref(), ticket, outcome, move |dispatch, event| {
             crate::storage::block_on_anyhow(async move {
                 crate::security::audit_record::record(&dispatch, None, event)
                     .await
