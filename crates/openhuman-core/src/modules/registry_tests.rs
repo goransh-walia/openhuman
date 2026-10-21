@@ -214,7 +214,7 @@ fn tinybox_registry_matches_the_published_v0142_release_manifest() {
             "windows-2025-x86_64",
             "tinybox-0.1.42-windows-2025-x86_64.zip",
             "8ace9208d6a89a6d4d2766a91d5f9be937e1aaf076b4a7ca3af5c965997167d3",
-        )
+        ),
     ];
 
     assert_eq!(actual.len(), 17);
