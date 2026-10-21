@@ -110,11 +110,13 @@ async fn whole_tool_trust_stays_with_the_exact_tenant_and_variant() {
         (trusted.clone(), Variant::FlowStrict),
     ] {
         assert!(matches!(
-            engine.check(CheckInput {
-                tenant,
-                variant,
-                ..input()
-            }).await,
+            engine
+                .check(CheckInput {
+                    tenant,
+                    variant,
+                    ..input()
+                })
+                .await,
             Err(EngineError::Unavailable(_))
         ));
     }
