@@ -181,8 +181,7 @@ fn shell_check(arguments: &serde_json::Value) -> Option<Check> {
     let declared_class = arguments
         .get("category")
         .and_then(serde_json::Value::as_str)
-        .and_then(SecurityPolicy::parse_declared_class)
-        .map(crate::security::policy::native_commands::to_bus_class);
+        .and_then(SecurityPolicy::parse_declared_class);
     Some(Check::HostShell {
         command: command.to_owned(),
         declared_class,

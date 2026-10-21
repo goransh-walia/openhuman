@@ -230,7 +230,6 @@ mod native {
             external_effect,
         })
         .await
-        .map(super::super::native_commands::from_bus_class)
     }
 
     impl SecurityPolicy {
