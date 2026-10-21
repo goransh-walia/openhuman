@@ -19,18 +19,6 @@ Migration steps:
 
 - `registry_v2`: `agents.registry` v1 to v2 from `storage_agents`
 
-## approvals
-
-| Kind | Name | Version | Scope | Indexed fields |
-| --- | --- | --- | --- | --- |
-| collection | `approvals.flow_trust` | 2 | tenant | `flow_id`, `tool_name` |
-| collection | `approvals.requests` | 2 | tenant | `pending`, `created_ms`, `pending`, `decided_ms`, `session_id`, `pending` |
-
-Migration steps:
-
-- `requests_v2`: `approvals.requests` v1 to v2 from `approvals`
-- `flow_trust_v2`: `approvals.flow_trust` v1 to v2 from `approval_flow_trust`
-
 ## artifacts
 
 | Kind | Name | Version | Scope | Indexed fields |
