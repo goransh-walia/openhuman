@@ -236,34 +236,38 @@ impl ApprovalSecurityMiddleware {
         }
     }
 
-    fn record_external_terminal(
+    fn record_terminal_with<F>(
         &self,
         gate: Option<&ApprovalGate>,
-        tool_name: &str,
+        ticket: &str,
         outcome: ApprovalExecutionOutcome<'_>,
-    ) {
-        use ApprovalExecutionOutcome as Outcome;
-        let outcome = match outcome {
-            Outcome::Result(result) if result.is_error => "failure",
-            Outcome::Result(_) => "success",
-            Outcome::Failed(_) => "failure",
-            Outcome::Cancelled(_) | Outcome::Control(_) => "aborted",
-            // A dropped in-flight tool may already have produced effects.
-            Outcome::Abandoned => "abandoned",
-            _ => "aborted",
-        };
-        let event = crate::security::audit_record::HostAuditEvent::external_tool_execution(
-            tool_name, outcome,
-        );
-        let dispatch = DispatchCtx::ambient();
-        self.record_external_terminal_with(gate, event, move |event| {
-            crate::storage::block_on_anyhow(async move {
-                crate::security::audit_record::record(&dispatch, None, event)
-                    .await
-                    .map_err(anyhow::Error::msg)
-            })
-            .map_err(|error| error.to_string())
-        });
+        write: F,
+    ) where
+        F: FnOnce(crate::security::audit_record::HostAuditEvent) -> Result<(), String>,
+    {
+        let tool_name = self
+            .audit_tickets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(ticket);
+        if let Some(tool_name) = tool_name {
+            use ApprovalExecutionOutcome as Outcome;
+            let outcome = match outcome {
+                Outcome::Result(result) if result.is_error => "failure",
+                Outcome::Result(_) => "success",
+                Outcome::Failed(_) => "failure",
+                Outcome::Cancelled(_) | Outcome::Control(_) => "aborted",
+                // A dropped in-flight tool may already have produced effects.
+                Outcome::Abandoned => "abandoned",
+                _ => "aborted",
+            };
+            let event = crate::security::audit_record::HostAuditEvent::external_tool_execution(
+                &tool_name, outcome,
+            );
+            self.record_external_terminal_with(gate, event, write);
+        } else if let Some(gate) = gate {
+            Self::record_terminal_on(gate, ticket, outcome);
+        }
     }
 }
 
@@ -379,17 +383,16 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
     }
 
     fn record_terminal(&self, ticket: &str, outcome: ApprovalExecutionOutcome<'_>) {
-        let tool_name = self
-            .audit_tickets
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(ticket);
-        if let Some(tool_name) = tool_name {
-            let gate = ApprovalGate::try_global();
-            self.record_external_terminal(gate.as_deref(), &tool_name, outcome);
-        } else if let Some(gate) = ApprovalGate::try_global() {
-            Self::record_terminal_on(&gate, ticket, outcome);
-        }
+        let gate = ApprovalGate::try_global();
+        let dispatch = DispatchCtx::ambient();
+        self.record_terminal_with(gate.as_deref(), ticket, outcome, move |event| {
+            crate::storage::block_on_anyhow(async move {
+                crate::security::audit_record::record(&dispatch, None, event)
+                    .await
+                    .map_err(anyhow::Error::msg)
+            })
+            .map_err(|error| error.to_string())
+        });
     }
 }
 
