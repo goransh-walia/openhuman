@@ -70,13 +70,6 @@
     "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
   },
   {
-    "path": "crates/openhuman-core/src/memory/test_fixtures.rs",
-    "rule": "json-write",
-    "site": "std::fs::File::create(tmp.path().join(\"config.toml\")).expect(\"config file\");",
-    "reason": "test-only fixture creates an empty config file in a temporary directory so filesystem authorization tests do not read shared process config",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7328"
-  },
-  {
     "path": "crates/openhuman-core/src/modules/browser_task_report.rs",
     "rule": "json-write",
     "site": "let mut options = tokio::fs::OpenOptions::new();",
@@ -89,13 +82,6 @@
     "site": "Connection::open_with_flags(&copy, OpenFlags::SQLITE_OPEN_READ_WRITE)",
     "reason": "the storage importer's read-only reader of a legacy database, opened on a scratch copy of it (never the real file) to bring older installs' rows into the backend",
     "issue": "https://github.com/tinyhumansai/openhuman/issues/7430"
-  },
-  {
-    "path": "crates/openhuman-core/src/security/approval/native/history_import.rs",
-    "rule": "json-write",
-    "site": "std::fs::write(",
-    "reason": "content-free one-time marker for legacy approval history migration; module import operations are idempotent and the marker prevents repeated startup reads",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7328"
   },
   {
     "path": "crates/openhuman-core/src/security/approval/store_import.rs",
