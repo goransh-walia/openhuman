@@ -11,10 +11,8 @@
 //!   `GrantFlowTool2`.
 //!
 //! The legacy file is read from a scratch copy and never modified. The importer
-//! is idempotent twice over: a marker file next to the legacy database records
-//! that it finished, so a later start skips it, and the module itself returns the
-//! existing row for a request it already holds and `Unchanged` for a live grant,
-//! so a run interrupted before the marker is safe to repeat.
+//! runs once per process and is safe to repeat after a restart: the module returns
+//! the existing row for a request it already holds and `Unchanged` for a live grant.
 
 use std::{collections::HashSet, path::PathBuf};
 
