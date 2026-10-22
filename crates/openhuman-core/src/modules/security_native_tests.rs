@@ -188,9 +188,7 @@ pub(crate) async fn native_fixture_configured(
             require_attestation(&proxy, &unpinned).await.unwrap_err(),
             "TinySecurity recipient does not match a pinned release"
         );
-        if let Err(error) = require_attestation(&proxy, &record).await {
-            panic!("{error}; native module state: {:#?}", host.list());
-        }
+        require_attestation(&proxy, &record).await.unwrap();
     }
     NativeFixture {
         _fixtures: fixtures,
