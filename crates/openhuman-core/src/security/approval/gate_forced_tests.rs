@@ -203,6 +203,18 @@ fn saas_forced_approval_needs_a_routable_web_chat_surface() {
 }
 
 #[test]
+fn a_saas_human_approval_uses_the_one_time_variant_and_route() {
+    assert_eq!(
+        one_time_approval_mode(Variant::Standard, false, true),
+        (Variant::Forced, true)
+    );
+    assert_eq!(
+        one_time_approval_mode(Variant::Standard, false, false),
+        (Variant::Standard, false)
+    );
+}
+
+#[test]
 fn saas_outcome_maps_an_allowlisted_verdict_to_allow() {
     use crate::profiles::tools::{gate_verdict_with, SaasToolGroup};
     let verdict = gate_verdict_with("shell", &[SaasToolGroup::HostShell]);

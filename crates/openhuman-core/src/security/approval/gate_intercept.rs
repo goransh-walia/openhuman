@@ -129,7 +129,7 @@ impl ApprovalGate {
         // a pre-declared workflow action, the CLI or an unlabelled call is
         // allowed is the module's decision (`origin_class`), and the engine also
         // applies the user's allowlist, per-flow trust and auto-approve setting.
-        let (mut variant, flow_id) = match &origin {
+        let (variant, flow_id) = match &origin {
             AgentTurnOrigin::WebChat { .. } => (
                 if forced {
                     Variant::Forced
@@ -185,12 +185,11 @@ impl ApprovalGate {
             | AgentTurnOrigin::DirectChat
             | AgentTurnOrigin::Unknown => (Variant::Standard, None),
         };
-        if saas_human_approval {
-            // The deployment allowlist was not enough to authorize this call.
-            // Use the one-time variant so configured or durable auto-grants
-            // cannot bypass the per-user decision.
-            variant = Variant::Forced;
-        }
+        // The deployment allowlist was not enough to authorize this call.
+        // The one-time variant prevents configured or durable auto-grants
+        // from bypassing the per-user decision.
+        let (variant, approval_forced) =
+            one_time_approval_mode(variant, forced, saas_human_approval);
 
         // Chat context (thread/client id) for routing the yes/no reply — handed
         // to the turn by the web channel; absent for non-chat callers.
@@ -305,7 +304,7 @@ impl ApprovalGate {
                 chat_thread_id: chat_thread_id.clone(),
                 chat_client_id,
                 tool_call_id: tool_call_id.map(str::to_string),
-                forced: forced || saas_human_approval,
+                forced: approval_forced,
                 agent_id,
                 approval_scope: scope.clone(),
                 thread_key: thread_key.clone(),

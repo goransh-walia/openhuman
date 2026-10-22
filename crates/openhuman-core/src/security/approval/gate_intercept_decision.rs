@@ -257,6 +257,20 @@ pub(crate) fn saas_prompt_needed(
         && (forced || crate::profiles::tools::requires_user_approval(ctx, tool_name))
 }
 
+/// Keep SaaS user approvals one-time even when the ordinary chat posture has
+/// persistent grants enabled.
+pub(crate) fn one_time_approval_mode(
+    variant: Variant,
+    forced: bool,
+    saas_human_approval: bool,
+) -> (Variant, bool) {
+    if saas_human_approval {
+        (Variant::Forced, true)
+    } else {
+        (variant, forced)
+    }
+}
+
 /// The gate's outcome in SaaS, `None` when an authenticated per-user surface
 /// should handle the approval (or outside SaaS). Without that route, calls use
 /// the deployment allowlist and forced approvals fail closed.

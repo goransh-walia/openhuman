@@ -218,7 +218,9 @@ pub fn gate_verdict_with(tool: &str, groups: &[SaasToolGroup]) -> Result<(), Str
     if admits_with(tool, false, groups) {
         return Ok(());
     }
-    Err(format!("'{tool}' is not in the deployment's allowlisted tool groups"))
+    Err(format!(
+        "'{tool}' is not in the deployment's allowlisted tool groups"
+    ))
 }
 
 /// Whether a rejected tool is specifically withheld pending a person's
