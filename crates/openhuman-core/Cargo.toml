@@ -226,7 +226,10 @@ tinychannels-bus = { version = "0.1", path = "../../vendor/tinychannels/crates/t
 # never loads a module. The kernel-floor ratchet catches exactly that, and did.
 tinybus = { path = "../../vendor/tinybus/crates/tinybus", default-features = false, features = ["macros", "uds"] }
 tinysearch-bus = { path = "../../vendor/tinysearch/crates/tinysearch-bus", features = ["schemars"] }
-tinysecurity-bus = { path = "../../vendor/tinysecurity/crates/tinysecurity-bus", optional = true }
+# The contract types (notably `CommandClass`) are part of the core's public
+# policy vocabulary even when the loadable module is disabled. The bus crate is
+# transport-free; only the module-loading integration is feature-gated.
+tinysecurity-bus = { path = "../../vendor/tinysecurity/crates/tinysecurity-bus" }
 # Registry vocabulary is available even when the loader is disabled, so the
 # pre-core client can identify and report an unavailable module safely.
 tinycomputer-bus = { path = "../../vendor/tinycomputer/crates/tinycomputer-bus" }
@@ -692,7 +695,7 @@ modules = [
     "dep:tinystoragedrivers-busproxy",
     "dep:tinybus-module",
 ]
-security-module = ["modules", "dep:tinysecurity-bus"]
+security-module = ["modules"]
 # Voice domain: STT/TTS providers, reply speech, and live voice.
 # The desktop product enables voice explicitly; contributor defaults leave it
 # off. WAV framing moved to the `tinyvoice` module, removing the former `hound`
