@@ -36,22 +36,18 @@ impl tinybus::Interface for AuthenticatedComputerPeer {
         args: serde_json::Value,
     ) -> tinybus::Result<serde_json::Value> {
         if member.as_str() != "Authorize" {
-            return Err(tinybus::Error::unknown_method(member.to_string()));
+            return Err(tinybus::Error::failed("unknown test peer method"));
         }
         let target: BrowserEgressTarget = serde_json::from_value(args)
-            .map_err(|error| tinybus::Error::invalid_args(error.to_string()))?;
-        let callback = self
-            .0
-            .proxy(
-                contract::INTERFACE,
-                contract::OBJECT_PATH,
-                contract::INTERFACE,
-            )?;
-        let grant: contract::BrowserEgressGrant = callback
-            .call(methods::AUTHORIZE, (target,))
-            .await?;
-        serde_json::to_value(grant)
-            .map_err(|error| tinybus::Error::failed(error.to_string()))
+            .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+        let callback = self.0.proxy(
+            contract::INTERFACE,
+            contract::OBJECT_PATH,
+            contract::INTERFACE,
+        )?;
+        let grant: contract::BrowserEgressGrant =
+            callback.call(methods::AUTHORIZE, (target,)).await?;
+        serde_json::to_value(grant).map_err(|error| tinybus::Error::failed(error.to_string()))
     }
 }
 
@@ -72,7 +68,7 @@ mod authenticated_computer_export {
     tinybus_module::module_export_static! {
         setup = super::authenticated_computer_setup,
         worker_threads = 1,
-        provides = [tinycomputer_bus::names::INTERFACE],
+        provides = ["ai.tinyhumans.tinycomputer.Desktop"],
         methods = ["Authorize"],
         signals = [],
         requires = [],
