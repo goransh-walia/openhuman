@@ -35,6 +35,7 @@ mod copilot_bus;
 mod draft_store;
 pub(crate) mod host_gates;
 pub mod memory_tools;
+mod memory_guard;
 pub mod node_contracts;
 pub mod ops;
 pub(crate) mod recovery;
