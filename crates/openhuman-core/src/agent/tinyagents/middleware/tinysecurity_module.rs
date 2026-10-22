@@ -175,11 +175,12 @@ fn level_acts(level: PermissionLevel) -> bool {
 /// The module receives the effective host tier: the configured autonomy
 /// level narrowed by any caller-specific ceiling carried by this dispatch.
 fn access_tier(autonomy: AutonomyLevel, ceiling: Option<AutonomyLevel>) -> AccessTier {
-    use AutonomyLevel::{Full, ReadOnly, Supervised};
-    match (autonomy, ceiling) {
-        (ReadOnly, _) | (_, Some(ReadOnly)) => AccessTier::Read,
-        (Supervised, _) | (_, Some(Supervised)) => AccessTier::Write,
-        (Full, _) | (_, Some(Full)) => AccessTier::Full,
+    if autonomy == AutonomyLevel::ReadOnly || ceiling == Some(AutonomyLevel::ReadOnly) {
+        AccessTier::Read
+    } else if autonomy == AutonomyLevel::Supervised || ceiling == Some(AutonomyLevel::Supervised) {
+        AccessTier::Write
+    } else {
+        AccessTier::Full
     }
 }
 
