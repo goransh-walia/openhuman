@@ -31,6 +31,7 @@ pub(crate) mod fetched_site;
 pub(crate) mod memory_pack;
 pub(crate) mod packed_tool_route;
 pub(crate) mod repeated_failure;
+pub(crate) mod sandbox_requirement;
 pub(crate) mod security_gate;
 #[cfg(feature = "security-module")]
 pub(crate) mod tinysecurity;

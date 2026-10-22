@@ -177,6 +177,9 @@ pub(crate) fn tool_middleware(
             sources.push(Arc::new(ChannelApprovalVerdicts::new(session)));
         }
         let mut security_policy = TinySecurityPolicy::with_sources(sources);
+        security_policy = security_policy.with_policy_source(Arc::new(
+            super::sandbox_requirement::SandboxRequirementPolicy::from_tool_sets(&tool_sets),
+        ));
         if let Some(enforcement) = &enforcement {
             security_policy = security_policy.with_policy_source(
                 super::tool_policy::builder_policy(enforcement.policy.clone(), tool_sets.clone()),
@@ -207,6 +210,9 @@ pub(crate) fn tool_middleware(
             vec![Arc::new(MissingModulePolicy {
                 effects: ApprovalSecurityMiddleware::new(tool_sets.clone()),
             })];
+        policies.push(Arc::new(
+            super::sandbox_requirement::SandboxRequirementPolicy::from_tool_sets(&tool_sets),
+        ));
         if let Some(enforcement) = &enforcement {
             policies.push(super::tool_policy::builder_policy(
                 enforcement.policy.clone(),

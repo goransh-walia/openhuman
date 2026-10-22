@@ -21,7 +21,7 @@ use tinyagents_harness::middleware::{
 use tinyagents_harness::middleware::{
     plan_mode_middleware, ArgRecoveryMiddleware, BudgetLimits, BudgetMiddleware,
     ContextCompressionMiddleware, PromptCacheGuardMiddleware, RepeatProgressMiddleware,
-    RunModeHandle, ToolPolicyMiddleware as TaToolPolicyMiddleware,
+    RunModeHandle,
 };
 use tinyagents_harness::runtime::AgentHarness;
 use tinyagents_harness::steering::SteeringHandle;
@@ -557,17 +557,6 @@ pub(super) fn install_turn_middleware(
             .map(|enforcement| enforcement.session.clone()),
         tool_policy.clone(),
     );
-
-    // SDK-owned tool-policy projection (issue #4249 / tinyagents-full-migration
-    // 01.1). Keep this narrow for now: enforce sandbox requirements declared by
-    // adapter policies without enabling classification/approval/result-byte
-    // gates yet. `require_classification(true)` would currently reject an
-    // unregistered hallucinated tool in `before_tool` before
-    // `RunPolicy::unknown_tool` can return a recoverable tool error, while
-    // OpenHuman's existing wrappers still own HITL approval and output caps.
-    harness.push_middleware(Arc::new(
-        TaToolPolicyMiddleware::new(harness.tools().policies()).require_sandbox(true),
-    ));
 
     // CLI/RPC-only scope gate — a tool restricted to explicit CLI/RPC invocation
     // must not run from the model loop. Intrinsic to the tool, so installed on
