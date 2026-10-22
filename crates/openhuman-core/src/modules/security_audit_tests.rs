@@ -27,10 +27,7 @@ impl tinytools::Tool for AllowedExternalAuditTool {
         true
     }
 
-    async fn execute(
-        &self,
-        _args: serde_json::Value,
-    ) -> anyhow::Result<tinytools::ToolResult> {
+    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<tinytools::ToolResult> {
         Ok(tinytools::ToolResult::success("completed"))
     }
 }
@@ -182,8 +179,7 @@ async fn audit_record_uses_the_admitting_dispatch_tenant() {
     ]);
     let run = tinyagents_harness::context::RunContext::new(
         tinyagents_harness::context::RunConfig::new("audit-tenant-terminal"),
-        crate::agent::tinyagents::host::OpenHumanRunContext::new()
-            .with_core(admitted.resolved()),
+        crate::agent::tinyagents::host::OpenHumanRunContext::new().with_core(admitted.resolved()),
     );
     let call = ToolCall {
         id: "audit-tenant-call".into(),
