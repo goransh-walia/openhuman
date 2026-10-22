@@ -521,17 +521,16 @@ impl Tool for FlowMemoryRememberTool {
                     ))
                 }
             };
-        let contains_credentials = match super::memory_guard::contains_credentials(&config, content)
-            .await
-        {
-            Ok(contains_credentials) => contains_credentials,
-            Err(_) => {
-                return Ok(ToolResult::error(
-                    "Secure flow memory content check is unavailable; refusing to store."
-                        .to_string(),
-                ))
-            }
-        };
+        let contains_credentials =
+            match super::memory_guard::contains_credentials(&config, content).await {
+                Ok(contains_credentials) => contains_credentials,
+                Err(_) => {
+                    return Ok(ToolResult::error(
+                        "Secure flow memory content check is unavailable; refusing to store."
+                            .to_string(),
+                    ))
+                }
+            };
         if contains_credentials {
             tracing::warn!(
                 target: "flows",

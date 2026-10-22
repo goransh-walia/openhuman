@@ -35,5 +35,7 @@ async fn flow_memory_guard_fails_closed_when_tinysecurity_is_disabled() {
     let mut config = crate::config::Config::default();
     config.modules.enabled = false;
 
-    assert!(contains_credentials(&config, "ordinary content").await.is_err());
+    assert!(contains_credentials(&config, "ordinary content")
+        .await
+        .is_err());
 }
