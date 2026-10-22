@@ -233,9 +233,7 @@ const SecurityPanel = () => {
                   <li
                     key={grant.request_id}
                     className="flex items-center justify-between gap-3 py-3">
-                    <span className="min-w-0 truncate text-sm text-content">
-                      {grant.tool}
-                    </span>
+                    <span className="min-w-0 truncate text-sm text-content">{grant.tool}</span>
                     <Button
                       type="button"
                       variant="secondary"
