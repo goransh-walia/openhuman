@@ -281,7 +281,16 @@ pub(crate) fn instantiate(runtime: &Runtime, spec: AgentSpec) -> Result<AgentInn
             Some(route.base_url.clone()),
             Some(route.api_key.clone()),
         )
-        .map(|scoped| scoped.with_headers(route.headers.clone()))
+        .map(|scoped| {
+            scoped
+                .with_headers(route.headers.clone())
+                .with_provider_options(route.provider_options.clone())
+                .with_reasoning_effort(
+                    route
+                        .reasoning_effort
+                        .map(|effort| effort.as_str().to_string()),
+                )
+        })
     });
     let mut overrides = openhuman_core::agent::host_overrides::HostOverrides::default();
     overrides.parent = runtime.core_runtime().context().host_overrides();

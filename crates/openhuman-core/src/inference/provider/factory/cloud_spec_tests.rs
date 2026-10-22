@@ -19,6 +19,7 @@ fn build<'a>(entry: &CloudProviderCreds, model: &str, key: &'a str) -> CloudBuil
         temperature_override: None,
         temperature_unsupported_models: &[],
         native_tool_calling: true,
+        default_provider_options: None,
         extra_headers: &[],
         extra_query_params: &[],
         user_agent: None,

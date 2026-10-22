@@ -14,8 +14,8 @@ use std::time::Duration;
 use common::{chat_completion, chat_requests, offline_config, runtime, stub_backend};
 use openhuman_embed::{
     AgentDefinitionSpec, AgentSpec, AgentTurnOrigin, CronError, HostTurnTools, JobSchedule,
-    JobSpec, JobTarget, Provider, Runtime, RuntimeError, RuntimeEventKind, RuntimeEvents,
-    ServiceSet, Tool, ToolScopeSpec, TrustedAutomationSource, Workspace,
+    JobSpec, JobTarget, Provider, ReasoningEffort, Runtime, RuntimeError, RuntimeEventKind,
+    RuntimeEvents, ServiceSet, Tool, ToolScopeSpec, TrustedAutomationSource, Workspace,
 };
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -103,8 +103,9 @@ fn a_scheduled_job_runs_a_runtime_agent_with_its_host_tool_as_cron() {
         tokio::spawn(async {
             let backend = stub_backend().await;
             let provider = provider_calling_ping().await;
+            let config = offline_config();
             let runtime = Runtime::builder()
-                .config(offline_config())
+                .config(config.clone())
                 .workspace(Workspace::Ephemeral)
                 .backend_url(backend.uri())
                 .build()
@@ -121,7 +122,9 @@ fn a_scheduled_job_runs_a_runtime_agent_with_its_host_tool_as_cron() {
                                 format!("{}/v1", provider.uri()),
                                 "sk-fixture",
                             )
-                            .model("fixture"),
+                            .model("fixture")
+                            .provider_options(serde_json::json!({"provider": {"sort": "latency"}}))
+                            .reasoning_effort(ReasoningEffort::High),
                         )
                         .definition(
                             AgentDefinitionSpec::new()
@@ -161,6 +164,17 @@ fn a_scheduled_job_runs_a_runtime_agent_with_its_host_tool_as_cron() {
             );
             assert_eq!(changed.retries, None);
             assert!(!changed.single_flight);
+            runtime
+                .core_runtime()
+                .invoke(
+                    "openhuman.cron_update",
+                    serde_json::json!({
+                        "job_id": changed.id,
+                        "patch": {"model": "cron-override"}
+                    }),
+                )
+                .await
+                .unwrap_or_else(|error| panic!("job model override was not stored: {error}"));
 
             // The run goes through the cron scheduler's agent path.
             let run = cron.run_now("teeny-hourly").await.expect("job runs");
@@ -182,6 +196,12 @@ fn a_scheduled_job_runs_a_runtime_agent_with_its_host_tool_as_cron() {
             let requests = chat_requests(&provider).await;
             let first_request = String::from_utf8_lossy(&requests[0].body).to_string();
             assert!(first_request.contains("TEENY_CRON_PROMPT"));
+            let first_body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+            assert_eq!(
+                first_body["provider"],
+                serde_json::json!({"sort": "latency"})
+            );
+            assert_eq!(first_body["reasoning_effort"], "high");
             assert!(common::tool_names(&requests[0]).contains(&"teeny_ping".to_string()));
             assert_eq!(cron.runs("teeny-hourly", 10).unwrap()[0].status, "ok");
 

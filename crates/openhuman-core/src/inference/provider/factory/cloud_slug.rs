@@ -457,6 +457,14 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
         })
         .map(|route| route.headers.clone())
         .unwrap_or_default();
+    let default_provider_options = config
+        .ephemeral_route
+        .as_ref()
+        .filter(|route| {
+            slug == crate::config::schema::ephemeral_route::EPHEMERAL_ROUTE_SLUG
+                && route.endpoint == entry.endpoint
+        })
+        .and_then(|route| route.provider_options.clone());
     let mut extra_query_params: Vec<(String, String)> = Vec::new();
     let mut user_agent: Option<String> = None;
     let mut codex_route: Option<&tinyinference_llm::providers::openai::codex::OpenAiCodexRouting> =
@@ -579,6 +587,7 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
         temperature_override,
         temperature_unsupported_models: config.temperature_unsupported_models.as_slice(),
         native_tool_calling,
+        default_provider_options,
         extra_headers: extra_headers.as_slice(),
         extra_query_params: extra_query_params.as_slice(),
         user_agent: user_agent.as_deref(),

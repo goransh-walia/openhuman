@@ -45,6 +45,12 @@ struct AgentChatParams {
     api_key: Option<String>,
     #[serde(default)]
     inference_headers: Vec<(String, String)>,
+    /// Provider-specific defaults for the per-call route.
+    #[serde(default)]
+    inference_provider_options: Option<Value>,
+    /// Reasoning effort for the model selected by the per-call route.
+    #[serde(default)]
+    inference_reasoning_effort: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,6 +151,16 @@ pub fn schemas(function: &str) -> ControllerSchema {
                     comment: "Custom header name/value pairs for inference_url only; never persisted.",
                     required: false,
                 },
+                FieldSchema {
+                    name: "inference_provider_options",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::Json)),
+                    comment: "Provider-specific defaults for inference_url; request options override them by key.",
+                    required: false,
+                },
+                optional_string(
+                    "inference_reasoning_effort",
+                    "Reasoning effort for the model selected by inference_url.",
+                ),
             ],
             outputs: vec![json_output(
                 "response",
@@ -240,8 +256,14 @@ fn handle_agent_chat(ctx: DispatchCtx, params: Map<String, Value>) -> Controller
             p.temperature,
             p.thread_id,
             p.cwd,
-            crate::config::schema::EphemeralRoute::from_params(p.inference_url, p.api_key)
-                .map(|route| route.with_headers(p.inference_headers)),
+            crate::config::schema::EphemeralRoute::from_params(p.inference_url, p.api_key).map(
+                |route| {
+                    route
+                        .with_headers(p.inference_headers)
+                        .with_provider_options(p.inference_provider_options)
+                        .with_reasoning_effort(p.inference_reasoning_effort)
+                },
+            ),
             crate::inference::host_runtime::ops::AgentChatEnv::default(),
         )
         .await?

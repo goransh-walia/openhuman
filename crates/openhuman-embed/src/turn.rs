@@ -461,6 +461,10 @@ impl Turn {
         self.request.inference_url = Some(route.base_url);
         self.request.api_key = Some(route.api_key);
         self.request.inference_headers = route.headers;
+        self.request.inference_provider_options = route.provider_options;
+        self.request.inference_reasoning_effort = route
+            .reasoning_effort
+            .map(|effort| effort.as_str().to_string());
         self
     }
 
@@ -632,6 +636,13 @@ async fn dispatch(
                         request.api_key.clone(),
                     )
                     .map(|route| route.with_headers(request.inference_headers.clone()));
+                    let route = route
+                        .map(|route| {
+                            route.with_provider_options(request.inference_provider_options.clone())
+                        })
+                        .map(|route| {
+                            route.with_reasoning_effort(request.inference_reasoning_effort.clone())
+                        });
                     agent_chat_reply_for_controlled(
                         &mut config,
                         target,
@@ -671,6 +682,13 @@ async fn dispatch(
                         request.api_key,
                     )
                     .map(|route| route.with_headers(request.inference_headers));
+                    let route = route
+                        .map(|route| {
+                            route.with_provider_options(request.inference_provider_options)
+                        })
+                        .map(|route| {
+                            route.with_reasoning_effort(request.inference_reasoning_effort)
+                        });
                     let host = options.tools.or_else(|| inner.composed_host_tools());
                     let target = AgentChatTarget::Definition {
                         definition: &inner.definition,

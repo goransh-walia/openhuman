@@ -83,6 +83,8 @@ pub use openhuman_core::config::{SearchHostCredential, UnknownKeyedSearchProvide
 pub use openhuman_core::core::runtime::{current_tenant, NoTenant, Tenant};
 pub use openhuman_core::security::TrustedAccess;
 pub use openhuman_core::tools::toolpacks::{GroupMode, ToolGroups};
+/// Reasoning effort values accepted by routed inference providers.
+pub use tinyinference_llm::model::ReasoningEffort;
 // The seam `AgentSpec::tools` needs: the belt types, and `Tool` itself from the
 // vendored tinytools. An embedder that took `tinytools` as its own dependency
 // would build tools of a different, incompatible type.

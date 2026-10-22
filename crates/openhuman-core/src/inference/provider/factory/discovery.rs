@@ -74,6 +74,14 @@ pub(crate) fn model_limits_request(
         temperature_override: None,
         temperature_unsupported_models: &temperature_unsupported,
         native_tool_calling: true,
+        default_provider_options: config
+            .ephemeral_route
+            .as_ref()
+            .filter(|route| {
+                slug == crate::config::schema::ephemeral_route::EPHEMERAL_ROUTE_SLUG
+                    && route.endpoint == resolution.entry.endpoint
+            })
+            .and_then(|route| route.provider_options.clone()),
         extra_headers: &extra_headers,
         extra_query_params: &[],
         user_agent: None,
