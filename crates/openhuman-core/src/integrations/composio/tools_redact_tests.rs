@@ -176,6 +176,35 @@ async fn every_result_string_is_sent_to_the_module() {
 }
 
 #[tokio::test]
+async fn an_oversized_result_is_withheld_before_module_calls() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let called = Arc::clone(&calls);
+    let values = (0..257).map(|index| format!("result field {index}"));
+    let outcome = redact_outcome_with(
+        Ok(tinytools::ToolResult::json(json!(values.collect::<Vec<_>>()))),
+        &keys(),
+        move |strings| {
+            called.fetch_add(1, Ordering::SeqCst);
+            async move {
+                Ok(strings
+                    .into_iter()
+                    .map(|text| (text.clone(), text))
+                    .collect())
+            }
+        },
+    )
+    .await;
+
+    assert_eq!(outcome.unwrap_err().to_string(), WITHHELD);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn a_result_without_its_composio_key_still_redacts_other_credentials() {
     const PROVIDER_TOKEN: &str = "bearer provider-token-abcdef";
     let outcome = redact_outcome_with(
