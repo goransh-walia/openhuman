@@ -622,6 +622,34 @@ impl ApprovalEngine for NativeEngine {
             .map_err(|error| unavailable(error.to_string()))
     }
 
+    async fn grant_tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        tool: &str,
+    ) -> Result<(), EngineError> {
+        NativeEngine::grant_tool_trust(self, tenant, variant, tool).await
+    }
+
+    async fn tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        posture: super::super::engine::Posture,
+    ) -> Result<Vec<super::super::types::ToolTrustEntry>, EngineError> {
+        NativeEngine::tool_trust(self, tenant, variant, posture).await
+    }
+
+    async fn revoke_tool_trust_by_id(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        posture: super::super::engine::Posture,
+        request_id: &str,
+    ) -> Result<bool, EngineError> {
+        NativeEngine::revoke_tool_trust_by_id(self, tenant, variant, posture, request_id).await
+    }
+
     async fn grant_flow_trust(
         &self,
         tenant: &crate::core::runtime::Tenant,

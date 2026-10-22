@@ -5,8 +5,8 @@ use tinysecurity_bus::{
     ToolTrustOutcome2, ToolTrustReceipt2,
 };
 
-use super::super::engine::{EngineError, Posture, Variant};
-use super::super::types::ToolTrustEntry;
+use super::super::super::engine::{EngineError, Posture, Variant};
+use super::super::super::types::ToolTrustEntry;
 use super::scopes;
 use super::{unavailable, NativeEngine, LOG};
 
