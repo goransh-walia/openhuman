@@ -35,7 +35,7 @@ use super::tinysecurity::{VerdictSource, SHELL_TOOL};
 use crate::agent::tinyagents::host::OpenHumanRunContext;
 #[cfg(test)]
 use crate::security::approval::ApprovalGate;
-use crate::security::policy::{CommandFlow, CommandStage, SecurityPolicy};
+use crate::security::policy::{AutonomyLevel, CommandFlow, CommandStage, SecurityPolicy};
 use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 
 const LOG: &str = "[tinyagents::mw::tinysecurity]";
@@ -172,6 +172,17 @@ fn level_acts(level: PermissionLevel) -> bool {
     level > PermissionLevel::ReadOnly
 }
 
+/// The module receives the effective host tier: the configured autonomy
+/// level narrowed by any caller-specific ceiling carried by this dispatch.
+fn access_tier(autonomy: AutonomyLevel, ceiling: Option<AutonomyLevel>) -> AccessTier {
+    use AutonomyLevel::{Full, ReadOnly, Supervised};
+    match (autonomy, ceiling) {
+        (ReadOnly, _) | (_, Some(ReadOnly)) => AccessTier::Read,
+        (Supervised, _) | (_, Some(Supervised)) => AccessTier::Write,
+        (Full, _) | (_, Some(Full)) => AccessTier::Full,
+    }
+}
+
 /// The shell command gate for `arguments`, or `None` when the call carries no
 /// command to classify. The model's `category` can only raise the class.
 fn shell_check(arguments: &serde_json::Value) -> Option<Check> {
@@ -209,6 +220,7 @@ impl ModuleAsk for BusModule {
         // settings, so an equal policy reuses the registered scope and its ledger.
         let policy = crate::security::live_policy::effective_in(dispatch)
             .unwrap_or_else(|| Arc::new(SecurityPolicy::from_full_config(&config)));
+        let tier = access_tier(policy.autonomy, dispatch.autonomy_tier_ceiling());
         let scope = crate::modules::security::command::command_scope_id(
             &policy.workspace_dir,
             policy
@@ -246,7 +258,7 @@ impl ModuleAsk for BusModule {
                 .map(|run| run.flow_id.clone()),
             call_id,
             origin: module_origin(ctx),
-            tier: AccessTier::Full,
+            tier,
         })?;
         let tool = approval_tool_name(&call.name, &call.arguments).into_owned();
         // Arguments are only evidence for a human's approval; a call that needs
