@@ -91,9 +91,7 @@ impl std::fmt::Display for PlanMappingError {
             Self::DiskLimitUnenforceable => {
                 "the sandbox plan requests a disk quota TinyBox cannot enforce"
             }
-            Self::PidsLimitUnenforceable => {
-                "the Docker sandbox request cannot enforce a PID limit"
-            }
+            Self::PidsLimitUnenforceable => "the Docker sandbox request cannot enforce a PID limit",
             Self::InvalidGrant => "the sandbox plan carries a grant that is not valid text",
             Self::MalformedHostRun => "the sandbox plan for a run on the host claims a jail",
         })
