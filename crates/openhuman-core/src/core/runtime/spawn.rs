@@ -28,7 +28,7 @@ impl DispatchCtx {
     /// Run a future on a dedicated current-thread runtime while preserving
     /// this dispatch context. This is for synchronous APIs that must bridge to
     /// async module calls and may be called outside a Tokio runtime.
-    pub fn block_on<F, T>(&self, future: F) -> Result<T, BlockOnError>
+    pub(crate) fn block_on<F, T>(&self, future: F) -> Result<T, BlockOnError>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
