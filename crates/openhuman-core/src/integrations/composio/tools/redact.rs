@@ -46,6 +46,10 @@ pub(crate) fn composio_secrets(config: &Config) -> Vec<String> {
 /// What a result becomes when the module could not check it.
 pub(crate) const WITHHELD: &str = "Composio result withheld: the security module could not check it for credentials. Do not retry; tell the user the result could not be checked.";
 
+fn contains_configured_secret(text: &str, secrets: &[String]) -> bool {
+    secrets.iter().any(|secret| text.contains(secret))
+}
+
 /// Every string the outcome carries that could contain a key: text, JSON string
 /// values and object keys, follow-up content, the markdown rendering and the
 /// metadata.
@@ -146,7 +150,7 @@ pub(crate) type Answers = Result<HashMap<String, String>, String>;
 /// unavailable redactor answer withholds the complete result.
 pub(crate) async fn redact_outcome_with<R, Fut>(
     outcome: anyhow::Result<ToolResult>,
-    _secrets: &[String],
+    secrets: &[String],
     redactor: R,
 ) -> anyhow::Result<ToolResult>
 where
@@ -161,7 +165,11 @@ where
             }
             match redactor(strings.clone()).await {
                 Ok(answers) => {
-                    if strings.iter().any(|text| !answers.contains_key(text)) {
+                    if strings.iter().any(|text| {
+                        answers
+                            .get(text)
+                            .is_none_or(|answer| contains_configured_secret(answer, secrets))
+                    }) {
                         return Err(anyhow::anyhow!(WITHHELD));
                     }
                     apply_answers(&mut result, &answers);
@@ -177,6 +185,9 @@ where
             let rendered = format!("{error:#}");
             match redactor(vec![rendered.clone()]).await {
                 Ok(answers) => match answers.get(&rendered) {
+                    Some(redacted) if contains_configured_secret(redacted, secrets) => {
+                        Err(anyhow::anyhow!(WITHHELD))
+                    }
                     Some(redacted) if *redacted != rendered => {
                         tracing::debug!("[composio] redacted credentials from a tool error");
                         Err(anyhow::anyhow!(redacted.clone()))
@@ -237,6 +248,7 @@ async fn redact_one(_config: &Config, _text: &str, _secrets: &[String]) -> Resul
 pub(crate) async fn redact_and_report(config: &Config, operation: &str, rendered: &str) -> String {
     let secrets = composio_secrets(config);
     let redacted = match redact_one(config, rendered, &secrets).await {
+        Ok(redacted) if contains_configured_secret(&redacted, &secrets) => WITHHELD.to_string(),
         Ok(redacted) => redacted,
         Err(error) => {
             tracing::warn!("[composio] error text withheld: {error}");
