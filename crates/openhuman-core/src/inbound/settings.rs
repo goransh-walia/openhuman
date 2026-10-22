@@ -102,8 +102,10 @@ pub fn with_sources(mut pipeline: Value, inbound: &InboundConfig) -> Value {
                 "ack": "after_ingest",
                 "weight": SOURCE_WEIGHT,
                 "cadence": "instant",
-                "budget": {
-                    "max_turns": source.max_batch,
+                "coalesce": {
+                    "debounce_ms": source.debounce_ms,
+                    "max_wait_ms": source.max_wait_ms,
+                    "max_events": source.max_batch,
                 },
             })
         })
