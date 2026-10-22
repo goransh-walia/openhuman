@@ -450,6 +450,12 @@ grant revocation through mocked core RPC. The targeted SaaS gate/profile tests
 pass. Task 13's single-middleware consolidation and full interactive prompt /
 decision browser flow remain open.
 
+The TinySecurity tool-call adapter now sends the effective caller tier derived
+from the registered autonomy level and the dispatch's narrower agent ceiling;
+it no longer hard-codes `Full`. The tier mapping regression and all 15 focused
+adapter tests pass. Duplicate host access-policy enforcement remains in place
+until the complete middleware consolidation and replacement coverage land.
+
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
 **Host files:** sandbox/{ops,types,grants,docker}.rs,
