@@ -443,6 +443,9 @@ parity gap in v0.17.0; TinySecurity PR #42 adds that case while preserving sourc
 identifiers and must release before the host integration is publishable. The
 host guard tests and no-security-module RPC-log suppression test pass locally;
 the flow-node short-key test remains red against the currently pinned archive.
+Network destination gates also deny when `security-module` is compiled out;
+regressions cover both direct and routed gates, and the enabled native gate
+suite passes.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
