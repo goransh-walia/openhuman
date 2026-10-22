@@ -620,6 +620,26 @@
     "verification": "modules/security_egress_tests.rs: local_only_registers_no_destination_instead_of_open_public_egress"
   },
   {
+    "file": "crates/openhuman-core/src/modules/security_egress.rs",
+    "scope": "",
+    "name": "BINDINGS",
+    "type": "std::sync::OnceLock<std::sync::Mutex<Vec<BrowserDialBinding>>>",
+    "count": 1,
+    "category": "D",
+    "reason": "The registry holds the authenticated TinySecurity module proxy for an exact policy id and generation; authorization is rechecked by that module before it issues or consumes browser dial grants.",
+    "verification": "modules/browser_egress_host_tests.rs: authenticated_computer_can_use_the_host_callback_to_authorize_a_browser_dial"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_path_stub.rs",
+    "scope": "",
+    "name": "ACTION_ROOT",
+    "type": "RefCell<Option<PathBuf>>",
+    "count": 1,
+    "category": "A",
+    "reason": "A thread-local test fixture path used only to exercise host path validation without the TinySecurity module; a guard restores the prior value and it holds no tenant state.",
+    "verification": "modules/security_scoped_tests.rs: a_test_path_port_only_accepts_paths_inside_the_configured_action_dir"
+  },
+  {
     "file": "crates/openhuman-core/src/modules/security_gap.rs",
     "scope": "",
     "name": "OVERRIDE",

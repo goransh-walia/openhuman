@@ -224,7 +224,7 @@ trait Settled {
     fn settled(&self) -> bool;
 }
 
-#[cfg(feature = "modules")]
+#[cfg(all(feature = "modules", feature = "legacy-import"))]
 macro_rules! settled_outcome {
     ($($module:ident),*) => {$(
         impl Settled for $module::Outcome {

@@ -105,6 +105,6 @@ pub(super) async fn install(connection: &Connection) -> Result<()> {
     connection.request_name(contract::INTERFACE).await
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "security-module", feature = "modules"))]
 #[path = "browser_egress_host_tests.rs"]
 mod tests;
