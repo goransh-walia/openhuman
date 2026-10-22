@@ -110,7 +110,6 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
             );
             config
                 .security
-                .security
                 .autonomy
                 .allowed_commands
                 .push(cmd.to_string());
