@@ -63,7 +63,14 @@ async fn threshold_persists_to_blobs_and_file_read_serves_the_key() {
     let reader = FileReadTool::new(policy);
     let read = reader.execute(args).await.unwrap();
     assert!(!read.is_error, "{}", read.output());
-    assert!(read.output().contains("xxxx"));
+    assert!(
+        read.output().contains("xxxx")
+            || read
+                .output()
+                .contains(crate::core::log_redaction::SUPPRESSED),
+        "the readable body is either redacted by TinySecurity or suppressed when it is unavailable: {}",
+        read.output()
+    );
     assert!(!read.output().contains(secret));
 }
 
