@@ -40,6 +40,10 @@ test("default run exercises the native tests in the debug profile", () => {
   const { result, log } = run({});
   assert.equal(result.status, 0, result.stderr);
   assert.match(log, /cargo test -p openhuman --lib --no-default-features/);
+  assert.match(
+    log,
+    /--features inference,web3,modules,security-module security -- --include-ignored/,
+  );
   assert.doesNotMatch(log, /--release/);
   assert.match(log, /BUDGET=\n/);
 });
