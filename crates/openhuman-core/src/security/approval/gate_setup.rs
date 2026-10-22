@@ -135,7 +135,11 @@ impl ApprovalGate {
     /// What the user configured for a call under `variant`, read live: the
     /// engine converts a required approval into an audited automatic one only
     /// as far as this allows. A forced call has no shortcut at all.
-    fn posture(&self, ctx: &crate::core::runtime::DispatchCtx, variant: Variant) -> Posture {
+    pub(super) fn posture(
+        &self,
+        ctx: &crate::core::runtime::DispatchCtx,
+        variant: Variant,
+    ) -> Posture {
         if variant == Variant::Forced {
             return Posture {
                 require_approval: true,

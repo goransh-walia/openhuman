@@ -113,13 +113,12 @@ pub async fn approval_list_recent_decisions(
 pub async fn approval_list_tool_trust(
     ctx: &DispatchCtx,
 ) -> anyhow::Result<Outcome<Vec<ToolTrustEntry>>> {
-    let tenant = ctx
-        .tenant()
+    ctx.tenant()
         .map_err(|error| anyhow!("tool grant listing has no tenant: {error}"))?;
     let Some(gate) = ApprovalGate::try_global() else {
         return Ok(Outcome::new(Vec::new(), vec![]));
     };
-    let grants = gate.list_tool_trust(&tenant)?;
+    let grants = gate.list_tool_trust(ctx)?;
     let log = format!("[approval] list_tool_trust returned {} grant(s)", grants.len());
     Ok(Outcome::single_log(grants, log))
 }
@@ -134,12 +133,11 @@ pub async fn approval_revoke_tool_trust(
     if request_id.is_empty() {
         return Err(anyhow!("request_id must not be empty"));
     }
-    let tenant = ctx
-        .tenant()
+    ctx.tenant()
         .map_err(|error| anyhow!("tool grant revocation has no tenant: {error}"))?;
     let gate = ApprovalGate::try_global()
         .ok_or_else(|| anyhow!("approval gate is not installed; supervised mode disabled"))?;
-    let revoked = gate.revoke_tool_trust_by_id(&tenant, request_id)?;
+    let revoked = gate.revoke_tool_trust_by_id(ctx, request_id)?;
     let log = if revoked {
         "[approval] whole-tool grant revoked".to_string()
     } else {

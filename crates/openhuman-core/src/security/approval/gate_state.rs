@@ -46,10 +46,15 @@ impl ApprovalGate {
     /// List whole-tool grants in the exact standard approval scope.
     pub(crate) fn list_tool_trust(
         &self,
-        tenant: &crate::core::runtime::Tenant,
+        ctx: &DispatchCtx,
     ) -> anyhow::Result<Vec<super::types::ToolTrustEntry>> {
-        let tenant = tenant.clone();
-        self.run_engine(|engine| async move { engine.tool_trust(&tenant, Variant::Standard).await })?
+        let tenant = ctx
+            .tenant()
+            .map_err(|error| anyhow::anyhow!("tool grant listing has no tenant: {error}"))?;
+        let posture = self.posture(ctx, Variant::Standard);
+        self.run_engine(|engine| async move {
+            engine.tool_trust(&tenant, Variant::Standard, posture).await
+        })?
             .map_err(|error| anyhow::anyhow!("could not list whole-tool grants: {error}"))
     }
 
@@ -58,13 +63,16 @@ impl ApprovalGate {
     /// tenant's registered scope.
     pub(crate) fn revoke_tool_trust_by_id(
         &self,
-        tenant: &crate::core::runtime::Tenant,
+        ctx: &DispatchCtx,
         request_id: &str,
     ) -> anyhow::Result<bool> {
-        let (tenant, request_id) = (tenant.clone(), request_id.to_owned());
+        let tenant = ctx
+            .tenant()
+            .map_err(|error| anyhow::anyhow!("tool grant revocation has no tenant: {error}"))?;
+        let (posture, request_id) = (self.posture(ctx, Variant::Standard), request_id.to_owned());
         self.run_engine(|engine| async move {
             engine
-                .revoke_tool_trust_by_id(&tenant, Variant::Standard, &request_id)
+                .revoke_tool_trust_by_id(&tenant, Variant::Standard, posture, &request_id)
                 .await
         })?
         .map_err(|error| anyhow::anyhow!("could not revoke whole-tool grant: {error}"))
