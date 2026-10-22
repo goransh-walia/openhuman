@@ -589,7 +589,5 @@ async fn run_pending_v5_to_v6_reconciles_orphaned_providers() {
     );
 }
 
-/// Verify that a user at v3 with a deliberately customised
-/// `max_actions_per_hour` does NOT have it reset by the migration.
 #[path = "security_policy_tests.rs"]
 mod security_policy_tests;
