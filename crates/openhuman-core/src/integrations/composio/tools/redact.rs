@@ -142,11 +142,11 @@ fn apply_answers(result: &mut ToolResult, answers: &HashMap<String, String>) {
 pub(crate) type Answers = Result<HashMap<String, String>, String>;
 
 /// [`redact_composio_outcome`] over an explicit redactor, so the walk is
-/// testable without a module. An outcome that mentions a key and that the
-/// redactor could not check is withheld.
+/// testable without a module. Every outcome string is checked; a malformed or
+/// unavailable redactor answer withholds the complete result.
 pub(crate) async fn redact_outcome_with<R, Fut>(
     outcome: anyhow::Result<ToolResult>,
-    secrets: &[String],
+    _secrets: &[String],
     redactor: R,
 ) -> anyhow::Result<ToolResult>
 where
@@ -159,8 +159,11 @@ where
             if strings.is_empty() {
                 return Ok(result);
             }
-            match redactor(strings).await {
+            match redactor(strings.clone()).await {
                 Ok(answers) => {
+                    if strings.iter().any(|text| !answers.contains_key(text)) {
+                        return Err(anyhow::anyhow!(WITHHELD));
+                    }
                     apply_answers(&mut result, &answers);
                     Ok(result)
                 }
@@ -175,10 +178,11 @@ where
             match redactor(vec![rendered.clone()]).await {
                 Ok(answers) => match answers.get(&rendered) {
                     Some(redacted) if *redacted != rendered => {
-                        tracing::debug!("[composio] redacted a credential from a tool error");
+                        tracing::debug!("[composio] redacted credentials from a tool error");
                         Err(anyhow::anyhow!(redacted.clone()))
                     }
-                    _ => Err(error),
+                    Some(_) => Err(error),
+                    None => Err(anyhow::anyhow!(WITHHELD)),
                 },
                 Err(why) => {
                     tracing::warn!("[composio] error text withheld: {why}");
