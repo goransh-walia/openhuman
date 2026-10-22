@@ -18,7 +18,6 @@ pub(crate) use path_checks::home_credential_stores;
 mod types;
 
 pub(crate) use command_analysis::CommandAnalysis;
-#[cfg(test)]
 pub use enforcement::validate_path_within_root;
 pub use enforcement::{ensure_openhuman_scratch_dir, openhuman_scratch_dir};
 pub use module_gate::{host_action_class, Budget, PathKind};

@@ -43,7 +43,6 @@ use crate::flows::{
 use crate::memory::types::{FetchParams, RecallParams};
 use crate::security::approval::{summarize_action, GateOutcome};
 use crate::security::policy::CommandClass;
-#[cfg(test)]
 use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::security::SecurityPolicy;
 use tinymemory_api::wrap_untrusted_for_agent;
