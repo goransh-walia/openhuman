@@ -350,6 +350,10 @@ impl ApprovalEngine for UnavailableEngine {
     ) -> Result<Vec<String>, EngineError> {
         Ok(Vec::new())
     }
+
+    async fn grant_tool_trust(&self, _tenant: &Tenant, _tool: &str) -> Result<(), EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
 }
 
 #[cfg(test)]
