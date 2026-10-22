@@ -1,4 +1,4 @@
-//! Published TinySecurity admission pins copied verbatim from v0.15.0/checksum.toml.
+//! Published TinySecurity admission pins copied verbatim from v0.16.0/checksum.toml.
 //!
 //! `LoadPolicy::Eager` is the "load at boot" policy (the issue calls it Boot): a missing
 //! security module changes behaviour, so it must be serving before the first request.
@@ -9,63 +9,63 @@ pub(crate) const TINYSECURITY: ModuleRecord = ModuleRecord {
     description: "Native security policy and immutable filesystem authorization scopes",
     bus_name: tinysecurity_bus::names::INTERFACE,
     object_path: tinysecurity_bus::names::OBJECT_PATH,
-    version: "0.15.0",
-    release_url: "https://github.com/tinyhumansai/tinysecurity/releases/tag/v0.15.0",
+    version: "0.16.0",
+    release_url: "https://github.com/tinyhumansai/tinysecurity/releases/tag/v0.16.0",
     assets: &[
         PlatformAsset {
             host_key: "ubuntu-24.04-x86_64",
-            archive: "tinysecurity-module-0.15.0-ubuntu-24.04-x86_64.tar.gz",
-            sha256: "48bca9ec5875d7fd104b56725053bdf96f155929658d26f3e4201aeddcba2abe",
+            archive: "tinysecurity-module-0.16.0-ubuntu-24.04-x86_64.tar.gz",
+            sha256: "a7a6d77dbb1d944d5cff05df9bdae7afca3400cea2f143d9582211ce119993ff",
         },
         PlatformAsset {
             host_key: "ubuntu-24.04-arm64",
-            archive: "tinysecurity-module-0.15.0-ubuntu-24.04-arm64.tar.gz",
-            sha256: "a16272d27aa5e04cb5dd19bad8882c55691080f2276dcabbc54344a6513f3de9",
+            archive: "tinysecurity-module-0.16.0-ubuntu-24.04-arm64.tar.gz",
+            sha256: "fe7b37a3ea3c44815577fe67474a4491f85759d1907954c39a838081753ee636",
         },
         PlatformAsset {
             host_key: "ubuntu-22.04-x86_64",
-            archive: "tinysecurity-module-0.15.0-ubuntu-22.04-x86_64.tar.gz",
-            sha256: "dd33129f055e917d9030a78001dce78b3771b5e4c38e95ac46e5838e159a570c",
+            archive: "tinysecurity-module-0.16.0-ubuntu-22.04-x86_64.tar.gz",
+            sha256: "cebd42e4e67bd926be48c9b0a858c56c334ce5a35decdcbfb368d75ef134f0e1",
         },
         PlatformAsset {
             host_key: "ubuntu-22.04-arm64",
-            archive: "tinysecurity-module-0.15.0-ubuntu-22.04-arm64.tar.gz",
-            sha256: "5277a7df59def5e0c3dfc5dfe2017794ae3c52ee9cdd957d290664418ea01c86",
+            archive: "tinysecurity-module-0.16.0-ubuntu-22.04-arm64.tar.gz",
+            sha256: "d6157ff83beee777c12e2cce14af3a71cdfd9780def26e2ec43dee592fc921c4",
         },
         PlatformAsset {
             host_key: "macos-26-arm64",
-            archive: "tinysecurity-module-0.15.0-macos-26-arm64.tar.gz",
-            sha256: "ef0f368a46bb7f3d29bc06e656355e5b01b122dbc6e9208e8d615f276105d924",
+            archive: "tinysecurity-module-0.16.0-macos-26-arm64.tar.gz",
+            sha256: "727ea3f01c6f31fde80d8686256fc23f5d1f2eb6880abcda1de3d89002f90f15",
         },
         PlatformAsset {
             host_key: "macos-26-x86_64",
-            archive: "tinysecurity-module-0.15.0-macos-26-x86_64.tar.gz",
-            sha256: "91a4b33a2b46219dc596d8012e20114c81f33863e580eb3085e9cf472d3eba09",
+            archive: "tinysecurity-module-0.16.0-macos-26-x86_64.tar.gz",
+            sha256: "21c49c77bb9676cbd7bbac8b67cd383c010df9a76421aafdf6ac07accead06b1",
         },
         PlatformAsset {
             host_key: "macos-15-arm64",
-            archive: "tinysecurity-module-0.15.0-macos-15-arm64.tar.gz",
-            sha256: "719be2707b0a8b9845cc2b3fb4289963f13f13cb34947183dfbcc68f3891885f",
+            archive: "tinysecurity-module-0.16.0-macos-15-arm64.tar.gz",
+            sha256: "f7f15099d1a116465338420c2a6a2da9e20c4d008d1bf5b2b88a6852e7e0758f",
         },
         PlatformAsset {
             host_key: "macos-15-x86_64",
-            archive: "tinysecurity-module-0.15.0-macos-15-x86_64.tar.gz",
-            sha256: "cdb1dcbdf517022de7d4d1341b0cc30d153d68eed781918688609eaea9e77cdb",
+            archive: "tinysecurity-module-0.16.0-macos-15-x86_64.tar.gz",
+            sha256: "dc3dd1657653e83c4592db46af4e8f412663bc4b3ead230675e51ab71c8c065c",
         },
         PlatformAsset {
             host_key: "windows-2025-x86_64",
-            archive: "tinysecurity-module-0.15.0-windows-2025-x86_64.zip",
-            sha256: "a8d6446e9935811ecfe895b7d906958b233d44b4adb4d8bd9c3a10d688b92041",
+            archive: "tinysecurity-module-0.16.0-windows-2025-x86_64.zip",
+            sha256: "3206ec937fd74f2fc32c78012900388a738f29c2dc134ef9c9c094dce547ed8b",
         },
         PlatformAsset {
             host_key: "windows-2022-x86_64",
-            archive: "tinysecurity-module-0.15.0-windows-2022-x86_64.zip",
-            sha256: "362046d5a4dab3cf815b3f38e58d76324fa32b774b83de052c7c31dc57af82b5",
+            archive: "tinysecurity-module-0.16.0-windows-2022-x86_64.zip",
+            sha256: "18ace3e79ef6415dc8f1fa2c0afe1336254f0f93f7c0bb8cfe725133353b676f",
         },
         PlatformAsset {
             host_key: "windows-11-arm64",
-            archive: "tinysecurity-module-0.15.0-windows-11-arm64.zip",
-            sha256: "e7e9e19815e2accbb30ec96f5e12a86a24817d029f219ccf8d8a2b9f85cf02b3",
+            archive: "tinysecurity-module-0.16.0-windows-11-arm64.zip",
+            sha256: "e3067f3475990879e1145ff09ca55a463bd0e09f68965b936a4842b1b49296a2",
         },
     ],
     load: LoadPolicy::Eager,
