@@ -65,12 +65,18 @@ impl DispatchCtx {
                 None => fut.await,
             }
         };
-        async move {
-            #[cfg(test)]
-            if let Some(scanner) = prompt_scanner {
-                return crate::security::prompt_injection::with_scanner(scanner, entered).await;
+        #[cfg(test)]
+        {
+            async move {
+                if let Some(scanner) = prompt_scanner {
+                    return crate::security::prompt_injection::with_scanner(scanner, entered).await;
+                }
+                entered.await
             }
-            entered.await
+        }
+        #[cfg(not(test))]
+        {
+            entered
         }
     }
 
