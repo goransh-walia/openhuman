@@ -493,7 +493,10 @@ grant revocation through mocked core RPC. The targeted SaaS gate/profile tests
 pass. The existing interactive browser harness covers the approval prompt,
 approve-once execution and denial without execution
 (`app/test/e2e/specs/agent-harness-behaviors.spec.ts`). Task 13's
-single-middleware consolidation remains open.
+single-middleware consolidation remains open. The unused OpenHuman
+`ToolPolicyMiddleware` wrapper and trait implementation are removed; the
+security gate now calls the session policy adapters directly, and their tests
+exercise the session host state without constructing a second middleware.
 
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
