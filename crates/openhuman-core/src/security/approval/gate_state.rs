@@ -380,6 +380,24 @@ impl ApprovalGate {
             .map_err(|error| anyhow::anyhow!("could not save the tool trust: {error}"))
     }
 
+    /// List durable whole-tool grants belonging to the current tenant.
+    pub fn list_tool_trust(&self) -> anyhow::Result<Vec<tinysecurity_bus::ToolTrustEntry2>> {
+        let tenant = current_route_tenant();
+        self.run_engine(|engine| async move { engine.tool_trust(&tenant).await })?
+            .map_err(|error| anyhow::anyhow!("could not read the tool trust: {error}"))
+    }
+
+    /// Revoke a durable whole-tool grant by the opaque id returned from its
+    /// tenant-scoped list operation.
+    pub fn revoke_tool_trust(&self, request_id: &str) -> anyhow::Result<bool> {
+        let tenant = current_route_tenant();
+        let request_id = request_id.to_owned();
+        self.run_engine(|engine| async move {
+            engine.revoke_tool_trust(&tenant, &request_id).await
+        })?
+        .map_err(|error| anyhow::anyhow!("could not revoke the tool trust: {error}"))
+    }
+
     /// Whether `(flow_id, tool_name)` currently holds "approve always for
     /// this flow" trust. Exposed for tests and diagnostics.
     pub fn is_flow_tool_trusted(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<bool> {

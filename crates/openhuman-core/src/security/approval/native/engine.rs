@@ -10,8 +10,9 @@ use tinysecurity_bus::{
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
     ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
     GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo,
-    RecordExecutionRequest2, RevokeFlowToolRequest2, SubjectScope, ToolCall, ToolTrustReceipt2,
-    Verdict,
+    ListToolTrustRequest2, RecordExecutionRequest2, RevokeFlowToolRequest2,
+    RevokeToolByIdRequest2, SubjectScope, ToolCall, ToolTrustEntry2, ToolTrustList2,
+    ToolTrustReceipt2, Verdict,
 };
 
 use super::super::engine::{
@@ -680,6 +681,87 @@ impl ApprovalEngine for NativeEngine {
             ));
         }
         Ok(())
+    }
+
+    async fn tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+    ) -> Result<Vec<ToolTrustEntry2>, EngineError> {
+        let proxy = self.proxy().await?;
+        let subject = self.subject(tenant, Variant::Standard)?;
+        let generation = Self::generation(&proxy).await?;
+        let scope = scopes::ensure(
+            &self.config,
+            &proxy,
+            subject,
+            &Posture {
+                require_approval: true,
+                ..Default::default()
+            },
+            generation,
+        )
+        .await
+        .map_err(EngineError::Unavailable)?;
+        let listed: ToolTrustList2 = proxy
+            .call_confidential(
+                names::methods::LIST_TOOL_TRUST2,
+                (ListToolTrustRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                },),
+            )
+            .await
+            .map_err(|error| unavailable(format!("TinySecurity ListToolTrust2 failed: {error}")))?;
+        if listed.entries.len() > 4096 {
+            return Err(unavailable("TinySecurity returned too many tool grants"));
+        }
+        Ok(listed.entries)
+    }
+
+    async fn revoke_tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        request_id: &str,
+    ) -> Result<bool, EngineError> {
+        if request_id.is_empty() || request_id.len() > 128 {
+            return Err(unavailable("invalid TinySecurity tool grant id"));
+        }
+        let proxy = self.proxy().await?;
+        let subject = self.subject(tenant, Variant::Standard)?;
+        let generation = Self::generation(&proxy).await?;
+        let scope = scopes::ensure(
+            &self.config,
+            &proxy,
+            subject,
+            &Posture {
+                require_approval: true,
+                ..Default::default()
+            },
+            generation,
+        )
+        .await
+        .map_err(EngineError::Unavailable)?;
+        let _guard = scope.stream.lock().await;
+        let generation = Self::generation(&proxy).await?;
+        let audit = Self::correlation(&scope, generation).await?;
+        let receipt: ToolTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::REVOKE_TOOL_BY_ID2,
+                (RevokeToolByIdRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    request_id: request_id.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| {
+                unavailable(format!("TinySecurity RevokeToolById2 failed: {error}"))
+            })?;
+        if receipt.scope_id != scope.scope_id {
+            return Err(unavailable(
+                "TinySecurity returned a receipt for another scope",
+            ));
+        }
+        Ok(receipt.outcome == tinysecurity_bus::ToolTrustOutcome2::Revoked)
     }
 
     async fn revoke_flow_trust(

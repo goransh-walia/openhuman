@@ -246,6 +246,19 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
 
     /// Durably trust one exact tool in the tenant's operator scope.
     async fn grant_tool_trust(&self, tenant: &Tenant, tool: &str) -> Result<(), EngineError>;
+
+    /// List live durable operator grants from the tenant's registered scope.
+    async fn tool_trust(
+        &self,
+        tenant: &Tenant,
+    ) -> Result<Vec<tinysecurity_bus::ToolTrustEntry2>, EngineError>;
+
+    /// Revoke one listed durable operator grant by its opaque row identity.
+    async fn revoke_tool_trust(
+        &self,
+        tenant: &Tenant,
+        request_id: &str,
+    ) -> Result<bool, EngineError>;
 }
 
 /// The shared engine handle a gate holds.
@@ -352,6 +365,21 @@ impl ApprovalEngine for UnavailableEngine {
     }
 
     async fn grant_tool_trust(&self, _tenant: &Tenant, _tool: &str) -> Result<(), EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
+
+    async fn tool_trust(
+        &self,
+        _tenant: &Tenant,
+    ) -> Result<Vec<tinysecurity_bus::ToolTrustEntry2>, EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
+
+    async fn revoke_tool_trust(
+        &self,
+        _tenant: &Tenant,
+        _request_id: &str,
+    ) -> Result<bool, EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
     }
 }
