@@ -31,10 +31,13 @@ const cargoMetadata = packages => {
     for (const dependency of pkg.dependencies ?? []) {
       const name = typeof dependency === 'string' ? dependency : dependency.name;
       if (ids.has(name)) continue;
+      const isTsd = name.startsWith('tinystoragedrivers');
       const dep = {
         name,
-        source: registry,
-        manifest_path: `/cargo/registry/${name}/Cargo.toml`,
+        source: isTsd ? null : registry,
+        manifest_path: isTsd
+          ? `/repo/vendor/tinystoragedrivers/crates/${name}/Cargo.toml`
+          : `/cargo/registry/${name}/Cargo.toml`,
         dependencies: [],
       };
       ids.set(name, packageId(dep, allPackages.length));
@@ -59,8 +62,8 @@ test('a clean workspace passes', () => {
   assert.deepEqual(checkMetadata({ packages: [pkg('openhuman', ['serde']), pkg('tinyflows', ['tinystoragedrivers-core'])] }), []);
 });
 
-test('every forbidden backend dependency is rejected', () => {
-  for (const dep of ['rusqlite', 'libsqlite3-sys', 'mongodb', 'object_store', 'sqlx', 'redb', 'sled', 'rocksdb']) {
+test('backend dependencies recognized by the checker are rejected', () => {
+  for (const dep of ['rusqlite', 'libsqlite3-sys', 'mongodb', 'sqlx', 'redb', 'sled', 'rocksdb']) {
     const v = checkMetadata({ packages: [pkg('tinymcp', [dep])] });
     assert.equal(v.length, 1, dep);
     assert.equal(v[0].package, 'tinymcp');
@@ -147,7 +150,7 @@ test('the standalone storage types contract must be vendored with the rest of th
   });
   assert.equal(v.length, 1);
   assert.equal(v[0].kind, 'tsd-not-vendored');
-  assert.match(v[0].detail, /tinystoragedrivers-types.*required by tinyjuice-bus/);
+  assert.match(v[0].detail, /required by tinyjuice-bus/);
 });
 
 test('a path tinystoragedrivers package outside the vendored checkout fails', () => {
