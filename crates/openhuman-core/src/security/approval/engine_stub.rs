@@ -508,6 +508,38 @@ impl ApprovalEngine for StubEngine {
             .insert(tool.to_owned());
         Ok(())
     }
+
+    async fn tool_trust(
+        &self,
+        _tenant: &Tenant,
+    ) -> Result<Vec<tinysecurity_bus::ToolTrustEntry2>, EngineError> {
+        Ok(self
+            .grants
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .map(|tool| tinysecurity_bus::ToolTrustEntry2 {
+                tool: tool.clone(),
+                request_id: format!("stub:{tool}"),
+                granted_at_ms: 0,
+            })
+            .collect())
+    }
+
+    async fn revoke_tool_trust(
+        &self,
+        _tenant: &Tenant,
+        request_id: &str,
+    ) -> Result<bool, EngineError> {
+        let Some(tool) = request_id.strip_prefix("stub:") else {
+            return Ok(false);
+        };
+        Ok(self
+            .grants
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(tool))
+    }
 }
 
 /// A prompt surface that records what it was shown, for the tests of an engine.
