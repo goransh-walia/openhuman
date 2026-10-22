@@ -100,7 +100,7 @@ impl SandboxBackendCheck {
     }
 
     async fn finding(&self, ctx: &DoctorCtx) -> Finding {
-        if !ctx.config().components.security.sandbox || ctx.config().security.sandbox.enabled == Some(false) {
+        if !ctx.config().components.sandbox || ctx.config().security.sandbox.enabled == Some(false) {
             return Finding::skipped(
                 "sandbox/backend",
                 "Sandboxing is disabled in the selected configuration.",
