@@ -41,4 +41,4 @@ fi
 
 bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib "$@" \
   --no-default-features --features inference,web3,modules,security-module \
-  modules::security -- --include-ignored --nocapture
+  security -- --include-ignored --nocapture
