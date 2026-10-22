@@ -155,7 +155,10 @@ fn approval_lists_are_inherited_until_the_agent_sets_them() {
         .auto_approve(["shell", "file_write"])
         .auto_approve_all(false)
         .apply(&mut config);
-    assert_eq!(config.security.autonomy.auto_approve, ["shell", "file_write"]);
+    assert_eq!(
+        config.security.autonomy.auto_approve,
+        ["shell", "file_write"]
+    );
     assert!(!config.security.autonomy.auto_approve_all);
 }
 
@@ -180,7 +183,10 @@ fn restrictive_tiers_switch_the_policy_on() {
         let mut config = openhuman_core::config::Config::default();
         config.security.autonomy.enabled = false;
         access.apply(&mut config);
-        assert!(config.security.autonomy.enabled, "{access:?} must enable the policy");
+        assert!(
+            config.security.autonomy.enabled,
+            "{access:?} must enable the policy"
+        );
     }
 }
 
