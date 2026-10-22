@@ -28,6 +28,6 @@ test -f "$module_path" || {
 cd -- "$repo_root"
 export OPENHUMAN_TEST_SECURITY_MODULE="$module_path"
 bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
-  --no-default-features --features modules,security-module \
+  --no-default-features --features modules,security-module,legacy-import,storage-sqlite,secret-file \
   modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases \
   -- --ignored --exact

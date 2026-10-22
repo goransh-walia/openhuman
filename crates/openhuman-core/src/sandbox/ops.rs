@@ -400,7 +400,6 @@ async fn admit_request(
         policy: planned.apply(request.policy),
         jail: super::native_jail::PlannedJail {
             config: planned.plan.jail,
-            resources: planned.plan.resources,
         },
     })
 }

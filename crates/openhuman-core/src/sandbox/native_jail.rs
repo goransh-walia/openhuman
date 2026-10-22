@@ -18,8 +18,6 @@ use crate::modules::tinybox::{self, contract};
 pub(crate) struct PlannedJail {
     /// Planned grants and confinement requirements.
     pub(crate) config: contract::NativeJailConfig,
-    /// Explicit optional resource limits from the same plan.
-    pub(crate) resources: contract::NativeJailResourceRequest,
 }
 /// Without the module there is no plan to carry.
 #[cfg(not(feature = "modules"))]
@@ -198,15 +196,6 @@ async fn execute_owned(
     // points TMPDIR, TMP and TEMP at it unless the caller overrides them. The
     // grants, network, subprocess rule and isolation requirement are the
     // module's plan, mapped by `sandbox::plan`, not derived here.
-    let resources = jail.resources;
-    run.resource_limits = if resources.cpu_millis.is_some()
-        || resources.memory_bytes.is_some()
-        || resources.pids_max.is_some()
-    {
-        Some(resources)
-    } else {
-        None
-    };
     run.jail = Some(jail.config);
     super::shell_exec::run(config, run).await
 }

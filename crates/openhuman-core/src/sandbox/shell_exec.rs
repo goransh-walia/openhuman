@@ -50,10 +50,6 @@ pub(crate) struct NativeShellRun {
     /// Native confinement; `None` is ordinary local execution.
     #[cfg(feature = "modules")]
     pub(crate) jail: Option<contract::NativeJailConfig>,
-    /// Explicit contract 2.2 native resource limits; absent limits keep the
-    /// legacy shell request shape and do not synthesize a disk quota.
-    #[cfg(feature = "modules")]
-    pub(crate) resource_limits: Option<contract::NativeJailResourceRequest>,
 }
 
 impl NativeShellRun {
@@ -79,8 +75,6 @@ impl NativeShellRun {
             stdin: None,
             #[cfg(feature = "modules")]
             jail: None,
-            #[cfg(feature = "modules")]
-            resource_limits: None,
         }
     }
 
@@ -182,15 +176,10 @@ async fn run_owned(
         let process = tinybox::reserve(config, contract::ReserveRequest::Process(resource.clone()))
             .await
             .map_err(|_| anyhow::anyhow!("TinyBox could not reserve a command process"))?;
-        let resource_limits = run.resource_limits;
         let request = shell_exec_request(process, &resource, run)?;
-        let process = match resource_limits {
-            Some(limits) => {
-                tinybox::start_native_shell_exec_with_resources(config, request, limits).await
-            }
-            None => tinybox::start_native_shell_exec(config, request).await,
-        }
-        .map_err(|_| anyhow::anyhow!("TinyBox could not start the command process"))?;
+        let process = tinybox::start_native_shell_exec(config, request)
+            .await
+            .map_err(|_| anyhow::anyhow!("TinyBox could not start the command process"))?;
         collect_process(config, process, timeout, abandoned, meter).await
     }
     .await;

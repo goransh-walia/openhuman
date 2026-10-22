@@ -100,12 +100,6 @@ fn open_jail() -> contract::NativeJailConfig {
 fn open_planned_jail() -> PlannedJail {
     PlannedJail {
         config: open_jail(),
-        resources: contract::NativeJailResourceRequest {
-            cpu_millis: None,
-            memory_bytes: None,
-            pids_max: None,
-            disk_bytes: None,
-        },
     }
 }
 
