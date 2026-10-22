@@ -63,7 +63,7 @@ describe('ApprovalHistoryPanel', () => {
       initialEntries: ['/settings/approval-history'],
     });
 
-    expect(await screen.findByTestId('approval-tool-trust-row')).toBeInTheDocument();
+    expect(await screen.findAllByTestId('approval-tool-trust-row')).toHaveLength(2);
     expect(screen.getByText('gmail_send')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('approval-tool-trust-revoke-grant-1'));
 
