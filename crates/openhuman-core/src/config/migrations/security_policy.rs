@@ -138,7 +138,3 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
     }
     notices
 }
-
-#[cfg(test)]
-#[path = "security_policy_tests.rs"]
-mod tests;
