@@ -43,6 +43,33 @@ impl ApprovalGate {
         .map_err(|error| anyhow::anyhow!("could not save the whole-tool grant: {error}"))
     }
 
+    /// List whole-tool grants in the exact standard approval scope.
+    pub(crate) fn list_tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+    ) -> anyhow::Result<Vec<super::types::ToolTrustEntry>> {
+        let tenant = tenant.clone();
+        self.run_engine(|engine| async move { engine.tool_trust(&tenant, Variant::Standard).await })?
+            .map_err(|error| anyhow::anyhow!("could not list whole-tool grants: {error}"))
+    }
+
+    /// Revoke one whole-tool grant by the opaque ID returned from
+    /// [`Self::list_tool_trust`]. The module checks that the ID belongs to this
+    /// tenant's registered scope.
+    pub(crate) fn revoke_tool_trust_by_id(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        request_id: &str,
+    ) -> anyhow::Result<bool> {
+        let (tenant, request_id) = (tenant.clone(), request_id.to_owned());
+        self.run_engine(|engine| async move {
+            engine
+                .revoke_tool_trust_by_id(&tenant, Variant::Standard, &request_id)
+                .await
+        })?
+        .map_err(|error| anyhow::anyhow!("could not revoke whole-tool grant: {error}"))
+    }
+
     /// Run an engine call from synchronous code. The decision side of the gate is
     /// synchronous by contract (the embedding API, an agent's teardown, the
     /// harness's record hook), so the engine's async call runs on the shared
