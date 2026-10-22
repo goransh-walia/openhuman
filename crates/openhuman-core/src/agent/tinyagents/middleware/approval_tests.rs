@@ -399,6 +399,32 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
     );
 }
 
+#[tokio::test]
+async fn an_external_effect_is_denied_when_the_approval_gate_is_missing() {
+    let _lock = AUDIT_TEST_LOCK.get_or_init(Default::default).lock().await;
+    let _reset_latch = ResetAuditFailureLatch;
+    assert!(ApprovalGate::try_global().is_none());
+    let resolver = ApprovalSecurityMiddleware::new(vec![Arc::new(vec![
+        Box::new(ExternalAuditTool) as Box<dyn Tool>,
+    ])]);
+    let ctx = RunContext::new(
+        RunConfig::new("missing-approval-gate"),
+        OpenHumanRunContext::new(),
+    );
+    let call = TaToolCall {
+        id: "call-missing-gate".into(),
+        name: "send_external".into(),
+        arguments: serde_json::json!({"payload": "sensitive"}),
+        invalid: None,
+    };
+
+    assert!(matches!(
+        resolver.resolve_allowed(&ctx, &call).await,
+        ApprovalResolution::Deny { .. }
+    ));
+    assert!(resolver.audit_tickets.lock().unwrap().is_empty());
+}
+
 #[test]
 fn a_required_approval_is_not_allowed_to_run_without_a_gate() {
     let resolution = ApprovalSecurityMiddleware::resolve_without_gate("composio_execute");
