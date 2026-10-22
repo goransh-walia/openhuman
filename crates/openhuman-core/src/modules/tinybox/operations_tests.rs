@@ -126,19 +126,15 @@ async fn mock_client_with_docker_control_delay(
 
 #[test]
 fn host_and_module_contract_versions_must_cover_the_full_host_surface() {
-    assert_eq!(require_compatible(contract::CONTRACT_VERSION), Ok(()));
+    let (major, minor) = contract::CONTRACT_VERSION;
+    assert_eq!(require_compatible((major, minor)), Ok(()));
+    assert_eq!(require_compatible((major, minor + 1)), Ok(()));
     assert_eq!(
-        require_compatible((1, contract::CONTRACT_VERSION.1 + 1)),
-        Ok(())
-    );
-    assert_eq!(
-        require_compatible((1, contract::CONTRACT_VERSION.1 - 1))
-            .expect_err("older member set is refused"),
+        require_compatible((major - 1, u32::MAX)).expect_err("older major is refused"),
         ModuleCallError::IncompatibleContract
     );
     assert_eq!(
-        require_compatible((2, contract::CONTRACT_VERSION.1))
-            .expect_err("different major is refused"),
+        require_compatible((major + 1, minor)).expect_err("different major is refused"),
         ModuleCallError::IncompatibleContract
     );
 }
@@ -327,7 +323,7 @@ async fn pinned_loader_serves_resolve_local_grants_from_tinybox_v0124() {
 
     let record = crate::modules::registry::find(MODULE_ID).expect("TinyBox registry record");
     assert_eq!(record.version, "0.1.28");
-    assert_eq!(contract::CONTRACT_VERSION, (1, 18));
+    assert_eq!(contract::CONTRACT_VERSION, (2, 0));
     let asset = tinybus::module::platform::host_candidates()
         .iter()
         .find_map(|host_key| record.asset_for(host_key))
