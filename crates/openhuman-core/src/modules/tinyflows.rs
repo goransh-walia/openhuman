@@ -399,10 +399,11 @@ mod fixture;
 #[cfg(all(test, feature = "modules"))]
 pub(crate) use imp::serve_pair_after_first;
 #[cfg(feature = "modules")]
+pub(crate) use imp::{copilot_proxy, proxy, run_proxy, serve, unserve};
+#[cfg(all(feature = "modules", feature = "flows"))]
 pub(crate) use imp::{
     authoring_proxy, catalog_proxy, catalog_proxy_for_migration, copilot_invoke_proxy,
-    copilot_proxy, portability_proxy, proxy, run_proxy, runs_proxy, serve, serve_pair,
-    serve_registered, unserve,
+    portability_proxy, runs_proxy, serve_pair, serve_registered,
 };
 
 #[cfg(not(feature = "modules"))]

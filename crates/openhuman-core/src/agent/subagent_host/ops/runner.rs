@@ -921,6 +921,6 @@ async fn run_typed_mode(
             tinyagents_orchestration::subagent::SubagentPersistenceDisposition::TerminalExisting,
     })
 }
-#[cfg(test)]
+#[cfg(all(test, feature = "flows"))]
 #[path = "runner_flow_prompt_tests.rs"]
 mod flow_prompt_tests;
