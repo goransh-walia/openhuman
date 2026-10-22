@@ -413,7 +413,7 @@ async fn ensure_agent_dirs_creates_missing_action_dir_and_trusted_root() {
     // The projects home is registered exactly once as a ReadWrite trusted root.
     let projects_path = projects_dir.to_string_lossy().to_string();
     let matching: Vec<_> = cfg
-        .autonomy
+        .security.autonomy
         .trusted_roots
         .iter()
         .filter(|r| r.path == projects_path)
@@ -424,7 +424,7 @@ async fn ensure_agent_dirs_creates_missing_action_dir_and_trusted_root() {
     // Idempotent: a second call neither errors nor duplicates the trusted root.
     crate::config::ensure_agent_dirs(&mut cfg).await;
     let count = cfg
-        .autonomy
+        .security.autonomy
         .trusted_roots
         .iter()
         .filter(|r| r.path == projects_path)
