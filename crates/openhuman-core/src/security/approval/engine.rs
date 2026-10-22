@@ -4,7 +4,7 @@
 //! cancelled, reserved, executed), its exact binding to the call, the tool and
 //! flow grants, the 10-minute interactive expiry and the audit trail are the
 //! TinySecurity module's. The gate keeps what is the host's: the verified
-//! origin of a call, which grants and posture the user configured, the parked
+//! origin of a call, the approval posture, the legacy import payload, the parked
 //! tool-call future, chat routing and the product events.
 //!
 //! This file is the seam between the two. It holds no module types, so the gate
@@ -56,8 +56,8 @@ impl Variant {
     }
 }
 
-/// What the user configured for a subject: the module converts a required
-/// approval into an audited automatic one only as far as this allows.
+/// Runtime approval settings registered for a subject; durable tool and flow
+/// grants are kept by the module and are not part of this posture.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Posture {
     /// An approval is required unless the agent's approvals are off.
