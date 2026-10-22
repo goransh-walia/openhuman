@@ -189,7 +189,9 @@ fn module_text(input: &str) -> Option<String> {
     match try_redact(RedactMode::Text, input, Some(TEXT_TIMEOUT)) {
         Ok(redacted) => Some(redacted),
         Err(error) => {
-            log::debug!("[security][redact] module text pass unavailable, content suppressed: {error}");
+            log::debug!(
+                "[security][redact] module text pass unavailable, content suppressed: {error}"
+            );
             None
         }
     }

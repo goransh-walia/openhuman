@@ -456,6 +456,10 @@ Tool-result credential scrubbing also withholds when TinySecurity is not built
 or armed; the diagnostic floor no longer authorizes unverified model-visible
 tool output. A feature-off regression first failed by returning the unchanged
 result, then passed after removing the harness scrubber fallback.
+The synchronous `Text` redactor now suppresses the complete value when the
+module cannot answer. Its consumers persist artifact bodies or put failure text
+back into model context, so the log-only floor no longer substitutes for the
+module there; the feature-off regression pins the suppression marker.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
