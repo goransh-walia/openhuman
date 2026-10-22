@@ -296,6 +296,18 @@ Composio loopback gates and `util/url.rs` callers.
    events. Module owns state/TTL/log. Callbacks do not create recursive lock waits.
 **Exit:** restart-surviving real native approval round trip, no unsafe grant replay.
 
+**Release and host progress (2026-10-22):** TinySecurity v0.16.0 is published
+and its release workflow passed. Its contract adds durable whole-tool
+grant/revoke/list operations and immutable legacy-source import receipts.
+OpenHuman now pins the release tag and all eleven supported platform checksums,
+imports legacy `autonomy.auto_approve` entries through `ImportTrustSource2`, and
+registers no transient whole-tool grants in each call's approval scope. A native
+test against the published Linux archive verifies an imported grant still
+authorizes a fresh engine with an empty transient grant list. Host list/revoke
+surfaces and the wider approval/SaaS cases remain open. These changes are on
+the existing draft PR #7331; its cross-platform native-policy and release
+latency jobs are running.
+
 ## Task 8 — Rules and optional Jev judge
 
 **Owner files:** new `crates/tinysecurity-auto/{Cargo.toml,src/lib.rs}`, internal
