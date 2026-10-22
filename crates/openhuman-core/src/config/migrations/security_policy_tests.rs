@@ -145,5 +145,7 @@ fn retired_sandbox_backend_in_the_security_table_wins_as_auto() {
 #[test]
 fn supported_sandbox_backends_are_left_alone() {
     let mut d = doc("[sandbox]\nbackend = \"docker\"\n");
-    assert!(rewrite_document(&mut d).is_empty());
+    let notices = rewrite_document(&mut d);
+    assert!(notices.contains(&Notice::Overlaid { table: "sandbox" }));
+    assert_eq!(d["security"]["sandbox"]["backend"].as_str(), Some("docker"));
 }

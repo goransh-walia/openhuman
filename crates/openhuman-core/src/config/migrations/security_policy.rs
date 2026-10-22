@@ -65,14 +65,6 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
     let Some(root) = document.as_table_mut() else {
         return notices;
     };
-    if let Some(Value::Table(autonomy)) = root.get_mut("autonomy") {
-        if autonomy.remove("max_cost_per_day_cents").is_some() {
-            notices.push(Notice::DroppedMaxCost { table: "autonomy" });
-        }
-    }
-    if let Some(Value::Table(sandbox)) = root.get_mut("sandbox") {
-        notices.extend(retire_sandbox_keys(sandbox, "sandbox"));
-    }
     let original_security = root.remove("security");
     let had_security = original_security.is_some();
     let mut security = match original_security {
@@ -105,18 +97,18 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
         }
         let had_legacy = legacy.is_some();
         let mut merged = legacy.unwrap_or_default();
-        if let Some(mut current) = current {
-            if name == "autonomy" && current.remove("max_cost_per_day_cents").is_some() {
-                notices.push(Notice::DroppedMaxCost {
-                    table: "security.autonomy",
-                });
-            }
-            if name == "sandbox" {
-                notices.extend(retire_sandbox_keys(&mut current, "security.sandbox"));
-            }
+        if let Some(current) = current {
             for (key, value) in current {
                 merged.insert(key, value);
             }
+        }
+        if name == "autonomy" && merged.remove("max_cost_per_day_cents").is_some() {
+            notices.push(Notice::DroppedMaxCost {
+                table: "security.autonomy",
+            });
+        }
+        if name == "sandbox" {
+            notices.extend(retire_sandbox_keys(&mut merged, "security.sandbox"));
         }
         security.insert(name.to_owned(), Value::Table(merged));
         if had_legacy {
