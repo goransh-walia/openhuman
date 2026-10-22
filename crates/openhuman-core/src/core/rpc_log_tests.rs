@@ -28,6 +28,12 @@ fn unavailable_or_malformed_structured_redaction_suppresses_params() {
     });
     let malformed = redact_params_with(&params, |_| "not-json".to_owned());
 
-    assert_eq!(unavailable, Value::String(crate::core::log_redaction::SUPPRESSED.into()));
-    assert_eq!(malformed, Value::String(crate::core::log_redaction::SUPPRESSED.into()));
+    assert_eq!(
+        unavailable,
+        Value::String(crate::core::log_redaction::SUPPRESSED.into())
+    );
+    assert_eq!(
+        malformed,
+        Value::String(crate::core::log_redaction::SUPPRESSED.into())
+    );
 }
