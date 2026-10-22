@@ -4,11 +4,10 @@
 //! Flow (issue #1339):
 //! 1. Agent harness calls [`ApprovalGate::intercept`] with the tool
 //!    name, a redacted JSON of the arguments, and a short summary.
-//! 2. Gate checks the user's "Always allow" allowlist
-//!    (`autonomy.auto_approve`, read live via
-//!    [`crate::security::live_policy`]). Hit → `Allow`
-//!    immediately. An `ApproveAlwaysForTool` decision adds the tool to
-//!    that list via `approval_decide` (config save + policy reload).
+//! 2. Gate supplies the current approval posture. TinySecurity checks its
+//!    durable tool and flow grants before requiring a human. Legacy
+//!    `autonomy.auto_approve` entries are imported once through immutable
+//!    source receipts; scope registration never replays that list.
 //! 3. Otherwise: persist a row in `pending_approvals`, publish a
 //!    [`DomainEvent::ApprovalRequested`] event so the UI can pop a
 //!    toast, and park the call on a `oneshot::Sender` keyed by
