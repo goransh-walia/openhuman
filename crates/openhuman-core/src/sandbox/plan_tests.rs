@@ -109,16 +109,31 @@ fn a_docker_pid_limit_is_refused_instead_of_silently_dropped() {
 
 #[test]
 fn a_host_run_with_resource_limits_is_refused_instead_of_ignoring_them() {
-    let mut planned = artifact(SandboxBackend::Noop);
-    planned.host_run = true;
-    planned.minimum_isolation = IsolationLevel2::None;
-    planned.grants.clear();
-    planned.constraints.clear();
-    planned.limits.memory_bytes = Some(64 << 20);
-    assert!(
-        BoxPlan::from_artifact(&planned, None).is_err(),
-        "the host executor has no resource-bound enforcement path"
-    );
+    for limits in [
+        ResourceLimits2 {
+            cpu_millicores: Some(500),
+            ..ResourceLimits2::default()
+        },
+        ResourceLimits2 {
+            memory_bytes: Some(64 << 20),
+            ..ResourceLimits2::default()
+        },
+        ResourceLimits2 {
+            pids_max: Some(64),
+            ..ResourceLimits2::default()
+        },
+    ] {
+        let mut planned = artifact(SandboxBackend::Noop);
+        planned.host_run = true;
+        planned.minimum_isolation = IsolationLevel2::None;
+        planned.grants.clear();
+        planned.constraints.clear();
+        planned.limits = limits;
+        assert_eq!(
+            BoxPlan::from_artifact(&planned, None),
+            Err(PlanMappingError::HostResourceLimitUnenforceable)
+        );
+    }
 }
 
 #[test]
