@@ -193,7 +193,7 @@ async fn backend_handles_report_a_defined_status() {
     let _lock = env_guard::env_lock_async().await;
     let none = create_sandbox_backend(
         &DispatchCtx::process_default(),
-        &resolve(SandboxMode::None, &RuntimeConfig::default(), false),
+        &resolve(&RuntimeConfig::default(), false),
     )
     .await;
     assert_eq!(none.kind, SandboxBackendKind::None);
