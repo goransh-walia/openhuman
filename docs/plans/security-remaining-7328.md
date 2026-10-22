@@ -472,6 +472,17 @@ TinyComputer browser process startup/egress contracts.
    SaaS+env off ordering/boot_guard stays pinned. Explicit unsupported platforms
    deny instead of silently skipping product behavior.
 
+**TinyBox dependency status (2026-10-22):** upstream PR
+[#100](https://github.com/tinyhumansai/tinybox/pull/100) merged at
+`83ca264fbc41d603119e58e162cd990a961c5621`, removing TinyBox-owned command
+classification from contract 2.0. OpenHuman no longer imports that removed
+command-policy API, but TinyBox v0.2.0 has not been released and OpenHuman still
+pins the released v0.1.42 / contract 1.22 module. Do not update the host pin or
+registry until the owner publishes the new artifact and checksum.
+[#103](https://github.com/tinyhumansai/tinybox/pull/103) remains draft and adds
+Linux native resource limits; it is only part of the TinyBox #27 work and does
+not complete cross-platform jail, microVM, Docker, or process-launch coverage.
+
 ## Task 15 — Host audit, scan/consequence gates and crypto facades
 
 **Files:** shell audit consumers, `mcp/audit/`, security encryption/keyring/device/
