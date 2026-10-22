@@ -129,7 +129,7 @@ impl ApprovalGate {
         // a pre-declared workflow action, the CLI or an unlabelled call is
         // allowed is the module's decision (`origin_class`), and the engine also
         // applies the user's allowlist, per-flow trust and auto-approve setting.
-        let (variant, flow_id) = match &origin {
+        let (mut variant, flow_id) = match &origin {
             AgentTurnOrigin::WebChat { .. } => (
                 if forced {
                     Variant::Forced
@@ -185,6 +185,12 @@ impl ApprovalGate {
             | AgentTurnOrigin::DirectChat
             | AgentTurnOrigin::Unknown => (Variant::Standard, None),
         };
+        if saas_human_approval {
+            // The deployment allowlist was not enough to authorize this call.
+            // Use the one-time variant so configured or durable auto-grants
+            // cannot bypass the per-user decision.
+            variant = Variant::Forced;
+        }
 
         // Chat context (thread/client id) for routing the yes/no reply — handed
         // to the turn by the web channel; absent for non-chat callers.
@@ -299,7 +305,7 @@ impl ApprovalGate {
                 chat_thread_id: chat_thread_id.clone(),
                 chat_client_id,
                 tool_call_id: tool_call_id.map(str::to_string),
-                forced,
+                forced: forced || saas_human_approval,
                 agent_id,
                 approval_scope: scope.clone(),
                 thread_key: thread_key.clone(),
@@ -319,19 +325,10 @@ impl ApprovalGate {
             surface: Arc::clone(&surface),
             armed: true,
         };
-        let mut posture = self.posture(&turn_ctx, variant);
-        if saas_human_approval {
-            // A deployment-level rejection cannot be turned into an automatic
-            // approval by profile settings. It must receive this call's human
-            // decision through the WebChat surface.
-            posture.require_approval = true;
-            posture.auto_approve_all = false;
-            posture.tool_grants.clear();
-        }
         let input = CheckInput {
             tenant: route_tenant,
             variant,
-            posture,
+            posture: self.posture(&turn_ctx, variant),
             call_id: fresh_call_id(),
             tool: tool_name.to_string(),
             args: object_arguments(args_redacted),
