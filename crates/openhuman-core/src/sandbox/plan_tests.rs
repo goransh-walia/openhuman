@@ -56,6 +56,14 @@ fn a_jail_plan_maps_grants_network_and_isolation_floor() {
 }
 
 #[test]
+fn an_unbounded_plan_does_not_synthesize_native_resource_limits() {
+    let plan = BoxPlan::from_artifact(&artifact(SandboxBackend::Jail), None).unwrap();
+    let resources = serde_json::to_value(plan.resources).unwrap();
+    let resources = resources.as_object().unwrap();
+    assert!(resources.is_empty(), "an absent bound must stay absent");
+}
+
+#[test]
 fn planned_bounds_override_defaults_and_absent_bounds_keep_them() {
     let mut planned = artifact(SandboxBackend::Docker);
     planned.limits = ResourceLimits2 {
