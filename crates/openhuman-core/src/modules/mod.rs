@@ -235,19 +235,19 @@ macro_rules! settled_outcome {
     )*};
 }
 
-#[cfg(feature = "modules")]
+#[cfg(all(feature = "modules", feature = "legacy-import"))]
 settled_outcome!(
     storage_import_tinyconnectors,
     storage_import_tinybox,
     storage_import_tinyjuice
 );
-#[cfg(feature = "modules")]
+#[cfg(all(feature = "modules", feature = "legacy-import"))]
 impl Settled for storage_import_tinyjuice_savings::Outcome {
     fn settled(&self) -> bool {
         matches!(self, Self::AlreadyDone | Self::Imported { .. })
     }
 }
-#[cfg(all(feature = "modules", feature = "web3"))]
+#[cfg(all(feature = "modules", feature = "web3", feature = "legacy-import"))]
 settled_outcome!(storage_import_tinywallet);
 
 /// The (importer, module scope, directory) triples this process already

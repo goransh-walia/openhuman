@@ -22,6 +22,7 @@ impl ApprovalEngine for NativeEngine {
         )
         .await
         .map_err(EngineError::Unavailable)?;
+        #[cfg(feature = "legacy-import")]
         if !crate::core::runtime::is_saas()
             && input.variant == Variant::Standard
             && !input.legacy_tool_grants.is_empty()

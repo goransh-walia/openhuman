@@ -144,6 +144,7 @@ impl NativeEngine {
                 .map_err(EngineError::Unavailable)?,
         };
         if matches!(self.source, Source::Production) {
+            #[cfg(feature = "legacy-import")]
             super::history_import::ensure(self, &proxy).await;
         }
         Ok(proxy)

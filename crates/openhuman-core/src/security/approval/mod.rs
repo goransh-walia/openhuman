@@ -34,7 +34,7 @@ pub mod schemas;
 mod storage_schema;
 pub mod store;
 mod store_documents;
-#[cfg(feature = "security-module")]
+#[cfg(all(feature = "security-module", feature = "legacy-import"))]
 mod store_import;
 pub(crate) use storage_schema::{collection_specs, upgrade_records};
 pub mod types;
