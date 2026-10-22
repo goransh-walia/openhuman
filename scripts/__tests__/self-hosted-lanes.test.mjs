@@ -424,6 +424,14 @@ test("private gates-off and Tauri execute equivalent coverage suites with nextes
     /--features modules,mcp,e2e-test-support/,
   );
   assert.match(checks["gate-contract-tests-features"].run, /--test-threads=1/);
+  assert.match(
+    checks["gate-contract-tests"].run,
+    /integrations::composio::builder_tools::tests:: integrations::composio::flow_gate::tests::/,
+  );
+  assert.match(
+    checks["gate-contract-tests-features"].run,
+    /mcp::registry::tests::/,
+  );
   assert.equal(
     checks["tauri-coverage"].env.CARGO_BUILD_TARGET_DIR,
     "target/ci-private-coverage",
