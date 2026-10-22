@@ -280,7 +280,7 @@ fn one_runtime_hosts_independently_configured_agents() {
                 .session("hidden-turn")
                 .send()
                 .await
-                .expect("hidden turn runs");
+                .unwrap_or_else(|error| panic!("hidden turn runs: {error:?}"));
             withholding_agent
                 .turn("restore the configured tool")
                 .session("visible-turn")
