@@ -282,11 +282,12 @@ async fn keyring_round_trip_through_the_served_consent_callback() {
     )
     .await
     .unwrap();
+    let proxy = fx.proxy.clone().with_timeout(Duration::from_secs(5));
     policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
     let name = "user:token-7328";
 
     keyring_set(
-        &fx.proxy,
+        &proxy,
         caller(),
         "store a token",
         name,
