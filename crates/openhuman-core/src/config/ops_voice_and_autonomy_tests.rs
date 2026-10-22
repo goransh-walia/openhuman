@@ -417,7 +417,6 @@ async fn add_auto_approve_tool_appends_then_dedupes() {
     let reloaded = load_config_with_timeout().await.expect("reload");
     let hits = reloaded
         .security
-        .security
         .autonomy
         .auto_approve
         .iter()

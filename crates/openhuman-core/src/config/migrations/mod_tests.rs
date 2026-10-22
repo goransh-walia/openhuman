@@ -385,13 +385,11 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     assert_eq!(config.security.autonomy.max_actions_per_hour, 20);
     assert!(!config
         .security
-        .security
         .autonomy
         .allowed_commands
         .iter()
         .any(|c| c == "pnpm"));
     assert!(!config
-        .security
         .security
         .autonomy
         .auto_approve
@@ -410,7 +408,6 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
         assert!(
             config
                 .security
-                .security
                 .autonomy
                 .allowed_commands
                 .iter()
@@ -423,7 +420,6 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     for cmd in &["git", "npm", "cargo", "ls", "cat"] {
         assert!(
             config
-                .security
                 .security
                 .autonomy
                 .allowed_commands
@@ -439,7 +435,6 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
         assert!(
             config
                 .security
-                .security
                 .autonomy
                 .auto_approve
                 .iter()
@@ -453,7 +448,6 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
         assert!(
             !config
                 .security
-                .security
                 .autonomy
                 .auto_approve
                 .iter()
@@ -466,7 +460,6 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     for tool in &["file_read", "memory_search", "memory_list"] {
         assert!(
             config
-                .security
                 .security
                 .autonomy
                 .auto_approve
@@ -653,7 +646,6 @@ async fn run_pending_widens_a_hand_written_v0_allowlist_and_that_is_visible() {
         assert!(
             config
                 .security
-                .security
                 .autonomy
                 .allowed_commands
                 .iter()
@@ -667,7 +659,6 @@ async fn run_pending_widens_a_hand_written_v0_allowlist_and_that_is_visible() {
     for added in &["mkdir", "touch", "cp", "mv", "ln"] {
         assert!(
             config
-                .security
                 .security
                 .autonomy
                 .allowed_commands
@@ -728,7 +719,6 @@ async fn a_hand_written_empty_allowlist_is_also_widened() {
     for added in &["mkdir", "touch", "cp", "mv", "ln"] {
         assert!(
             config
-                .security
                 .security
                 .autonomy
                 .allowed_commands

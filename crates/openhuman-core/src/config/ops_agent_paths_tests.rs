@@ -414,7 +414,6 @@ async fn ensure_agent_dirs_creates_missing_action_dir_and_trusted_root() {
     let projects_path = projects_dir.to_string_lossy().to_string();
     let matching: Vec<_> = cfg
         .security
-        .security
         .autonomy
         .trusted_roots
         .iter()
@@ -426,7 +425,6 @@ async fn ensure_agent_dirs_creates_missing_action_dir_and_trusted_root() {
     // Idempotent: a second call neither errors nor duplicates the trusted root.
     crate::config::ensure_agent_dirs(&mut cfg).await;
     let count = cfg
-        .security
         .security
         .autonomy
         .trusted_roots
