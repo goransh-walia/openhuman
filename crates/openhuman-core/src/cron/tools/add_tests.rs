@@ -19,7 +19,7 @@ async fn test_config(tmp: &TempDir) -> Arc<Config> {
 
 fn test_security(cfg: &Config) -> Arc<SecurityPolicy> {
     Arc::new(SecurityPolicy::from_config(
-        &cfg.autonomy,
+        &cfg.security.autonomy,
         &cfg.workspace_dir,
         &cfg.workspace_dir,
     ))

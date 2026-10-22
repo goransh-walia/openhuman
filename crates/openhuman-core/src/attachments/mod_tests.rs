@@ -7,7 +7,7 @@ async fn legacy_sidecar_rehydrates_into_an_authorized_acting_original() {
     let mut cfg = config(temp.path());
     // The acting workspace is provisioned before enabling its strict boundary.
     tokio::fs::create_dir_all(&cfg.action_dir).await.unwrap();
-    cfg.autonomy.enabled = true;
+    cfg.security.autonomy.enabled = true;
     let stash = cfg.workspace_dir.join("attachments");
     tokio::fs::create_dir_all(&stash).await.unwrap();
     let source = stash.join("legacy.png");

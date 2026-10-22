@@ -384,7 +384,7 @@ async fn refreshing_binding_config_updates_existing_flow_subscriber() {
         &DispatchCtx::ambient(),
         &initial,
         Arc::new(SecurityPolicy::from_config(
-            &initial.autonomy,
+            &initial.security.autonomy,
             &initial.workspace_dir,
             &initial.action_dir,
         )),

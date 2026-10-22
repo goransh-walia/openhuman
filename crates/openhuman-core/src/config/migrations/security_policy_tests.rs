@@ -81,7 +81,7 @@ fn legacy_policy_tables_decode_and_save_under_security() {
 fn max_cost_is_deleted_with_a_notice_everywhere_it_appears() {
     let mut d = doc("[autonomy]\nmax_cost_per_day_cents = 900\n[security.autonomy]\nmax_cost_per_day_cents = 1\n");
     let notices = rewrite_document(&mut d);
-    assert!(notices.contains(&Notice::DroppedMaxCost { table: "autonomy" }));
+    assert!(notices.contains(&Notice::DroppedMaxCost { table: "security.autonomy" }));
     assert!(notices.contains(&Notice::DroppedMaxCost {
         table: "security.autonomy"
     }));
@@ -107,10 +107,10 @@ fn retired_sandbox_backends_become_auto_with_a_notice() {
         let mut d = doc(&text);
         let notices = rewrite_document(&mut d);
         assert!(notices.contains(&Notice::RetiredSandboxBackend {
-            table: "sandbox",
+            table: "security.sandbox",
             from
         }));
-        assert!(notices.contains(&Notice::DroppedFirejailArgs { table: "sandbox" }));
+        assert!(notices.contains(&Notice::DroppedFirejailArgs { table: "security.sandbox" }));
         let config = crate::config::schema::config_from_toml_str(&text).unwrap();
         assert!(matches!(
             config.security.sandbox.backend,

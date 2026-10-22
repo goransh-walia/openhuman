@@ -242,10 +242,10 @@ fn grant_turn_cwd_is_the_only_mutation() {
 
     assert_eq!(config.action_dir, base.action_dir);
     assert_eq!(config.workspace_dir, base.workspace_dir);
-    assert_eq!(config.security.autonomy.workspace_only, base.autonomy.workspace_only);
+    assert_eq!(config.security.autonomy.workspace_only, base.security.autonomy.workspace_only);
     assert_eq!(
         config.security.autonomy.forbidden_paths,
-        base.autonomy.forbidden_paths
+        base.security.autonomy.forbidden_paths
     );
 }
 

@@ -56,13 +56,13 @@ fn saas_security_policy_never_uses_the_operator_home() {
 #[test]
 fn two_tenants_with_opposite_settings_translate_independently() {
     let mut strict = Config::default();
-    strict.autonomy.enabled = true;
-    strict.autonomy.level = AutonomyLevel::ReadOnly;
-    strict.privacy.mode = HostPrivacy::LocalOnly;
+    strict.security.autonomy.enabled = true;
+    strict.security.autonomy.level = AutonomyLevel::ReadOnly;
+    strict.security.privacy.mode = HostPrivacy::LocalOnly;
     let mut loose = Config::default();
-    loose.autonomy.enabled = true;
-    loose.autonomy.level = AutonomyLevel::Full;
-    loose.privacy.mode = HostPrivacy::Standard;
+    loose.security.autonomy.enabled = true;
+    loose.security.autonomy.level = AutonomyLevel::Full;
+    loose.security.privacy.mode = HostPrivacy::Standard;
 
     let a = settings(&strict);
     let b = settings(&loose);
@@ -229,12 +229,12 @@ fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
         ]
     );
     assert!(
-        !Config::default().autonomy.forbidden_paths.is_empty(),
+        !Config::default().security.autonomy.forbidden_paths.is_empty(),
         "the default list must reach the module"
     );
     assert_eq!(
         settings(&Config::default()).policy.forbidden_paths,
-        Config::default().autonomy.forbidden_paths
+        Config::default().security.autonomy.forbidden_paths
     );
 }
 

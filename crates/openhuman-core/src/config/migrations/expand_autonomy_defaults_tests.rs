@@ -152,7 +152,7 @@ fn idempotent_on_already_expanded_config() {
 fn preserves_user_custom_commands_not_in_new_set() {
     let mut config = old_v3_config();
     config
-        .autonomy
+        .security.autonomy
         .allowed_commands
         .push("my_custom_tool".to_string());
 
@@ -160,7 +160,7 @@ fn preserves_user_custom_commands_not_in_new_set() {
 
     assert!(
         config
-            .autonomy
+            .security.autonomy
             .allowed_commands
             .iter()
             .any(|c| c == "my_custom_tool"),
@@ -178,13 +178,13 @@ fn no_duplicate_commands_when_some_already_present() {
     run(&mut config).expect("migration should succeed");
 
     let pnpm_count = config
-        .autonomy
+        .security.autonomy
         .allowed_commands
         .iter()
         .filter(|c| *c == "pnpm")
         .count();
     let yarn_count = config
-        .autonomy
+        .security.autonomy
         .allowed_commands
         .iter()
         .filter(|c| *c == "yarn")

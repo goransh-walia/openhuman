@@ -54,6 +54,6 @@ fn the_setting_is_read_without_asking_for_the_deployment() {
     let config = Config::default();
     let ctx = DispatchCtx::unbound();
     let mut disabled = config.clone();
-    disabled.sandbox.enabled = Some(false);
+    disabled.security.sandbox.enabled = Some(false);
     assert!(sandbox_off(&ctx, &disabled));
 }

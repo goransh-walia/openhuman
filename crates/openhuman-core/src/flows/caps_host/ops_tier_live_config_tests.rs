@@ -174,7 +174,7 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
     let mut captured = parent_file.clone();
     // This is the effective autonomy after AgentSpec's config_fn escape hatch;
     // embed construction marks that final in-memory config as Captured.
-    captured.autonomy.level = AutonomyLevel::ReadOnly;
+    captured.security.autonomy.level = AutonomyLevel::ReadOnly;
     let parent = crate::core::runtime::CoreContext::for_test(
         crate::core::runtime::DomainSet::full(),
         Some(captured.workspace_dir.clone()),
@@ -188,7 +188,7 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
         Some(crate::core::runtime::AutonomyTierSource::Captured);
     let captured_ctx = crate::core::runtime::DispatchCtx::new(parent.derive_with(captured_overlay));
     let captured_policy = SecurityPolicy::from_config(
-        &captured.autonomy,
+        &captured.security.autonomy,
         &captured.workspace_dir,
         &captured.action_dir,
     );
@@ -203,8 +203,8 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
     .is_err());
 
     // A fixed ceiling contributes independently of a disabled file tier.
-    parent_file.autonomy.enabled = false;
-    parent_file.autonomy.level = AutonomyLevel::ReadOnly;
+    parent_file.security.autonomy.enabled = false;
+    parent_file.security.autonomy.level = AutonomyLevel::ReadOnly;
     let mut capped_overlay = crate::core::runtime::ContextOverlay::new(
         captured.clone(),
         crate::core::runtime::DomainSet::full(),
@@ -214,7 +214,7 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
     let capped_ctx =
         crate::core::runtime::DispatchCtx::new(parent.derive_with(capped_overlay.clone()));
     let baseline = SecurityPolicy::from_config(
-        &captured.autonomy,
+        &captured.security.autonomy,
         &captured.workspace_dir,
         &captured.action_dir,
     );
@@ -240,7 +240,7 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
         "a disabled file tier must not contribute its stale ReadOnly level"
     );
 
-    parent_file.autonomy.level = AutonomyLevel::Full;
+    parent_file.security.autonomy.level = AutonomyLevel::Full;
     let mut host_only_overlay = crate::core::runtime::ContextOverlay::new(
         captured.clone(),
         crate::core::runtime::DomainSet::full(),
@@ -304,7 +304,7 @@ async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
     // Simulate Settings changing the same persisted config after the run has
     // already captured Full. No global policy hooks or timing are involved.
     let mut changed = config;
-    changed.autonomy.level = AutonomyLevel::ReadOnly;
+    changed.security.autonomy.level = AutonomyLevel::ReadOnly;
     changed.save().await.unwrap();
 
     let err = code
@@ -329,14 +329,14 @@ async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
     let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
     save_tier_config(&captured).await;
     let mut live = captured.clone();
-    live.autonomy.level = AutonomyLevel::Full;
+    live.security.autonomy.level = AutonomyLevel::Full;
     save_tier_config(&live).await;
 
     let tools = OpenHumanTools {
         ctx: live_tier_context(&captured),
         config: Arc::new(captured.clone()),
         security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
+            &captured.security.autonomy,
             &captured.workspace_dir,
             &captured.action_dir,
         )),
@@ -368,7 +368,7 @@ async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
         ctx,
         config: Arc::new(captured.clone()),
         security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
+            &captured.security.autonomy,
             &captured.workspace_dir,
             &captured.action_dir,
         )),
@@ -386,7 +386,7 @@ async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
     let path = captured.action_dir.join("tier-downgrade.txt");
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "before");
 
-    captured.autonomy.level = AutonomyLevel::ReadOnly;
+    captured.security.autonomy.level = AutonomyLevel::ReadOnly;
     save_tier_config(&captured).await;
     let error = tools
         .invoke(
@@ -415,13 +415,13 @@ async fn http_adapter_passes_its_live_upgrade_to_the_http_gate_without_egress() 
     let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
     save_tier_config(&captured).await;
     let mut live = captured.clone();
-    live.autonomy.level = AutonomyLevel::Full;
+    live.security.autonomy.level = AutonomyLevel::Full;
     save_tier_config(&live).await;
     let http = OpenHumanHttp {
         ctx: live_tier_context(&captured),
         config: Arc::new(captured.clone()),
         security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
+            &captured.security.autonomy,
             &captured.workspace_dir,
             &captured.action_dir,
         )),
