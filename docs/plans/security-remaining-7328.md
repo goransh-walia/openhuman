@@ -514,8 +514,14 @@ exercise the session host state without constructing a second middleware.
 Builder policy decisions are now folded into `TinySecurityPolicy` as another
 source, removing the separate `CombinedPolicy` wrapper while retaining the
 shared approval resolver. The SDK's `ToolPolicyMiddleware(require_sandbox)`
-still filters model-visible tools and remains until TinySecurity's sandbox plan
-can replace that behavior through the released module contract.
+has now been removed from both the normal and live harnesses. Its declared
+`SandboxMode::Required` check is folded into the shared TinySecurity gate as a
+host adapter, with tests for denial without a sandboxed workspace, allowance
+with one, and tools that do not require a sandbox. The actual process plan and
+execution remain owned by TinySecurity's released `Plan2` contract and TinyBox;
+the adapter only enforces the tool declaration against the run workspace.
+Remaining Task 13 work is the audit of the remaining posture and deny-list
+surfaces plus the full approval UI and cross-path verification.
 
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
