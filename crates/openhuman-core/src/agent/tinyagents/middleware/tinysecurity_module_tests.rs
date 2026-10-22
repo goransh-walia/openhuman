@@ -154,6 +154,19 @@ fn host_action(permission: ToolPermission, external_effect: bool, spend: bool) -
     }
 }
 
+#[test]
+fn caller_access_tier_uses_policy_and_never_exceeds_the_dispatch_ceiling() {
+    use crate::security::AutonomyLevel::{Full, ReadOnly, Supervised};
+    use tinysecurity_bus::AccessTier::{Full as FullAccess, Read, Write};
+
+    assert_eq!(access_tier(ReadOnly, None), Read);
+    assert_eq!(access_tier(Supervised, None), Write);
+    assert_eq!(access_tier(Full, None), FullAccess);
+    assert_eq!(access_tier(Full, Some(ReadOnly)), Read);
+    assert_eq!(access_tier(Full, Some(Supervised)), Write);
+    assert_eq!(access_tier(ReadOnly, Some(Full)), Read);
+}
+
 #[tokio::test]
 async fn an_unregistered_tool_is_denied_and_never_asked() {
     let module = Recorder::answering(Ok(Verdict::Allow));
