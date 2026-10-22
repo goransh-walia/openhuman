@@ -305,9 +305,9 @@ imports legacy `autonomy.auto_approve` entries through `ImportTrustSource2`, and
 registers no transient whole-tool grants in each call's approval scope. A native
 test against the published Linux archive verifies an imported grant still
 authorizes a fresh engine with an empty transient grant list. Host list/revoke
-surfaces and the wider approval/SaaS cases remain open. These changes are on
-the existing draft PR #7331; its cross-platform native-policy and release
-latency jobs are running.
+surfaces were completed in the v0.17.0 follow-up below; the wider approval/SaaS
+cases remain open. These changes are on the existing draft PR #7331; its
+cross-platform native-policy and release latency jobs are running.
 
 **Follow-up (2026-10-22):** TinySecurity v0.17.0 is now published and pinned
 with all eleven host checksums from its release manifest. The v0.17 bus adds
@@ -443,8 +443,12 @@ that falls outside the deployment's tool allowlist now continues through the
 tenant-scoped approval engine and existing `ApprovalRequested` surface. Its
 approval is one-time and cannot be auto-approved by profile posture or durable
 grants. Allowlisted tools retain their audited automatic path; non-chat SaaS
-origins remain denied. The targeted SaaS gate/profile tests pass; the broader
-Task 13 middleware consolidation and judge UI remain open.
+origins remain denied. Durable tool-grant list/revoke, the localized history
+panel, and judged-verdict scores/expiry are implemented; component tests cover
+those states, and a Playwright browser test now exercises judged history and
+grant revocation through mocked core RPC. The targeted SaaS gate/profile tests
+pass. Task 13's single-middleware consolidation and full interactive prompt /
+decision browser flow remain open.
 
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
