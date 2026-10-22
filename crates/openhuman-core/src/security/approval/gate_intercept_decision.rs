@@ -240,6 +240,15 @@ impl ApprovalGate {
 /// The gate's outcome in SaaS, `None` outside it. SaaS has no per-user approval
 /// surface, so the gate never parks there; the verdict comes from the
 /// deployment's allowlisted tool groups.
+pub(crate) fn saas_prompt_needed(
+    _ctx: &crate::core::runtime::DispatchCtx,
+    _saas: bool,
+    _origin: &AgentTurnOrigin,
+    _tool_name: &str,
+) -> bool {
+    false
+}
+
 pub(crate) fn saas_outcome_with(
     ctx: &crate::core::runtime::DispatchCtx,
     saas: bool,

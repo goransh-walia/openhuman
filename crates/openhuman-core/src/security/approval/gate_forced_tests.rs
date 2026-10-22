@@ -139,6 +139,16 @@ fn saas_outcome_is_absent_outside_saas() {
 }
 
 #[test]
+fn saas_web_chat_with_a_prompt_route_can_request_human_approval() {
+    assert!(saas_prompt_needed(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        true,
+        &web_origin(),
+        "shell"
+    ));
+}
+
+#[test]
 fn saas_outcome_never_parks_and_denies_without_an_allowlisted_group() {
     // No agent host is installed here, so no tool group is allowlisted.
     match saas_outcome_with(&crate::core::runtime::DispatchCtx::ambient(), true, "shell") {
