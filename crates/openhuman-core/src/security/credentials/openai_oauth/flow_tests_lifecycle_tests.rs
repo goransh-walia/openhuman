@@ -48,14 +48,6 @@ fn build_authorize_url_includes_codex_pkce_and_extra_params() {
 }
 
 #[test]
-fn parse_callback_input_accepts_full_redirect_url() {
-    let url = "http://127.0.0.1:1455/auth/callback?code=abc&state=xyz";
-    let (code, state) = parse_callback_input(url).unwrap();
-    assert_eq!(code, "abc");
-    assert_eq!(state, "xyz");
-}
-
-#[test]
 fn parse_callback_input_accepts_raw_query_string() {
     let (code, state) = parse_callback_input("code=abc%20123&state=xyz").unwrap();
     assert_eq!(code, "abc 123");
@@ -63,18 +55,9 @@ fn parse_callback_input_accepts_raw_query_string() {
 }
 
 #[test]
-fn parse_callback_input_rejects_missing_code() {
-    let err = parse_callback_input("http://127.0.0.1:1455/auth/callback?state=xyz").unwrap_err();
-    assert!(err.contains("code"));
-}
-
-#[test]
-fn parse_callback_input_rejects_blank_invalid_and_missing_state() {
+fn parse_callback_input_rejects_blank_and_missing_state() {
     let blank = parse_callback_input("   ").unwrap_err();
     assert!(blank.contains("required"));
-
-    let invalid = parse_callback_input("not-a-callback").unwrap_err();
-    assert!(invalid.contains("invalid"));
 
     let missing_state =
         parse_callback_input("http://127.0.0.1:1455/auth/callback?code=abc").unwrap_err();

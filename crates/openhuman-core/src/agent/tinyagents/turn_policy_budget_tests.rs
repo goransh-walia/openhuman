@@ -1,5 +1,15 @@
 use super::*;
 
+#[test]
+fn model_call_timeout_environment_override_reaches_run_limits() {
+    let overrides = env_overrides_from(|name| {
+        (name == "OPENHUMAN_MODEL_CALL_TIMEOUT_SECS").then(|| "2".to_owned())
+    });
+    let policy = run_policy_for_provider_with_overrides(10, false, false, None, overrides);
+
+    assert_eq!(policy.limits.max_model_call_ms, Some(2_000));
+}
+
 #[tokio::test]
 async fn per_turn_tool_limit_reaches_the_execution_policy() {
     let policy = run_policy_for_provider(10, false, false, Some(2));

@@ -186,9 +186,15 @@ test("config/auth in-process integration tests run serially in both full runners
       start >= 0 && end > start,
       `${runner} has an in-process module runner`,
     );
+    const runnerFunction = source.slice(start, end);
     assert.match(
-      source.slice(start, end),
-      /config_auth_app_state_connectivity_e2e[\s\S]*?--test-threads=1/,
+      runnerFunction,
+      /\(config\|auth\|app_state\|connectivity\)_e2e/,
+      `${runner} isolates the four split config/auth groups`,
+    );
+    assert.match(
+      runnerFunction,
+      /--test-threads=1/,
       `${runner} serializes auth RPC fixtures that share process-wide listeners`,
     );
   }

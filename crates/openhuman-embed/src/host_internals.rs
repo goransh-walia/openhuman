@@ -118,8 +118,8 @@ pub mod doctor {
 
     pub use openhuman_core::doctor::registry::registered_checks;
     pub use openhuman_core::doctor::{
-        register_check_source, register_check_source_in, DoctorCheck, DoctorCheckSource,
-        DoctorConfigSource, DoctorCtx, DoctorTier, Finding, FindingSeverity,
+        register_check_source, register_check_source_in, ComponentId, DoctorCheck,
+        DoctorCheckSource, DoctorConfigSource, DoctorCtx, DoctorTier, Finding, FindingSeverity,
     };
 }
 

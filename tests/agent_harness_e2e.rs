@@ -15,6 +15,10 @@
 mod env_guard;
 #[path = "support/linked_modules.rs"]
 mod linked_modules;
+#[cfg(feature = "mcp")]
+#[path = "support/local_mcp_http.rs"]
+mod local_mcp_http;
+#[cfg(feature = "mcp")]
 #[path = "support/mcp_stub_trusted.rs"]
 mod mcp_stub_trusted;
 #[path = "support/scripted_stack.rs"]
@@ -84,6 +88,7 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
 
 static SCRIPTED_COMPLETIONS: OnceLock<Mutex<std::collections::VecDeque<Value>>> = OnceLock::new();
 static CAPTURED_COMPLETION_REQUESTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
+static CAPTURED_MANAGED_GEMINI_REQUESTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
 static CAPTURED_PROXY_REQUESTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
 const SCRIPT_DISCOVERED_MCP_TOOL: &str = "__script_discovered_mcp_tool__";
 
@@ -98,6 +103,15 @@ fn with_scripted<T>(f: impl FnOnce(&mut std::collections::VecDeque<Value>) -> T)
 
 fn with_captured<T>(f: impl FnOnce(&mut Vec<Value>) -> T) -> T {
     let m = CAPTURED_COMPLETION_REQUESTS.get_or_init(|| Mutex::new(Vec::new()));
+    let mut guard = match m.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    f(&mut guard)
+}
+
+fn with_captured_managed_gemini<T>(f: impl FnOnce(&mut Vec<Value>) -> T) -> T {
+    let m = CAPTURED_MANAGED_GEMINI_REQUESTS.get_or_init(|| Mutex::new(Vec::new()));
     let mut guard = match m.lock() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
@@ -121,6 +135,7 @@ fn reset_script(responses: Vec<Value>) {
         q.extend(responses);
     });
     with_captured(|c| c.clear());
+    with_captured_managed_gemini(|requests| requests.clear());
 }
 
 fn tool_call_completion(name: &str, arguments: Value) -> Value {
@@ -129,10 +144,6 @@ fn tool_call_completion(name: &str, arguments: Value) -> Value {
         "name": name,
         "arguments": arguments.to_string(),
     }]})
-}
-
-fn error_completion(status: u16, message: &str) -> Value {
-    json!({ "status": status, "error": message })
 }
 
 /// True when any captured upstream request carries the engine's unknown-tool
@@ -199,35 +210,6 @@ fn captured_requests_reject_tool_as_unknown(requests: &[Value], tool: &str) -> b
 // wait expires and never sets [`CANARY_OVERLAP`].
 
 /// Canary substrings whose worker requests must overlap. Empty = disarmed.
-/// Milliseconds every scripted upstream reply is held before it is served, or
-/// `0` for "answer immediately". Armed by the per-model-call ceiling test
-/// (#5766/#5767): the ceiling can only be observed against a call that is still
-/// in flight when the ceiling elapses, and it must apply to *every* attempt —
-/// a queue entry would stall only the first, and the retry would be answered
-/// instantly by the default completion, hiding the timeout.
-static SCRIPTED_STALL_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
-/// Arms the stall and disarms it on drop.
-///
-/// The guard exists because the atomic is process-global and the env lock is
-/// deliberately recovered from poisoning: if a test panicked between arming and
-/// a bare `disarm`, every later test sharing this scripted handler would inherit
-/// a 25s delay on every completion, turning one failure into a cascade of
-/// unrelated timeouts.
-struct ScriptedStallGuard;
-
-impl Drop for ScriptedStallGuard {
-    fn drop(&mut self) {
-        SCRIPTED_STALL_MS.store(0, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-#[must_use = "the stall is disarmed when the guard drops; binding it to `_` disarms it immediately"]
-fn arm_scripted_stall(ms: u64) -> ScriptedStallGuard {
-    SCRIPTED_STALL_MS.store(ms, std::sync::atomic::Ordering::SeqCst);
-    ScriptedStallGuard
-}
-
 static CANARY_BARRIER: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 /// Worker requests currently parked at the barrier.
 static CANARY_IN_FLIGHT: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
@@ -342,13 +324,6 @@ async fn scripted_chat_completions(
             "body": body.clone(),
         }))
     });
-
-    // Hold every reply while the stall is armed, so a model call is still
-    // in flight when a per-call ceiling elapses (#5766/#5767).
-    let stall_ms = SCRIPTED_STALL_MS.load(std::sync::atomic::Ordering::SeqCst);
-    if stall_ms > 0 {
-        tokio::time::sleep(Duration::from_millis(stall_ms)).await;
-    }
 
     // Park an armed fan-out worker before it is answered, so a peer has a
     // chance to arrive. Before the queue pop, not after: holding the popped
@@ -467,6 +442,42 @@ fn completion_response(streaming: bool, message: Value) -> axum::response::Respo
         .into_response()
 }
 
+/// Test-owned managed Gemini endpoint used to prove the released TinySearch
+/// module's grounded answer and citation cross back into the next model turn.
+async fn scripted_managed_gemini_generate_content(Json(body): Json<Value>) -> Json<Value> {
+    with_captured_managed_gemini(|requests| requests.push(body.clone()));
+    let query = body
+        .pointer("/contents/0/parts/0/text")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    Json(json!({
+        "success": true,
+        "data": {
+            "modelVersion": "gemini-3.8-flash",
+            "responseId": "agent-harness-managed-gemini-fixture",
+            "candidates": [{
+                "content": {
+                    "role": "model",
+                    "parts": [{ "text": "The fixture's distinct grounded answer is cerulean." }]
+                },
+                "groundingMetadata": {
+                    "webSearchQueries": [query],
+                    "groundingChunks": [{
+                        "web": {
+                            "uri": "https://fixture.invalid/source",
+                            "title": "Test-owned source"
+                        }
+                    }],
+                    "groundingSupports": [{
+                        "segment": { "startIndex": 0, "endIndex": 10 },
+                        "groundingChunkIndices": [0]
+                    }]
+                }
+            }]
+        }
+    }))
+}
+
 fn scripted_upstream_router() -> Router {
     Router::new()
         .route("/settings", get(current_user))
@@ -474,6 +485,10 @@ fn scripted_upstream_router() -> Router {
         .route(
             "/openai/v1/chat/completions",
             post(scripted_chat_completions),
+        )
+        .route(
+            "/agent-integrations/gemini/models/gemini-3.8-flash/generate-content",
+            post(scripted_managed_gemini_generate_content),
         )
         .route("/v1/chat/completions", post(scripted_chat_completions))
         .route("/chat/completions", post(scripted_chat_completions))
@@ -1385,6 +1400,154 @@ where
 }
 
 // ─── Task 2: Multi-turn state persistence ────────────────────────────────────
+
+/// A released TinySearch module calls the managed Gemini route and returns its
+/// grounded answer to the following model request through the host tool seam.
+/// The standard Rust E2E runners stage the registry-pinned release on
+/// `OPENHUMAN_MODULE_PATH`; on Linux x86_64 that uses the Ubuntu 22.04 asset.
+#[cfg(all(
+    target_os = "linux",
+    target_arch = "x86_64",
+    feature = "modules",
+    any(feature = "mcp", feature = "skills")
+))]
+#[test]
+fn managed_tinysearch_answer_reaches_followup_model_request() {
+    run_on_agent_stack(
+        "managed_tinysearch_answer_reaches_followup_model_request",
+        managed_tinysearch_answer_reaches_followup_model_request_inner,
+    );
+}
+
+#[cfg(all(
+    target_os = "linux",
+    target_arch = "x86_64",
+    feature = "modules",
+    any(feature = "mcp", feature = "skills")
+))]
+async fn managed_tinysearch_answer_reaches_followup_model_request_inner() {
+    let _lock = env_lock();
+    let pinned = openhuman_core::modules::registry::find("tinysearch")
+        .expect("TinySearch is registered in the module asset registry");
+    assert_eq!(pinned.version, "0.5.1", "use the pinned module release");
+    assert!(
+        std::env::var_os("OPENHUMAN_MODULE_SOURCE").is_none()
+            && std::env::var_os("OPENHUMAN_MODULE_SOURCE_DIR").is_none()
+            && std::env::var_os("OPENHUMAN_MODULE_SOURCE_TINYSEARCH").is_none(),
+        "the integration must use the staged release, not a source or linked override"
+    );
+    let module_paths_env = std::env::var_os("OPENHUMAN_MODULE_PATH")
+        .expect("the standard Rust test runner must stage TinySearch on OPENHUMAN_MODULE_PATH");
+    let module_paths = std::env::split_paths(&module_paths_env).collect::<Vec<_>>();
+    let artifact = openhuman_core::modules::local_artifact("tinysearch")
+        .expect("the standard Rust test runner must stage the pinned TinySearch library");
+    let artifact_dir = artifact
+        .parent()
+        .expect("the staged TinySearch artifact has a parent directory");
+    assert!(
+        module_paths.iter().any(|path| path == artifact_dir),
+        "TinySearch must resolve to the standard runner's staged release path: {artifact:?}"
+    );
+    let module_cache = tempdir().expect("isolated module cache");
+    let _module_cache_guard = EnvVarGuard::set_to_path("XDG_CACHE_HOME", module_cache.path());
+    let module_data = tempdir().expect("isolated module data directory");
+    let _module_data_guard = EnvVarGuard::set_to_path("XDG_DATA_HOME", module_data.path());
+
+    const QUERY: &str = "What color is the fixture's named answer?";
+    const ANSWER: &str = "The fixture's distinct grounded answer is cerulean.";
+    reset_script(vec![
+        tool_call_completion("web_answer_tool", json!({ "query": QUERY })),
+        text_completion("I received the grounded answer and its source."),
+    ]);
+    let stack = boot_stack_with_config(
+        "[search]\nenabled = true\n\n[search.providers.gemini]\nenabled = true\nroute = \"managed\"\n\n[search.roles]\nanswer = [\"gemini\"]\n\n[modules]\nsource = \"release\"\nallow_download = false\n",
+    )
+    .await;
+    let mut events = spawn_sse_collector(format!(
+        "{}/events?client_id=tinysearch-managed-wire",
+        stack.rpc_base
+    ))
+    .await;
+    let request_id = send_web_chat(
+        &stack.rpc_base,
+        8_233,
+        "tinysearch-managed-wire",
+        "thread-tinysearch-managed-wire",
+        "Find the fixture's named answer and tell me what it says.",
+    )
+    .await;
+    let done =
+        wait_for_terminal_request(&mut events, Duration::from_secs(120), Some(&request_id)).await;
+    assert_eq!(
+        done.get("event").and_then(Value::as_str),
+        Some("chat_done"),
+        "the module-backed answer turn must finish: {done}"
+    );
+
+    let modules_response =
+        post_json_rpc(&stack.rpc_base, 8_234, "openhuman.modules_list", json!({})).await;
+    let modules_response = assert_no_jsonrpc_error(&modules_response, "modules_list after search");
+    let tinysearch = modules_response
+        .get("modules")
+        .or_else(|| modules_response.pointer("/result/modules"))
+        .and_then(Value::as_array)
+        .and_then(|modules| {
+            modules
+                .iter()
+                .find(|module| module.get("id").and_then(Value::as_str) == Some("tinysearch"))
+        })
+        .unwrap_or_else(|| panic!("modules_list omitted TinySearch: {modules_response}"));
+    assert_eq!(
+        tinysearch.get("version").and_then(Value::as_str),
+        Some("0.5.1")
+    );
+    assert_eq!(
+        tinysearch.get("state").and_then(Value::as_str),
+        Some("ready")
+    );
+    assert_eq!(
+        tinysearch.get("source").and_then(Value::as_str),
+        Some("release")
+    );
+
+    let managed_requests = with_captured_managed_gemini(|requests| requests.clone());
+    assert_eq!(
+        managed_requests.len(),
+        1,
+        "TinySearch must call managed Gemini once"
+    );
+    let managed_request = &managed_requests[0];
+    let request_text = managed_request
+        .pointer("/contents/0/parts/0/text")
+        .and_then(Value::as_str)
+        .expect("managed Gemini request has a text prompt");
+    assert!(
+        request_text.contains(QUERY),
+        "the module must forward the requested query to managed Gemini: {managed_request}"
+    );
+    assert_eq!(
+        managed_request.get("tools"),
+        Some(&json!([{ "googleSearch": {} }])),
+        "grounded answers must request Gemini search grounding"
+    );
+
+    let completions = with_captured(|requests| requests.clone());
+    assert_eq!(
+        completions.len(),
+        2,
+        "the tool result must reach a follow-up model turn"
+    );
+    let delivered = tool_result_text(&completions[1..], "web_answer_tool")
+        .expect("the next model request must contain web_answer_tool's result");
+    assert!(
+        delivered.contains(ANSWER),
+        "the host must forward TinySearch's grounded answer: {delivered}"
+    );
+    assert!(
+        delivered.contains("https://fixture.invalid/source"),
+        "the host must forward TinySearch's grounded source: {delivered}"
+    );
+}
 
 /// Turn 2's upstream request must include turn 1's user message and assistant
 /// reply — proves transcript/history persistence across turns on one thread.
@@ -2492,70 +2655,6 @@ async fn empty_provider_response_inner() {
     stack.shutdown();
 }
 
-// ─── Task 8: Provider error retry ────────────────────────────────────────────
-//
-// ReliableProvider retries on 5xx (reliable.rs:426-507).
-// Default provider_retries = 2 (runtime.rs:107-109) → max_retries = 2.
-// Loop: attempt 0..=2 (3 attempts total). On attempt 0 the mock returns 500;
-// on attempt 1 it returns the canary text. The harness does NOT use
-// provider_backoff_ms = 500ms with backoff; the minimum is 50ms
-// (reliable.rs:352, base_backoff_ms.max(50)). Both requests appear in the
-// CAPTURED_COMPLETION_REQUESTS queue because each attempt calls the mock.
-
-/// First upstream call 500s; ReliableProvider retries (provider_retries=2,
-/// reliable.rs:426-507); second attempt succeeds with RETRY_SUCCESS_CANARY.
-/// ≥2 captured upstream requests confirm the retry path was actually exercised.
-#[test]
-fn provider_error_retry() {
-    run_on_agent_stack("provider_error_retry", provider_error_retry_inner);
-}
-
-async fn provider_error_retry_inner() {
-    let _lock = env_lock();
-    reset_script(vec![
-        // Attempt 0: scripted upstream returns 500.
-        error_completion(500, "scripted transient upstream failure"),
-        // Attempt 1 (first retry): scripted upstream returns the canary.
-        text_completion("RETRY_SUCCESS_CANARY"),
-    ]);
-    let stack = boot_stack().await;
-
-    let mut events =
-        spawn_sse_collector(format!("{}/events?client_id=harness-retry", stack.rpc_base)).await;
-    send_web_chat(
-        &stack.rpc_base,
-        700,
-        "harness-retry",
-        "thread-retry",
-        "hello",
-    )
-    .await;
-
-    let done = wait_for_terminal(&mut events, Duration::from_secs(120)).await;
-    assert_eq!(
-        done.get("event").and_then(Value::as_str),
-        Some("chat_done"),
-        "expected chat_done after retry; got: {done}"
-    );
-    let full_response = done
-        .get("full_response")
-        .and_then(Value::as_str)
-        .unwrap_or_else(|| panic!("chat_done missing full_response: {done}"));
-    assert!(
-        full_response.contains("RETRY_SUCCESS_CANARY"),
-        "full_response must contain RETRY_SUCCESS_CANARY after retry; got: {full_response}"
-    );
-
-    // Both the 500 attempt and the successful retry hit the upstream mock.
-    let count = with_captured(|c| c.len());
-    assert!(
-        count >= 2,
-        "expected ≥2 upstream attempts (500 + retry), got {count}"
-    );
-
-    stack.shutdown();
-}
-
 // ─── Task 9: Parallel fan-out + multi-hop chain ───────────────────────────────
 //
 // parallel_subagent_fanout:
@@ -3391,406 +3490,6 @@ async fn streaming_tool_call_accumulation() {
 /// Needed for streaming_tool_call_accumulation.
 use openhuman_core::config::AgentConfig;
 
-// ─── Case 13 (provider-level): SSE tool-arg accumulation ──────────────────────
-//
-// The `streaming_tool_call_accumulation` test above drives the engine + UI
-// delta forwarding through a ScriptedProvider that returns a *pre-assembled*
-// ChatResponse — it never exercises the real provider's chunk-by-chunk
-// accumulation. The accumulation that issue #3471 case 13 targets lives in
-// TinyAgents' `OpenAiModel` SSE transport: its accumulator glues partial
-// `function.arguments`
-// fragments from successive SSE chunks into one JSON string, which only parses
-// once the stream completes. Nothing else covers that path beyond its error-frame
-// unit tests.
-//
-// This test stands up a real axum SSE upstream that emits OpenAI-style
-// `chat.completion.chunk` frames whose `function.arguments` fragments are split
-// at awkward byte offsets (mid-key, mid-value), points a real
-// crate-native `OpenAiModel` at it, and drives `ChatModel::stream`. It asserts
-// the model:
-//   - reassembles exactly one tool call with `name == "echo_tool"`,
-//   - produces an `arguments` string that parses AND equals the canonical JSON,
-//   - forwards ≥3 correlated `ToolCallDelta`s whose concatenation is the full
-//     JSON and whose tool name remains available to streaming consumers.
-
-/// The JSON the upstream streams back, split across SSE chunks. Chosen so the
-/// splits land mid-key and mid-value, the worst case for naive accumulation.
-const SSE_TOOL_ARGS_JSON: &str = r#"{"value":"SSE_STREAM_CANARY","n":42}"#;
-
-/// Build the four awkward `function.arguments` fragments from
-/// [`SSE_TOOL_ARGS_JSON`]. Concatenated they reproduce the JSON byte-for-byte;
-/// individually each is invalid JSON, forcing the provider to accumulate before
-/// parsing. Returned as owned Strings so the SSE task can take them by value.
-fn sse_tool_arg_fragments() -> [String; 4] {
-    let s = SSE_TOOL_ARGS_JSON;
-    // Byte offsets land mid-key (`{"valu`), across the key→value boundary,
-    // mid-value, and the tail. len = 36.
-    //   0..6   {"valu
-    //   6..18  e":"SSE_STRE
-    //   18..30 AM_CANARY","
-    //   30..36 n":42}
-    [
-        s[0..6].to_string(),
-        s[6..18].to_string(),
-        s[18..30].to_string(),
-        s[30..].to_string(),
-    ]
-}
-
-/// One OpenAI-style `chat.completion.chunk` SSE frame for a tool-call delta.
-/// `id`/`name` are only set on the first fragment (`include_header`); later
-/// fragments carry just the `function.arguments` continuation, exactly as real
-/// providers stream them.
-fn sse_tool_chunk_frame(arguments: &str, include_header: bool) -> String {
-    let function = if include_header {
-        json!({ "name": "echo_tool", "arguments": arguments })
-    } else {
-        json!({ "arguments": arguments })
-    };
-    let mut tool_call = json!({
-        "index": 0,
-        "function": function,
-    });
-    if include_header {
-        tool_call["id"] = json!("call_sse_canary");
-        tool_call["type"] = json!("function");
-    }
-    let chunk = json!({
-        "id": "chatcmpl-sse-canary",
-        "object": "chat.completion.chunk",
-        "choices": [{ "index": 0, "delta": { "tool_calls": [tool_call] }, "finish_reason": null }],
-    });
-    format!("data: {chunk}\n\n")
-}
-
-/// The terminal `finish_reason: "tool_calls"` frame followed by `[DONE]`.
-fn sse_tool_finish_frames() -> String {
-    let finish = json!({
-        "id": "chatcmpl-sse-canary",
-        "object": "chat.completion.chunk",
-        "choices": [{ "index": 0, "delta": {}, "finish_reason": "tool_calls" }],
-    });
-    format!("data: {finish}\n\ndata: [DONE]\n\n")
-}
-
-/// axum handler: assert the provider asked for streaming with native tools, then
-/// stream the split tool-arg fragments back as `text/event-stream`.
-async fn sse_tool_args_handler(Json(body): Json<Value>) -> axum::response::Response {
-    use axum::body::Body;
-    use axum::http::header::CONTENT_TYPE;
-    use axum::response::IntoResponse;
-
-    // The streaming path is only taken when the provider set stream:true and
-    // forwarded the native tool spec; assert both so a regression that drops
-    // either can't make this test silently pass through a non-streaming branch.
-    assert_eq!(
-        body.get("stream").and_then(Value::as_bool),
-        Some(true),
-        "provider must request stream:true on the native streaming path; body: {body}"
-    );
-    let tool_names: Vec<&str> = body
-        .get("tools")
-        .and_then(Value::as_array)
-        .map(|tools| {
-            tools
-                .iter()
-                .filter_map(|t| t.pointer("/function/name").and_then(Value::as_str))
-                .collect()
-        })
-        .unwrap_or_default();
-    assert!(
-        tool_names.contains(&"echo_tool"),
-        "provider must forward the native echo_tool spec; tools in body: {tool_names:?}; body: {body}"
-    );
-
-    let [f0, f1, f2, f3] = sse_tool_arg_fragments();
-    // First fragment carries id+name; the remaining three are pure arg
-    // continuations. A finish frame + [DONE] close the stream.
-    let frames: Vec<String> = vec![
-        sse_tool_chunk_frame(&f0, true),
-        sse_tool_chunk_frame(&f1, false),
-        sse_tool_chunk_frame(&f2, false),
-        sse_tool_chunk_frame(&f3, false),
-        sse_tool_finish_frames(),
-    ];
-    let body_stream = tokio_stream::iter(
-        frames
-            .into_iter()
-            .map(|frame| Ok::<_, std::convert::Infallible>(axum::body::Bytes::from(frame))),
-    );
-
-    (
-        StatusCode::OK,
-        [(CONTENT_TYPE, "text/event-stream")],
-        Body::from_stream(body_stream),
-    )
-        .into_response()
-}
-
-fn sse_tool_args_router() -> Router {
-    Router::new().route("/chat/completions", post(sse_tool_args_handler))
-}
-
-/// Provider-level coverage for issue #3471 case 13: the real
-/// TinyAgents' `OpenAiModel` accumulates `function.arguments` fragments split
-/// across SSE chunks into one valid JSON string, and forwards the ordered
-/// `ToolCallStart` → `ToolCallArgsDelta*` events to the live receiver.
-///
-/// Unlike `streaming_tool_call_accumulation` (which uses a ScriptedProvider that
-/// returns a pre-assembled response), this drives the actual provider HTTP +
-/// SSE-parse path against an in-test upstream, so the `entry.arguments.push_str`
-/// accumulation in its SSE transport is what assembles the final tool call.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn provider_sse_tool_args_accumulation() {
-    use tinyinference_llm::message::Message;
-    use tinyinference_llm::model::{ChatModel, ModelRequest, ModelStreamItem};
-    use tinyinference_llm::providers::openai::{AuthStyle, OpenAiModel};
-    use tinyinference_llm::tool::ToolSchema;
-
-    let _lock = env_lock();
-
-    // Stand up the SSE upstream on an ephemeral port.
-    let (addr, server) = serve_on_ephemeral(sse_tool_args_router()).await;
-    let base_url = format!("http://{addr}");
-
-    // Real provider, Bearer auth with a non-empty credential so
-    // credential_for_request() does not short-circuit. base_url has no path, so
-    // chat_completions_url() targets `<base_url>/chat/completions` — the route
-    // the upstream serves.
-    let model = OpenAiModel::new("test-key")
-        .with_provider("e2e-sse-canary")
-        .with_base_url(&base_url)
-        .with_auth_style(AuthStyle::Bearer);
-
-    // A native tool spec so the streaming request carries `tools` (and the
-    // handler's assertion that the provider forwarded echo_tool passes).
-    let tools = vec![ToolSchema::new(
-        "echo_tool",
-        "Echo the provided value back.",
-        json!({
-            "type": "object",
-            "properties": { "value": { "type": "string" }, "n": { "type": "number" } },
-            "required": ["value"],
-        }),
-    )];
-    let request = ModelRequest::new(vec![Message::user("call echo_tool")])
-        .with_tools(tools)
-        .with_model("e2e-sse-model")
-        .with_temperature(0.0);
-    let mut stream = model
-        .stream(&(), request)
-        .await
-        .unwrap_or_else(|e| panic!("model stream over SSE failed: {e:#}"));
-    let mut deltas = Vec::new();
-    let mut response = None;
-    while let Some(item) = stream.next().await {
-        match item {
-            ModelStreamItem::ToolCallDelta(delta) => deltas.push(delta),
-            ModelStreamItem::Completed(completed) => response = Some(completed),
-            ModelStreamItem::Failed(error) => panic!("model stream failed: {error}"),
-            ModelStreamItem::ProviderFailed(error) => {
-                panic!("provider stream failed: {}", error.message)
-            }
-            _ => {}
-        }
-    }
-    let response = response.expect("stream must emit its completed response");
-
-    // ── Assert 1: exactly one tool call, name echo_tool ───────────────────────
-    assert_eq!(
-        response.message.tool_calls.len(),
-        1,
-        "expected exactly one accumulated tool call; got {}: {:?}",
-        response.message.tool_calls.len(),
-        response.message.tool_calls
-    );
-    let tool_call = &response.message.tool_calls[0];
-    assert_eq!(
-        tool_call.name, "echo_tool",
-        "accumulated tool call must be echo_tool; got {:?}",
-        tool_call.name
-    );
-
-    // ── Assert 2: accumulated arguments parse AND equal the canonical JSON ─────
-    let expected: Value = json!({ "value": "SSE_STREAM_CANARY", "n": 42 });
-    let parsed = tool_call.arguments.clone();
-    assert_eq!(
-        parsed, expected,
-        "accumulated arguments must equal the canonical JSON exactly; \
-         got {parsed} from raw {:?}",
-        tool_call.arguments
-    );
-
-    // ── Assert 3: correlated ToolCallDelta stream concatenates to the JSON ────
-    let named_delta_count = deltas
-        .iter()
-        .filter(|d| d.tool_name.as_deref() == Some("echo_tool"))
-        .count();
-    assert!(
-        named_delta_count >= 1,
-        "expected the streamed tool name to be available; deltas: {deltas:?}"
-    );
-    assert!(
-        deltas
-            .iter()
-            .all(|delta| delta.call_id == "call_sse_canary"),
-        "every argument fragment must retain the provider call id; deltas: {deltas:?}"
-    );
-
-    let arg_deltas: Vec<String> = deltas.iter().map(|delta| delta.content.clone()).collect();
-    assert!(
-        arg_deltas.len() >= 3,
-        "expected ≥3 ToolCallDelta events (split fragments); got {}: {arg_deltas:?}",
-        arg_deltas.len()
-    );
-    let concatenated: String = arg_deltas.concat();
-    assert_eq!(
-        concatenated, SSE_TOOL_ARGS_JSON,
-        "concatenated ToolCallArgsDelta deltas must reproduce the full arguments JSON exactly; \
-         got {concatenated:?}"
-    );
-
-    server.abort();
-}
-
-// ─── Per-model-call wall-clock ceiling (#5766 / PR #5767) ────────────────────
-//
-// Before #5767 a model call was bounded only by the *turn's remaining* wall
-// clock, so hang detection rode the turn deadline: a turn that had legitimately
-// spent most of its budget across many successful calls handed the next call
-// whatever was left and died. #5767 demoted the turn deadline to a runaway
-// guard (600s → 3600s) and introduced a per-call ceiling
-// (`RunLimits::max_model_call_ms`, default 900s,
-// `OPENHUMAN_MODEL_CALL_TIMEOUT_SECS`, `0` disables) that is recomputed afresh
-// for every call and every retry attempt.
-//
-// The harness names which bound fired in the timeout message
-// (`tinyagents-harness/src/agent_loop/model_call.rs:11,17` —
-// "per-model-call ceiling" vs "remaining wall-clock budget") precisely so field
-// triage can tell "this one call wedged" from "the run is out of time". That
-// label is what this test asserts on: it is the only externally visible signal
-// that distinguishes the two ceilings, so asserting merely "the turn failed"
-// would pass with the fix reverted.
-
-/// A wedged model call is cut off by the PER-CALL ceiling, not by the turn
-/// deadline: with a 2s per-call ceiling under a 600s turn deadline, an upstream
-/// that never answers in time must end the turn as a `turn_timeout` once its
-/// retries (each also cut at the ceiling) are spent, long before the 600s turn
-/// deadline.
-#[test]
-fn model_call_ceiling_bounds_a_wedged_call_below_the_turn_deadline() {
-    run_on_agent_stack(
-        "model_call_ceiling",
-        model_call_ceiling_bounds_a_wedged_call_below_the_turn_deadline_inner,
-    );
-}
-
-async fn model_call_ceiling_bounds_a_wedged_call_below_the_turn_deadline_inner() {
-    let _lock = env_lock();
-
-    // Per-call ceiling far tighter than the turn deadline, so whichever bound
-    // fires is unambiguous. Both are read per turn by `run_policy_for`.
-    let _per_call = EnvVarGuard::set("OPENHUMAN_MODEL_CALL_TIMEOUT_SECS", "2");
-    let _turn = EnvVarGuard::set("OPENHUMAN_AGENT_TURN_TIMEOUT_SECS", "600");
-    // There is a THIRD wall clock, and pinning only the two above leaves this
-    // test's conclusion resting on the ambient environment. `web_turn_deadline()`
-    // (`web_chat/ops_part_01.rs:79`) applies its own backstop from
-    // `OPENHUMAN_WEB_TURN_TIMEOUT_SECS`, and the web layer maps every harness
-    // `Timeout` onto the same generic `turn_timeout` copy — so an inherited
-    // value below the 8s bound asserted here would fire first, produce an
-    // identical terminal, and let the whole test pass with the per-call ceiling
-    // unwired. Cleared, not set, so it falls back to its 3600s default and can
-    // play no part in the outcome. The web idle guard reads its own variable;
-    // it is cleared for the same reason.
-    let _web_backstop = EnvVarGuard::unset("OPENHUMAN_WEB_TURN_TIMEOUT_SECS");
-    let _web_idle = EnvVarGuard::unset("OPENHUMAN_WEB_TURN_IDLE_SECS");
-
-    // Every upstream reply is held for 25s — comfortably past the 2s per-call
-    // ceiling and comfortably short of the 600s turn deadline. Armed globally
-    // so retry attempts stall too.
-    let _stall = arm_scripted_stall(25_000);
-    reset_script(vec![text_completion(
-        "this reply is never delivered in time",
-    )]);
-    let stack = boot_stack().await;
-
-    let mut events = spawn_sse_collector(format!(
-        "{}/events?client_id=harness-call-ceiling",
-        stack.rpc_base
-    ))
-    .await;
-    let started = std::time::Instant::now();
-    send_web_chat(
-        &stack.rpc_base,
-        910,
-        "harness-call-ceiling",
-        "thread-call-ceiling",
-        "stall please",
-    )
-    .await;
-
-    // 120s is a generous outer bound: the point is that the turn ends long
-    // before its own 600s deadline, and this wait would itself expire if the
-    // per-call ceiling were not in force.
-    // 120s is a generous outer bound: the point is that the turn ends long
-    // before its own 600s deadline, and this wait would itself expire if the
-    // per-call ceiling were not in force.
-    let terminal = wait_for_terminal(&mut events, Duration::from_secs(120)).await;
-    let elapsed = started.elapsed();
-
-    // The turn is stopped rather than completing.
-    assert_eq!(
-        terminal.get("event").and_then(Value::as_str),
-        Some("chat_error"),
-        "a wedged model call must terminate the turn; got: {terminal}"
-    );
-    assert_eq!(
-        terminal.get("error_type").and_then(Value::as_str),
-        Some("turn_timeout"),
-        "the stop must be a timeout, not some other failure; got: {terminal}"
-    );
-
-    // THE assertion, and the one that distinguishes the two ceilings. The
-    // upstream holds every reply for 25s. Bounded only by the turn's remainder
-    // — the pre-#5767 behaviour — that stall completes well inside the 600s
-    // budget and the turn SUCCEEDS with `chat_done`; only a per-call ceiling
-    // can end it in `chat_error`, which the assertions above already pinned.
-    //
-    // A per-call timeout is a retryable `CallTimeout` ("this one call wedged",
-    // tinyagents `retry::is_retryable`), and the turn policy retries a
-    // retryable call on a 5-attempt schedule with 3/6/12/24s backoff (#6413). So
-    // the turn does NOT end at ~2s any more: each of the attempts is cut at the
-    // 2s ceiling and the turn fails after the last one, about 10s of ceilings
-    // plus 34-56s of backoff. Pin that shape rather than a latency from before
-    // the retry schedule existed:
-    //  * the ceiling cut the FIRST attempt (the call was retried at all — it
-    //    would have returned at 25s otherwise);
-    //  * no attempt was allowed to run its full 25s stall, so the whole turn
-    //    is far shorter than even two un-bounded attempts would take.
-    let upstream_calls = with_captured(|c| c.len());
-    assert!(
-        upstream_calls >= 2,
-        "the 2s per-call ceiling must cut the wedged call and the harness must retry it; \
-         saw {upstream_calls} upstream call(s)"
-    );
-    assert!(
-        elapsed < Duration::from_secs(90),
-        "every attempt must be cut off by the 2s per-call ceiling, not left to run out the 25s \
-         stall; the retry schedule alone is about 45s, but the turn took {elapsed:?}"
-    );
-
-    // Deliberately NOT asserted: that the event names *which* ceiling fired.
-    // The harness distinguishes them internally ("per-model-call ceiling" vs
-    // "remaining wall-clock budget", `model_call.rs:11,17`) precisely so field
-    // triage can tell "this one call wedged" from "the run is out of time", but
-    // the host collapses both into `turn_timeout` with a message that says the
-    // turn "ran past its time budget" and blames a stalled tool or sub-agent.
-    // Here the turn had 598 of its 600 seconds left and no tool ran at all.
-    // Pinning that text would pin a misattribution — see W5-test-findings.md.
-
-    stack.shutdown();
-}
-
 // ─── Skills + MCP servers: installed from a registry, then used by the agent ─
 //
 // The registry suites (`skill_registry_e2e`, `mcp_registry_e2e`) stop at
@@ -4431,44 +4130,49 @@ const REGISTRY_MCP_SERVER: &str = "io.github.harness/echo";
 #[cfg(feature = "mcp")]
 const MCP_ECHO_CANARY: &str = "MCP_ECHO_CANARY_91c2";
 
-/// An official-registry record whose npm package launches the hermetic stub.
-///
-/// `runtimeHint` replaces the `npx` launcher (`official/types.rs`
-/// `to_example_config`), and the stub ignores the `-y <identifier>` it is given.
+/// An official-registry record pointing to the local, protocol-speaking fixture.
 #[cfg(feature = "mcp")]
-fn registry_mcp_record() -> Value {
+fn registry_mcp_record(endpoint: &str) -> Value {
     json!({
         "name": REGISTRY_MCP_SERVER,
         "title": "Harness Echo",
         "description": "Echoes a message back.",
-        "remotes": [],
-        "packages": [{
-            "registryType": "npm",
-            "identifier": "@harness/echo",
-            "runtimeHint": env!("CARGO_BIN_EXE_test-mcp-stub"),
-            "environmentVariables": []
-        }]
+        "remotes": [{ "type": "streamable-http", "url": endpoint }]
     })
 }
 
 /// The official registry's list and versions endpoints, serving one server.
 #[cfg(feature = "mcp")]
-async fn serve_mcp_registry_fixture() -> (
+async fn serve_mcp_registry_fixture(
+    endpoint: &str,
+) -> (
     SocketAddr,
     tokio::task::JoinHandle<Result<(), std::io::Error>>,
 ) {
-    async fn list() -> Json<Value> {
+    async fn list(endpoint: String) -> Json<Value> {
         Json(json!({
-            "servers": [{ "server": registry_mcp_record() }],
+            "servers": [{ "server": registry_mcp_record(&endpoint) }],
             "metadata": { "nextCursor": "" }
         }))
     }
-    async fn versions() -> Json<Value> {
-        Json(json!({ "servers": [{ "server": registry_mcp_record() }] }))
+    async fn versions(endpoint: String) -> Json<Value> {
+        Json(json!({ "servers": [{ "server": registry_mcp_record(&endpoint) }] }))
     }
     let app = Router::new()
-        .route("/v0/servers", get(list))
-        .route("/v0/servers/{name}/versions", get(versions));
+        .route(
+            "/v0/servers",
+            get({
+                let endpoint = endpoint.to_owned();
+                move || list(endpoint.clone())
+            }),
+        )
+        .route(
+            "/v0/servers/{name}/versions",
+            get({
+                let endpoint = endpoint.to_owned();
+                move || versions(endpoint.clone())
+            }),
+        );
     serve_on_ephemeral(app).await
 }
 
@@ -4500,7 +4204,8 @@ fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry() {
 #[cfg(feature = "mcp")]
 async fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry_inner() {
     let _lock = env_lock();
-    let (registry_addr, registry_join) = serve_mcp_registry_fixture().await;
+    let mcp_server = local_mcp_http::LocalMcpHttpServer::start_echo().await;
+    let (registry_addr, registry_join) = serve_mcp_registry_fixture(mcp_server.endpoint()).await;
     let _registry = EnvVarGuard::set(
         "MCP_OFFICIAL_REGISTRY_BASE",
         format!("http://{registry_addr}"),
@@ -4526,7 +4231,8 @@ async fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry_inner()
     );
 
     // Declared in mcp.json (the registry is browse-only) and connected.
-    let server_id = declare_and_connect_registry_echo_server(&stack.rpc_base, 801).await;
+    let server_id =
+        declare_and_connect_registry_echo_server(&stack.rpc_base, 801, mcp_server.endpoint()).await;
 
     // Used: the orchestrator discovers the schema, then calls the tool itself.
     reset_script(vec![
@@ -4579,22 +4285,27 @@ async fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry_inner()
         result.contains(MCP_ECHO_CANARY),
         "the MCP server's answer did not reach the model: {result}"
     );
+    assert_echo_call(&mcp_server, MCP_ECHO_CANARY);
 
     registry_join.abort();
     stack.shutdown();
 }
 
-/// Declare the registry's echo server in `mcp.json` the way a user who found
-/// it in the registry tab would — by its command, pointed at the stub — through
-/// the settings RPCs, connect it, and return its server id.
+/// Declare the registry's echo server in `mcp.json` by its discovered endpoint,
+/// connect it through settings RPCs, and return its server id. Registry data
+/// remains browse-only and never grants operator trust.
 #[cfg(feature = "mcp")]
-async fn declare_and_connect_registry_echo_server(rpc_base: &str, first_rpc_id: i64) -> String {
+async fn declare_and_connect_registry_echo_server(
+    rpc_base: &str,
+    first_rpc_id: i64,
+    endpoint: &str,
+) -> String {
     let declared = post_json_rpc(
         rpc_base,
         first_rpc_id,
         "openhuman.mcp_clients_config_set",
         json!({ "mcpServers": { REGISTRY_MCP_SERVER: {
-            "command": env!("CARGO_BIN_EXE_test-mcp-stub"),
+            "url": endpoint,
             // Off until the explicit connect below, so the background connect
             // config_set would otherwise start cannot race it.
             "enabled": false
@@ -4831,8 +4542,25 @@ async fn orchestrator_calls_an_operator_trusted_mcp_tool_directly_inner() {
         !result.contains("\"is_error\":true"),
         "the direct MCP call failed: {result}"
     );
-
     stack.shutdown();
+}
+
+#[cfg(feature = "mcp")]
+fn assert_echo_call(server: &local_mcp_http::LocalMcpHttpServer, expected: &str) {
+    let calls = server.tool_calls();
+    assert_eq!(
+        calls.len(),
+        1,
+        "expected one actual MCP tools/call: {calls:?}"
+    );
+    assert_eq!(calls[0].get("name").and_then(Value::as_str), Some("echo"));
+    assert_eq!(
+        calls[0]
+            .pointer("/arguments/message")
+            .and_then(Value::as_str),
+        Some(expected),
+        "the actual MCP server must receive the model's argument"
+    );
 }
 
 #[cfg(feature = "mcp")]

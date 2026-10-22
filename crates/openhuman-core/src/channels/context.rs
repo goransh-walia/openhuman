@@ -84,8 +84,13 @@ pub(crate) async fn module_client(ctx: &ChannelRuntimeContext) -> tinybus::modul
 }
 
 #[cfg(test)]
-pub(crate) fn conversation_history_key(msg: &tinychannels_bus::ChannelMessage) -> String {
-    tinychannels::context::conversation_history_key(msg)
+pub(crate) fn conversation_history_key(msg: &tinychannels_bus::ChannelInboundEnvelope) -> String {
+    tinychannels::context::conversation_history_key_parts(
+        &msg.channel.id,
+        &msg.sender.id,
+        &msg.conversation.id,
+        msg.conversation.thread_id.as_deref(),
+    )
 }
 
 pub(crate) async fn is_context_window_overflow_error(

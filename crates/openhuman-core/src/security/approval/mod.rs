@@ -45,6 +45,8 @@ pub use gate::{
 };
 pub use schemas::all_controller_schemas as all_approval_controller_schemas;
 pub use schemas::all_registered_controllers as all_approval_registered_controllers;
+#[cfg(test)]
+pub(crate) use schemas::approval_parameter_contracts;
 pub use summary::summarize_action;
 pub use types::{
     ApprovalAuditEntry, ApprovalDecision, ApprovalSourceContext, ExecutionOutcome, GateOutcome,

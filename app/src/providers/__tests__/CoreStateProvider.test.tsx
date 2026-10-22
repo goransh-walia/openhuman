@@ -1090,6 +1090,87 @@ describe('session expiry fixes (#5868)', () => {
     await waitFor(() => expect(screen.getByTestId('token').textContent).toBe('none'));
   });
 
+  it('refreshes the snapshot when an expiry lands during deep-link suppression', async () => {
+    resetCoreStateStore();
+    setActiveUserId(null);
+    vi.mocked(coreStateApi.fetchCoreAppSnapshot)
+      .mockReset()
+      .mockResolvedValueOnce(makeSnapshot({ userId: 'u1', sessionToken: 'tok1' }))
+      .mockResolvedValueOnce(
+        makeSnapshot({ userId: null, sessionToken: null, isAuthenticated: false })
+      );
+    vi.mocked(coreStateApi.listTeams).mockReset().mockResolvedValue([]);
+    vi.mocked(coreStateApi.getTeamMembers).mockReset().mockResolvedValue([]);
+    vi.mocked(coreStateApi.getTeamInvites).mockReset().mockResolvedValue([]);
+    vi.mocked(tauriCommands.logout).mockReset();
+    vi.mocked(tauriCommands.logout).mockResolvedValue(undefined as never);
+
+    render(
+      <CoreStateProvider>
+        <Consumer />
+      </CoreStateProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('token').textContent).toBe('tok1'));
+    vi.mocked(coreStateApi.fetchCoreAppSnapshot).mockClear();
+
+    // The native session owner can clear a rejected credential while a
+    // deep-link delivery is still suppressing destructive re-auth handling.
+    // The expiry event must still reconcile React's cached snapshot with the
+    // core's now-signed-out state.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('core-state:suppress-reauth', { detail: { until: Date.now() + 30_000 } })
+      );
+      window.dispatchEvent(
+        new CustomEvent('openhuman:session-expired', {
+          detail: { source: 'shell.auth/me', reason: 'confirmed' },
+        })
+      );
+    });
+
+    expect(vi.mocked(coreStateApi.fetchCoreAppSnapshot)).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByTestId('token').textContent).toBe('none'));
+    expect(vi.mocked(tauriCommands.logout)).not.toHaveBeenCalled();
+  });
+
+  it('keeps the current session when a stale expiry lands during deep-link suppression', async () => {
+    resetCoreStateStore();
+    setActiveUserId(null);
+    vi.mocked(coreStateApi.fetchCoreAppSnapshot)
+      .mockReset()
+      .mockResolvedValueOnce(makeSnapshot({ userId: 'u1', sessionToken: 'tok1' }))
+      .mockResolvedValueOnce(makeSnapshot({ userId: 'u1', sessionToken: 'tok1' }));
+    vi.mocked(coreStateApi.listTeams).mockReset().mockResolvedValue([]);
+    vi.mocked(coreStateApi.getTeamMembers).mockReset().mockResolvedValue([]);
+    vi.mocked(coreStateApi.getTeamInvites).mockReset().mockResolvedValue([]);
+    vi.mocked(tauriCommands.logout).mockReset();
+    vi.mocked(tauriCommands.logout).mockResolvedValue(undefined as never);
+
+    render(
+      <CoreStateProvider>
+        <Consumer />
+      </CoreStateProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('token').textContent).toBe('tok1'));
+    vi.mocked(coreStateApi.fetchCoreAppSnapshot).mockClear();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('core-state:suppress-reauth', { detail: { until: Date.now() + 30_000 } })
+      );
+      window.dispatchEvent(
+        new CustomEvent('openhuman:session-expired', {
+          detail: { source: 'shell.auth/me', reason: 'confirmed' },
+        })
+      );
+    });
+
+    expect(vi.mocked(coreStateApi.fetchCoreAppSnapshot)).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(screen.getByTestId('token').textContent).toBe('tok1');
+    expect(vi.mocked(tauriCommands.logout)).not.toHaveBeenCalled();
+  });
+
   it('confirmed session-expiry during bootstrap is replayed after the first snapshot lands (#5868)', async () => {
     // The module-level store may carry isBootstrapping:false from prior tests;
     // reset it so the component mounts with the correct initial value.

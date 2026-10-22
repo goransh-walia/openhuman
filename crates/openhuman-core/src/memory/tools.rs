@@ -349,6 +349,9 @@ mod offline_tests;
 #[path = "tools_queue_failure_tests.rs"]
 mod queue_failure_tests;
 #[cfg(test)]
+#[path = "tools_queue_tests.rs"]
+mod queue_tests;
+#[cfg(test)]
 #[path = "tools_read_tests.rs"]
 mod read_tests;
 #[cfg(test)]

@@ -398,9 +398,9 @@ The thread JSONL store moved to `tinyagents_session::threads` (`vendor/tinyagent
 
 | ID    | Feature       | Layer | Test path(s)             | Status | Notes |
 | ----- | ------------- | ----- | ------------------------ | ------ | ----- |
-| 9.1.1 | Task Creation | WD    | `cron-jobs-flow.spec.ts` | ✅     |       |
-| 9.1.2 | Task Update   | WD    | `cron-jobs-flow.spec.ts` | ✅     |       |
-| 9.1.3 | Task Deletion | WD    | `cron-jobs-flow.spec.ts` | ✅     |       |
+| 9.1.1 | Task Creation | PW    | `app/test/playwright/specs/cron-jobs-flow.spec.ts` | ✅     | Verifies an actual cron row and persisted state. |
+| 9.1.2 | Task Update   | PW    | `app/test/playwright/specs/cron-jobs-flow.spec.ts` | ✅     | Pause and resume persist across refresh. |
+| 9.1.3 | Task Deletion | PW    | `app/test/playwright/specs/cron-jobs-flow.spec.ts` | ✅     | Remove action clears the row and RPC state. |
 
 ### 9.2 Cron Jobs
 

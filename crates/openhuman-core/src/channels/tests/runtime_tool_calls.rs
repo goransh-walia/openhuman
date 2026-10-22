@@ -5,7 +5,7 @@ use super::super::context::{
 use super::super::runtime::process_channel_message;
 use super::super::Channel;
 use super::common::{
-    IterativeToolModel, MockPriceTool, ModelCaptureModel, RecordingChannel,
+    channel_envelope, IterativeToolModel, MockPriceTool, ModelCaptureModel, RecordingChannel,
     TelegramRecordingChannel, ToolCallingModel,
 };
 use std::collections::HashMap;
@@ -52,18 +52,16 @@ async fn process_channel_message_executes_native_tool_calls() {
 
     process_channel_message(
         runtime_ctx,
-        traits::ChannelMessage {
-            id: "msg-2".to_string(),
-            sender: "bob".to_string(),
-            reply_target: "chat-84".to_string(),
-            content: "What is the BTC price now?".to_string(),
-            channel: "test-channel".to_string(),
-            timestamp: 2,
-            thread_ts: None,
-            sender_name: None,
-            reply_to_id: None,
-            topic_id: None,
-        },
+        channel_envelope(
+            "test-channel",
+            "bob",
+            "chat-84",
+            "What is the BTC price now?",
+            "msg-2",
+            2,
+            None,
+            None,
+        ),
     )
     .await;
 
@@ -110,6 +108,7 @@ async fn process_channel_message_handles_models_command_without_llm_call() {
             auth_style: crate::config::schema::AuthStyle::OpenhumanJwt,
             default_model: Some("default-model".to_string()),
         });
+
     let runtime_ctx = Arc::new(ChannelRuntimeContext {
         relay_thread: None,
         channels_by_name: Arc::new(channels_by_name),
@@ -137,18 +136,16 @@ async fn process_channel_message_handles_models_command_without_llm_call() {
         core: None,
     });
 
-    let cmd_msg = traits::ChannelMessage {
-        id: "msg-cmd-1".to_string(),
-        sender: "alice".to_string(),
-        reply_target: "chat-1".to_string(),
-        content: "/models openhuman".to_string(),
-        channel: "telegram".to_string(),
-        timestamp: 1,
-        thread_ts: None,
-        sender_name: None,
-        reply_to_id: None,
-        topic_id: None,
-    };
+    let cmd_msg = channel_envelope(
+        "telegram",
+        "alice",
+        "chat-1",
+        "/models openhuman",
+        "msg-cmd-1",
+        1,
+        None,
+        None,
+    );
     let route_key = conversation_history_key(&cmd_msg);
     process_channel_message(runtime_ctx.clone(), cmd_msg).await;
 
@@ -194,18 +191,16 @@ async fn process_channel_message_uses_route_override_provider_and_model() {
         crate::agent::tinyagents::TurnModelSource::from_model(routed_provider),
     );
 
-    let routed_msg = traits::ChannelMessage {
-        id: "msg-routed-1".to_string(),
-        sender: "alice".to_string(),
-        reply_target: "chat-1".to_string(),
-        content: "hello routed provider".to_string(),
-        channel: "telegram".to_string(),
-        timestamp: 2,
-        thread_ts: None,
-        sender_name: None,
-        reply_to_id: None,
-        topic_id: None,
-    };
+    let routed_msg = channel_envelope(
+        "telegram",
+        "alice",
+        "chat-1",
+        "hello routed provider",
+        "msg-routed-1",
+        2,
+        None,
+        None,
+    );
     let route_key = conversation_history_key(&routed_msg);
     let mut route_overrides = HashMap::new();
     route_overrides.insert(
@@ -297,18 +292,16 @@ async fn process_channel_message_respects_configured_max_tool_iterations_above_d
 
     process_channel_message(
         runtime_ctx,
-        traits::ChannelMessage {
-            id: "msg-iter-success".to_string(),
-            sender: "alice".to_string(),
-            reply_target: "chat-iter-success".to_string(),
-            content: "Loop until done".to_string(),
-            channel: "test-channel".to_string(),
-            timestamp: 1,
-            thread_ts: None,
-            sender_name: None,
-            reply_to_id: None,
-            topic_id: None,
-        },
+        channel_envelope(
+            "test-channel",
+            "alice",
+            "chat-iter-success",
+            "Loop until done",
+            "msg-iter-success",
+            1,
+            None,
+            None,
+        ),
     )
     .await;
 
@@ -359,18 +352,16 @@ async fn process_channel_message_reports_configured_max_tool_iterations_limit() 
 
     process_channel_message(
         runtime_ctx,
-        traits::ChannelMessage {
-            id: "msg-iter-fail".to_string(),
-            sender: "bob".to_string(),
-            reply_target: "chat-iter-fail".to_string(),
-            content: "Loop forever".to_string(),
-            channel: "test-channel".to_string(),
-            timestamp: 2,
-            thread_ts: None,
-            sender_name: None,
-            reply_to_id: None,
-            topic_id: None,
-        },
+        channel_envelope(
+            "test-channel",
+            "bob",
+            "chat-iter-fail",
+            "Loop forever",
+            "msg-iter-fail",
+            2,
+            None,
+            None,
+        ),
     )
     .await;
 

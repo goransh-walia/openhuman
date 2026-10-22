@@ -1,7 +1,7 @@
 //! Controller schema and registered-controller lists for the `threads`
 //! namespace.
 
-use crate::core::all::RegisteredController;
+use crate::core::all::{BoundRegisteredController, ControllerEntry, RegisteredController};
 use crate::core::ControllerSchema;
 
 use super::handlers::{
@@ -11,6 +11,7 @@ use super::handlers::{
     handle_transcript_get, handle_turn_state_clear, handle_turn_state_get,
     handle_turn_state_get_turn, handle_turn_state_history, handle_turn_state_list,
     handle_update_labels, handle_update_title, handle_update_working_dir, handle_upsert,
+    parse_upsert, run_upsert,
 };
 use super::schema_defs::schemas;
 
@@ -147,4 +148,21 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
             handler: handle_search,
         },
     ]
+}
+
+pub(crate) fn all_controller_entries() -> Vec<ControllerEntry> {
+    all_registered_controllers()
+        .into_iter()
+        .map(|controller| {
+            if controller.schema.function == "upsert" {
+                ControllerEntry::bound(BoundRegisteredController::typed(
+                    controller.schema,
+                    parse_upsert,
+                    run_upsert,
+                ))
+            } else {
+                ControllerEntry::legacy(controller)
+            }
+        })
+        .collect::<Vec<_>>()
 }

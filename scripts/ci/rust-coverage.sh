@@ -241,7 +241,7 @@ run_integration_target() {
     # as scripts/test-rust-with-mock.sh does.
     suite "${target}" llvm_cov --no-report --no-fail-fast -p openhuman-cli \
       --test "${target}" -- --test-threads=1
-  elif [ "${target}" = "json_rpc_e2e" ]; then
+  elif [[ "${target}" =~ ^json_rpc_.*_e2e$ ]]; then
     # JSON-RPC tests share runtime/config globals and must remain serial.
     suite "${target}" llvm_cov --no-report --no-fail-fast -p openhuman-cli \
       --test "${target}" -- --test-threads=1

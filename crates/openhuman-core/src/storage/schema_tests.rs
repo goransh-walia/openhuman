@@ -49,7 +49,11 @@ fn module_collections_are_limited_to_the_named_owner() {
 #[cfg(feature = "modules")]
 #[test]
 fn tinyjuice_module_collections_come_from_the_owner_contract() {
-    assert!(module_collections("juice")
-        .iter()
-        .any(|collection| collection.name == tinyjuice_bus::storage::SAVINGS_COLLECTION));
+    assert_eq!(
+        module_collections("juice")
+            .iter()
+            .map(|collection| collection.name.as_str())
+            .collect::<Vec<_>>(),
+        [tinyjuice_bus::storage::SAVINGS_COLLECTION]
+    );
 }

@@ -237,6 +237,7 @@ fn multiple_home_paths_in_same_string_all_scrubbed() {
     assert_eq!(summary.matches("<HOME>").count(), 2);
 }
 
+#[test]
 fn file_handoff_links_are_redacted() {
     // A presigned storage link is a bearer capability: anyone holding the
     // URL can fetch the file until it expires. Redacted args are shown on

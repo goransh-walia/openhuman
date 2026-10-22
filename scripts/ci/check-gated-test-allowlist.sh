@@ -33,12 +33,15 @@ config/schema/load/source/revision_loader_tests.rs
 cron/bus_host.rs
 cron/bus_host_tests.rs
 core/all.rs
+core/all_bound_controller_tests.rs
+core/all_schema_contract_tests.rs
 core/all_tests.rs
 core/cli_tests.rs
 core/dispatch_tests.rs
 core/invoke_tests.rs
 core/legacy_aliases_tests.rs
 core/runtime/services.rs
+core/schema_test_support_tests.rs
 core/runtime/subscribers.rs
 mcp/server/resources.rs
 mcp/registry/mod.rs

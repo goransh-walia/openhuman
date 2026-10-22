@@ -101,6 +101,10 @@ pub(super) async fn execute(
     ctx: &ChannelCallbackCtx,
     request: ProgressiveTransportRequest,
 ) -> ProgressiveTransportResult {
+    if matches!(&request, ProgressiveTransportRequest::OutputEvent { .. }) {
+        log::debug!("[tinyhumans][channels] hosted callback does not project module output events");
+        return ProgressiveTransportResult::Failed;
+    }
     if ctx.session.is_cancelled() {
         log::debug!("[tinyhumans][channels] session closed before the transport call");
         return ProgressiveTransportResult::Unavailable;
@@ -202,6 +206,7 @@ async fn send(
             message_id,
             receipt,
             text,
+            ..
         } => {
             let context = transport_context(
                 turn_id,

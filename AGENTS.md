@@ -159,6 +159,12 @@ CI Lite runs area-specific checks and changed-line coverage on PRs to `main`
 or `release`. CI Full runs the complete suites for `release`. Changed-line
 coverage must be at least 80 percent.
 
+### Test ownership
+
+OpenHuman tests composition, host policy, adapters, RPC wire contracts, and data compatibility. Module behavior is tested in the owning `vendor/tiny*` repository. A host test that calls a vendor module's internals (for example, `tinychannels::providers::*` or `tinyinference_local::service::*`) belongs upstream. When code moves upstream, move its tests in the same upstream PR, then delete them in the host PR. Keep one host smoke test per module: load it and make one call through the bus. That is enough to test the host integration.
+
+A PR that only deletes tests is exempt from changed-line coverage because it has no changed lines for diff-cover to measure. CI Lite runs that changed-line check at an 80 percent threshold.
+
 - Frontend unit tests are colocated as `*.test.ts` or `*.test.tsx` under
   `app/src/`. Use Vitest and test behavior rather than implementation.
 - Rust unit tests are never inline. Put them in a sibling `<module>_tests.rs`

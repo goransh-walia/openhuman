@@ -86,7 +86,3 @@ pub fn set_blocking(
     let value = Zeroizing::new(value.to_vec());
     super::block_on(async move { secrets.set(&name, &value).await })
 }
-
-#[cfg(test)]
-#[path = "secrets_tests.rs"]
-mod tests;

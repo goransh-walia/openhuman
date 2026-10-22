@@ -858,6 +858,13 @@ export default function CoreStateProvider({ children }: { children: ReactNode })
           method,
           source
         );
+        // The native session owner may already have removed a rejected
+        // credential while the deep-link flow is in flight. Reconcile the
+        // rendered snapshot without calling logout(), which remains unsafe
+        // during the suppression window because a fresh session may be valid.
+        void refresh().catch(err => {
+          log('refresh failed after suppressed auth-expired: %O', sanitizeError(err));
+        });
         return;
       }
       // Debounce coalesces a burst of auth-expired events. EXCEPTION: a
