@@ -53,15 +53,24 @@ impl DispatchCtx {
         F::Output: Send,
     {
         let ctx = self.core().cloned();
+        #[cfg(test)]
+        let prompt_scanner = crate::security::prompt_injection::scanner::tests::current_scoped();
         // Box before the task-local wrapper. Its branching async state otherwise
         // multiplies a large task's inline size before Tokio can box it,
         // overflowing the spawning thread (including the CLI's main stack).
         let fut = Box::pin(fut);
-        async move {
+        let entered = async move {
             match ctx {
                 Some(ctx) => CoreContext::scope(ctx, fut).await,
                 None => fut.await,
             }
+        };
+        async move {
+            #[cfg(test)]
+            if let Some(scanner) = prompt_scanner {
+                return crate::security::prompt_injection::with_scanner(scanner, entered).await;
+            }
+            entered.await
         }
     }
 
