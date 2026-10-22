@@ -75,7 +75,7 @@ Both are fixed in [tinysecurity#27](https://github.com/tinyhumansai/tinysecurity
 
 ## Autonomy ladder
 
-`AutonomyLevel` is a three-step ladder that sets how strictly the policy gates tool calls. It only takes effect while `[autonomy] enabled = true`.
+`AutonomyLevel` is a three-step ladder that sets how strictly the policy gates tool calls. It only takes effect while `[security.autonomy] enabled = true`.
 
 - `ReadOnly` blocks every writing class outright. No approval can authorize one.
 - `Supervised` is the default. It allows reads and parks everything else for an approval round trip.
@@ -85,7 +85,7 @@ The wire spellings are lowercase (`readonly`, `supervised`, `full`). The user-fa
 
 The host keeps no operation kinds and no action counters. The module holds one hourly ledger, and the tool gate asks it for a decision before every executable tool dispatch and spends one action per acting call. This covers direct tool runs too (JS and RPC tool calls, workflow `tool_call` nodes), which pass through the same gate. Callers that are not tools (MCP server dispatch, `mcp_ui`, the workflow `http_request` node) spend through `SecurityPolicy::spend_action`.
 
-All of this applies only when the autonomy policy is on. `[autonomy] enabled = false` is the default, and `SecurityPolicy::from_config` carries that flag through every enforcement entry point. With the policy off, command classification, the approval gate, the command allowlist and the hourly action budget do nothing. `workspace_only`, `forbidden_paths` and the workspace-internal boundary are not enforced either.
+All of this applies only when the autonomy policy is on. `[security.autonomy] enabled = false` is the default, and `SecurityPolicy::from_config` carries that flag through every enforcement entry point. With the policy off, command classification, the approval gate, the command allowlist and the hourly action budget do nothing. `workspace_only`, `forbidden_paths` and the workspace-internal boundary are not enforced either.
 
 One check never turns off. The protected-path floor blocks credential stores (`~/.ssh`, `~/.gnupg`, `~/.aws`) and system roots. It also rejects `..` traversal and null bytes in a path. The module owns the floor and keeps it whatever the configuration (`DenialReason::Floor`, `ProtectedPath2`). The host has no copy of it: it asks through `security/floor.rs` and treats a module that cannot answer as protecting the path.
 

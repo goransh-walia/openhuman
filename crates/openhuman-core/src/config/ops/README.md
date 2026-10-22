@@ -16,8 +16,8 @@ fn, which returns `Outcome<T>`.
 | [`agent.rs`](./agent.rs) | Autonomy, agent, agent-paths, and memory-sync settings. |
 | [`loader.rs`](./loader.rs) | Config loading/snapshotting and runtime flags; split into submodules [`loader/load.rs`](./loader/load.rs), [`loader/paths.rs`](./loader/paths.rs), [`loader/reset_local_data.rs`](./loader/reset_local_data.rs), [`loader/runtime_flags.rs`](./loader/runtime_flags.rs), [`loader/snapshot.rs`](./loader/snapshot.rs). |
 | [`model.rs`](./model.rs) | AI-provider, memory, runtime, local-AI, and Composio-trigger settings. |
-| [`privacy.rs`](./privacy.rs) | Privacy Mode (`[privacy]`) get/set. |
-| [`sandbox.rs`](./sandbox.rs) | Sandbox / Docker runtime (`[sandbox]`, `[runtime.docker]`) settings. |
+| [`privacy.rs`](./privacy.rs) | Privacy Mode (`[security.privacy]`) get/set. |
+| [`sandbox.rs`](./sandbox.rs) | Sandbox / Docker runtime (`[security.sandbox]`, `[runtime.docker]`) settings. |
 | [`ui.rs`](./ui.rs) | Browser, analytics, and onboarding-flag settings. |
 | [`search.rs`](./search.rs) | Search settings: providers, routes, role order, keys, limits, and the web-access allowlist. |
 
@@ -70,7 +70,7 @@ After saving, a loaded TinySearch module is refreshed privately.
 
 ## Security-relevant behavior
 
-- `apply_autonomy_settings` is the single write path for `[autonomy]`: after
+- `apply_autonomy_settings` is the single write path for `[security.autonomy]`: after
   `Config::save()` it calls
   `crate::security::live_policy::reload_from(&config.security.autonomy)` and publishes
   `DomainEvent::AutonomyConfigChanged`, so the live `SecurityPolicy` and any
