@@ -168,6 +168,30 @@ async fn only_strings_that_mention_a_key_are_sent_to_the_module() {
 }
 
 #[tokio::test]
+async fn a_result_without_its_composio_key_still_redacts_other_credentials() {
+    const PROVIDER_TOKEN: &str = "bearer provider-token-abcdef";
+    let outcome = redact_outcome_with(
+        Ok(tinytools::ToolResult::success(format!(
+            "provider response: {PROVIDER_TOKEN}"
+        ))),
+        &keys(),
+        |strings| async move {
+            Ok(strings
+                .into_iter()
+                .map(|text| {
+                    let redacted = text.replace(PROVIDER_TOKEN, "bearer [REDACTED]");
+                    (text, redacted)
+                })
+                .collect())
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(texts(&outcome), "provider response: bearer [REDACTED]");
+}
+
+#[tokio::test]
 async fn a_result_the_module_could_not_check_is_withheld() {
     let error = redact_outcome_with(
         Ok(tinytools::ToolResult::success(format!(
