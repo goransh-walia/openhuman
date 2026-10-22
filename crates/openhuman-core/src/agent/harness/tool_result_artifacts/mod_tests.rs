@@ -10,6 +10,7 @@ use tinytools::Tool;
 /// the project the agent is editing), and the real `file_read` opens it through
 /// the materialised file under the strictest policy shape (enabled,
 /// `workspace_only`, action dir outside the workspace).
+#[cfg(feature = "security-module")]
 #[tokio::test]
 async fn threshold_persists_to_blobs_and_file_read_serves_the_key() {
     let tmp = tempfile::tempdir().unwrap();
