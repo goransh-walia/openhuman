@@ -146,7 +146,7 @@ impl OpenHumanCode {
 
             let mut extra_env = BTreeMap::new();
             if let Ok(host_path) = std::env::var("PATH") {
-                extra_env.insert("PATH".into(), host_path.into());
+                extra_env.insert("PATH".into(), host_path);
             }
 
             tracing::debug!(

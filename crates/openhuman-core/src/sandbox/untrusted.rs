@@ -94,7 +94,7 @@ pub(crate) async fn run(spawn: UntrustedShell<'_>) -> anyhow::Result<SandboxExec
             &ambient_ctx
         }
     };
-    let operator_off = super::operator::sandbox_off(&ctx, config);
+    let operator_off = super::operator::sandbox_off(ctx, config);
     let policy = super::policy::command_policy(config, cwd, state_dir)
         .map_err(|error| anyhow::anyhow!(error))?;
     // The module binds the command text and a digest of its stdin. A container has no

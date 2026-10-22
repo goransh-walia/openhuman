@@ -1,7 +1,6 @@
 use crate::config::DelegateAgentConfig;
 use crate::inference::provider::factory::make_openhuman_backend_model_for_options;
 use crate::inference::provider::factory::INFERENCE_BACKEND_ID;
-use crate::security::policy::ToolOperation;
 use crate::security::SecurityPolicy;
 use crate::tools::timeout::tool_execution_timeout_secs;
 use async_trait::async_trait;
