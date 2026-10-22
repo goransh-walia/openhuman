@@ -268,7 +268,8 @@ async fn module_refuses_payloads_over_the_configured_limit() {
 }
 
 fn fx_dir() -> tempfile::TempDir {
-    tempfile::tempdir_in(std::env::temp_dir()).unwrap()
+    let temp_root = std::env::temp_dir().canonicalize().unwrap();
+    tempfile::tempdir_in(temp_root).unwrap()
 }
 
 /// Keyring round trip through the module's encrypted-file backend, with the
