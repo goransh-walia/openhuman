@@ -703,6 +703,9 @@ modules = [
     "dep:tinybus-module",
 ]
 security-module = ["modules"]
+# Tests that exercise the released TinySecurity artifact are opt-in because
+# they need the platform-specific module archive staged by the native fixture CI.
+native-security-tests = ["security-module"]
 # Voice domain: STT/TTS providers, reply speech, and live voice.
 # The desktop product enables voice explicitly; contributor defaults leave it
 # off. WAV framing moved to the `tinyvoice` module, removing the former `hound`

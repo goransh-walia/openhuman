@@ -48,6 +48,6 @@ for test_filter in \
   tools::implementations; do
   bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib "$@" \
     --no-default-features \
-    --features inference,web3,modules,security-module,flows,storage-sqlite,secret-file,legacy-import \
-    "$test_filter" -- --include-ignored --nocapture
+    --features inference,web3,modules,security-module,native-security-tests,flows,storage-sqlite,secret-file,legacy-import \
+    "$test_filter" -- --nocapture
 done
