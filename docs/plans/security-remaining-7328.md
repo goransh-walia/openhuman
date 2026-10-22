@@ -158,7 +158,7 @@ missing behaviors are RED, not removed or marked successful.
    config/env fallback for SaaS. Secret settings never enter PolicyInfo or logs.
 **Exit:** round-trip old config fixtures and isolated new effective policies pass.
 
-**Host status (TinySecurity v0.16.0, published 2026-10-22):** done: `[security]` table
+**Host status (TinySecurity v0.17.0, published 2026-10-22):** done: `[security]` table
 (`config/schema/security.rs`, audit and approval TTL wired from it, folded
 `[security.autonomy|sandbox|privacy]` overlay), migration 14->15
 (`security_policy.rs`, `max_cost_per_day_cents` deleted with a notice), single
@@ -166,17 +166,18 @@ translator (`modules/security_policy.rs`), scoped client with generation-keyed
 decision cache (`modules/security_scoped.rs`), `live_policy::reload_from_config`
 driver, `SecurityPolicy::from_full_config` (privacy no longer hard-coded), the
 trusted-host binding in `module_config`, and a released-module two-tenant test.
-Open: routing shell/filesystem/network gates through the client and deleting the
-`tinybox_core::shell` calls in `command_checks.rs` (needs `security-module`
-default-on and a sync-to-async seam), scoped audited variants, and physically
-moving `[autonomy]/[sandbox]/[privacy]` under `[security]` in `Config`. The
-host already subscribes to `PolicyChanged`; the earlier inventory entry was
-stale. Task 7's released durable whole-tool grant support is tracked below.
+Filesystem, network and shell gates route through TinySecurity clients; the
+former TinyBox shell calls are gone from `command_checks.rs`, which now only
+parses the model's escalate-only class hint. The host subscribes to
+`PolicyChanged`. Still open: scoped audited variants, physically moving
+`[autonomy]`, `[sandbox]` and `[privacy]` into the typed `Config.security`
+structure (currently a pre-decode overlay), and completing the redaction/egress
+consumers in Task 12. Task 7's released durable whole-tool grant support is
+tracked below.
 
 ## Task 3 — Command grammar, tool rules and action accounting
 
-**In progress:** root has dispatched this task; resume its result/review instead
-of dispatching a second implementer. The agreed contract is immutable
+**Released and integrated (TinySecurity v0.17.0):** the owner implements immutable
 `CommandPolicy { enabled, autonomy, allowed_commands, max_actions_per_hour,
 require_approval_for_medium_risk, block_high_risk_commands, action_dir, home_dir,
 execution_mode }`, opaque `CommandPolicyId`, RegisterCommandPolicy,
@@ -207,7 +208,12 @@ context. Keep these distinctions in characterization and native tests.
    reserve. Reinit/cache cannot replenish or bypass active reservations.
 5. Preserve merged path registry tests, adding full-policy binding and real native
    Windows/APFS/Linux cases; no second path normalizer.
-**Exit:** complete command/rule/rate parity through native Evaluate/Check.
+**Evidence:** the `command_registry` filter passes 12 tests, and the full
+`tinysecurity-policy` package suite passes at v0.17.0. OpenHuman's
+`modules/security_command.rs` registers immutable host-derived scopes and uses
+`ClassifyCommand` for authorization and `CheckCommand` for execution; native
+production tests exercise the released adapter. Remaining duplicate host
+redaction and egress consumers are tracked under Task 12, not this command task.
 
 ## Task 4 — One redactor and integrated scans
 
@@ -443,8 +449,10 @@ origins remain denied. Durable tool-grant list/revoke, the localized history
 panel, and judged-verdict scores/expiry are implemented; component tests cover
 those states, and a Playwright browser test now exercises judged history and
 grant revocation through mocked core RPC. The targeted SaaS gate/profile tests
-pass. Task 13's single-middleware consolidation and full interactive prompt /
-decision browser flow remain open.
+pass. The existing interactive browser harness covers the approval prompt,
+approve-once execution and denial without execution
+(`app/test/e2e/specs/agent-harness-behaviors.spec.ts`). Task 13's
+single-middleware consolidation remains open.
 
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
