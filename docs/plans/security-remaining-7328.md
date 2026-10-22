@@ -548,6 +548,14 @@ registry until the owner publishes the new artifact and checksum.
 [#103](https://github.com/tinyhumansai/tinybox/pull/103) remains draft and adds
 Linux native resource limits; it is only part of the TinyBox #27 work and does
 not complete cross-platform jail, microVM, Docker, or process-launch coverage.
+TinyBox PR [#112](https://github.com/tinyhumansai/tinybox/pull/112) has since
+merged as `b0b5969ab6d04b64c478e1f012b6af2ac53fc171`, bringing canonical TSD v2
+storage to main. PR #103 conflicted with that storage migration in
+`grants_manifest_e2e.rs`; its updated head `873f9789fa0cca5006ddb0779462be441d40a836`
+merges current main and preserves both the storage test host and canonical
+private staging path. GitHub reports it mergeable and CI is running. Keep it in
+draft until a compatible TinyBox release is available and OpenHuman's host
+adapter is updated.
 The spawner inventory now distinguishes `sandbox/ops.rs`'s module-planned
 operator host-run mode from an untrusted direct bypass: the module registers
 that source `TrustedHost`, while scheduled/hook text has a separate
