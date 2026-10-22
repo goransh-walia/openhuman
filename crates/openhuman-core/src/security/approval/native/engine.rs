@@ -196,6 +196,7 @@ impl NativeEngine {
         &self,
         proxy: &Proxy,
         tenant: &crate::core::runtime::Tenant,
+        posture: &super::super::engine::Posture,
     ) -> Result<std::sync::Arc<ScopeEntry>, EngineError> {
         let subject = self.subject(tenant, Variant::Standard)?;
         let generation = Self::generation(proxy).await?;
@@ -203,10 +204,7 @@ impl NativeEngine {
             &self.config,
             proxy,
             subject,
-            &super::super::engine::Posture {
-                require_approval: true,
-                ..Default::default()
-            },
+            posture,
             generation,
         )
         .await
@@ -681,6 +679,7 @@ impl ApprovalEngine for NativeEngine {
         &self,
         tenant: &crate::core::runtime::Tenant,
         variant: Variant,
+        posture: super::super::engine::Posture,
     ) -> Result<Vec<ToolTrustEntry>, EngineError> {
         if variant != Variant::Standard {
             return Err(unavailable(
@@ -688,7 +687,7 @@ impl ApprovalEngine for NativeEngine {
             ));
         }
         let proxy = self.proxy().await?;
-        let scope = self.tool_scope(&proxy, tenant).await?;
+        let scope = self.tool_scope(&proxy, tenant, &posture).await?;
         let _guard = scope.stream.lock().await;
         let listed: ToolTrustList2 = proxy
             .call_confidential(
@@ -714,6 +713,7 @@ impl ApprovalEngine for NativeEngine {
         &self,
         tenant: &crate::core::runtime::Tenant,
         variant: Variant,
+        posture: super::super::engine::Posture,
         request_id: &str,
     ) -> Result<bool, EngineError> {
         if variant != Variant::Standard {
@@ -722,7 +722,7 @@ impl ApprovalEngine for NativeEngine {
             ));
         }
         let proxy = self.proxy().await?;
-        let scope = self.tool_scope(&proxy, tenant).await?;
+        let scope = self.tool_scope(&proxy, tenant, &posture).await?;
         let _guard = scope.stream.lock().await;
         let generation = Self::generation(&proxy).await?;
         let audit = Self::correlation(&scope, generation).await?;

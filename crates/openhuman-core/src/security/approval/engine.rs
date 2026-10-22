@@ -236,6 +236,7 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
         &self,
         tenant: &Tenant,
         variant: Variant,
+        posture: Posture,
     ) -> Result<Vec<super::types::ToolTrustEntry>, EngineError>;
 
     /// Revoke one live whole-tool grant by the opaque ID returned from
@@ -244,6 +245,7 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
         &self,
         tenant: &Tenant,
         variant: Variant,
+        posture: Posture,
         request_id: &str,
     ) -> Result<bool, EngineError>;
 
@@ -361,6 +363,7 @@ impl ApprovalEngine for UnavailableEngine {
         &self,
         _tenant: &Tenant,
         _variant: Variant,
+        _posture: Posture,
     ) -> Result<Vec<super::types::ToolTrustEntry>, EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
     }
@@ -368,6 +371,7 @@ impl ApprovalEngine for UnavailableEngine {
         &self,
         _tenant: &Tenant,
         _variant: Variant,
+        _posture: Posture,
         _request_id: &str,
     ) -> Result<bool, EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
