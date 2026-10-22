@@ -56,13 +56,13 @@ fn saas_security_policy_never_uses_the_operator_home() {
 #[test]
 fn two_tenants_with_opposite_settings_translate_independently() {
     let mut strict = Config::default();
-    strict.autonomy.enabled = true;
-    strict.autonomy.level = AutonomyLevel::ReadOnly;
-    strict.privacy.mode = HostPrivacy::LocalOnly;
+    strict.security.autonomy.enabled = true;
+    strict.security.autonomy.level = AutonomyLevel::ReadOnly;
+    strict.security.privacy.mode = HostPrivacy::LocalOnly;
     let mut loose = Config::default();
-    loose.autonomy.enabled = true;
-    loose.autonomy.level = AutonomyLevel::Full;
-    loose.privacy.mode = HostPrivacy::Standard;
+    loose.security.autonomy.enabled = true;
+    loose.security.autonomy.level = AutonomyLevel::Full;
+    loose.security.privacy.mode = HostPrivacy::Standard;
 
     let a = settings(&strict);
     let b = settings(&loose);
@@ -92,13 +92,13 @@ fn default_config_keeps_the_policy_off() {
 #[test]
 fn privacy_mode_reaches_the_security_policy_not_just_the_translator() {
     let mut config = Config::default();
-    config.privacy.mode = HostPrivacy::Sensitive;
+    config.security.privacy.mode = HostPrivacy::Sensitive;
     assert_eq!(
         SecurityPolicy::from_full_config(&config).privacy_mode(),
         HostPrivacy::Sensitive
     );
     assert_eq!(
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir)
             .privacy_mode(),
         HostPrivacy::Standard,
         "the autonomy-only constructor cannot know the privacy block"
@@ -121,7 +121,7 @@ fn execution_modes_stay_distinct() {
 #[test]
 fn auto_approve_all_never_extends_to_remote_callers() {
     let mut config = Config::default();
-    config.autonomy.auto_approve_all = true;
+    config.security.autonomy.auto_approve_all = true;
     let origins = settings(&config).auto_origins;
     assert!(origins.contains(&Origin::Operator));
     assert!(!origins.contains(&Origin::Saas));
@@ -219,7 +219,7 @@ fn registered_policy_carries_no_credentials() {
 #[test]
 fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
     let mut config = Config::default();
-    config.autonomy.forbidden_paths = vec!["~/.ssh".into(), "secrets".into(), "/etc".into()];
+    config.security.autonomy.forbidden_paths = vec!["~/.ssh".into(), "secrets".into(), "/etc".into()];
     assert_eq!(
         settings(&config).policy.forbidden_paths,
         vec![
@@ -229,12 +229,12 @@ fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
         ]
     );
     assert!(
-        !Config::default().autonomy.forbidden_paths.is_empty(),
+        !Config::default().security.autonomy.forbidden_paths.is_empty(),
         "the default list must reach the module"
     );
     assert_eq!(
         settings(&Config::default()).policy.forbidden_paths,
-        Config::default().autonomy.forbidden_paths
+        Config::default().security.autonomy.forbidden_paths
     );
 }
 

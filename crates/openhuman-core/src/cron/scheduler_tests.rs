@@ -233,8 +233,8 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     config.reliability.scheduler_retries = 2;
     config.reliability.provider_backoff_ms = 2_000;
     // Read-only autonomy: `can_act()` is false, so the shell runner refuses.
-    config.autonomy.enabled = true;
-    config.autonomy.level = AutonomyLevel::ReadOnly;
+    config.security.autonomy.enabled = true;
+    config.security.autonomy.level = AutonomyLevel::ReadOnly;
 
     let counter = tmp.path().join("blocked-attempts.log");
     let command = counting_failure_command(&counter);
@@ -248,7 +248,7 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     )
     .unwrap();
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
     // Fixture guard: if the policy still permits acting, the command would run
     // and this test would be measuring the retryable path instead of the
     // blocked one — passing for entirely the wrong reason.
@@ -305,7 +305,7 @@ async fn a_shell_job_runs_on_this_platform() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
     // Fixture guard: a policy that refused to act would make this pass by
     // never spawning anything.
     assert!(
@@ -337,7 +337,7 @@ async fn scheduled_shell_authorization_fails_closed_when_tinybox_is_disabled() {
     let mut config = test_config(&tmp).await;
     config.modules.enabled = false;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
 
     let result = authorize_shell_command(&security, "echo must-not-run").await;
 
@@ -364,7 +364,7 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
     let security =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
     // Fixture guard: a policy that refused to act would report failure for a
     // reason that has nothing to do with the pipeline.
     assert!(

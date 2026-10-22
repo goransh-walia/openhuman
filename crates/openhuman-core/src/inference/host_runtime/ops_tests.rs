@@ -195,13 +195,13 @@ fn resolve_turn_cwd_rejects_a_file() {
 fn grant_turn_cwd_adds_a_read_write_root() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut config = Config::default();
-    let before = config.autonomy.trusted_roots.len();
+    let before = config.security.autonomy.trusted_roots.len();
 
     grant_turn_cwd(&mut config, dir.path());
 
-    assert_eq!(config.autonomy.trusted_roots.len(), before + 1);
+    assert_eq!(config.security.autonomy.trusted_roots.len(), before + 1);
     let granted = config
-        .autonomy
+        .security.autonomy
         .trusted_roots
         .last()
         .expect("the cwd was granted");
@@ -214,18 +214,18 @@ fn grant_turn_cwd_leaves_an_existing_entry_alone() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut config = Config::default();
     config
-        .autonomy
+        .security.autonomy
         .trusted_roots
         .push(crate::security::TrustedRoot {
             path: dir.path().to_string_lossy().to_string(),
             access: crate::security::TrustedAccess::Read,
         });
-    let before = config.autonomy.trusted_roots.clone();
+    let before = config.security.autonomy.trusted_roots.clone();
 
     grant_turn_cwd(&mut config, dir.path());
 
     assert_eq!(
-        config.autonomy.trusted_roots, before,
+        config.security.autonomy.trusted_roots, before,
         "a user-configured grant is never widened by the presence of a cwd"
     );
 }
@@ -242,10 +242,10 @@ fn grant_turn_cwd_is_the_only_mutation() {
 
     assert_eq!(config.action_dir, base.action_dir);
     assert_eq!(config.workspace_dir, base.workspace_dir);
-    assert_eq!(config.autonomy.workspace_only, base.autonomy.workspace_only);
+    assert_eq!(config.security.autonomy.workspace_only, base.security.autonomy.workspace_only);
     assert_eq!(
-        config.autonomy.forbidden_paths,
-        base.autonomy.forbidden_paths
+        config.security.autonomy.forbidden_paths,
+        base.security.autonomy.forbidden_paths
     );
 }
 
