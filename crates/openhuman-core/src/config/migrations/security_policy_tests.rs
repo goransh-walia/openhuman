@@ -46,8 +46,35 @@ fn security_only_spelling_decodes_without_legacy_tables() {
         "[security.autonomy]\nenabled = true\n[security.audit]\nenabled = false\n[security.approval]\nttl_secs = 30\n",
     )
     .unwrap();
-    assert!(config.autonomy.enabled);
+    assert!(config.security.autonomy.enabled);
     assert_eq!(config.security.approval.ttl_secs, Some(30));
+}
+
+#[test]
+fn legacy_policy_tables_decode_and_save_under_security() {
+    let config = crate::config::schema::config_from_toml_str(
+        "[autonomy]\nenabled = true\nmax_actions_per_hour = 17\n[sandbox]\nbackend = \"docker\"\n[privacy]\nmode = \"sensitive\"\n",
+    )
+    .unwrap();
+
+    assert!(config.security.autonomy.enabled);
+    assert_eq!(config.security.autonomy.max_actions_per_hour, 17);
+    assert!(matches!(
+        config.security.sandbox.backend,
+        crate::config::SandboxBackend::Docker
+    ));
+    assert_eq!(
+        config.security.privacy.mode,
+        crate::config::PrivacyMode::Sensitive
+    );
+
+    let saved = toml::to_string(&config).unwrap();
+    assert!(saved.contains("[security.autonomy]"));
+    assert!(saved.contains("[security.sandbox]"));
+    assert!(saved.contains("[security.privacy]"));
+    assert!(!saved.contains("\n[autonomy]\n"));
+    assert!(!saved.contains("\n[sandbox]\n"));
+    assert!(!saved.contains("\n[privacy]\n"));
 }
 
 #[test]
