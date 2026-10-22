@@ -65,7 +65,8 @@ async fn proxy_with_browser_egress(config: &Config, browser_egress: bool) -> Res
     if browser_egress {
         if config.browser.chrome_path.is_some() {
             return Err(
-                "TinyComputer browser egress cannot be combined with a configured executable".into(),
+                "TinyComputer browser egress cannot be combined with a configured executable"
+                    .into(),
             );
         }
         let (policy_id, generation) = super::security::egress::browser_dial_config(config).await?;
