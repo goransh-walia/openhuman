@@ -15,6 +15,72 @@ fn target(policy_id: &str, generation: u64, hostname: &str, port: u16) -> Browse
     }
 }
 
+// This linked module claims TinyComputer's real interface name through
+// ModuleHost, which gives its calls an authenticated module sender. A plain
+// Connection that merely requests the same name does not have that identity.
+struct AuthenticatedComputerPeer(Connection);
+
+#[async_trait::async_trait]
+impl tinybus::Interface for AuthenticatedComputerPeer {
+    fn name(&self) -> tinybus::InterfaceName {
+        tinycomputer_bus::names::INTERFACE.try_into().unwrap()
+    }
+
+    fn members(&self) -> Vec<tinybus::MemberName> {
+        vec!["Authorize".try_into().unwrap()]
+    }
+
+    async fn call(
+        &self,
+        member: &tinybus::MemberName,
+        args: serde_json::Value,
+    ) -> tinybus::Result<serde_json::Value> {
+        if member.as_str() != "Authorize" {
+            return Err(tinybus::Error::unknown_method(member.to_string()));
+        }
+        let target: BrowserEgressTarget = serde_json::from_value(args)
+            .map_err(|error| tinybus::Error::invalid_args(error.to_string()))?;
+        let callback = self
+            .0
+            .proxy(
+                contract::INTERFACE,
+                contract::OBJECT_PATH,
+                contract::INTERFACE,
+            )?;
+        let grant: contract::BrowserEgressGrant = callback
+            .call(methods::AUTHORIZE, (target,))
+            .await?;
+        serde_json::to_value(grant)
+            .map_err(|error| tinybus::Error::failed(error.to_string()))
+    }
+}
+
+async fn authenticated_computer_setup(connection: Connection) -> tinybus::Result<()> {
+    connection
+        .serve_at(
+            tinycomputer_bus::names::OBJECT_PATH,
+            AuthenticatedComputerPeer(connection.clone()),
+        )
+        .await?;
+    connection
+        .request_name(tinycomputer_bus::names::INTERFACE)
+        .await?;
+    Ok(())
+}
+
+mod authenticated_computer_export {
+    tinybus_module::module_export_static! {
+        setup = super::authenticated_computer_setup,
+        worker_threads = 1,
+        provides = [tinycomputer_bus::names::INTERFACE],
+        methods = ["Authorize"],
+        signals = [],
+        requires = [],
+        optional = [],
+        lazy = false,
+    }
+}
+
 async fn callback_bus() -> (
     MemoryBus,
     Connection,
@@ -122,24 +188,34 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
         fixture.proxy.clone(),
     );
 
-    let caller = Connection::connect(fixture.transport.connect().await.unwrap())
-        .await
-        .unwrap();
-    caller
-        .request_name(tinycomputer_bus::names::INTERFACE)
-        .await
-        .unwrap();
-    let proxy = caller
+    let host_callback = fixture
+        .client
         .proxy(
             contract::INTERFACE,
             contract::OBJECT_PATH,
             contract::INTERFACE,
         )
         .unwrap();
+    assert!(host_callback.is_available().await.unwrap());
+    fixture
+        .host
+        .attach_linked_with_config(
+            authenticated_computer_export::linked_module().unwrap(),
+            serde_json::json!({}),
+        )
+        .unwrap();
+    let proxy = fixture
+        .client
+        .proxy(
+            tinycomputer_bus::names::INTERFACE,
+            tinycomputer_bus::names::OBJECT_PATH,
+            tinycomputer_bus::names::INTERFACE,
+        )
+        .unwrap();
 
     let target = target(&policy_id.0, info.generation, "8.8.8.8", 443);
     let grant: contract::BrowserEgressGrant = proxy
-        .call(methods::AUTHORIZE, (target.clone(),))
+        .call("Authorize", (target.clone(),))
         .await
         .expect("TinySecurity authorizes a public IP without a network dial");
     assert_eq!(grant.generation, info.generation);
