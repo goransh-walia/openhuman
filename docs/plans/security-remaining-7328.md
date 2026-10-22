@@ -520,6 +520,19 @@ socket to either the old allowed listener or the denied rebound listener. This
 does not supply TinyComputer consequence/payment gates or prove native OS process
 confinement; both remain open under Tasks 14–15.
 
+**Consequence callback dependency (2026-10-22):** TinyComputer PR
+[#153](https://github.com/tinyhumansai/tinycomputer/pull/153) now carries opaque
+`host_context` only through a confidential callback addressed to a unique
+host-prepared recipient; requests fail closed when that callback is absent. Its
+Describe schema omits this host-only field from model-visible tool arguments.
+The PR is open and its new CI run is in progress. OpenHuman cannot configure the
+callback yet: the host uses TinyBus's generic release `Resolver`, while scoped
+host callbacks are currently available only through `ModuleHost::prepare_host_callbacks`
+plus `load_file_with_host_callbacks`, outside the resolver ladder. Add the
+module-scoped verified callback load path in TinyBus upstream first; then wire
+OpenHuman's consequence review adapter and update the TinyComputer gitlink only
+after the owner changes merge and release.
+
 ## Task 16 — Final matrix, documentation and completion evidence
 
 **Files:** `.github/workflows/{security-native,ci-full,test-reusable}.yml`,
