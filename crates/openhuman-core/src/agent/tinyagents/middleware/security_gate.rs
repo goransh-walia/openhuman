@@ -40,7 +40,7 @@ struct FallbackPolicy {
 #[async_trait::async_trait]
 impl ToolCallPolicy<OpenHumanRunContext> for FallbackPolicy {
     fn name(&self) -> &str {
-        "tinysecurity_unavailable"
+        "openhuman_security_gate"
     }
 
     async fn check(
