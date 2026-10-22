@@ -15,7 +15,7 @@ use tinysecurity_bus::{names, ApprovalLifecycle2, ApprovalRow2, DecideRequest2};
 
 /// A prompt surface that records what the engine asked it to show.
 #[derive(Default)]
-struct Shown {
+pub(super) struct Shown {
     deliveries: Mutex<Vec<Delivery>>,
 }
 
@@ -27,14 +27,14 @@ impl PromptSurface for Shown {
     }
 }
 
-struct World {
+pub(super) struct World {
     fixture: NativeFixture,
     _dir: tempfile::TempDir,
     engine: NativeEngine,
     config: Config,
 }
 
-async fn world() -> World {
+pub(super) async fn world() -> World {
     let fixture = native_approval_fixture().await;
     let dir = tempfile::tempdir_in(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp"),
@@ -53,7 +53,7 @@ async fn world() -> World {
     }
 }
 
-fn input(tool: &str, surface: &Arc<Shown>) -> CheckInput {
+pub(super) fn input(tool: &str, surface: &Arc<Shown>) -> CheckInput {
     CheckInput {
         tenant: crate::core::runtime::Tenant::default(),
         variant: Variant::Standard,

@@ -14,7 +14,7 @@ fn durable_messages(
 
 /// Simulate a v3 user config: narrow allowed_commands, narrow auto_approve,
 /// and the old hard-coded `max_actions_per_hour = 20`.
-fn simulate_v3_autonomy(config: &mut Config) {
+pub(super) fn simulate_v3_autonomy(config: &mut Config) {
     config.schema_version = 3;
     config.security.autonomy.allowed_commands = vec![
         "git".into(),
@@ -71,7 +71,7 @@ fn meta() -> TranscriptMeta {
     }
 }
 
-fn config_in(tmp: &TempDir) -> Config {
+pub(super) fn config_in(tmp: &TempDir) -> Config {
     Config {
         config_path: tmp.path().join("config.toml"),
         workspace_dir: tmp.path().join("workspace"),

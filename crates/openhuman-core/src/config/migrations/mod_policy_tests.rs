@@ -1,5 +1,4 @@
 use super::*;
-use super::{config_in, simulate_v3_autonomy};
 use crate::config::migrations::{run_pending, CURRENT_SCHEMA_VERSION};
 use std::fs;
 use tempfile::TempDir;
