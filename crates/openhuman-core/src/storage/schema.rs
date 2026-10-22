@@ -55,7 +55,10 @@ pub fn owner_schemas() -> Vec<Schema> {
     #[cfg(feature = "tinymemes")]
     schemas.push(tinymemes_bus::storage::storage_schema());
     #[cfg(feature = "inbound-queues")]
-    schemas.push(tinyeventqueues_bus::storage::storage_schema());
+    {
+        schemas.push(tinyeventqueues_bus::storage::storage_schema());
+        schemas.push(crate::inbound::results::storage_schema());
+    }
     schemas
 }
 

@@ -129,8 +129,12 @@ test("membership gate routes mixed identities, outsiders and bots away from EX63
       '#!/usr/bin/env bash\nurl="${!#}"\ncase "$url" in */members/alice|*/members/bob) echo 204;; *) echo 404;; esac\n',
       { mode: 0o755 },
     );
-    for (const [author, actor, association, token, expected, event] of [
+    for (const [author, actor, association, token, expected, event, draft] of [
       ["alice", "bob", "MEMBER", "fixture", true],
+      // Draft PRs stay off the EX63, even an org member's.
+      ["alice", "bob", "MEMBER", "fixture", false, undefined, "true"],
+      ["alice", "alice", "MEMBER", "", false, undefined, "true"],
+      ["alice", "bob", "MEMBER", "fixture", true, undefined, "false"],
       ["alice", "outsider", "MEMBER", "fixture", false],
       ["outsider", "alice", "NONE", "fixture", false],
       ["dependabot[bot]", "dependabot[bot]", "NONE", "fixture", false],
@@ -156,6 +160,7 @@ test("membership gate routes mixed identities, outsiders and bots away from EX63
           MEMBERSHIP_TOKEN: token,
           GITHUB_OUTPUT: output,
           GITHUB_EVENT_NAME: event ?? "pull_request_target",
+          DRAFT: draft ?? "",
         },
       });
       assert.equal(result.status, 0, result.stderr);

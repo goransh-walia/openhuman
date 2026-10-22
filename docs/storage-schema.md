@@ -199,6 +199,12 @@ Migration steps:
 - `tool_calls_v2`: `history.tool_calls` v1 to v2 from `session_history_tool_calls`
 - `search_v2`: `history.search` v1 to v2 from `session_history_fts`
 
+## inbound
+
+| Kind | Name | Version | Scope | Indexed fields |
+| --- | --- | --- | --- | --- |
+| collection | `inbound.results` | 1 | tenant | `status`, `created_ms`, `source`, `created_ms` |
+
 ## juice
 
 | Kind | Name | Version | Scope | Indexed fields |
