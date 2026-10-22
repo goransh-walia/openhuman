@@ -97,8 +97,8 @@ impl PinnedAgent for AgentChatPinned {
         let outcome = ctx
             .with_turn_origin(external_inbound_origin(&run.source, &run.turn_id))
             .enter(turn)
-        .await
-        .map_err(anyhow::Error::msg)?;
+            .await
+            .map_err(anyhow::Error::msg)?;
         Ok(outcome.value)
     }
 }
