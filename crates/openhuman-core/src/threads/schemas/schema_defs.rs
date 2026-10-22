@@ -464,6 +464,24 @@ pub(crate) fn schemas(function: &str) -> ControllerSchema {
                 required: true,
             }],
         },
+        "state_get" => ControllerSchema {
+            namespace: "threads",
+            function: "state_get",
+            description:
+                "Read a thread's saved run state (goal, plan, agent notes) and the run-state block it renders to.",
+            inputs: vec![FieldSchema {
+                name: "thread_id",
+                ty: TypeSchema::String,
+                comment: "Thread identifier.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "Envelope wrapping { state, block } (block is null when nothing is saved).",
+                required: true,
+            }],
+        },
         "edit_message" => ControllerSchema {
             namespace: "threads",
             function: "edit_message",

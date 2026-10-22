@@ -85,7 +85,12 @@ impl CallFacts {
     /// The facts of a call made by `identity`, without a run context.
     #[must_use]
     pub fn of(config: &Config, identity: &tinymemory_tools::layout::identity::Identity) -> Self {
-        let resolved = identity.resolve(&crate::memory::scope::identity_pins(config));
+        Self::of_resolved(&identity.resolve(&crate::memory::scope::identity_pins(config)))
+    }
+
+    /// The facts of a call made by an already resolved identity.
+    #[must_use]
+    pub fn of_resolved(resolved: &tinymemory_tools::layout::identity::ResolvedIdentity) -> Self {
         Self {
             agent_id: Some(resolved.agent_id.clone()),
             namespace: resolved.layout.learnings().clone(),
@@ -94,7 +99,7 @@ impl CallFacts {
         }
     }
 
-    fn native_scope(&self, config: &Config) -> ToolScope {
+    pub(crate) fn native_scope(&self, config: &Config) -> ToolScope {
         ToolScope {
             place: self.namespace.clone(),
             reach: Some(self.reach.clone()),

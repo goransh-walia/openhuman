@@ -553,7 +553,7 @@ async fn session_locator_is_memoized_across_calls() {
     );
 }
 
-const THREAD_GOAL_TOOLS: [&str; 3] = ["goal_get", "goal_set", "goal_complete"];
+const THREAD_GOAL_TOOLS: [&str; 4] = ["goal_get", "goal_set", "goal_complete", "goal_resume"];
 /// The goal tool this fixture's default (non-orchestrator) session surfaces on a
 /// thread; the others are admitted only for agents that list them.
 const SURFACED_GOAL_TOOL: &str = "goal_complete";

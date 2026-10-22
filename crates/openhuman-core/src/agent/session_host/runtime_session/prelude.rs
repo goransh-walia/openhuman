@@ -237,29 +237,29 @@ impl OpenHumanTurnPrelude {
     ) -> String {
         let mut context = String::new();
 
+        // A paused goal stays paused: the model reads the message and resumes,
+        // replaces or leaves it with the goal tools. Turns with the run-state
+        // block see the goal there, current on every call, so it is not also
+        // prepended to the user's message.
+        run_context.goal_suppressed = turn.overrides.suppress_active_goal;
         let active_goal = if turn.overrides.suppress_active_goal {
             None
         } else {
-            let loaded = crate::agent::goals::runtime::load_for_thread(
+            crate::agent::goals::runtime::load_for_thread(
                 &self.workspace_dir,
                 self.thread_id.as_deref(),
             )
-            .await;
-            match loaded {
-                Some(goal) if matches!(goal.status, ThreadGoalStatus::Paused) => {
-                    crate::agent::goals::runtime::resume_for_thread(
-                        &self.workspace_dir,
-                        self.thread_id.as_deref(),
-                    )
-                    .await
-                    .unwrap_or(Some(goal))
-                }
-                other => other,
-            }
+            .await
         };
+        let state_block_shows_goal =
+            crate::agent::tinyagents::state_block::applies(false, Some(&self.agent_definition_id));
         if let Some(goal) = &active_goal {
-            if let Some(block) = tinyagents_harness_tools::goals::active_goal_context_block(goal) {
-                context.push_str(&block);
+            if !state_block_shows_goal {
+                if let Some(block) =
+                    tinyagents_harness_tools::goals::active_goal_context_block(goal)
+                {
+                    context.push_str(&block);
+                }
             }
             if let Some(hook) = tinyagents_hooks::stop::GoalBudgetStopHook::for_goal(
                 crate::storage::sessions::stores_or_ephemeral(&self.workspace_dir).kv,
@@ -362,6 +362,13 @@ impl OpenHumanTurnPrelude {
         &self,
         receipt: &CommitReceipt<OpenHumanRunContext>,
     ) {
-        self.memory_post_turn(receipt);
+        // A plan that finished this turn hands its notes over: they stay for
+        // the thread's next turns and go to long-term memory with the reply.
+        let finished_plan = crate::agent::tinyagents::state_block::close_finished_plan(
+            &self.workspace_dir,
+            self.thread_id.as_deref(),
+        )
+        .await;
+        self.memory_post_turn(receipt, finished_plan);
     }
 }

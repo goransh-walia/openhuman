@@ -101,6 +101,7 @@ tinyagents-harness = { path = "../../vendor/tinyagents/crates/tinyagents-harness
 tinyagents-harness-tools = { path = "../../vendor/tinyagents/crates/tinyagents-harness-tools", default-features = false, features = [
     "goals",
     "skills",
+    "state-block",
     "subagents",
     "todos",
 ] }

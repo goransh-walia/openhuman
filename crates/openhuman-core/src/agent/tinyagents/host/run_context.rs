@@ -184,6 +184,10 @@ pub struct OpenHumanRunContext {
     pub progress: Option<Sender<AgentProgress>>,
     /// Stop policies evaluated after each model call.
     pub stop_hooks: Vec<Arc<dyn StopHook<tinyagents_harness::cost::TurnCost>>>,
+    /// The turn runs with `TurnOverrides::suppress_active_goal`: the thread
+    /// goal must not reach the model this turn. Set by the turn prelude; the
+    /// run-state block (which reads the goal from the store) follows it.
+    pub goal_suppressed: bool,
     /// Agent/turn tool callbacks, registered after the runtime's global ones.
     pub tool_hooks: Vec<Arc<dyn tinyagents_hooks::tool::ToolHook<OpenHumanRunContext>>>,
     /// Host cap on real tool invocations for this turn tree; `None` leaves the
@@ -339,6 +343,7 @@ impl OpenHumanRunContext {
             approval: Default::default(),
             progress: None,
             stop_hooks: Vec::new(),
+            goal_suppressed: false,
             tool_hooks: Vec::new(),
             tool_call_limit: None,
             untrusted_input_turn: false,

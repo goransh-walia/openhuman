@@ -204,6 +204,13 @@ pub(super) fn handle_todos_get(_ctx: DispatchCtx, params: Map<String, Value>) ->
     })
 }
 
+pub(super) fn handle_state_get(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let p = parse::<ops::ThreadLiveStateRequest>(params)?;
+        to_json(ops::state_get(p).await?)
+    })
+}
+
 pub(super) fn handle_search(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p = parse::<ops::ThreadSearchRequest>(params)?;

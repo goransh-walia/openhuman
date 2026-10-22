@@ -14,7 +14,7 @@ use tinyagents_runtime::DriverRequest;
 use tinyinference_llm::model::{ChatModel, ModelProfile, ModelRequest, ModelResponse};
 use tinytools::{Tool, ToolResult};
 
-const GOAL_TOOLS: [&str; 3] = ["goal_get", "goal_set", "goal_complete"];
+const GOAL_TOOLS: [&str; 4] = ["goal_get", "goal_set", "goal_complete", "goal_resume"];
 
 struct PlainTool;
 

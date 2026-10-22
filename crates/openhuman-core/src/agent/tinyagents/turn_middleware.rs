@@ -105,6 +105,13 @@ pub(super) struct TurnMiddlewareInputs {
     /// Called when the turn starts summarizing earlier conversation, so the
     /// client can show it. `None` for a turn nobody watches.
     pub(super) compaction_notice: Option<super::context_wiring::CompactionNotice>,
+    /// The session store the goal and `todo` tools write, whether or not this
+    /// turn has the `todo` tool; the run-state block reads it.
+    /// With the scope the `todo` tool uses on a turn without a thread (the
+    /// session id), so a headless turn's block still finds its plan.
+    pub(super) state_store: Option<(Arc<dyn tinyagents_harness::store::Store>, String)>,
+    /// The turn suppresses the thread goal (`TurnOverrides::suppress_active_goal`).
+    pub(super) goal_suppressed: bool,
 }
 
 /// The handles the run loop reads after the drive returns.
@@ -157,6 +164,8 @@ pub(super) fn install_turn_middleware(
         tool_outcome_sink,
         todo_store,
         compaction_notice,
+        state_store,
+        goal_suppressed,
     } = inputs;
     let super::host::HarnessHostPolicy {
         stop_hooks,
@@ -507,9 +516,14 @@ pub(super) fn install_turn_middleware(
     // it so its `after_model` runs first and the plan check comes first.
     match todo_store {
         Some(store) if verify_before_finish::applies(is_subagent, agent_id) => {
-            harness.push_middleware(Arc::new(
-                tinyagents_harness_tools::todos::TodoSequenceMiddleware::new(store),
-            ));
+            // A thread-less turn's plan sits under the session id (the `todo`
+            // tool's fallback scope); without the same key these rules never
+            // see it.
+            let mut sequence = tinyagents_harness_tools::todos::TodoSequenceMiddleware::new(store);
+            if let Some((_, fallback_thread)) = &state_store {
+                sequence = sequence.with_fallback_thread(fallback_thread.clone());
+            }
+            harness.push_middleware(Arc::new(sequence));
         }
         _ => tracing::debug!(
             is_subagent,
@@ -517,6 +531,10 @@ pub(super) fn install_turn_middleware(
             "[todo_sequence] not installed for this turn"
         ),
     }
+    // The goal, the plan and the turn's tool-call facts on every model call,
+    // request-only. On these turns the goal is not prepended to the user's
+    // message (see `state_block`).
+    super::state_block::install(harness, state_store, is_subagent, agent_id, goal_suppressed);
 
     // Direct web lookup is bounded. Once enough search/fetch results have
     // returned, the web tools leave the request so the run works with what it

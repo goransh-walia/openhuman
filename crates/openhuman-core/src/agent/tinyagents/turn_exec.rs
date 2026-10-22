@@ -586,6 +586,13 @@ async fn drive_turn(
                 let bridge = bridge.clone();
                 Arc::new(move || bridge.announce_compaction())
             }),
+            state_store: run_context.parent.as_ref().map(|parent| {
+                (
+                    crate::storage::sessions::stores_or_ephemeral(&parent.workspace_dir).kv,
+                    parent.session_id.clone(),
+                )
+            }),
+            goal_suppressed: run_context.goal_suppressed,
         },
     );
     if let Some(scope) = run_context.response_shape.clone() {

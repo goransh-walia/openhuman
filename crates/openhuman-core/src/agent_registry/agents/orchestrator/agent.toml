@@ -337,6 +337,9 @@ named = [
     "goal_set",
     "goal_get",
     "goal_complete",
+    # Resumes a paused goal when the user's message continues it; the turn
+    # start no longer resumes one on any message.
+    "goal_resume",
     # Workflow composition. `run_workflow` runs another workflow as a
     # subagent and (by default) waits on its result like a function call;
     # `await_workflow` re-attaches to a run that outlived its inline wait.
