@@ -2992,9 +2992,11 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'Nie skonfigurowano żadnych zmiennych środowiskowych.',
   'settings.approvalHistory.title': 'Historia zatwierdzeń',
   'settings.approvalHistory.toolTrustTitle': 'Zaufane narzędzia',
-  'settings.approvalHistory.toolTrustDescription': 'Narzędzia, które mogą działać bez każdorazowego pytania.',
+  'settings.approvalHistory.toolTrustDescription':
+    'Narzędzia, które mogą działać bez każdorazowego pytania.',
   'settings.approvalHistory.toolTrustEmpty': 'Brak zaufanych narzędzi.',
-  'settings.approvalHistory.toolTrustError': 'Nie udało się wczytać ani zaktualizować zaufanych narzędzi.',
+  'settings.approvalHistory.toolTrustError':
+    'Nie udało się wczytać ani zaktualizować zaufanych narzędzi.',
   'settings.approvalHistory.subtitle':
     'Ostatnie decyzje o zatwierdzeniu narzędzi, najnowsze najpierw.',
   'settings.approvalHistory.refresh': 'Odśwież',

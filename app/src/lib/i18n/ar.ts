@@ -2896,7 +2896,8 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'لم يتم تكوين أي متغيرات بيئة.',
   'settings.approvalHistory.title': 'سجل الموافقات',
   'settings.approvalHistory.toolTrustTitle': 'الأدوات الموثوقة',
-  'settings.approvalHistory.toolTrustDescription': 'الأدوات التي سمحت بتشغيلها دون طلب الموافقة في كل مرة.',
+  'settings.approvalHistory.toolTrustDescription':
+    'الأدوات التي سمحت بتشغيلها دون طلب الموافقة في كل مرة.',
   'settings.approvalHistory.toolTrustEmpty': 'لا توجد أدوات موثوقة.',
   'settings.approvalHistory.toolTrustError': 'تعذّر تحميل الأدوات الموثوقة أو تحديثها.',
   'settings.approvalHistory.subtitle': 'قرارات الموافقة على الأدوات الأخيرة، الأحدث أولاً.',

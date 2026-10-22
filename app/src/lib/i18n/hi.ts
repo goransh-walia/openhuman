@@ -2953,7 +2953,8 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'कोई पर्यावरण चर कॉन्फ़िगर नहीं किए गए।',
   'settings.approvalHistory.title': 'अनुमोदन इतिहास',
   'settings.approvalHistory.toolTrustTitle': 'विश्वसनीय टूल',
-  'settings.approvalHistory.toolTrustDescription': 'वे टूल जिन्हें हर बार पूछे बिना चलाने की अनुमति दी है।',
+  'settings.approvalHistory.toolTrustDescription':
+    'वे टूल जिन्हें हर बार पूछे बिना चलाने की अनुमति दी है।',
   'settings.approvalHistory.toolTrustEmpty': 'कोई विश्वसनीय टूल नहीं हैं।',
   'settings.approvalHistory.toolTrustError': 'विश्वसनीय टूल लोड या अपडेट नहीं हो सके।',
   'settings.approvalHistory.subtitle': 'हाल के टूल-अनुमोदन निर्णय, नवीनतम पहले।',

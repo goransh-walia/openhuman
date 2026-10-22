@@ -2980,9 +2980,11 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'Переменные окружения не настроены.',
   'settings.approvalHistory.title': 'История одобрений',
   'settings.approvalHistory.toolTrustTitle': 'Доверенные инструменты',
-  'settings.approvalHistory.toolTrustDescription': 'Инструменты, которым разрешено запускаться без повторного запроса.',
+  'settings.approvalHistory.toolTrustDescription':
+    'Инструменты, которым разрешено запускаться без повторного запроса.',
   'settings.approvalHistory.toolTrustEmpty': 'Нет доверенных инструментов.',
-  'settings.approvalHistory.toolTrustError': 'Не удалось загрузить или обновить список доверенных инструментов.',
+  'settings.approvalHistory.toolTrustError':
+    'Не удалось загрузить или обновить список доверенных инструментов.',
   'settings.approvalHistory.subtitle':
     'Последние решения об одобрении инструментов, новейшие первыми.',
   'settings.approvalHistory.refresh': 'Обновить',

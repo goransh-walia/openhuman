@@ -3169,7 +3169,8 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'Yapılandırılmış ortam değişkeni yok.',
   'settings.approvalHistory.title': 'Onay geçmişi',
   'settings.approvalHistory.toolTrustTitle': 'Güvenilen araçlar',
-  'settings.approvalHistory.toolTrustDescription': 'Her seferinde sormadan çalışmasına izin verdiğiniz araçlar.',
+  'settings.approvalHistory.toolTrustDescription':
+    'Her seferinde sormadan çalışmasına izin verdiğiniz araçlar.',
   'settings.approvalHistory.toolTrustEmpty': 'Güvenilen araç yok.',
   'settings.approvalHistory.toolTrustError': 'Güvenilen araçlar yüklenemedi veya güncellenemedi.',
   'settings.approvalHistory.tableTitle': 'Kararlar',

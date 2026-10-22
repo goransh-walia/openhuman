@@ -2978,7 +2978,8 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'Tidak ada variabel lingkungan yang dikonfigurasi.',
   'settings.approvalHistory.title': 'Riwayat persetujuan',
   'settings.approvalHistory.toolTrustTitle': 'Alat tepercaya',
-  'settings.approvalHistory.toolTrustDescription': 'Alat yang diizinkan berjalan tanpa meminta persetujuan setiap kali.',
+  'settings.approvalHistory.toolTrustDescription':
+    'Alat yang diizinkan berjalan tanpa meminta persetujuan setiap kali.',
   'settings.approvalHistory.toolTrustEmpty': 'Tidak ada alat tepercaya.',
   'settings.approvalHistory.toolTrustError': 'Alat tepercaya tidak dapat dimuat atau diperbarui.',
   'settings.approvalHistory.subtitle': 'Keputusan persetujuan alat terbaru, terbaru lebih dulu.',

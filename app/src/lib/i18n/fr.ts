@@ -3016,9 +3016,11 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': "Aucune variable d'environnement configurée.",
   'settings.approvalHistory.title': 'Historique des approbations',
   'settings.approvalHistory.toolTrustTitle': 'Outils approuvés',
-  'settings.approvalHistory.toolTrustDescription': 'Outils autorisés à s’exécuter sans nouvelle demande.',
+  'settings.approvalHistory.toolTrustDescription':
+    'Outils autorisés à s’exécuter sans nouvelle demande.',
   'settings.approvalHistory.toolTrustEmpty': 'Aucun outil approuvé.',
-  'settings.approvalHistory.toolTrustError': 'Impossible de charger ou de mettre à jour les outils approuvés.',
+  'settings.approvalHistory.toolTrustError':
+    'Impossible de charger ou de mettre à jour les outils approuvés.',
   'settings.approvalHistory.subtitle':
     "Décisions récentes d'approbation d'outils, les plus récentes en premier.",
   'settings.approvalHistory.refresh': 'Actualiser',

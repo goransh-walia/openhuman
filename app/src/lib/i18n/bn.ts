@@ -2949,7 +2949,8 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'কোনো পরিবেশ ভেরিয়েবল কনফিগার করা হয়নি।',
   'settings.approvalHistory.title': 'অনুমোদন ইতিহাস',
   'settings.approvalHistory.toolTrustTitle': 'বিশ্বস্ত টুল',
-  'settings.approvalHistory.toolTrustDescription': 'যে টুলগুলো প্রতিবার জিজ্ঞাসা না করেই চালানোর অনুমতি দিয়েছেন।',
+  'settings.approvalHistory.toolTrustDescription':
+    'যে টুলগুলো প্রতিবার জিজ্ঞাসা না করেই চালানোর অনুমতি দিয়েছেন।',
   'settings.approvalHistory.toolTrustEmpty': 'কোনো বিশ্বস্ত টুল নেই।',
   'settings.approvalHistory.toolTrustError': 'বিশ্বস্ত টুল লোড বা আপডেট করা যায়নি।',
   'settings.approvalHistory.subtitle': 'সাম্প্রতিক টুল-অনুমোদন সিদ্ধান্ত, নতুনতম প্রথমে।',

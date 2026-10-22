@@ -3035,9 +3035,11 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'Keine Umgebungsvariablen konfiguriert.',
   'settings.approvalHistory.title': 'Genehmigungsverlauf',
   'settings.approvalHistory.toolTrustTitle': 'Vertrauenswürdige Tools',
-  'settings.approvalHistory.toolTrustDescription': 'Tools, die ohne erneute Nachfrage ausgeführt werden dürfen.',
+  'settings.approvalHistory.toolTrustDescription':
+    'Tools, die ohne erneute Nachfrage ausgeführt werden dürfen.',
   'settings.approvalHistory.toolTrustEmpty': 'Keine vertrauenswürdigen Tools.',
-  'settings.approvalHistory.toolTrustError': 'Vertrauenswürdige Tools konnten nicht geladen oder aktualisiert werden.',
+  'settings.approvalHistory.toolTrustError':
+    'Vertrauenswürdige Tools konnten nicht geladen oder aktualisiert werden.',
   'settings.approvalHistory.subtitle': 'Aktuelle Tool-Genehmigungsentscheidungen, neueste zuerst.',
   'settings.approvalHistory.refresh': 'Aktualisieren',
   'settings.approvalHistory.loading': 'Genehmigungsverlauf wird geladen…',

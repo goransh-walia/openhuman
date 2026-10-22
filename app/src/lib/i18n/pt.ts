@@ -2992,9 +2992,11 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': 'Nenhuma variável de ambiente configurada.',
   'settings.approvalHistory.title': 'Histórico de aprovações',
   'settings.approvalHistory.toolTrustTitle': 'Ferramentas confiáveis',
-  'settings.approvalHistory.toolTrustDescription': 'Ferramentas autorizadas a executar sem pedir confirmação novamente.',
+  'settings.approvalHistory.toolTrustDescription':
+    'Ferramentas autorizadas a executar sem pedir confirmação novamente.',
   'settings.approvalHistory.toolTrustEmpty': 'Nenhuma ferramenta confiável.',
-  'settings.approvalHistory.toolTrustError': 'Não foi possível carregar ou atualizar as ferramentas confiáveis.',
+  'settings.approvalHistory.toolTrustError':
+    'Não foi possível carregar ou atualizar as ferramentas confiáveis.',
   'settings.approvalHistory.subtitle':
     'Decisões recentes de aprovação de ferramentas, as mais recentes primeiro.',
   'settings.approvalHistory.refresh': 'Atualizar',
