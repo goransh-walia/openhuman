@@ -72,11 +72,11 @@ After saving, a loaded TinySearch module is refreshed privately.
 
 - `apply_autonomy_settings` is the single write path for `[autonomy]`: after
   `Config::save()` it calls
-  `crate::security::live_policy::reload_from(&config.autonomy)` and publishes
+  `crate::security::live_policy::reload_from(&config.security.autonomy)` and publishes
   `DomainEvent::AutonomyConfigChanged`, so the live `SecurityPolicy` and any
   running agent sessions pick up the change without a core restart.
   `add_auto_approve_tool` (backing the `ApproveAlwaysForTool` approval
-  decision) appends to `config.autonomy.auto_approve` under a process-wide
+  decision) appends to `config.security.autonomy.auto_approve` under a process-wide
   lock and delegates to `apply_autonomy_settings`, so the same reload
   happens. `apply_agent_paths_settings` calls
   `crate::security::live_policy::set_action_dir` when `action_dir` changes.

@@ -201,7 +201,8 @@ fn grant_turn_cwd_adds_a_read_write_root() {
 
     assert_eq!(config.security.autonomy.trusted_roots.len(), before + 1);
     let granted = config
-        .security.autonomy
+        .security
+        .autonomy
         .trusted_roots
         .last()
         .expect("the cwd was granted");
@@ -214,7 +215,8 @@ fn grant_turn_cwd_leaves_an_existing_entry_alone() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut config = Config::default();
     config
-        .security.autonomy
+        .security
+        .autonomy
         .trusted_roots
         .push(crate::security::TrustedRoot {
             path: dir.path().to_string_lossy().to_string(),
@@ -242,7 +244,10 @@ fn grant_turn_cwd_is_the_only_mutation() {
 
     assert_eq!(config.action_dir, base.action_dir);
     assert_eq!(config.workspace_dir, base.workspace_dir);
-    assert_eq!(config.security.autonomy.workspace_only, base.security.autonomy.workspace_only);
+    assert_eq!(
+        config.security.autonomy.workspace_only,
+        base.security.autonomy.workspace_only
+    );
     assert_eq!(
         config.security.autonomy.forbidden_paths,
         base.security.autonomy.forbidden_paths

@@ -71,8 +71,11 @@ async fn one_live_capability_observes_full_readonly_full_updates() {
     };
     let ctx = live_tier_context(&config).with_turn_origin(origin.clone());
     assert!(has_issue48_workflow_origin(&ctx));
-    let mut baseline =
-        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
+    let mut baseline = SecurityPolicy::from_config(
+        &config.security.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    );
     baseline.trusted_roots.push(crate::security::TrustedRoot {
         path: dir.path().join("trusted").display().to_string(),
         access: crate::security::TrustedAccess::ReadWrite,
@@ -128,8 +131,11 @@ async fn live_tier_reload_failure_fails_closed() {
     let config = persisted_tier_config(dir.path(), true, AutonomyLevel::Full);
     std::fs::create_dir_all(&config.config_path).unwrap();
     let ctx = live_tier_context(&config);
-    let baseline =
-        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
+    let baseline = SecurityPolicy::from_config(
+        &config.security.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    );
     let error =
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
             .await
@@ -153,8 +159,11 @@ async fn malformed_live_config_is_denied_without_echoing_its_contents() {
     )
     .unwrap();
     let ctx = live_tier_context(&config);
-    let baseline =
-        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
+    let baseline = SecurityPolicy::from_config(
+        &config.security.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    );
     let error =
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
             .await

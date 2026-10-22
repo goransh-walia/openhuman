@@ -41,7 +41,12 @@ fn adds_new_commands_to_narrow_list() {
     // Every new command must now be present.
     for cmd in NEW_COMMANDS {
         assert!(
-            config.security.autonomy.allowed_commands.iter().any(|c| c == cmd),
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .iter()
+                .any(|c| c == cmd),
             "expected {:?} in allowed_commands after migration",
             cmd
         );
@@ -49,7 +54,12 @@ fn adds_new_commands_to_narrow_list() {
     // Existing commands must be preserved.
     for cmd in &["git", "npm", "cargo", "ls", "cat", "grep"] {
         assert!(
-            config.security.autonomy.allowed_commands.iter().any(|c| c == *cmd),
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .iter()
+                .any(|c| c == *cmd),
             "expected existing command {:?} preserved",
             cmd
         );
@@ -67,7 +77,12 @@ fn adds_new_auto_approve_tools_to_narrow_list() {
 
     for tool in NEW_AUTO_APPROVE_TOOLS {
         assert!(
-            config.security.autonomy.auto_approve.iter().any(|t| t == tool),
+            config
+                .security
+                .autonomy
+                .auto_approve
+                .iter()
+                .any(|t| t == tool),
             "expected {:?} in auto_approve after migration",
             tool
         );
@@ -75,7 +90,12 @@ fn adds_new_auto_approve_tools_to_narrow_list() {
     // Write tools must keep Supervised mode's ask-before-edit contract.
     for tool in &["file_write", "edit_file"] {
         assert!(
-            !config.security.autonomy.auto_approve.iter().any(|t| t == *tool),
+            !config
+                .security
+                .autonomy
+                .auto_approve
+                .iter()
+                .any(|t| t == *tool),
             "expected {:?} to require approval after migration",
             tool
         );
@@ -83,7 +103,12 @@ fn adds_new_auto_approve_tools_to_narrow_list() {
     // Existing tools must be preserved.
     for tool in &["file_read", "memory_search", "memory_list"] {
         assert!(
-            config.security.autonomy.auto_approve.iter().any(|t| t == *tool),
+            config
+                .security
+                .autonomy
+                .auto_approve
+                .iter()
+                .any(|t| t == *tool),
             "expected existing tool {:?} preserved",
             tool
         );
@@ -152,7 +177,8 @@ fn idempotent_on_already_expanded_config() {
 fn preserves_user_custom_commands_not_in_new_set() {
     let mut config = old_v3_config();
     config
-        .security.autonomy
+        .security
+        .autonomy
         .allowed_commands
         .push("my_custom_tool".to_string());
 
@@ -160,7 +186,8 @@ fn preserves_user_custom_commands_not_in_new_set() {
 
     assert!(
         config
-            .security.autonomy
+            .security
+            .autonomy
             .allowed_commands
             .iter()
             .any(|c| c == "my_custom_tool"),
@@ -172,19 +199,29 @@ fn preserves_user_custom_commands_not_in_new_set() {
 fn no_duplicate_commands_when_some_already_present() {
     let mut config = old_v3_config();
     // Pre-seed a subset of new commands so we can check no duplicates appear.
-    config.security.autonomy.allowed_commands.push("pnpm".to_string());
-    config.security.autonomy.allowed_commands.push("yarn".to_string());
+    config
+        .security
+        .autonomy
+        .allowed_commands
+        .push("pnpm".to_string());
+    config
+        .security
+        .autonomy
+        .allowed_commands
+        .push("yarn".to_string());
 
     run(&mut config).expect("migration should succeed");
 
     let pnpm_count = config
-        .security.autonomy
+        .security
+        .autonomy
         .allowed_commands
         .iter()
         .filter(|c| *c == "pnpm")
         .count();
     let yarn_count = config
-        .security.autonomy
+        .security
+        .autonomy
         .allowed_commands
         .iter()
         .filter(|c| *c == "yarn")

@@ -383,8 +383,18 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
 
     assert_eq!(config.schema_version, 3);
     assert_eq!(config.security.autonomy.max_actions_per_hour, 20);
-    assert!(!config.security.autonomy.allowed_commands.iter().any(|c| c == "pnpm"));
-    assert!(!config.security.autonomy.auto_approve.iter().any(|t| t == "glob"));
+    assert!(!config
+        .security
+        .autonomy
+        .allowed_commands
+        .iter()
+        .any(|c| c == "pnpm"));
+    assert!(!config
+        .security
+        .autonomy
+        .auto_approve
+        .iter()
+        .any(|t| t == "glob"));
 
     run_pending(&mut config).await;
 
@@ -396,7 +406,12 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     // New commands must be present after the migration.
     for cmd in &["pnpm", "yarn", "make", "sort", "diff", "mkdir", "cp"] {
         assert!(
-            config.security.autonomy.allowed_commands.iter().any(|c| c == *cmd),
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .iter()
+                .any(|c| c == *cmd),
             "expected {:?} in allowed_commands after v3→v4 migration",
             cmd
         );
@@ -404,7 +419,12 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     // Original commands must be preserved.
     for cmd in &["git", "npm", "cargo", "ls", "cat"] {
         assert!(
-            config.security.autonomy.allowed_commands.iter().any(|c| c == *cmd),
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .iter()
+                .any(|c| c == *cmd),
             "expected original command {:?} preserved",
             cmd
         );
@@ -413,7 +433,12 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     // New read-only auto-approve tools must be present.
     for tool in &["glob", "grep"] {
         assert!(
-            config.security.autonomy.auto_approve.iter().any(|t| t == *tool),
+            config
+                .security
+                .autonomy
+                .auto_approve
+                .iter()
+                .any(|t| t == *tool),
             "expected {:?} in auto_approve after v3→v4 migration",
             tool
         );
@@ -421,7 +446,12 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     // Write tools must keep Supervised mode's ask-before-edit contract.
     for tool in &["file_write", "edit_file"] {
         assert!(
-            !config.security.autonomy.auto_approve.iter().any(|t| t == *tool),
+            !config
+                .security
+                .autonomy
+                .auto_approve
+                .iter()
+                .any(|t| t == *tool),
             "expected {:?} to require approval after v3→v4 migration",
             tool
         );
@@ -429,7 +459,12 @@ async fn run_pending_expands_autonomy_defaults_from_v3() {
     // Original auto-approve tools must be preserved.
     for tool in &["file_read", "memory_search", "memory_list"] {
         assert!(
-            config.security.autonomy.auto_approve.iter().any(|t| t == *tool),
+            config
+                .security
+                .autonomy
+                .auto_approve
+                .iter()
+                .any(|t| t == *tool),
             "expected original tool {:?} preserved",
             tool
         );
@@ -609,7 +644,12 @@ async fn run_pending_widens_a_hand_written_v0_allowlist_and_that_is_visible() {
     // The user's own entries survive — the merge is additive.
     for kept in &["ls", "cat"] {
         assert!(
-            config.security.autonomy.allowed_commands.iter().any(|c| c == kept),
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .iter()
+                .any(|c| c == kept),
             "{kept} was configured explicitly and must survive"
         );
     }
@@ -618,7 +658,12 @@ async fn run_pending_widens_a_hand_written_v0_allowlist_and_that_is_visible() {
     // filesystem. This is the security-relevant half.
     for added in &["mkdir", "touch", "cp", "mv", "ln"] {
         assert!(
-            config.security.autonomy.allowed_commands.iter().any(|c| c == added),
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .iter()
+                .any(|c| c == added),
             "current behaviour: the v3->v4 migration adds {added} to a hand-written \
              allowlist that never contained it"
         );
@@ -673,7 +718,12 @@ async fn a_hand_written_empty_allowlist_is_also_widened() {
     );
     for added in &["mkdir", "touch", "cp", "mv", "ln"] {
         assert!(
-            config.security.autonomy.allowed_commands.iter().any(|c| c == added),
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .iter()
+                .any(|c| c == added),
             "an explicitly empty allowlist still gains {added}"
         );
     }

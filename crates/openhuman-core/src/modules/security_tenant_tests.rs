@@ -356,7 +356,8 @@ async fn real_forbidden_paths_register_with_the_module() {
     let root = fixture.acting.path().canonicalize().unwrap();
     let state = tokio::sync::Mutex::new(ScopedState::default());
     let mut config = two_tenant_config(&root, "forbid", false, "unused_tool");
-    config.security.autonomy.forbidden_paths = vec!["~/.ssh".into(), "private".into(), "/etc".into()];
+    config.security.autonomy.forbidden_paths =
+        vec!["~/.ssh".into(), "private".into(), "/etc".into()];
     let activation = activate_on(
         &fixture.proxy,
         &state,

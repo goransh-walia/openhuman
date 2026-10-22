@@ -174,7 +174,13 @@ fn auto_approve_write_lock() -> &'static tokio::sync::Mutex<()> {
 pub async fn add_auto_approve_tool(ctx: &DispatchCtx, tool_name: &str) -> Result<(), String> {
     let _guard = auto_approve_write_lock().lock().await;
     let mut config = ctx.load_config().await?;
-    if config.security.autonomy.auto_approve.iter().any(|t| t == tool_name) {
+    if config
+        .security
+        .autonomy
+        .auto_approve
+        .iter()
+        .any(|t| t == tool_name)
+    {
         tracing::debug!(
             tool = tool_name,
             "[config:auto_approve] tool already allow-listed; nothing to persist"

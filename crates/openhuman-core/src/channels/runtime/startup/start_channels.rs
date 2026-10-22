@@ -105,7 +105,10 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     // (config.update_autonomy_settings) are reflected by `live_policy::current()`
     // and picked up by the next session.
     let security = crate::security::live_policy::install(
-        Arc::new(SecurityPolicy::from_full_config(&config).with_privacy_mode(config.security.privacy.mode)),
+        Arc::new(
+            SecurityPolicy::from_full_config(&config)
+                .with_privacy_mode(config.security.privacy.mode),
+        ),
         config.workspace_dir.clone(),
         config.action_dir.clone(),
     );

@@ -250,7 +250,10 @@ fn referenced_but_disabled(config: &Config) -> Vec<Finding> {
     }
 
     if config.security.sandbox.enabled == Some(true)
-        || !matches!(&config.security.sandbox.backend, crate::config::SandboxBackend::Auto)
+        || !matches!(
+            &config.security.sandbox.backend,
+            crate::config::SandboxBackend::Auto
+        )
         || explicitly_configured(config, "sandbox.backend")
     {
         references.push(("sandbox", "sandbox"));

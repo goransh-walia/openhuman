@@ -31,13 +31,19 @@ mode = "sensitive"
 "#;
     let config = crate::config::schema::config_from_toml_str(text).unwrap();
     assert!(config.security.autonomy.enabled);
-    assert_eq!(config.security.autonomy.level, crate::security::AutonomyLevel::Full);
+    assert_eq!(
+        config.security.autonomy.level,
+        crate::security::AutonomyLevel::Full
+    );
     assert_eq!(config.security.autonomy.max_actions_per_hour, 7);
     assert!(matches!(
         config.security.sandbox.backend,
         crate::config::SandboxBackend::Landlock
     ));
-    assert_eq!(config.security.privacy.mode, crate::config::PrivacyMode::Sensitive);
+    assert_eq!(
+        config.security.privacy.mode,
+        crate::config::PrivacyMode::Sensitive
+    );
 }
 
 #[test]
@@ -81,7 +87,9 @@ fn legacy_policy_tables_decode_and_save_under_security() {
 fn max_cost_is_deleted_with_a_notice_everywhere_it_appears() {
     let mut d = doc("[autonomy]\nmax_cost_per_day_cents = 900\n[security.autonomy]\nmax_cost_per_day_cents = 1\n");
     let notices = rewrite_document(&mut d);
-    assert!(notices.contains(&Notice::DroppedMaxCost { table: "security.autonomy" }));
+    assert!(notices.contains(&Notice::DroppedMaxCost {
+        table: "security.autonomy"
+    }));
     assert!(notices.contains(&Notice::DroppedMaxCost {
         table: "security.autonomy"
     }));
@@ -110,7 +118,9 @@ fn retired_sandbox_backends_become_auto_with_a_notice() {
             table: "security.sandbox",
             from
         }));
-        assert!(notices.contains(&Notice::DroppedFirejailArgs { table: "security.sandbox" }));
+        assert!(notices.contains(&Notice::DroppedFirejailArgs {
+            table: "security.sandbox"
+        }));
         let config = crate::config::schema::config_from_toml_str(&text).unwrap();
         assert!(matches!(
             config.security.sandbox.backend,

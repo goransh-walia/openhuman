@@ -98,8 +98,12 @@ fn privacy_mode_reaches_the_security_policy_not_just_the_translator() {
         HostPrivacy::Sensitive
     );
     assert_eq!(
-        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir)
-            .privacy_mode(),
+        SecurityPolicy::from_config(
+            &config.security.autonomy,
+            &config.workspace_dir,
+            &config.action_dir
+        )
+        .privacy_mode(),
         HostPrivacy::Standard,
         "the autonomy-only constructor cannot know the privacy block"
     );
@@ -219,7 +223,8 @@ fn registered_policy_carries_no_credentials() {
 #[test]
 fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
     let mut config = Config::default();
-    config.security.autonomy.forbidden_paths = vec!["~/.ssh".into(), "secrets".into(), "/etc".into()];
+    config.security.autonomy.forbidden_paths =
+        vec!["~/.ssh".into(), "secrets".into(), "/etc".into()];
     assert_eq!(
         settings(&config).policy.forbidden_paths,
         vec![
@@ -229,7 +234,11 @@ fn settings_register_the_operator_forbidden_paths_not_an_empty_list() {
         ]
     );
     assert!(
-        !Config::default().security.autonomy.forbidden_paths.is_empty(),
+        !Config::default()
+            .security
+            .autonomy
+            .forbidden_paths
+            .is_empty(),
         "the default list must reach the module"
     );
     assert_eq!(

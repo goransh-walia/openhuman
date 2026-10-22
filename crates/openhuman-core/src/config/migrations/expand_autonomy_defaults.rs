@@ -97,12 +97,22 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
     let commands_before = config.security.autonomy.allowed_commands.clone();
     let mut added_commands: Vec<&str> = Vec::new();
     for &cmd in NEW_COMMANDS {
-        if !config.security.autonomy.allowed_commands.iter().any(|c| c == cmd) {
+        if !config
+            .security
+            .autonomy
+            .allowed_commands
+            .iter()
+            .any(|c| c == cmd)
+        {
             log::debug!(
                 "[migrations][expand-autonomy-defaults] adding command={:?} to allowed_commands",
                 cmd
             );
-            config.security.autonomy.allowed_commands.push(cmd.to_string());
+            config
+                .security
+                .autonomy
+                .allowed_commands
+                .push(cmd.to_string());
             added_commands.push(cmd);
             stats.commands_added += 1;
         }
@@ -147,7 +157,13 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
 
     // Merge new auto-approve tools (additive only).
     for &tool in NEW_AUTO_APPROVE_TOOLS {
-        if !config.security.autonomy.auto_approve.iter().any(|t| t == tool) {
+        if !config
+            .security
+            .autonomy
+            .auto_approve
+            .iter()
+            .any(|t| t == tool)
+        {
             log::debug!(
                 "[migrations][expand-autonomy-defaults] adding tool={:?} to auto_approve",
                 tool
