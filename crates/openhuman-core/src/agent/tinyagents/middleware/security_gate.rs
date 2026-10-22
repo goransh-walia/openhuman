@@ -15,9 +15,13 @@
 
 use std::sync::Arc;
 
+#[cfg(not(feature = "security-module"))]
 use tinyagents_harness::context::RunContext;
-use tinyagents_harness::middleware::{PolicyDecision, ToolCallPolicy};
+#[cfg(not(feature = "security-module"))]
+use tinyagents_harness::middleware::PolicyDecision;
+use tinyagents_harness::middleware::ToolCallPolicy;
 use tinyagents_harness::runtime::AgentHarness;
+#[cfg(not(feature = "security-module"))]
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::Tool;
 
