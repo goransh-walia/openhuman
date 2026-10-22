@@ -54,7 +54,7 @@ impl DispatchCtx {
     {
         let ctx = self.core().cloned();
         #[cfg(test)]
-        let prompt_scanner = crate::security::prompt_injection::scanner::tests::current_scoped();
+        let prompt_scanner = crate::security::prompt_injection::current_scoped();
         // Box before the task-local wrapper. Its branching async state otherwise
         // multiplies a large task's inline size before Tokio can box it,
         // overflowing the spawning thread (including the CLI's main stack).
