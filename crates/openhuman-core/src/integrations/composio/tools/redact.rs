@@ -43,22 +43,13 @@ pub(crate) fn composio_secrets(config: &Config) -> Vec<String> {
     secrets
 }
 
-/// Only a string that actually contains one of the call's keys is sent to the
-/// module. This decides whether to ask, never what to remove: the module still
-/// removes the key (and anything else it recognizes) from every string it is
-/// given. Most results never mention the key, so most results cost no module
-/// call at all.
-fn mentions_a_key(text: &str, secrets: &[String]) -> bool {
-    secrets.iter().any(|secret| text.contains(secret.as_str()))
-}
-
 /// What a result becomes when the module could not check it.
 pub(crate) const WITHHELD: &str = "Composio result withheld: the security module could not check it for credentials. Do not retry; tell the user the result could not be checked.";
 
 /// Every string the outcome carries that could contain a key: text, JSON string
 /// values and object keys, follow-up content, the markdown rendering and the
 /// metadata.
-fn strings_of(result: &ToolResult, secrets: &[String]) -> Vec<String> {
+fn strings_of(result: &ToolResult) -> Vec<String> {
     fn json(value: &Value, out: &mut Vec<String>) {
         match value {
             Value::String(text) => out.push(text.clone()),
@@ -88,7 +79,6 @@ fn strings_of(result: &ToolResult, secrets: &[String]) -> Vec<String> {
     if let Some(metadata) = &result.metadata {
         json(metadata, &mut out);
     }
-    out.retain(|text| mentions_a_key(text, secrets));
     out.sort();
     out.dedup();
     out
@@ -165,7 +155,7 @@ where
 {
     match outcome {
         Ok(mut result) => {
-            let strings = strings_of(&result, secrets);
+            let strings = strings_of(&result);
             if strings.is_empty() {
                 return Ok(result);
             }
@@ -182,9 +172,6 @@ where
         }
         Err(error) => {
             let rendered = format!("{error:#}");
-            if !mentions_a_key(&rendered, secrets) {
-                return Err(error);
-            }
             match redactor(vec![rendered.clone()]).await {
                 Ok(answers) => match answers.get(&rendered) {
                     Some(redacted) if *redacted != rendered => {
@@ -206,15 +193,17 @@ where
 /// credentials.
 #[cfg(feature = "security-module")]
 async fn module_answers(config: &Config, secrets: &[String], strings: Vec<String>) -> Answers {
-    let answers = futures::future::join_all(strings.iter().map(|text| {
-        crate::modules::security::text::redact_credentials_with(config, text, secrets)
+    use futures::StreamExt;
+
+    futures::stream::iter(strings.into_iter().map(|text| async move {
+        let answer =
+            crate::modules::security::text::redact_credentials_with(config, &text, secrets).await;
+        (text, answer)
     }))
-    .await;
-    strings
-        .into_iter()
-        .zip(answers)
-        .map(|(text, answer)| answer.map(|redacted| (text, redacted)))
-        .collect()
+    .buffer_unordered(8)
+    .map(|(text, answer)| answer.map(|redacted| (text, redacted)))
+    .collect()
+    .await
 }
 
 /// Without the security module nothing can check a string that mentions a key,
@@ -241,15 +230,11 @@ async fn redact_one(_config: &Config, _text: &str, _secrets: &[String]) -> Resul
 /// and return that same redacted copy for the caller's own error text.
 pub(crate) async fn redact_and_report(config: &Config, operation: &str, rendered: &str) -> String {
     let secrets = composio_secrets(config);
-    let redacted = if !mentions_a_key(rendered, &secrets) {
-        rendered.to_string()
-    } else {
-        match redact_one(config, rendered, &secrets).await {
-            Ok(redacted) => redacted,
-            Err(error) => {
-                tracing::warn!("[composio] error text withheld: {error}");
-                WITHHELD.to_string()
-            }
+    let redacted = match redact_one(config, rendered, &secrets).await {
+        Ok(redacted) => redacted,
+        Err(error) => {
+            tracing::warn!("[composio] error text withheld: {error}");
+            WITHHELD.to_string()
         }
     };
     super::super::ops::report_composio_op_error(operation, &redacted);
@@ -263,9 +248,6 @@ pub(crate) async fn redact_composio_outcome(
     outcome: anyhow::Result<ToolResult>,
 ) -> anyhow::Result<ToolResult> {
     let secrets = composio_secrets(config);
-    if secrets.is_empty() {
-        return outcome;
-    }
     redact_outcome_with(outcome, &secrets, |strings| {
         module_answers(config, &secrets, strings)
     })
