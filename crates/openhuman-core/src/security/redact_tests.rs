@@ -173,16 +173,12 @@ fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
 }
 
 #[test]
-fn text_falls_back_to_the_floor_never_the_original_or_a_blank() {
+fn text_suppresses_the_whole_value_when_module_cannot_answer() {
     let out = answer_or_floor(
         None,
         "retry failed: Authorization: Bearer abcdefghijklmnop\nok",
     );
-    assert!(!out.contains("abcdefghijklmnop"), "{out}");
-    assert!(
-        out.starts_with("retry failed:") && out.ends_with("\nok"),
-        "{out}"
-    );
+    assert_eq!(out, crate::core::log_redaction::SUPPRESSED);
 }
 
 #[test]
