@@ -119,11 +119,20 @@ fn captured() -> Option<std::sync::Arc<CoreContext>> {
 /// requiring the future to be `Send`.
 pub(crate) fn carry<F: Future>(fut: F) -> impl Future<Output = F::Output> {
     let ctx = captured();
+    #[cfg(test)]
+    let prompt_scanner = crate::security::prompt_injection::current_scoped();
     async move {
-        match ctx {
-            Some(ctx) => CoreContext::scope(ctx, fut).await,
-            None => fut.await,
+        let carried = async move {
+            match ctx {
+                Some(ctx) => CoreContext::scope(ctx, fut).await,
+                None => fut.await,
+            }
+        };
+        #[cfg(test)]
+        if let Some(scanner) = prompt_scanner {
+            return crate::security::prompt_injection::with_scanner(scanner, carried).await;
         }
+        carried.await
     }
 }
 
