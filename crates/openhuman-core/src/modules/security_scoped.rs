@@ -273,11 +273,8 @@ pub(crate) async fn activate_on(
     mode: CommandExecutionMode,
 ) -> Result<Activation, String> {
     let path = translate::path_policy(config);
-    let command = translate::command_policy(
-        config,
-        mode,
-        super::security_policy::security_home_dir(),
-    );
+    let command =
+        translate::command_policy(config, mode, super::security_policy::security_home_dir());
     let registration = registration_fingerprint(&path, &command, config, &subject)?;
     let key = subject_key(&subject);
     {
