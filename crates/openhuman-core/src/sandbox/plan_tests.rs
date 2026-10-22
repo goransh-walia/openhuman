@@ -98,6 +98,16 @@ fn a_disk_limit_is_refused_instead_of_silently_dropped() {
 }
 
 #[test]
+fn a_docker_pid_limit_is_refused_instead_of_silently_dropped() {
+    let mut planned = artifact(SandboxBackend::Docker);
+    planned.limits.pids_max = Some(64);
+    assert!(
+        BoxPlan::from_artifact(&planned, None).is_err(),
+        "DockerRunRequest has no PID limit field, so this plan cannot be launched safely"
+    );
+}
+
+#[test]
 fn host_networking_opens_the_box_only_when_planned() {
     let mut planned = artifact(SandboxBackend::Jail);
     planned.network = PlannedNetwork::Host;
