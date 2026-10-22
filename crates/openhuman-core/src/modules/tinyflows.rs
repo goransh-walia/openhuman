@@ -404,15 +404,17 @@ pub(crate) use imp::copilot_proxy;
     not(any(feature = "flows", feature = "skills"))
 ))]
 pub(crate) use imp::copilot_proxy;
+#[cfg(all(test, feature = "modules"))]
+pub(crate) use imp::serve_pair_after_first;
+#[cfg(all(test, feature = "modules", not(feature = "flows")))]
+pub(crate) use imp::serve_registered;
 #[cfg(all(feature = "modules", feature = "flows"))]
 pub(crate) use imp::{
     authoring_proxy, catalog_proxy, catalog_proxy_for_migration, copilot_invoke_proxy,
-    portability_proxy, runs_proxy, serve_pair,
+    portability_proxy, runs_proxy, serve_pair, serve_registered,
 };
 #[cfg(feature = "modules")]
 pub(crate) use imp::{proxy, run_proxy, serve, unserve};
-#[cfg(all(test, feature = "modules"))]
-pub(crate) use imp::{serve_pair_after_first, serve_registered};
 
 #[cfg(not(feature = "modules"))]
 mod imp {
