@@ -284,7 +284,8 @@ pub struct SecurityPolicy {
     /// session is rebuilt.
     #[doc(hidden)]
     pub media_files_roots: Arc<std::sync::Mutex<Option<crate::artifacts::FileRoots>>>,
-    /// Whether the agent may install OS packages via the `install_tool` tool.
+    /// Legacy compatibility setting. `install_tool` refuses execution until
+    /// package-manager scripts can be run in an approved isolated environment.
     pub allow_tool_install: bool,
     /// Tool names the user has pre-approved ("Always allow"). The `ApprovalGate`
     /// skips the interactive prompt for any tool in this set. Sourced from

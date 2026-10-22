@@ -489,10 +489,12 @@ not complete cross-platform jail, microVM, Docker, or process-launch coverage.
 The spawner inventory now distinguishes `sandbox/ops.rs`'s module-planned
 operator host-run mode from an untrusted direct bypass: the module registers
 that source `TrustedHost`, while scheduled/hook text has a separate
-`UntrustedSkill` source that cannot receive a host-run plan. The inventory
-still reports one untrusted direct spawner: `install_tool`, whose host package
-manager command has no TinySecurity/TinyBox plan yet. Its human approval and
-SaaS denial do not satisfy Task 14; a safe scoped install design remains open.
+`UntrustedSkill` source that cannot receive a host-run plan. `install_tool` no
+longer launches host package managers. Its enabled path returns a clear refusal
+until package-manager scripts can run in an approved isolated environment, and
+the regression test verifies the refused call. The spawner inventory now
+reports zero untrusted direct spawners. A sandboxed package installer remains
+unavailable; do not restore host execution to make the tool appear functional.
 
 ## Task 15 — Host audit, scan/consequence gates and crypto facades
 

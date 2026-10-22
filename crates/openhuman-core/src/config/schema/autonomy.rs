@@ -77,8 +77,8 @@ pub struct AutonomyConfig {
     /// which stay blocked regardless.
     #[serde(default)]
     pub trusted_roots: Vec<TrustedRoot>,
-    /// Whether the agent may install OS packages via the `install_tool` tool.
-    /// Intended to be enabled only in Full access mode.
+    /// Legacy compatibility field. Host package installation remains disabled
+    /// until package-manager scripts can run in an approved isolated environment.
     #[serde(default)]
     pub allow_tool_install: bool,
 }
