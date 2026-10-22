@@ -173,15 +173,6 @@
       "note": "fixed argv: `node --version` / `python3 --version`, no skill-supplied text reaches the command"
     },
     {
-      "file": "crates/openhuman-core/src/tools/impl/system/install_tool.rs",
-      "spawns": 1,
-      "trust": "untrusted",
-      "plan": "direct host package-manager process after interactive approval and allow_tool_install; no TinySecurity sandbox plan",
-      "executor": "direct",
-      "test": "pending",
-      "note": "operator-approved host mutation (interactive human approval + allow_tool_install, fixed manager argv, validated package name); refused under SaaS. Task 14 remains open until the package-manager capability is safely scoped to an approved TinyBox plan or removed."
-    },
-    {
       "file": "crates/openhuman-tui/src/app/artifacts.rs",
       "spawns": 3,
       "trust": "host-probe",
