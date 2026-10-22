@@ -27,7 +27,10 @@ impl tinybus::Interface for AuthenticatedComputerPeer {
     }
 
     fn members(&self) -> Vec<tinybus::MemberName> {
-        vec!["Authorize".try_into().unwrap()]
+        ["Authorize", "Consume", "Validate"]
+            .into_iter()
+            .map(|member| member.try_into().unwrap())
+            .collect()
     }
 
     async fn call(
@@ -35,20 +38,38 @@ impl tinybus::Interface for AuthenticatedComputerPeer {
         member: &tinybus::MemberName,
         args: serde_json::Value,
     ) -> tinybus::Result<serde_json::Value> {
-        if member.as_str() != "Authorize" {
-            return Err(tinybus::Error::failed("unknown test peer method"));
-        }
-        let (target,): (BrowserEgressTarget,) = serde_json::from_value(args).map_err(|error| {
-            tinybus::Error::failed(format!("invalid test peer target args: {error}"))
-        })?;
         let callback = self.0.proxy(
             contract::INTERFACE,
             contract::OBJECT_PATH,
             contract::INTERFACE,
         )?;
-        let grant: contract::BrowserEgressGrant =
-            callback.call(methods::AUTHORIZE, (target,)).await?;
-        serde_json::to_value(grant).map_err(|error| tinybus::Error::failed(error.to_string()))
+        match member.as_str() {
+            "Authorize" => {
+                let (target,): (BrowserEgressTarget,) = serde_json::from_value(args)
+                    .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+                let grant: contract::BrowserEgressGrant =
+                    callback.call(methods::AUTHORIZE, (target,)).await?;
+                serde_json::to_value(grant)
+                    .map_err(|error| tinybus::Error::failed(error.to_string()))
+            }
+            "Consume" => {
+                let (request,): (BrowserEgressConsumeRequest,) = serde_json::from_value(args)
+                    .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+                let decision: BrowserEgressDecision =
+                    callback.call(methods::CONSUME, (request,)).await?;
+                serde_json::to_value(decision)
+                    .map_err(|error| tinybus::Error::failed(error.to_string()))
+            }
+            "Validate" => {
+                let (request,): (BrowserEgressValidateRequest,) = serde_json::from_value(args)
+                    .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+                let decision: BrowserEgressDecision =
+                    callback.call(methods::VALIDATE, (request,)).await?;
+                serde_json::to_value(decision)
+                    .map_err(|error| tinybus::Error::failed(error.to_string()))
+            }
+            _ => Err(tinybus::Error::failed("unknown test peer method")),
+        }
     }
 }
 
@@ -70,7 +91,7 @@ mod authenticated_computer_export {
         setup = super::authenticated_computer_setup,
         worker_threads = 1,
         provides = ["ai.tinyhumans.tinycomputer.Desktop"],
-        methods = ["Authorize"],
+        methods = ["Authorize", "Consume", "Validate"],
         signals = [],
         requires = [],
         optional = [],
