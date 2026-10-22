@@ -30,13 +30,21 @@ fn redact_params_with(params: &Value, redact: impl FnOnce(&str) -> String) -> Va
 
 /// The synchronously bounded shared module redactor used by dispatch logs.
 pub fn redact_params_for_log(params: &Value) -> Value {
-    redact_params_with(params, |text| {
-        crate::modules::security::text::redact_for_log(
-            crate::modules::security::text::RedactMode::StructuredLogArguments,
-            text,
-            None,
-        )
-    })
+    #[cfg(feature = "security-module")]
+    {
+        redact_params_with(params, |text| {
+            crate::modules::security::text::redact_for_log(
+                crate::modules::security::text::RedactMode::StructuredLogArguments,
+                text,
+                None,
+            )
+        })
+    }
+    #[cfg(not(feature = "security-module"))]
+    {
+        let _ = params;
+        Value::String(crate::core::log_redaction::SUPPRESSED.to_owned())
+    }
 }
 
 #[cfg(test)]

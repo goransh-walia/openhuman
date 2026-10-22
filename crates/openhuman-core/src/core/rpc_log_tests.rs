@@ -37,3 +37,13 @@ fn unavailable_or_malformed_structured_redaction_suppresses_params() {
         Value::String(crate::core::log_redaction::SUPPRESSED.into())
     );
 }
+
+#[cfg(not(feature = "security-module"))]
+#[test]
+fn disabled_security_module_suppresses_rpc_params() {
+    let params = serde_json::json!({ "token": "must-not-leak" });
+    assert_eq!(
+        redact_params_for_log(&params),
+        Value::String(crate::core::log_redaction::SUPPRESSED.into())
+    );
+}
