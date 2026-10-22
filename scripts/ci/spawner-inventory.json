@@ -81,14 +81,6 @@
       "test": "n/a"
     },
     {
-      "file": "crates/openhuman-core/src/inference/host_runtime/service/speech.rs",
-      "spawns": 1,
-      "trust": "host-probe",
-      "plan": "n/a",
-      "executor": "n/a",
-      "test": "n/a"
-    },
-    {
       "file": "crates/openhuman-core/src/platform/service/linux.rs",
       "spawns": 8,
       "trust": "operator",
