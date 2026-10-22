@@ -36,10 +36,11 @@ function run(env) {
   return { result, log: readFileSync(log, "utf8"), dir };
 }
 
-test("default run exercises the native tests in the debug profile", () => {
+test("default run enables opt-in native tests in the debug profile", () => {
   const { result, log } = run({});
   assert.equal(result.status, 0, result.stderr);
   assert.match(log, /cargo test -p openhuman --lib --no-default-features/);
+  assert.match(log, /native-security-tests/);
   for (const filter of [
     "modules::security",
     "security::approval",
@@ -49,10 +50,11 @@ test("default run exercises the native tests in the debug profile", () => {
     "tools::implementations",
   ]) {
     assert.ok(
-      log.includes(`${filter} -- --include-ignored`),
+      log.includes(`${filter} -- --nocapture`),
       `native security fixture does not run ${filter} tests`,
     );
   }
+  assert.doesNotMatch(log, /--include-ignored/);
   assert.doesNotMatch(log, /--release/);
   assert.match(log, /BUDGET=\n/);
 });
