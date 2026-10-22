@@ -217,7 +217,7 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
         record: _,
         client: _,
         transport: _,
-        _module_name_guard: _,
+        _module_name_guard,
     } = native_fixture().await;
     let root = acting.path().canonicalize().unwrap();
     let action = root.join("action");
