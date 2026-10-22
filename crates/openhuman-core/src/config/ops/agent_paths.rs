@@ -68,6 +68,7 @@ pub async fn ensure_agent_dirs(config: &mut Config) {
     }
     let projects_path = projects_dir.to_string_lossy().to_string();
     if !config
+        .security
         .autonomy
         .trusted_roots
         .iter()
@@ -98,6 +99,7 @@ pub async fn ensure_agent_dirs(config: &mut Config) {
     if !action_path.is_empty()
         && !config.workspace_dir.starts_with(&action_dir)
         && !config
+            .security
             .autonomy
             .trusted_roots
             .iter()

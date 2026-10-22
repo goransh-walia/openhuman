@@ -105,6 +105,7 @@ pub(super) fn grant_turn_cwd(config: &mut Config, root: &std::path::Path) {
         return;
     }
     config
+        .security
         .autonomy
         .trusted_roots
         .push(crate::security::TrustedRoot {
