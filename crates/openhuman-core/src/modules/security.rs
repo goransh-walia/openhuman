@@ -362,7 +362,7 @@ pub(crate) async fn evaluate(
             .call_confidential(
                 names::methods::EVALUATE,
                 (EvaluateRequest {
-                    caller: caller.into_context(),
+                    caller: caller.0,
                     call,
                 },),
             )
@@ -393,7 +393,7 @@ pub(crate) async fn check(
             .call_confidential(
                 names::methods::CHECK,
                 (CheckRequest {
-                    caller: caller.into_context(),
+                    caller: caller.0,
                     checks,
                 },),
             )

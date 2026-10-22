@@ -2,7 +2,7 @@ use tinysecurity_bus::CallerContext;
 
 /// Caller identity supplied exclusively by trusted host dispatch. This wrapper
 /// intentionally has no Deserialize implementation or model-facing controller.
-pub(crate) struct VerifiedCaller(CallerContext);
+pub(crate) struct VerifiedCaller(pub(crate) CallerContext);
 
 impl VerifiedCaller {
     /// Wrap already authenticated identity and authority, never model arguments.
@@ -11,10 +11,6 @@ impl VerifiedCaller {
             return Err("TinySecurity caller identity is missing".into());
         }
         Ok(Self(context))
-    }
-
-    pub(crate) fn into_context(self) -> CallerContext {
-        self.0
     }
 }
 
