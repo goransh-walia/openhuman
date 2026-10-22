@@ -170,8 +170,12 @@ Host follow-up is done: `Config.security` owns typed autonomy, sandbox and
 privacy fields; the pre-decode rewrite folds legacy top-level tables into the
 canonical nested shape with nested values taking precedence. Save emits only
 `[security.*]`. Config consumers across core/embed/TinyHumans and profile-owned
-config overlays use the nested fields. Regression coverage checks legacy decode,
-precedence, save shape, sandbox retirement and profile refresh.
+config overlays use the nested fields. The config RPC snapshot now uses
+TinySecurity endpoint-origin redaction for storage URLs as well as inbound queue
+URLs, suppressing unsupported schemes and database names. Stale characterization
+imports were updated to current security-owned turn-origin, approval-gate and
+prompt-scan APIs. Regression coverage checks legacy decode, precedence, save
+shape, sandbox retirement, profile refresh and endpoint suppression.
 Filesystem, network and shell gates route through TinySecurity clients; the
 former TinyBox shell calls are gone from `command_checks.rs`, which now only
 parses the model's escalate-only class hint. The host subscribes to
