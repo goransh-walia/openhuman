@@ -521,7 +521,10 @@ fn a_cold_resumed_thread_can_send_again() {
                 .enable_all()
                 .build()
                 .expect("test runtime")
-                .block_on(cold_resumed_thread_can_send_again());
+                .block_on(crate::security::prompt_injection::with_scanner(
+                    crate::security::prompt_injection::scanner_stub::StubScanner::phrases(),
+                    cold_resumed_thread_can_send_again(),
+                ));
         })
         .expect("test thread")
         .join()
@@ -672,7 +675,10 @@ fn reply_language_directive_rides_each_user_message_until_cleared() {
                 .enable_all()
                 .build()
                 .expect("test runtime")
-                .block_on(reply_language_directive_rides_each_user_message_until_cleared_body());
+                .block_on(crate::security::prompt_injection::with_scanner(
+                    crate::security::prompt_injection::scanner_stub::StubScanner::phrases(),
+                    reply_language_directive_rides_each_user_message_until_cleared_body(),
+                ));
         })
         .expect("test thread")
         .join()
