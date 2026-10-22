@@ -63,7 +63,7 @@ test('a clean workspace passes', () => {
 });
 
 test('backend dependencies recognized by the checker are rejected', () => {
-  for (const dep of ['rusqlite', 'libsqlite3-sys', 'mongodb', 'sqlx', 'redb', 'sled', 'rocksdb']) {
+  for (const dep of ['rusqlite', 'libsqlite3-sys', 'mongodb', 'aws-sdk-s3', 'object_store', 'sqlx', 'redb', 'sled', 'rocksdb']) {
     const v = checkMetadata({ packages: [pkg('tinymcp', [dep])] });
     assert.equal(v.length, 1, dep);
     assert.equal(v[0].package, 'tinymcp');
