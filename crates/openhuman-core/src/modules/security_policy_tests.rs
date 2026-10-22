@@ -1,6 +1,6 @@
 use super::*;
-use std::path::PathBuf;
 use crate::config::PrivacyMode as HostPrivacy;
+use std::path::PathBuf;
 use tinytools::rules::{Patterns, ToolRules};
 
 fn tenant(profile: Option<&str>, agent: Option<&str>) -> Tenant {
