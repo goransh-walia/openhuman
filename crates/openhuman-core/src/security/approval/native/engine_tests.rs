@@ -366,7 +366,7 @@ async fn a_listed_whole_tool_grant_can_be_revoked_by_its_opaque_id() {
         .unwrap());
     assert!(world
         .engine
-            .tool_trust(&first, Variant::Standard, Posture::default())
+        .tool_trust(&first, Variant::Standard, Posture::default())
         .await
         .unwrap()
         .is_empty());

@@ -200,15 +200,9 @@ impl NativeEngine {
     ) -> Result<std::sync::Arc<ScopeEntry>, EngineError> {
         let subject = self.subject(tenant, Variant::Standard)?;
         let generation = Self::generation(proxy).await?;
-        scopes::ensure(
-            &self.config,
-            proxy,
-            subject,
-            posture,
-            generation,
-        )
-        .await
-        .map_err(EngineError::Unavailable)
+        scopes::ensure(&self.config, proxy, subject, posture, generation)
+            .await
+            .map_err(EngineError::Unavailable)
     }
 
     /// The module's current generation, which every correlation carries.
