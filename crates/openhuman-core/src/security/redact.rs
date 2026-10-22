@@ -65,24 +65,12 @@ pub fn arguments(args: &serde_json::Value) -> serde_json::Value {
 /// whole; real credentials are far shorter than a chunk and ordinary text has
 /// line breaks.
 ///
-/// Fail closed once the module is serving: when it was armed and cannot answer
-/// (faulted, timed out, a chunk refused) the result is `None` and the caller
-/// withholds it. Where no module is serving at all (a build without
-/// `security-module`, a host that never loaded it, a unit test) there is no
-/// module to fail, and the harness's own credential scrub answers instead: the
-/// documented floor for tool results, as `core::log_redaction` is for logs.
-/// Neither path ever returns the original text.
+/// Fail closed whenever the module cannot answer, including when it is not
+/// built or has not been armed. The fixed diagnostic floor is for logs only;
+/// it does not authorize model-visible tool output.
 #[must_use]
 pub fn credentials(text: &str) -> Option<String> {
-    credentials_with(text, |chunk| {
-        module_credentials(chunk).unwrap_or_else(|| Some(floor_credentials(chunk)))
-    })
-}
-
-/// The floor for tool results where no module serves: the shared credential
-/// scrubber the harness itself uses.
-fn floor_credentials(chunk: &str) -> String {
-    tinyinference_core::sanitize::scrub_credentials(chunk)
+    credentials_with(text, |chunk| module_credentials(chunk).flatten())
 }
 
 /// Largest slice handed to the module in one `CredentialsOnly` call.
