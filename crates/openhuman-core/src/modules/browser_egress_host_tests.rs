@@ -38,8 +38,9 @@ impl tinybus::Interface for AuthenticatedComputerPeer {
         if member.as_str() != "Authorize" {
             return Err(tinybus::Error::failed("unknown test peer method"));
         }
-        let target: BrowserEgressTarget = serde_json::from_value(args)
-            .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+        let (target,): (BrowserEgressTarget,) = serde_json::from_value(args).map_err(|error| {
+            tinybus::Error::failed(format!("invalid test peer target args: {error}"))
+        })?;
         let callback = self.0.proxy(
             contract::INTERFACE,
             contract::OBJECT_PATH,
