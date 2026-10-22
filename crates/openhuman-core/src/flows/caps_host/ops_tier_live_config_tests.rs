@@ -339,14 +339,17 @@ async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
         security: Arc::new(tiered_policy(&captured)),
         approval: Default::default(),
     };
-    tools
+    let result = tools
         .invoke(
             "oh:file_write",
             json!({ "path": "tier-upgrade.txt", "content": "written" }),
             None,
         )
-        .await
-        .expect("live Full tier and downstream filesystem gate must allow the write");
+        .await;
+    if let Err(error) = &result {
+        eprintln!("native upgrade invoke error: {error:?}");
+    }
+    result.expect("live Full tier and downstream filesystem gate must allow the write");
     assert_eq!(
         std::fs::read_to_string(captured.action_dir.join("tier-upgrade.txt")).unwrap(),
         "written"
@@ -369,14 +372,17 @@ async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
         approval: Default::default(),
     };
 
-    tools
+    let result = tools
         .invoke(
             "oh:file_write",
             json!({ "path": "tier-downgrade.txt", "content": "before" }),
             None,
         )
-        .await
-        .expect("Full permits the initial write");
+        .await;
+    if let Err(error) = &result {
+        eprintln!("native downgrade setup invoke error: {error:?}");
+    }
+    result.expect("Full permits the initial write");
     let path = captured.action_dir.join("tier-downgrade.txt");
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "before");
 
