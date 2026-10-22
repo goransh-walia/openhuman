@@ -41,7 +41,7 @@ use crate::flows::{
     FLOWS_TAG,
 };
 use crate::memory::types::{FetchParams, RecallParams};
-use crate::security::approval::{redact_args, summarize_action, GateOutcome};
+use crate::security::approval::{summarize_action, GateOutcome};
 use crate::security::policy::CommandClass;
 #[cfg(test)]
 use crate::security::turn_origin;

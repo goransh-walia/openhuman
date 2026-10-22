@@ -33,6 +33,7 @@ const CAPABILITIES: &str = contract::names::CAPABILITIES;
 const SHUTDOWN: &str = contract::names::SHUTDOWN;
 const FORWARD: &str = contract::names::FORWARD;
 const CLOSE_FORWARD: &str = contract::names::CLOSE_FORWARD;
+const ANALYZE_SHELL: &str = contract::names::ANALYZE_SHELL;
 const JAIL_STATUS: &str = contract::names::JAIL_STATUS;
 const BEGIN_FILE_READ: &str = contract::names::BEGIN_FILE_READ;
 const READ_FILE_CHUNK: &str = contract::names::READ_FILE_CHUNK;

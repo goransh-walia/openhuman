@@ -133,10 +133,10 @@
       "file": "crates/openhuman-core/src/sandbox/untrusted.rs",
       "spawns": 1,
       "trust": "untrusted",
-      "plan": "operator-authorized scheduled shell job and hook commands (hooks/spawner.rs) -> jail policy resolved by sandbox::ops (native jail or Docker), refused below the isolation floor",
+      "plan": "scheduled shell jobs, command hooks and TinyFlows code-node scripts -> TinySecurity SandboxPlan2/ConsumeSandboxPlan2 and TinyBox jail or Docker; refused below the isolation floor",
       "executor": "jailed",
       "test": "crates/openhuman-core/src/sandbox/untrusted_tests.rs",
-      "note": "the one gate, with callers cron scheduler shell jobs and command hooks (hooks/spawner_tests.rs) (sandbox::untrusted::run); it has no unjailed branch: the operator's switch is declared to the module, which plans a run on the host only for the trusted operator, never for this untrusted source or under SaaS"
+      "note": "the shared gate is called by cron shell jobs, command hooks and flows/caps_host/code.rs; flow scripts pass their DispatchCtx explicitly. It has no unjailed branch: the operator's switch is declared to the module, which plans a run on the host only for the trusted operator, never for untrusted source or under SaaS"
     },
     {
       "file": "crates/openhuman-core/src/security/secret_storage/encrypted_store.rs",

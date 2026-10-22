@@ -122,6 +122,7 @@ tinyagents-storage-kit = { path = "../../vendor/tinyagents/crates/tinyagents-sto
 # The storage ports and the URL-to-backend facade (`storage` domain). No driver
 # by default: the `storage-*` features below add them.
 tinystoragedrivers = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456", default-features = false }
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
 tinystoragedrivers-api = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456" }
 # Legacy source readers use the shared SQLite binding only while the host
 # migration feature is enabled; production storage opens through the facade.

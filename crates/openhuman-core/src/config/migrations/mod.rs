@@ -33,7 +33,6 @@ mod repair_http_request_limits;
 mod retire_chat_v1_model;
 pub(crate) mod retire_cloud_provider_type;
 mod retire_local_whisper_stt;
-mod retire_managed_tier_slugs;
 pub(crate) mod security_policy;
 mod unify_ai_provider_settings;
 

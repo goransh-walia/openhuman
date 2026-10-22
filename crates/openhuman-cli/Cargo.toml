@@ -553,3 +553,7 @@ path = "../../tests/embeddings_opt_out.rs"
 name = "storage_backend_capabilities"
 path = "../../tests/storage_backend_capabilities.rs"
 required-features = ["storage-sqlite"]
+
+[[test]]
+name = "storage_approvals_e2e"
+path = "../../tests/storage_approvals_e2e.rs"

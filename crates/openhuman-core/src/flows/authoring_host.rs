@@ -125,7 +125,6 @@ impl ApprovalCallbacks {
                 use crate::security::policy::CommandClass;
                 use crate::security::{GateDecision, SecurityPolicy};
                 use tinyflows_bus::catalog::{ManifestCandidate, ManifestClass};
-                use tinysecurity_bus::CommandClass;
 
                 let security = SecurityPolicy::from_config(
                     &config.security.autonomy,

@@ -411,9 +411,10 @@ fn one_runtime_hosts_independently_configured_agents() {
             // Transcripts are keyed by agent and live in the agent's own store
             // under the workspace, and a thread resumes its own history.
             let listing = |agent_id: &str, session_id: &str| -> Vec<String> {
-                tinyagents_session::port::WorkspaceStores::open(&workspace_dir, agent_id)
-                    .expect("the agent's workspace store")
-                    .transcripts()
+                openhuman_embed::__host::agent::session_store::installed()
+                    .expect("the runtime's session store")
+                    .for_agent(agent_id)
+                    .transcripts
                     .thread_transcripts(session_id, None)
                     .map(|found| found.roots.into_iter().map(|root| root.stem).collect())
                     .unwrap_or_default()

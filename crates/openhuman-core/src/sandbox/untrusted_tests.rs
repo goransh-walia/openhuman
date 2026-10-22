@@ -17,6 +17,7 @@ fn config_in(root: &Path) -> Config {
 
 fn shell<'a>(config: &'a Config, command: &'a str) -> UntrustedShell<'a> {
     UntrustedShell {
+        dispatch_ctx: None,
         config,
         command,
         cwd: &config.action_dir,
@@ -157,6 +158,7 @@ async fn untrusted_gate_follows_the_released_jail() {
         .expect("the released module reports its jail");
 
     let inside = run(UntrustedShell {
+        dispatch_ctx: None,
         config: &config,
         command: "echo jailed > inside.txt && cat inside.txt",
         cwd: &workspace,
@@ -170,6 +172,7 @@ async fn untrusted_gate_follows_the_released_jail() {
     let escape = outside.join("escaped.txt");
     let command = format!("echo escaped > '{}'", escape.display());
     let escaped = run(UntrustedShell {
+        dispatch_ctx: None,
         config: &config,
         command: &command,
         cwd: &workspace,

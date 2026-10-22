@@ -345,8 +345,9 @@ pub mod artifact_publisher {
 /// Egress disclosure, for hosted calls that leave the machine.
 pub mod egress {
     pub use openhuman_core::security::egress::{
-        emit_external_transfer, emit_external_transfer_in, enforce_egress, local_only_tool_block,
-        DataKind, EgressDescriptor, EgressLedger, EgressReason, IdentificationRisk,
+        emit_external_transfer, emit_external_transfer_in, enforce_egress, enforce_egress_blocking,
+        local_only_tool_block, DataKind, EgressDescriptor, EgressLedger, EgressReason,
+        IdentificationRisk,
     };
 }
 

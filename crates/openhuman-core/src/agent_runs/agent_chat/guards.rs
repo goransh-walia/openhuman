@@ -31,7 +31,7 @@ pub(super) fn prompt_guard_user_message(action: PromptEnforcementAction) -> &'st
 /// Extracted to keep `agent_chat` and `agent_chat_simple` in lockstep —
 /// future tweaks (additional log lines, tightening the trim rules) live in
 /// exactly one place.
-pub(super) fn normalize_model_override(opt: Option<String>) -> Option<String> {
+pub(crate) fn normalize_model_override(opt: Option<String>) -> Option<String> {
     opt.and_then(|m| {
         let t = m.trim();
         if t.is_empty() {
@@ -42,7 +42,7 @@ pub(super) fn normalize_model_override(opt: Option<String>) -> Option<String> {
     })
 }
 
-pub(super) async fn enforce_user_prompt_or_reject(
+pub(crate) async fn enforce_user_prompt_or_reject(
     prompt: &str,
     source: &'static str,
 ) -> Result<(), String> {

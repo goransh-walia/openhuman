@@ -31,14 +31,12 @@ pub mod summary;
 pub use registration_scope::ApprovalScope;
 pub mod rpc;
 pub mod schemas;
-#[cfg(feature = "security-module")]
-mod store_import;
 mod storage_schema;
 pub mod store;
 mod store_documents;
+#[cfg(feature = "security-module")]
+mod store_import;
 pub(crate) use storage_schema::{collection_specs, upgrade_records};
-#[cfg(feature = "legacy-import")]
-pub(crate) use store_documents::import_source;
 pub mod types;
 
 pub use gate::{

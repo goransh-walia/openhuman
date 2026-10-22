@@ -6,7 +6,6 @@ use crate::security::GateDecision;
 use serde_json::json;
 use std::sync::Arc;
 use tinyagents_harness::tool::response_fields_from_schema;
-use tinysecurity_bus::CommandClass;
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 /// The tier gate an `http_request` (Network-class) node calls: BLOCKED under
