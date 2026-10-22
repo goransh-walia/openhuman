@@ -599,6 +599,17 @@ socket to either the old allowed listener or the denied rebound listener. This
 does not supply TinyComputer consequence/payment gates or prove native OS process
 confinement; both remain open under Tasks 14–15.
 
+The consequence gate still lacks a trusted host caller context: the module
+callback knows the paused task and action, but not the tenant-bound dispatch
+context that initiated `ContinueTask`. TinyComputer PR
+[#153](https://github.com/tinyhumansai/tinycomputer/pull/153) adds an opaque,
+redacted `HostContext` field to `ContinueTask`, relays it to
+`ConsequenceHost.Review`, and bumps the wire contract to 2.27. It is awaiting
+upstream CI/review. OpenHuman must wait for that owner change to land and be
+released before adding the host adapter; the adapter must validate and consume
+the short-lived host-issued context, bind the exact task/action, and fail
+closed on missing, stale, mismatched or reused context.
+
 ## Task 16 — Final matrix, documentation and completion evidence
 
 **Files:** `.github/workflows/{security-native,ci-full,test-reusable}.yml`,
