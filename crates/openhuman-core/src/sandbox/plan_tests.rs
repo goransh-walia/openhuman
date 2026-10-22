@@ -57,7 +57,10 @@ fn a_jail_plan_maps_grants_network_and_isolation_floor() {
 #[test]
 fn an_unbounded_plan_does_not_synthesize_native_resource_limits() {
     let plan = BoxPlan::from_artifact(&artifact(SandboxBackend::Jail), None).unwrap();
-    assert!(plan.jail.resources.is_none(), "an absent bound must stay absent");
+    assert!(
+        plan.jail.resources.is_none(),
+        "an absent bound must stay absent"
+    );
 }
 
 #[test]
