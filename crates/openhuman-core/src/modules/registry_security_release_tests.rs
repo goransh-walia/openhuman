@@ -79,4 +79,3 @@ fn tinysecurity_registry_matches_the_published_v016_release_manifest() {
         ]
     );
 }
-
