@@ -16,6 +16,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(default)]
 pub struct SecurityConfig {
+    /// `[security.autonomy]`: action permissions and command limits.
+    pub autonomy: super::AutonomyConfig,
+    /// `[security.sandbox]`: execution isolation selection.
+    pub sandbox: super::SandboxConfig,
+    /// `[security.privacy]`: data-egress posture.
+    pub privacy: super::PrivacyConfig,
     /// `[security.approval]`: interactive approval timing.
     pub approval: ApprovalSettings,
     /// `[security.auto_approve]`: automatic approval beyond the per-tool list.
