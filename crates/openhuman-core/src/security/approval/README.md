@@ -7,13 +7,13 @@ Interactive approval workflow for supervised mode (issue #1339). `ApprovalGate` 
 ## Responsibilities
 
 - Label the call's origin (`origin_class`) and hand it to the engine; what each class is allowed is the module's decision (contract 1.22): a cron turn's external effect is denied, an unlabelled call is denied unless the user's Always-allow list names that exact tool, and internal background jobs, pre-declared workflow actions and the CLI are audited automatic approvals that never park. The host only renders the refusal in its own words (`engine_denial`). SaaS never parks: there is no per-user prompt channel, so the deployment's tool groups are the pre-authorization, a call they allow is recorded as an audited automatic approval under the tenant's own subject and audit stream (`saas_approved`), and anything else is denied.
-- Hand the engine the call posture: the auto-approve-everything setting and the agent's approvals-off setting. The legacy `autonomy.auto_approve` list is not replayed into TinySecurity; otherwise revoking a durable module grant could be undone by stale config. The module turns a required approval into an audited automatic one (`auto:tool-grant`, `auto:flow-grant`, `auto:host-policy`, `auto:trusted-automation`, `auto:local-operator`) only as far as that allows. Whole-tool grants use `GrantTool2` under the exact user/workspace/agent scope. Per-flow trust is also module-owned (`GrantFlowTool2`, `RevokeFlowTool2`, `ListFlowTrust2`) and approves the exact tool in the exact flow. Strict-flow approvals never become global whole-tool grants; forced approvals remain one-time.
+- Hand the engine the current call posture, including the auto-approve-everything setting and the agent's approvals-off setting. Legacy `autonomy.auto_approve` entries are imported once with `ImportTrustSource2`; they are never replayed during scope registration, so a revoked durable grant cannot be resurrected. Whole-tool grants use `GrantTool2` under the exact user/workspace/agent scope of the parked request. Per-flow grants use `GrantFlowTool2`, `RevokeFlowTool2` and `ListFlowTrust2` and approve only the exact tool in the exact flow. Strict-flow approvals never become global whole-tool grants; forced approvals remain one-time.
 - Park the tool-call future when a person must decide, resolve it on a decision (`approve_once` / `approve_always_for_tool` / `approve_always_for_flow` / `deny`), expiry, or channel drop, failing closed in every non-approve path.
 - Reserve an approval for execution exactly once, right before the tool runs, and record the call's terminal outcome after it ends (`record_execution`).
 - Authenticate the decision: the RPC that carries it is the authenticated human action, so the host issues an opaque ticket for exactly that request and choice, and the module verifies it against the exact pending row (`VerifyHuman`).
 - Build safe action summaries (`summarize_action`) before anything leaves the gate; argument redaction is the TinySecurity module's (`security::redact::arguments`, `StructuredArguments` mode).
 - Route a thread's yes/no chat reply back to a parked approval (`pending_for_thread` + `parse_approval_reply`).
-- On `approve_always_for_tool`, resolve the current call first and then persist the tool with `GrantTool2`; if persistence fails, report a warning and let later calls prompt. On `approve_always_for_flow`, grant the flow trust to the module.
+- On `approve_always_for_tool`, resolve the current call first and then persist its tool grant in TinySecurity; if persistence fails, report a warning and let later calls prompt. On `approve_always_for_flow`, persist the flow trust in TinySecurity.
 
 ## Key files
 
@@ -93,7 +93,7 @@ The module's rows live in the document store of the current call's storage scope
 - `crate::core::all`: `ControllerFuture` / `RegisteredController` for the controller registry.
 - `crate::core` (`ControllerSchema`, `FieldSchema`, `TypeSchema`): schema definitions.
 - `crate::core::Outcome`: RPC return contract.
-- `crate::config::Config`: workspace dir and call posture settings. Durable whole-tool trust is stored by TinySecurity, not in the legacy `autonomy.auto_approve` list.
+- `crate::config::Config`: workspace dir and call posture settings; the boot-time `autonomy.auto_approve` snapshot is only a one-time legacy import source. Durable whole-tool trust is stored by TinySecurity.
 - `crate::modules::security` (`approval_proxy`, `approval_init_config`, `audit_init_config`) and `modules/security_host.rs`: the attested module and the callbacks served for it. The host links only `tinysecurity-bus`.
 - `crate::security`: `live_policy::current()` for the live "Always allow" list and `POLICY_DENIED_MARKER` for deny reasons.
 

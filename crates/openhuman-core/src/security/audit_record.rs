@@ -113,6 +113,29 @@ pub async fn record(
     crate::modules::security::audit::record_for_tenant(config, &tenant, event).await
 }
 
+/// Record through an explicit module connection, retaining the dispatch's tenant.
+/// The native fixture uses this to test tenant selection without mutating global state.
+#[cfg(feature = "security-module")]
+pub(crate) async fn record_with_proxy(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: Option<&crate::config::Config>,
+    event: HostAuditEvent,
+    proxy: &tinybus::Proxy,
+) -> Result<(), String> {
+    let loaded;
+    let config = match config {
+        Some(config) => config,
+        None => {
+            loaded = ctx.load_config().await?;
+            &loaded
+        }
+    };
+    let tenant = ctx
+        .tenant()
+        .map_err(|_| "no tenant scope for the audit row".to_owned())?;
+    crate::modules::security::audit::record_for_tenant_with(proxy, config, &tenant, event).await
+}
+
 /// Without the module there is no audit stream; the row is reported, not kept.
 #[cfg(not(feature = "security-module"))]
 pub async fn record(

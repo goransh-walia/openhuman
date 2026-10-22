@@ -19,48 +19,13 @@ fn entry(agent: &str) -> Arc<ScopeEntry> {
     ))
 }
 
-fn posture(tools: &[&str]) -> Posture {
-    Posture {
-        require_approval: true,
-        auto_approve_all: false,
-        tool_grants: tools.iter().map(|t| (*t).to_owned()).collect(),
-    }
-}
-
 #[test]
-fn grants_are_sorted_deduplicated_and_exact() {
-    let granted = grants(&posture(&["slack_post", "gmail_send", "slack_post"]));
-    assert_eq!(granted.tools, ["gmail_send", "slack_post"]);
-    // Per-flow trust is the module's durable state, never part of the posture.
+fn scope_registration_never_replays_legacy_tool_grants() {
+    let granted = grants();
+    assert!(granted.tools.is_empty());
+    // Per-tool trust is imported through immutable durable receipts, never the
+    // mutable scope posture. Flow trust is also independently durable.
     assert!(granted.flows.is_empty());
-    assert!(granted.is_valid());
-}
-
-#[test]
-fn a_name_the_module_never_grants_is_dropped_not_fatal() {
-    // A human-only or native tool in the user's list must not fail every
-    // registration of the subject; it simply is never auto-approved.
-    let granted = grants(&posture(&[
-        "device_crypto",
-        "native_secret_grant",
-        "policy_change",
-        "gmail_send",
-        "  ",
-    ]));
-    assert_eq!(granted.tools, ["gmail_send"]);
-    assert!(granted.is_valid());
-}
-
-#[test]
-fn grants_never_exceed_the_modules_bounds() {
-    let many: Vec<String> = (0..MAX_TOOL_GRANTS2 + 10)
-        .map(|n| format!("tool_{n}"))
-        .collect();
-    let granted = grants(&Posture {
-        tool_grants: many,
-        ..Posture::default()
-    });
-    assert_eq!(granted.tools.len(), MAX_TOOL_GRANTS2);
     assert!(granted.is_valid());
 }
 

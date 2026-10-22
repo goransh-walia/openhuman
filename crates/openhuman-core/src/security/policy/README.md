@@ -7,9 +7,8 @@ always-forbidden system/credential paths, trusted roots, and the per-hour
 action budget. TinySecurity answers path, protected-floor, and command-policy
 questions. This folder holds the settings that module is given and the host's
 projection of its answers; it decides nothing and has no local fallback (see
-`native_commands.rs`, `native_paths.rs` and `module_gate.rs`). TinyBox's
-`CommandClass` remains a compatibility vocabulary used when projecting the
-module's answer; it does not own or evaluate command policy.
+`native_commands.rs`, `native_paths.rs` and `module_gate.rs`). Command classes
+come from TinySecurity's bus contract; TinyBox owns no command-policy vocabulary.
 
 ## Autonomy is off by default
 
@@ -33,7 +32,7 @@ impl in [`types.rs`](./types.rs).
 
 - Build a `SecurityPolicy` from `AutonomyConfig` (`SecurityPolicy::from_config`).
 - Ask TinySecurity about a shell command (`check_command`) and project
-  its answer into a `GateDecision`, the compatibility `CommandClass` and the host's
+  its answer into a `GateDecision`, its `CommandClass` and the host's
   policy-blocked messages (`Refusal`). The autonomy tier table is the module's;
   every caller asks it (`command_class_gate`).
 - Ask the module whether filesystem paths are reachable, in one batch per

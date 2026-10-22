@@ -269,6 +269,66 @@ async fn a_flow_grant_applies_to_that_flow_only() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_durable_operator_tool_grant_is_reused_by_the_module() {
+    let world = world().await;
+    let shown = Arc::new(Shown::default());
+    world
+        .engine
+        .grant_tool_trust(
+            &crate::core::runtime::Tenant::default(),
+            Variant::Standard,
+            "gmail_send",
+        )
+        .await
+        .expect("TinySecurity persists the exact operator grant");
+    assert!(matches!(
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
+        Checked::Approved { .. }
+    ));
+    assert!(shown.deliveries.lock().unwrap().is_empty());
+    assert!(matches!(
+        world
+            .engine
+            .check(input("slack_post", &shown))
+            .await
+            .unwrap(),
+        Checked::Pending { .. }
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn legacy_auto_approve_is_imported_as_durable_tool_trust() {
+    let world = world().await;
+    let shown = Arc::new(Shown::default());
+    let mut legacy = input("gmail_send", &shown);
+    legacy.posture.tool_grants = vec!["gmail_send".into()];
+
+    assert!(matches!(
+        world.engine.check(legacy).await.unwrap(),
+        Checked::Approved { .. }
+    ));
+
+    // Simulate the next process: legacy config still carries the item, but no
+    // transient scope registration grants it. Only the import receipt can keep
+    // it active in the module.
+    let restarted = NativeEngine::on(world.config.clone(), world.fixture.proxy.clone());
+    let migrated = input("gmail_send", &shown);
+    assert!(
+        matches!(
+            restarted.check(migrated).await.unwrap(),
+            Checked::Approved { .. }
+        ),
+        "the imported grant must survive without being re-granted by posture"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn auto_approve_all_is_the_posture_and_a_forced_call_ignores_it() {
     let world = world().await;
     let shown = Arc::new(Shown::default());

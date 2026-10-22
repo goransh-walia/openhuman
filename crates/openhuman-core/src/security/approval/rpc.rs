@@ -195,7 +195,7 @@ pub async fn approval_preauthorize_flow(
 /// unknown / already decided / belongs to a different session. With
 /// `agent_id`, also errors when the request belongs to another agent.
 pub async fn approval_decide(
-    ctx: &DispatchCtx,
+    _ctx: &DispatchCtx,
     request_id: &str,
     decision: ApprovalDecision,
     agent_id: Option<&str>,

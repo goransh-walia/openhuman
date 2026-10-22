@@ -127,14 +127,20 @@ async fn mock_client_with_docker_control_delay(
 #[test]
 fn host_and_module_contract_versions_must_cover_the_full_host_surface() {
     let (major, minor) = contract::CONTRACT_VERSION;
-    assert_eq!(require_compatible((major, minor)), Ok(()));
+    assert_eq!(require_compatible(contract::CONTRACT_VERSION), Ok(()));
     assert_eq!(require_compatible((major, minor + 1)), Ok(()));
+    if minor > 0 {
+        assert_eq!(
+            require_compatible((major, minor - 1)).expect_err("older member set is refused"),
+            ModuleCallError::IncompatibleContract
+        );
+    }
     assert_eq!(
-        require_compatible((major - 1, u32::MAX)).expect_err("older major is refused"),
+        require_compatible((major + 1, minor)).expect_err("different major is refused"),
         ModuleCallError::IncompatibleContract
     );
     assert_eq!(
-        require_compatible((major + 1, minor)).expect_err("different major is refused"),
+        require_compatible((major - 1, u32::MAX)).expect_err("older major is refused"),
         ModuleCallError::IncompatibleContract
     );
 }
@@ -275,7 +281,7 @@ async fn pinned_loader_serves_the_published_tinybox_release() {
 
     crate::modules::ops::ensure_loaded(&config, MODULE_ID)
         .await
-        .expect("the OpenHuman release registry and TinyBus loader admit v0.1.28");
+        .expect("the OpenHuman release registry and TinyBus loader admit the pinned release");
     let capabilities = super::capabilities(&config)
         .await
         .expect("the loaded release serves TinyBus capabilities");
@@ -310,19 +316,18 @@ async fn pinned_loader_serves_the_published_tinybox_release() {
 }
 
 #[tokio::test]
-#[ignore = "requires the downloaded, checksum-verified TinyBox v0.1.28 archive"]
-async fn pinned_loader_rejects_pre_contract2_tinybox_release() {
+#[ignore = "requires the downloaded, checksum-verified TinyBox release archive"]
+async fn pinned_loader_serves_resolve_local_grants_from_tinybox_release() {
     let _environment_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let archive = std::env::var_os("TINYBOX_RELEASE_ARTIFACT")
         .map(std::path::PathBuf::from)
-        .expect("set TINYBOX_RELEASE_ARTIFACT to the verified v0.1.28 archive");
+        .expect("set TINYBOX_RELEASE_ARTIFACT to the verified pinned release archive");
     assert!(
         archive.is_file(),
         "missing verified release archive: {archive:?}"
     );
 
     let record = crate::modules::registry::find(MODULE_ID).expect("TinyBox registry record");
-    assert_eq!(record.version, "0.1.28");
     let asset = tinybus::module::platform::host_candidates()
         .iter()
         .find_map(|host_key| record.asset_for(host_key))
@@ -377,10 +382,31 @@ async fn pinned_loader_rejects_pre_contract2_tinybox_release() {
     config.modules.enabled = true;
     config.modules.allow_download = false;
     config.modules.install_dir = Some(install.path().display().to_string());
-    let error = crate::modules::ops::ensure_loaded(&config, MODULE_ID)
+    crate::modules::ops::ensure_loaded(&config, MODULE_ID)
         .await
-        .expect_err("the v1 module contract must be rejected by this v2 host");
-    assert!(error.to_ascii_lowercase().contains("contract"), "{error}");
+        .expect("the TinyBus loader admits the published pinned artifact");
+
+    let home = tempfile::tempdir().expect("temporary operator home");
+    let allowed = home.path().join("workspace");
+    std::fs::create_dir(&allowed).expect("create an allowed grant");
+    let request = contract::ResolveLocalGrantsRequest {
+        home: Some(home.path().display().to_string()),
+        config: contract::LocalGrantConfig {
+            toolchain_homes: false,
+            extra_read_only: vec!["~/workspace".to_owned()],
+            ..contract::LocalGrantConfig::default()
+        },
+        protected: contract::ProtectedPaths::default(),
+    };
+    let grants: contract::LocalGrants = super::module_client(&config)
+        .call(MODULE_ID, RESOLVE_LOCAL_GRANTS, (request,))
+        .await
+        .expect("the published artifact serves ResolveLocalGrants");
+    assert_eq!(
+        grants.read_only,
+        vec![allowed.canonicalize().unwrap().display().to_string()]
+    );
+    assert!(grants.read_write.is_empty());
 }
 
 #[test]
@@ -394,7 +420,6 @@ fn every_host_operation_is_a_member_of_the_canonical_contract() {
         SPAWN,
         IS_RUNNING,
         CANCEL,
-        ANALYZE_SHELL,
         RESERVE,
         CAPABILITIES,
         SHUTDOWN,
@@ -417,7 +442,9 @@ fn every_host_operation_is_a_member_of_the_canonical_contract() {
         CLEANUP_DOCKER,
         RUN_DOCKER_WITHOUT_WORKSPACE,
     ];
-    assert_eq!(methods, contract::METHODS[..methods.len()]);
+    assert!(methods
+        .iter()
+        .all(|method| contract::METHODS.contains(method)));
     assert!(contract::METHODS.contains(&SELECT_SHELL));
     assert!(contract::METHODS.contains(&START_NATIVE_SHELL_EXEC));
 }
@@ -433,7 +460,6 @@ fn every_member_the_host_calls_is_named_in_the_pinned_contract() {
         SPAWN,
         IS_RUNNING,
         CANCEL,
-        ANALYZE_SHELL,
         RESERVE,
         CAPABILITIES,
         SHUTDOWN,

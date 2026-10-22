@@ -28,7 +28,6 @@ const CLOSE: &str = contract::names::CLOSE;
 const SPAWN: &str = contract::names::SPAWN;
 const IS_RUNNING: &str = contract::names::IS_RUNNING;
 const CANCEL: &str = contract::names::CANCEL;
-const ANALYZE_SHELL: &str = contract::names::ANALYZE_SHELL;
 const RESERVE: &str = contract::names::RESERVE;
 const CAPABILITIES: &str = contract::names::CAPABILITIES;
 const SHUTDOWN: &str = contract::names::SHUTDOWN;
@@ -348,14 +347,6 @@ pub async fn close_forward(
     request: contract::CloseForwardRequest,
 ) -> Result<(), String> {
     call(config, CLOSE_FORWARD, (request,), false).await
-}
-
-/// Ask TinyBox for structural shell facts; this is not an authorization check.
-pub async fn analyze_shell(
-    config: &Config,
-    command: String,
-) -> Result<contract::ShellAnalysis, String> {
-    call(config, ANALYZE_SHELL, (command,), false).await
 }
 
 /// Open a bounded workspace file reader.

@@ -29,3 +29,11 @@ fn declared_class_parses_and_is_escalate_only_input() {
     assert_eq!(SecurityPolicy::parse_declared_class("bogus"), None);
     assert_eq!(SecurityPolicy::parse_declared_class(""), None);
 }
+
+#[test]
+fn command_class_uses_the_tinysecurity_contract_type() {
+    let parsed: tinysecurity_bus::CommandClass =
+        SecurityPolicy::parse_declared_class("read").expect("read is a known class");
+
+    assert_eq!(parsed, tinysecurity_bus::CommandClass::Read);
+}

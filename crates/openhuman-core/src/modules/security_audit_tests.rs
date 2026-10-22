@@ -144,9 +144,14 @@ async fn audit_record_uses_the_admitting_dispatch_tenant() {
     let event = HostAuditEvent::command_execution("tool:shell", "ls", false, true, true, 1);
 
     CoreContext::scope(ambient_other, async {
-        crate::security::audit_record::record(&admitted, Some(&config), event)
-            .await
-            .expect("audit row records for its admitted dispatch");
+        crate::security::audit_record::record_with_proxy(
+            &admitted,
+            Some(&config),
+            event,
+            &fixture.proxy,
+        )
+        .await
+        .expect("audit row records for its admitted dispatch");
     })
     .await;
 

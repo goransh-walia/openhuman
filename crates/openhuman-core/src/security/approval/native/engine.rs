@@ -15,7 +15,8 @@ use tinysecurity_bus::{
 };
 
 use super::super::engine::{
-    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Sealed, Variant,
+    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Posture, Sealed,
+    Variant,
 };
 use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
 use super::scopes::{self, ScopeEntry};
@@ -310,6 +311,13 @@ impl ApprovalEngine for NativeEngine {
         )
         .await
         .map_err(EngineError::Unavailable)?;
+        if !crate::core::runtime::is_saas()
+            && input.variant == Variant::Standard
+            && !input.posture.tool_grants.is_empty()
+        {
+            super::history_import::import_tool_grants(&proxy, &scope, &input.posture.tool_grants)
+                .await;
+        }
         self.sweep(&proxy, &scope, generation).await;
 
         let arguments_json =

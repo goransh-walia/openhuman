@@ -12,6 +12,7 @@ use tinysecurity_bus::{PathAccess, PathPolicy, PathTrustedRoot, PathValidationRe
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn production_client_registers_and_checks_a_path_policy_on_the_released_archive() {
+    let _module_name_guard = super::native_tests::lock_module_name().await;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();
     let dir = tempfile::tempdir_in(&root).unwrap();
@@ -71,6 +72,7 @@ async fn production_client_registers_and_checks_a_path_policy_on_the_released_ar
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn sync_seam_redacts_through_the_released_archive_from_inside_and_outside_a_runtime() {
+    let _module_name_guard = super::native_tests::lock_module_name().await;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();
     let dir = tempfile::tempdir_in(&root).unwrap();
@@ -160,6 +162,7 @@ fn production_client_gates_shell_and_network_on_the_released_archive() {
 }
 
 async fn production_client_gates_shell_and_network_on_the_released_archive_inner() {
+    let _module_name_guard = super::native_tests::lock_module_name().await;
     use crate::security::policy::{CommandFlow, CommandQuery, CommandStage, Refusal};
     use crate::security::{AutonomyLevel, GateDecision, SecurityPolicy};
     use tinysecurity_bus::CommandClass;
@@ -281,6 +284,8 @@ async fn production_client_gates_shell_and_network_on_the_released_archive_inner
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn production_keyring_is_denied_and_creates_no_store_on_the_released_archive() {
+    let _consent_test_guard = crypto::KEYRING_CONSENT_TEST_LOCK.lock().await;
+    let _module_name_guard = super::native_tests::lock_module_name().await;
     use crate::security::keyring_consent::policy;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();

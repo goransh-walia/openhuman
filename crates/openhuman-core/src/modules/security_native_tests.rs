@@ -24,6 +24,21 @@ pub(crate) struct NativeFixture {
     pub(crate) record: super::super::ModuleRecord,
     /// The in-memory bus both peers sit on, for a test that needs another peer.
     pub(crate) transport: MemoryBus,
+    // Keep the process-global TinySecurity module bus name reserved until all
+    // fixture-owned module state has been dropped. This is last so it drops
+    // after `host` and the broker task.
+    _module_name_guard: tokio::sync::OwnedMutexGuard<()>,
+}
+
+fn module_name_lock() -> std::sync::Arc<tokio::sync::Mutex<()>> {
+    static LOCK: std::sync::OnceLock<std::sync::Arc<tokio::sync::Mutex<()>>> =
+        std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Arc::new(tokio::sync::Mutex::new(())))
+        .clone()
+}
+
+pub(crate) async fn lock_module_name() -> tokio::sync::OwnedMutexGuard<()> {
+    module_name_lock().lock_owned().await
 }
 
 pub(super) async fn native_fixture() -> NativeFixture {
@@ -51,6 +66,7 @@ pub(crate) async fn native_fixture_configured(
     approvals: bool,
     adjust: impl FnOnce(&mut ModuleConfig),
 ) -> NativeFixture {
+    let module_name_guard = lock_module_name().await;
     let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
     std::fs::create_dir_all(&target).unwrap();
     let fixture_root = std::env::var_os("OPENHUMAN_TEST_SECURITY_FIXTURE_DIR")
@@ -183,6 +199,7 @@ pub(crate) async fn native_fixture_configured(
         client,
         record,
         transport,
+        _module_name_guard: module_name_guard,
     }
 }
 
@@ -200,6 +217,7 @@ async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
         record: _,
         client: _,
         transport: _,
+        _module_name_guard,
     } = native_fixture().await;
     let root = acting.path().canonicalize().unwrap();
     let action = root.join("action");
