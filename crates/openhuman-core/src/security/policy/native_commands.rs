@@ -254,7 +254,7 @@ impl SecurityPolicy {
             require_approval_for_medium_risk: self.require_approval_for_medium_risk,
             block_high_risk_commands: self.block_high_risk_commands,
             action_dir,
-            home_dir: crate::modules::security_policy::security_home_dir(),
+            home_dir: crate::modules::security::policy_translation::security_home_dir(),
         })
     }
 
