@@ -531,6 +531,20 @@ async fn native_shell_and_policy_validation_use_their_contract_members() {
     let _: () = call_with_client(&client, START_NATIVE_SHELL_EXEC, (shell.clone(),), false)
         .await
         .expect("native shell start call");
+    let shell_resources = contract::NativeJailResourceRequest {
+        cpu_millis: Some(500),
+        memory_bytes: Some(64 << 20),
+        pids_max: Some(32),
+        disk_bytes: None,
+    };
+    let _: () = call_with_client(
+        &client,
+        START_NATIVE_SHELL_EXEC_WITH_RESOURCES,
+        (shell.clone(), shell_resources),
+        false,
+    )
+    .await
+    .expect("resource-aware native shell start call");
     let _: () = call_with_client(&client, VALIDATE_DOCKER_POLICY, (policy.clone(),), false)
         .await
         .expect("policy validation call");
@@ -538,6 +552,18 @@ async fn native_shell_and_policy_validation_use_their_contract_members() {
     let called: Vec<_> = log.iter().filter(|(n, _)| n != CAPABILITIES).collect();
     let expected = [
         ("StartNativeShellExec".to_owned(), json!([shell])),
+        (
+            "StartNativeShellExecWithResources".to_owned(),
+            json!([
+                shell,
+                contract::NativeJailResourceRequest {
+                    cpu_millis: Some(500),
+                    memory_bytes: Some(64 << 20),
+                    pids_max: Some(32),
+                    disk_bytes: None,
+                }
+            ]),
+        ),
         ("ValidateDockerPolicy".to_owned(), json!([policy])),
     ];
     assert_eq!(called, expected.iter().collect::<Vec<_>>());
