@@ -615,8 +615,9 @@ async fn an_all_injection_batch_completes_without_calling_the_model() {
 
 #[tokio::test]
 async fn a_benign_batch_passes_the_whole_turn_guard() {
+    use crate::security::prompt_injection::scanner_stub::StubScanner;
     use crate::security::prompt_injection::{
-        enforce_prompt_input, PromptEnforcementAction, PromptEnforcementContext,
+        enforce_prompt_input, with_scanner, PromptEnforcementAction, PromptEnforcementContext,
     };
     let items: Vec<_> = ["loving the new release", "when is the next meetup"]
         .iter()
@@ -629,14 +630,17 @@ async fn a_benign_batch_passes_the_whole_turn_guard() {
         &crate::config::schema::InboundSourceConfig::default(),
         &items,
     );
-    let decision = enforce_prompt_input(
-        &prompt,
-        PromptEnforcementContext {
-            source: "test",
-            request_id: None,
-            user_id: None,
-            session_id: None,
-        },
+    let decision = with_scanner(
+        StubScanner::phrases(),
+        enforce_prompt_input(
+            &prompt,
+            PromptEnforcementContext {
+                source: "test",
+                request_id: None,
+                user_id: None,
+                session_id: None,
+            },
+        ),
     )
     .await;
     assert_eq!(decision.action, PromptEnforcementAction::Allow, "{prompt}");
