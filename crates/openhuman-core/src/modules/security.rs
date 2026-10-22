@@ -582,6 +582,11 @@ pub(crate) async fn validate_host_path(
     path: &str,
     parent: bool,
 ) -> Result<tinysecurity_bus::PathValidationResult, String> {
+    #[cfg(test)]
+    if let Some(result) = path_stub::validate_host_path(&policy, path, parent) {
+        return result;
+    }
+
     let config =
         config::host_config(&policy.workspace_dir, crate::core::runtime::is_saas()).await?;
     require_enabled(&config)?;
@@ -697,6 +702,10 @@ fn validate_path_response(result: &tinysecurity_bus::PathValidationResult) -> Re
 #[cfg(test)]
 #[path = "security_native_tests.rs"]
 pub(crate) mod native_tests;
+
+#[cfg(test)]
+#[path = "security_path_stub.rs"]
+pub(crate) mod path_stub;
 
 #[cfg(test)]
 #[path = "security_production_tests.rs"]

@@ -329,6 +329,7 @@ async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
     let dir = tempfile::tempdir().unwrap();
     let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
     save_tier_config(&captured).await;
+    let _path_port = crate::modules::security::path_stub::install_port(captured.action_dir.clone());
     let mut live = captured.clone();
     live.autonomy.level = AutonomyLevel::Full;
     save_tier_config(&live).await;
@@ -361,6 +362,7 @@ async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
     let dir = tempfile::tempdir().unwrap();
     let mut captured = persisted_tier_config(dir.path(), true, AutonomyLevel::Full);
     save_tier_config(&captured).await;
+    let _path_port = crate::modules::security::path_stub::install_port(captured.action_dir.clone());
     let ctx = live_tier_context(&captured);
     let tools = OpenHumanTools {
         ctx,
