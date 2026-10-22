@@ -162,7 +162,7 @@ fn production_client_gates_shell_and_network_on_the_released_archive() {
 async fn production_client_gates_shell_and_network_on_the_released_archive_inner() {
     use crate::security::policy::{CommandFlow, CommandQuery, CommandStage, Refusal};
     use crate::security::{AutonomyLevel, GateDecision, SecurityPolicy};
-    use tinybox_bus::CommandClass;
+    use tinysecurity_bus::CommandClass;
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();

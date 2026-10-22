@@ -22,7 +22,7 @@ impl FlowCallPolicy for FlowPolicy {
         captured: &Config,
         live: &Config,
         security: &SecurityPolicy,
-        class: tinybox_bus::CommandClass,
+        class: tinysecurity_bus::CommandClass,
     ) -> std::result::Result<GateDecision, String> {
         let policy =
             super::super::tier::tier_policy_from_config(dispatch, captured, Some(live), security)

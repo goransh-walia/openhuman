@@ -294,7 +294,7 @@ fn shell_safe_env_vars_includes_essentials() {
 #[tokio::test]
 async fn shell_block_verdict_never_reaches_the_runtime() {
     use crate::security::GateDecision;
-    use tinybox_bus::CommandClass;
+    use tinysecurity_bus::CommandClass;
 
     let tmp = tempfile::tempdir().unwrap();
     let marker = tmp.path().join("ran");

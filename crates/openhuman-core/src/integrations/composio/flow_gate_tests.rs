@@ -5,7 +5,7 @@ use crate::integrations::composio::catalog::seed_live_catalog_cache_expired;
 use crate::integrations::composio::catalog::{seed_live_catalog_cache, ToolContract};
 use crate::integrations::composio::{ComposioExecuteResponse, ConnectedIntegration};
 use serde_json::json;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 fn integration(
     toolkit: &str,

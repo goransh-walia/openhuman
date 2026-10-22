@@ -1,5 +1,5 @@
 use super::*;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 // -- LLM escalate-only category (Phase G) -------------------------
 

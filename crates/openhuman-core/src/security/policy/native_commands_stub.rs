@@ -10,7 +10,7 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 use super::native_commands::{
     CommandFlow, CommandGateway, CommandQuery, CommandStage, CommandVerdict, Refusal,

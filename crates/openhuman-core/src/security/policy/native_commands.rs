@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 #[cfg(feature = "security-module")]

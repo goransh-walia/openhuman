@@ -57,7 +57,7 @@ mod tool_results_and_credentials_tests;
 #[cfg(test)]
 fn enforce_node_tier_gate(
     security: &SecurityPolicy,
-    class: tinybox_bus::CommandClass,
+    class: tinysecurity_bus::CommandClass,
     node: &str,
 ) -> Result<crate::security::GateDecision> {
     futures::executor::block_on(super::enforce_node_tier_gate(security, class, node))

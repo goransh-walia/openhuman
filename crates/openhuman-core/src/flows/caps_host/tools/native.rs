@@ -3,7 +3,7 @@
 use super::super::{EngineError, Result};
 use async_trait::async_trait;
 use serde_json::Value;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 use super::{ToolBackend, ToolCallCtx};
 

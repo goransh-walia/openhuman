@@ -6,7 +6,7 @@
 //! names start with `desired_` and which are expected to fail until fixed.
 
 use super::*;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 fn policy(autonomy: AutonomyLevel) -> SecurityPolicy {
     SecurityPolicy {

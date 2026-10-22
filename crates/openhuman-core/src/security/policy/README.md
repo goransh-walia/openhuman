@@ -63,7 +63,7 @@ impl in [`types.rs`](./types.rs).
 | [`command_checks.rs`](./command_checks.rs) | `parse_declared_class` |
 | [`native_commands.rs`](./native_commands.rs) | `SecurityPolicy::check_command` / `command_class_gate[_blocking]`, `CommandQuery`, `CommandFlow`, `CommandStage`, `CommandVerdict`, `Refusal`, the `CommandGateway` seam, and the translation to TinySecurity's command policy |
 | [`enforcement.rs`](./enforcement.rs) | `from_config`, `with_privacy_mode`, `openhuman_scratch_dir`/`ensure_openhuman_scratch_dir`, `validate_path_within_root` |
-| TinySecurity command-policy contract (`tinysecurity-bus`) | Command class, gate, risk and refusal category for one command under the host-registered policy; `tinybox_bus::CommandClass` is only the host-facing compatibility vocabulary |
+| TinySecurity command-policy contract (`tinysecurity-bus`) | Command class, gate, risk and refusal category for one command under the host-registered policy; `tinysecurity_bus::CommandClass` is only the host-facing compatibility vocabulary |
 
 ## Public surface
 

@@ -19,7 +19,7 @@ use crate::modules::tinyflows as module;
 use crate::security::credentials::{HttpCredential, HttpCredentialsStore};
 use crate::security::SecurityPolicy;
 use crate::tools::http_request_tool;
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 use tinytools::Tool as _;
 
 use super::{

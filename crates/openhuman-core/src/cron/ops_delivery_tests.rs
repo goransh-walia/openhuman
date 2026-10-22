@@ -481,7 +481,7 @@ async fn manual_runs_use_each_invocations_config_and_security_snapshot() {
         async fn run(&self, cx: &JobRunContext, _job: &CronJob, _run_id: &str) -> JobOutcome {
             use crate::security::policy::native_commands_stub::StubGateway;
             use crate::security::policy::{CommandFlow, CommandQuery, CommandStage};
-            use tinybox_bus::CommandClass;
+            use tinysecurity_bus::CommandClass;
 
             // Exercise the same module command gate used by scheduled shell
             // jobs, with the scripted module answer derived from this run's
