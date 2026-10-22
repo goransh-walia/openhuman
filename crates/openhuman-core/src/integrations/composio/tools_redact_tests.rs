@@ -215,6 +215,25 @@ async fn a_result_the_module_could_not_check_is_withheld() {
 }
 
 #[tokio::test]
+async fn a_module_answer_that_keeps_a_configured_key_is_withheld() {
+    let error = redact_outcome_with(
+        Ok(tinytools::ToolResult::success(format!("key {LONG_KEY}"))),
+        &keys(),
+        |strings| async move {
+            Ok(strings
+                .into_iter()
+                .map(|text| (text.clone(), text))
+                .collect())
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(error.to_string(), WITHHELD);
+    assert!(!error.to_string().contains(LONG_KEY));
+}
+
+#[tokio::test]
 async fn an_error_text_is_redacted_or_withheld_never_passed_on() {
     let redacted = redact_outcome_with(
         Err(anyhow::anyhow!("bad credential {LONG_KEY}")),
