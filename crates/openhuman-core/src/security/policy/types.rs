@@ -299,8 +299,8 @@ pub struct SecurityPolicy {
     /// without a `pending_approvals` audit row (openhuman#5634, accepted).
     /// Sourced from `autonomy.auto_approve_all`;
     /// observed live via `live_policy`. Does not affect
-    /// `is_always_forbidden`, `is_workspace_internal_path`, or
-    /// `ToolPolicyMiddleware`, which are independent code paths.
+    /// `is_always_forbidden`, `is_workspace_internal_path`, or the TinySecurity
+    /// tool gate, which are independent code paths.
     pub auto_approve_all: bool,
     pub tracker: ActionTracker,
     /// Gateway used by the module-owned command adapter. Production leaves

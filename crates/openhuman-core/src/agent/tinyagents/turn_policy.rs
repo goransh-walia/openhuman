@@ -16,7 +16,7 @@ use crate::agent::tinyagents::budget::MAX_SPAWN_DEPTH;
 
 /// The builder-configured [`ToolCallPolicy`](tinyagents_harness::middleware::ToolCallPolicy)
 /// plus the session context a policy check needs, handed to the shared turn seam
-/// so it can install the [`ToolPolicyMiddleware`](super::middleware::tool_policy::ToolPolicyMiddleware).
+/// so it can install the TinySecurity gate.
 /// `None` means "no policy enforcement on this turn" (the channel/CLI + sub-agent
 /// paths, which carry their own gating).
 #[derive(Clone)]
