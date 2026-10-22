@@ -311,7 +311,7 @@ async fn pinned_loader_serves_the_published_tinybox_release() {
 
 #[tokio::test]
 #[ignore = "requires the downloaded, checksum-verified TinyBox v0.1.28 archive"]
-async fn pinned_loader_serves_resolve_local_grants_from_tinybox_v0124() {
+async fn pinned_loader_rejects_pre_contract2_tinybox_release() {
     let _environment_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let archive = std::env::var_os("TINYBOX_RELEASE_ARTIFACT")
         .map(std::path::PathBuf::from)
@@ -323,7 +323,6 @@ async fn pinned_loader_serves_resolve_local_grants_from_tinybox_v0124() {
 
     let record = crate::modules::registry::find(MODULE_ID).expect("TinyBox registry record");
     assert_eq!(record.version, "0.1.28");
-    assert_eq!(contract::CONTRACT_VERSION, (2, 0));
     let asset = tinybus::module::platform::host_candidates()
         .iter()
         .find_map(|host_key| record.asset_for(host_key))
@@ -378,31 +377,10 @@ async fn pinned_loader_serves_resolve_local_grants_from_tinybox_v0124() {
     config.modules.enabled = true;
     config.modules.allow_download = false;
     config.modules.install_dir = Some(install.path().display().to_string());
-    crate::modules::ops::ensure_loaded(&config, MODULE_ID)
+    let error = crate::modules::ops::ensure_loaded(&config, MODULE_ID)
         .await
-        .expect("the TinyBus loader admits the published v0.1.28 artifact");
-
-    let home = tempfile::tempdir().expect("temporary operator home");
-    let allowed = home.path().join("workspace");
-    std::fs::create_dir(&allowed).expect("create an allowed grant");
-    let request = contract::ResolveLocalGrantsRequest {
-        home: Some(home.path().display().to_string()),
-        config: contract::LocalGrantConfig {
-            toolchain_homes: false,
-            extra_read_only: vec!["~/workspace".to_owned()],
-            ..contract::LocalGrantConfig::default()
-        },
-        protected: contract::ProtectedPaths::default(),
-    };
-    let grants: contract::LocalGrants = super::module_client(&config)
-        .call(MODULE_ID, RESOLVE_LOCAL_GRANTS, (request,))
-        .await
-        .expect("the published artifact serves ResolveLocalGrants");
-    assert_eq!(
-        grants.read_only,
-        vec![allowed.canonicalize().unwrap().display().to_string()]
-    );
-    assert!(grants.read_write.is_empty());
+        .expect_err("the v1 module contract must be rejected by this v2 host");
+    assert!(error.to_ascii_lowercase().contains("contract"), "{error}");
 }
 
 #[test]
