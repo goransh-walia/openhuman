@@ -108,6 +108,20 @@ fn a_docker_pid_limit_is_refused_instead_of_silently_dropped() {
 }
 
 #[test]
+fn a_host_run_with_resource_limits_is_refused_instead_of_ignoring_them() {
+    let mut planned = artifact(SandboxBackend::Noop);
+    planned.host_run = true;
+    planned.minimum_isolation = IsolationLevel2::None;
+    planned.grants.clear();
+    planned.constraints.clear();
+    planned.limits.memory_bytes = Some(64 << 20);
+    assert!(
+        BoxPlan::from_artifact(&planned, None).is_err(),
+        "the host executor has no resource-bound enforcement path"
+    );
+}
+
+#[test]
 fn host_networking_opens_the_box_only_when_planned() {
     let mut planned = artifact(SandboxBackend::Jail);
     planned.network = PlannedNetwork::Host;
