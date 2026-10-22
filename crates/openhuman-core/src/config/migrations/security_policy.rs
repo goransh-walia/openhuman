@@ -27,7 +27,7 @@ const FOLDED: [&str; 3] = ["autonomy", "sandbox", "privacy"];
 pub(crate) enum Notice {
     /// A retired `max_cost_per_day_cents` key was dropped from this table.
     DroppedMaxCost { table: &'static str },
-    /// `[security.<table>]` was overlaid onto the legacy `[<table>]`.
+    /// A legacy top-level security table was folded into `[security.<table>]`.
     Overlaid { table: &'static str },
     /// A retired sandbox backend (`firejail`, `bubblewrap`) was moved to `auto`.
     RetiredSandboxBackend {
@@ -130,7 +130,7 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
                 "[migrations][security] removed retired {table}.firejail_args: no Firejail backend exists"
             ),
             Notice::Overlaid { table } => {
-                log::debug!("[migrations][security] [security.{table}] overlaid onto [{table}]")
+                log::debug!("[migrations][security] folded [{table}] into [security.{table}]")
             }
         }
     }

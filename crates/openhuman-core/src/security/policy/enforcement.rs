@@ -191,8 +191,12 @@ impl SecurityPolicy {
     /// `Config` is in hand.
     #[must_use]
     pub fn from_full_config(config: &crate::config::Config) -> Self {
-        Self::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir)
-            .with_privacy_mode(config.security.privacy.mode)
+        Self::from_config(
+            &config.security.autonomy,
+            &config.workspace_dir,
+            &config.action_dir,
+        )
+        .with_privacy_mode(config.security.privacy.mode)
     }
 
     /// Return a copy of this policy with `privacy_mode` set. Used by the live-

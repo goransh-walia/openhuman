@@ -31,8 +31,11 @@ fn security_policy_info_returns_all_documented_fields() {
 fn security_policy_info_matches_default_config_policy_values() {
     let outcome = security_policy_info_for_config(&Config::default());
     let config = Config::default();
-    let default =
-        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
+    let default = SecurityPolicy::from_config(
+        &config.security.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    );
     assert_eq!(outcome.value["autonomy"], json!(default.autonomy));
     assert_eq!(
         outcome.value["allowed_commands"],

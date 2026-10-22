@@ -31,13 +31,19 @@ mode = "sensitive"
 "#;
     let config = crate::config::schema::config_from_toml_str(text).unwrap();
     assert!(config.security.autonomy.enabled);
-    assert_eq!(config.security.autonomy.level, crate::security::AutonomyLevel::Full);
+    assert_eq!(
+        config.security.autonomy.level,
+        crate::security::AutonomyLevel::Full
+    );
     assert_eq!(config.security.autonomy.max_actions_per_hour, 7);
     assert!(matches!(
         config.security.sandbox.backend,
         crate::config::SandboxBackend::Landlock
     ));
-    assert_eq!(config.security.privacy.mode, crate::config::PrivacyMode::Sensitive);
+    assert_eq!(
+        config.security.privacy.mode,
+        crate::config::PrivacyMode::Sensitive
+    );
 }
 
 #[test]
@@ -58,7 +64,8 @@ fn max_cost_is_deleted_with_a_notice_everywhere_it_appears() {
     assert!(notices.contains(&Notice::DroppedMaxCost {
         table: "security.autonomy"
     }));
-    assert!(d["security"]["autonomy"].get("max_cost_per_day_cents").is_none());
+    assert!(d.get("autonomy").is_none());
+    assert!(d["security"].get("autonomy").is_none());
 }
 
 #[test]
@@ -122,5 +129,7 @@ fn retired_sandbox_backend_in_the_security_table_wins_as_auto() {
 #[test]
 fn supported_sandbox_backends_are_left_alone() {
     let mut d = doc("[sandbox]\nbackend = \"docker\"\n");
-    assert!(rewrite_document(&mut d).is_empty());
+    assert!(rewrite_document(&mut d).contains(&Notice::Overlaid { table: "sandbox" }));
+    assert_eq!(d["security"]["sandbox"]["backend"], "docker");
+    assert!(d.get("sandbox").is_none());
 }

@@ -7,9 +7,9 @@
 //! key by key, with `[security.*]` values taking precedence. The policy stays
 //! off unless `[security.autonomy].enabled = true`.
 
+use super::{AutonomyConfig, PrivacyConfig};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use super::{AutonomyConfig, PrivacyConfig};
 
 /// `[security]`: everything that decides what an agent may do.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]

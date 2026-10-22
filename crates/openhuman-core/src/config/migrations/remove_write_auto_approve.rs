@@ -23,7 +23,8 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
     });
 
     let stats = MigrationStats {
-        auto_approve_removed: before_len.saturating_sub(config.security.autonomy.auto_approve.len()),
+        auto_approve_removed: before_len
+            .saturating_sub(config.security.autonomy.auto_approve.len()),
     };
 
     log::info!(

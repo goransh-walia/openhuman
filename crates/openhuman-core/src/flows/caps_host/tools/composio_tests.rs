@@ -20,8 +20,11 @@ async fn readonly_tier_refusal_keeps_one_capability_envelope_before_curation() {
             crate::core::runtime::DomainSet::full(),
             Some(config.workspace_dir.clone()),
         ));
-    let security =
-        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
+    let security = SecurityPolicy::from_config(
+        &config.security.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    );
     let approval = ApprovalTurnContext::default();
     let call = ToolCallCtx {
         dispatch: &dispatch,
