@@ -9,15 +9,14 @@ use tinysecurity_bus::{
     ApprovalLifecycle2, ApprovalRecordRequest2, ApprovalRow2, AuditCorrelation2, CallerContext,
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
     ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
-    GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, ListToolTrustRequest2, Origin,
-    PolicyInfo, RecordExecutionRequest2, RevokeFlowToolRequest2, RevokeToolByIdRequest2,
-    SubjectScope, ToolCall, ToolTrustList2, ToolTrustOutcome2, ToolTrustReceipt2, Verdict,
+    GrantFlowToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo, RecordExecutionRequest2,
+    RevokeFlowToolRequest2, SubjectScope, ToolCall, Verdict,
 };
 
 use super::super::engine::{
     ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Sealed, Variant,
 };
-use super::super::types::{ApprovalAuditEntry, ExecutionOutcome, ToolTrustEntry};
+use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
 use super::scopes::{self, ScopeEntry};
 use super::state::{host, CallEntry, RequestEntry, Ticket};
 use crate::config::Config;
