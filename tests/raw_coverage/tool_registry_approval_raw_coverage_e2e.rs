@@ -536,6 +536,8 @@ async fn approval_schema_handlers_validate_params_and_surface_empty_gate_state()
         vec![
             "list_pending",
             "list_recent_decisions",
+            "list_tool_trust",
+            "revoke_tool_trust",
             "decide",
             "get_gate_state",
             "preauthorize_flow"
@@ -548,6 +550,31 @@ async fn approval_schema_handlers_validate_params_and_surface_empty_gate_state()
 
     let controllers = all_approval_registered_controllers();
     assert_eq!(controllers.len(), schemas.len());
+
+    let list_grants_handler = controllers
+        .iter()
+        .find(|controller| controller.schema.function == "list_tool_trust")
+        .expect("list tool trust controller")
+        .handler;
+    let list_grants = list_grants_handler(DispatchCtx::process_default(), Map::new())
+        .await
+        .expect("list grants without a gate returns empty");
+    assert!(list_grants
+        .get("result")
+        .or(Some(&list_grants))
+        .and_then(Value::as_array)
+        .is_some_and(|rows| rows.is_empty()));
+
+    let revoke_grant_handler = controllers
+        .iter()
+        .find(|controller| controller.schema.function == "revoke_tool_trust")
+        .expect("revoke tool trust controller")
+        .handler;
+    let mut empty_request_id = Map::new();
+    empty_request_id.insert("request_id".to_string(), json!("  "));
+    assert!(revoke_grant_handler(DispatchCtx::process_default(), empty_request_id)
+        .await
+        .is_err());
 
     let list_handler = controllers
         .iter()

@@ -44,5 +44,5 @@ pub use schemas::all_registered_controllers as all_approval_registered_controlle
 pub use summary::summarize_action;
 pub use types::{
     ApprovalAuditEntry, ApprovalDecision, ApprovalSourceContext, ExecutionOutcome, GateOutcome,
-    JudgeVerdict, PendingApproval,
+    JudgeVerdict, PendingApproval, ToolTrustEntry,
 };
