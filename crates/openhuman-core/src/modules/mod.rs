@@ -50,6 +50,7 @@ pub mod accessibility;
 pub mod boot;
 #[cfg(feature = "modules")]
 pub mod browser;
+#[cfg(feature = "security-module")]
 mod browser_egress_host;
 #[cfg(feature = "modules")]
 pub mod browser_task;
