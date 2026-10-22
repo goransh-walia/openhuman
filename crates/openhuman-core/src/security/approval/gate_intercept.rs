@@ -448,10 +448,9 @@ impl ApprovalGate {
         }
     }
 
-    /// A call the SaaS deployment's tool groups allow: no person is asked (there
-    /// is no per-user prompt channel), so the engine records an automatic
-    /// approval for the tenant's subject, and a request that would need a person
-    /// is refused rather than parked.
+    /// A call the SaaS deployment's tool groups pre-authorize. This branch
+    /// records an automatic approval for the tenant's subject; the outer gate
+    /// sends rejected WebChat calls through the per-user approval surface.
     async fn saas_approved(
         &self,
         tool_name: &str,

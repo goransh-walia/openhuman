@@ -70,8 +70,8 @@ fn hard_denied_tools_never_pass() {
 fn the_gate_allows_only_allowlisted_groups() {
     assert!(gate_verdict_with("shell", &[SaasToolGroup::HostShell]).is_ok());
     let refused = gate_verdict_with("shell", &[]).unwrap_err();
-    assert!(refused.contains("no approval surface"), "{refused}");
-    // A domain tool that asks for approval has nowhere to ask in SaaS.
+    assert!(refused.contains("allowlisted tool groups"), "{refused}");
+    // Domain tools outside the deployment's allowlist require a user decision.
     assert!(gate_verdict_with("send_email", &SaasToolGroup::ALL).is_err());
 }
 

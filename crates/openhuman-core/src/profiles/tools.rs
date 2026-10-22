@@ -20,10 +20,10 @@
 //! Some tools stay out whatever the allowlist says ([`HARD_DENIED`]): they
 //! change the process, install code, or reach state shared by every user.
 //!
-//! There is no per-user approval surface yet, so in SaaS the approval gate
-//! does not park: it allows a tool from an allowlisted group, whose reach the
-//! sandbox and path policy already bound, and refuses anything else
-//! ([`gate_verdict`]).
+//! The deployment's allowlist pre-authorizes tools whose reach the sandbox and
+//! path policy bound. A rejected call can continue to the user's approval
+//! surface only when it came from a routable WebChat; calls from background,
+//! CLI, or unscoped work remain denied ([`gate_verdict`]).
 
 use std::path::Path;
 
@@ -212,15 +212,13 @@ fn current_named_tools(
     ctx.host_overrides()?.named_tools()
 }
 
-/// The approval gate's answer in SaaS, where it never parks: `Ok` for a tool
-/// in an allowlisted group, otherwise the refusal.
+/// The deployment's pre-authorization verdict in SaaS: `Ok` for a tool in an
+/// allowlisted group, otherwise a rejection for the host's user-approval path.
 pub fn gate_verdict_with(tool: &str, groups: &[SaasToolGroup]) -> Result<(), String> {
     if admits_with(tool, false, groups) {
         return Ok(());
     }
-    Err(format!(
-        "'{tool}' needs an approval, and this deployment has no approval surface for users"
-    ))
+    Err(format!("'{tool}' is not in the deployment's allowlisted tool groups"))
 }
 
 /// Whether a rejected tool is specifically withheld pending a person's
