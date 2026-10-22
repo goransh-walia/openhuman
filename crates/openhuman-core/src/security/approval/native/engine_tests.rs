@@ -302,6 +302,77 @@ async fn a_durable_operator_tool_grant_is_reused_by_the_module() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_listed_whole_tool_grant_can_be_revoked_by_its_opaque_id() {
+    let world = world().await;
+    let first = crate::core::runtime::Tenant::default();
+    let second = crate::core::runtime::Tenant {
+        user: "another-user".into(),
+        workspace: "another-workspace".into(),
+        agent: "another-agent".into(),
+    };
+
+    world
+        .engine
+        .grant_tool_trust(&first, Variant::Standard, "gmail_send")
+        .await
+        .unwrap();
+    world
+        .engine
+        .grant_tool_trust(&second, Variant::Standard, "gmail_send")
+        .await
+        .unwrap();
+
+    let first_grants = world
+        .engine
+        .tool_trust(&first, Variant::Standard)
+        .await
+        .unwrap();
+    assert_eq!(first_grants.len(), 1);
+    let request_id = first_grants[0].request_id.clone();
+    assert!(!request_id.is_empty());
+
+    assert!(!world
+        .engine
+        .revoke_tool_trust_by_id(&second, Variant::Standard, &request_id)
+        .await
+        .unwrap());
+    assert_eq!(
+        world
+            .engine
+            .tool_trust(&second, Variant::Standard)
+            .await
+            .unwrap()
+            .len(),
+        1,
+        "an ID from another registered scope must not revoke this grant"
+    );
+
+    assert!(world
+        .engine
+        .revoke_tool_trust_by_id(&first, Variant::Standard, &request_id)
+        .await
+        .unwrap());
+    assert!(!world
+        .engine
+        .revoke_tool_trust_by_id(&first, Variant::Standard, &request_id)
+        .await
+        .unwrap());
+    assert!(world
+        .engine
+        .tool_trust(&first, Variant::Standard)
+        .await
+        .unwrap()
+        .is_empty());
+
+    let shown = Arc::new(Shown::default());
+    assert!(matches!(
+        world.engine.check(input("gmail_send", &shown)).await.unwrap(),
+        Checked::Pending { .. }
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn legacy_auto_approve_is_imported_as_durable_tool_trust() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
