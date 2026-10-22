@@ -206,8 +206,10 @@ async fn module_answers(config: &Config, secrets: &[String], strings: Vec<String
     }))
     .buffer_unordered(8)
     .map(|(text, answer)| answer.map(|redacted| (text, redacted)))
-    .collect()
+    .collect::<Vec<_>>()
     .await
+    .into_iter()
+    .collect()
 }
 
 /// Without the security module nothing can check a string that mentions a key,
