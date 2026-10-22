@@ -101,11 +101,11 @@ pub(super) fn resolve_turn_cwd(cwd: Option<String>) -> Result<Option<std::path::
 /// the no-`cwd` path is untouched, and nothing process-global is mutated.
 pub(super) fn grant_turn_cwd(config: &mut Config, root: &std::path::Path) {
     let path = root.to_string_lossy().to_string();
-    if config.autonomy.trusted_roots.iter().any(|r| r.path == path) {
+    if config.security.autonomy.trusted_roots.iter().any(|r| r.path == path) {
         return;
     }
     config
-        .autonomy
+        .security.autonomy
         .trusted_roots
         .push(crate::security::TrustedRoot {
             path,

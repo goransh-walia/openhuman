@@ -129,7 +129,7 @@ impl ApprovalGate {
         if let Some(policy) = crate::security::live_policy::effective_in(ctx) {
             return policy.auto_approve_all;
         }
-        self.config.autonomy.auto_approve_all
+        self.config.security.autonomy.auto_approve_all
     }
 
     /// What the user configured for a call under `variant`, read live: the

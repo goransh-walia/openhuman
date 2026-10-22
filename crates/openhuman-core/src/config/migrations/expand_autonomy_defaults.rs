@@ -88,21 +88,21 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
     log::debug!(
         "[migrations][expand-autonomy-defaults] starting \
          allowed_commands.len={} auto_approve.len={} max_actions_per_hour={}",
-        config.autonomy.allowed_commands.len(),
-        config.autonomy.auto_approve.len(),
-        config.autonomy.max_actions_per_hour,
+        config.security.autonomy.allowed_commands.len(),
+        config.security.autonomy.auto_approve.len(),
+        config.security.autonomy.max_actions_per_hour,
     );
 
     // Merge new commands (additive only — never remove user entries).
-    let commands_before = config.autonomy.allowed_commands.clone();
+    let commands_before = config.security.autonomy.allowed_commands.clone();
     let mut added_commands: Vec<&str> = Vec::new();
     for &cmd in NEW_COMMANDS {
-        if !config.autonomy.allowed_commands.iter().any(|c| c == cmd) {
+        if !config.security.autonomy.allowed_commands.iter().any(|c| c == cmd) {
             log::debug!(
                 "[migrations][expand-autonomy-defaults] adding command={:?} to allowed_commands",
                 cmd
             );
-            config.autonomy.allowed_commands.push(cmd.to_string());
+            config.security.autonomy.allowed_commands.push(cmd.to_string());
             added_commands.push(cmd);
             stats.commands_added += 1;
         }
@@ -139,7 +139,7 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
              restore it in config.toml (the removals were NOT preserved) and set \
              `schema_version = {}` to keep this migration from running again.",
             commands_before.len(),
-            config.autonomy.allowed_commands.len(),
+            config.security.autonomy.allowed_commands.len(),
             added_commands.join(", "),
             crate::config::migrations::CURRENT_SCHEMA_VERSION,
         );
@@ -147,31 +147,31 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
 
     // Merge new auto-approve tools (additive only).
     for &tool in NEW_AUTO_APPROVE_TOOLS {
-        if !config.autonomy.auto_approve.iter().any(|t| t == tool) {
+        if !config.security.autonomy.auto_approve.iter().any(|t| t == tool) {
             log::debug!(
                 "[migrations][expand-autonomy-defaults] adding tool={:?} to auto_approve",
                 tool
             );
-            config.autonomy.auto_approve.push(tool.to_string());
+            config.security.autonomy.auto_approve.push(tool.to_string());
             stats.tools_added += 1;
         }
     }
 
     // Bump max_actions_per_hour only when it still holds the old default.
     // Users who deliberately configured a different ceiling keep their value.
-    if config.autonomy.max_actions_per_hour == OLD_DEFAULT_MAX_ACTIONS_PER_HOUR {
+    if config.security.autonomy.max_actions_per_hour == OLD_DEFAULT_MAX_ACTIONS_PER_HOUR {
         log::info!(
             "[migrations][expand-autonomy-defaults] bumping max_actions_per_hour \
              {} -> u32::MAX (old hard-coded default, PR #2500 changed code default)",
             OLD_DEFAULT_MAX_ACTIONS_PER_HOUR
         );
-        config.autonomy.max_actions_per_hour = u32::MAX;
+        config.security.autonomy.max_actions_per_hour = u32::MAX;
         stats.max_actions_bumped = true;
     } else {
         log::debug!(
             "[migrations][expand-autonomy-defaults] max_actions_per_hour={} — \
              not the old default, leaving unchanged",
-            config.autonomy.max_actions_per_hour
+            config.security.autonomy.max_actions_per_hour
         );
     }
 

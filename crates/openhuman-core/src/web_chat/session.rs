@@ -10,7 +10,7 @@ use serde_json::json;
 use super::types::{SessionCacheFingerprint, SessionEntry};
 
 pub(super) fn autonomy_signature(config: &Config) -> String {
-    serde_json::to_string(&config.autonomy).unwrap_or_default()
+    serde_json::to_string(&config.security.autonomy).unwrap_or_default()
 }
 
 /// Signature of `config.model_registry` for the session-cache fingerprint.

@@ -232,11 +232,11 @@ pub(crate) async fn bootstrap_core_runtime(
     crate::security::live_policy::install(
         std::sync::Arc::new(
             crate::security::SecurityPolicy::from_config(
-                &cfg.autonomy,
+                &cfg.security.autonomy,
                 &workspace_dir,
                 &action_dir,
             )
-            .with_privacy_mode(cfg.privacy.mode),
+            .with_privacy_mode(cfg.security.privacy.mode),
         ),
         workspace_dir.clone(),
         action_dir,

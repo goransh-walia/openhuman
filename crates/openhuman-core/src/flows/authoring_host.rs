@@ -127,7 +127,7 @@ impl ApprovalCallbacks {
                 use tinysecurity_bus::CommandClass;
 
                 let security = SecurityPolicy::from_config(
-                    &config.autonomy,
+                    &config.security.autonomy,
                     &config.workspace_dir,
                     &config.action_dir,
                 );

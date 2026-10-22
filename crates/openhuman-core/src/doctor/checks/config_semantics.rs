@@ -249,8 +249,8 @@ fn referenced_but_disabled(config: &Config) -> Vec<Finding> {
         references.push(("computer", "computer"));
     }
 
-    if config.sandbox.enabled == Some(true)
-        || !matches!(&config.sandbox.backend, crate::config::SandboxBackend::Auto)
+    if config.security.sandbox.enabled == Some(true)
+        || !matches!(&config.security.sandbox.backend, crate::config::SandboxBackend::Auto)
         || explicitly_configured(config, "sandbox.backend")
     {
         references.push(("sandbox", "sandbox"));

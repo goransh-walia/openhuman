@@ -48,7 +48,7 @@ pub async fn command_requires_sandbox(
     }
     let config = ctx.load_config().await?;
     Ok(matches!(
-        config.sandbox.backend,
+        config.security.sandbox.backend,
         SandboxBackend::Landlock | SandboxBackend::Docker
     ) || config.runtime.kind == "docker")
 }
