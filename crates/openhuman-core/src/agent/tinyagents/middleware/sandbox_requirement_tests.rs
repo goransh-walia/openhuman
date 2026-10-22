@@ -52,7 +52,7 @@ async fn sandbox_required_tool_is_allowed_in_a_sandboxed_workspace() {
 
 #[tokio::test]
 async fn tools_without_a_sandbox_requirement_are_not_restricted() {
-    let decision = policy(SandboxMode::None)
+    let decision = policy(SandboxMode::Disabled)
         .check(&context(), &call("send_email"))
         .await;
 
