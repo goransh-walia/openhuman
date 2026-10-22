@@ -9137,7 +9137,7 @@ dependencies = [
 
 [[package]]
 name = "tinyeventqueues"
-version = "0.1.3"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "log",
@@ -9155,7 +9155,7 @@ dependencies = [
 
 [[package]]
 name = "tinyeventqueues-bus"
-version = "0.1.3"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
