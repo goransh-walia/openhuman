@@ -556,6 +556,11 @@ merges current main and preserves both the storage test host and canonical
 private staging path. GitHub reports it mergeable and CI is running. Keep it in
 draft until a compatible TinyBox release is available and OpenHuman's host
 adapter is updated.
+The first post-merge CI run passed all 51 native jail unit tests but failed the
+separate resource cancellation proof because it constructed production storage
+without a served host callback. The test now uses TinyBox's testkit-backed
+`Resources::test_resources()` fixture (`586e883bf81bda850c5358de4c2755cc77413736`);
+the new hosted run is pending.
 The spawner inventory now distinguishes `sandbox/ops.rs`'s module-planned
 operator host-run mode from an untrusted direct bypass: the module registers
 that source `TrustedHost`, while scheduled/hook text has a separate
