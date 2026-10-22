@@ -174,17 +174,14 @@ fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
 
 #[test]
 fn text_suppresses_the_whole_value_when_module_cannot_answer() {
-    let out = answer_or_floor(
-        None,
-        "retry failed: Authorization: Bearer abcdefghijklmnop\nok",
-    );
+    let out = answer_or_suppress(None);
     assert_eq!(out, crate::core::log_redaction::SUPPRESSED);
 }
 
 #[test]
 fn text_prefers_the_module_answer() {
     assert_eq!(
-        answer_or_floor(Some("module said".into()), "raw"),
+        answer_or_suppress(Some("module said".into())),
         "module said"
     );
 }

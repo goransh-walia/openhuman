@@ -26,14 +26,12 @@ pub fn endpoint_host(url: &str) -> String {
 /// failure lines and artifact bodies. Waits up to [`TEXT_TIMEOUT`] for the
 /// module.
 ///
-/// This text is data the user still needs (an artifact the model re-reads, an
-/// audit row), so unlike an endpoint field it is not blanked when the module
-/// cannot answer. The fixed boot floor (`core::log_redaction`, ADR 7) is
-/// applied instead, line by line so a large body is not suppressed whole; the
-/// original text is never returned unfiltered.
+/// If the module cannot answer, the complete value is suppressed. The fixed
+/// diagnostic floor is reserved for log fields and never authorizes persisted
+/// or model-visible content.
 #[must_use]
 pub fn text(text: &str) -> String {
-    answer_or_floor(module_text(text), text)
+    answer_or_suppress(module_text(text))
 }
 
 /// Structured tool-call arguments with content, credentials and home paths
@@ -180,12 +178,9 @@ fn module_arguments(_args: &serde_json::Value) -> Option<String> {
     None
 }
 
-/// The module's `answer` when it gave one, otherwise the floor over `input`.
-fn answer_or_floor(answer: Option<String>, input: &str) -> String {
-    match answer {
-        Some(redacted) => redacted,
-        None => crate::core::log_redaction::floor_scrub_text(input),
-    }
+/// The module's `answer` when it gave one, otherwise the suppression marker.
+fn answer_or_suppress(answer: Option<String>) -> String {
+    answer.unwrap_or_else(|| crate::core::log_redaction::SUPPRESSED.to_string())
 }
 
 #[cfg(feature = "security-module")]
@@ -194,7 +189,7 @@ fn module_text(input: &str) -> Option<String> {
     match try_redact(RedactMode::Text, input, Some(TEXT_TIMEOUT)) {
         Ok(redacted) => Some(redacted),
         Err(error) => {
-            log::debug!("[security][redact] module text pass unavailable, floor applies: {error}");
+            log::debug!("[security][redact] module text pass unavailable, content suppressed: {error}");
             None
         }
     }
