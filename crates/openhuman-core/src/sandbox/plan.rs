@@ -229,7 +229,11 @@ fn validate_resources(
         return Err(PlanMappingError::CpuTimeUnenforceable);
     }
     if limits.cpu_millicores.is_some() {
-        return Err(PlanMappingError::CpuLimitUnenforceable);
+        return Err(if executor == PlannedExecutor::Host {
+            PlanMappingError::HostResourceLimitUnenforceable
+        } else {
+            PlanMappingError::CpuLimitUnenforceable
+        });
     }
     if limits.disk_bytes.is_some() {
         return Err(PlanMappingError::DiskLimitUnenforceable);
