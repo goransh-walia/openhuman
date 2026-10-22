@@ -343,7 +343,7 @@ async fn apply_autonomy_settings_updates_action_budget() {
 
     assert_eq!(cfg.security.autonomy.max_actions_per_hour, 64);
     assert_eq!(
-        outcome.value["config"]["autonomy"]["max_actions_per_hour"],
+        outcome.value["config"]["security"]["autonomy"]["max_actions_per_hour"],
         serde_json::json!(64)
     );
     assert!(outcome
