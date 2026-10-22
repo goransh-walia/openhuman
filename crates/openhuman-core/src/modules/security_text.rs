@@ -318,10 +318,10 @@ pub(crate) fn redact_blocking(
     text: &str,
     timeout: std::time::Duration,
 ) -> Result<String, String> {
-    if redaction_cache_enabled(crate::core::runtime::is_saas())
-        && let Some(hit) = cache().lock().ok().and_then(|c| c.get(&mode, text))
-    {
-        return Ok(hit);
+    if redaction_cache_enabled(crate::core::runtime::is_saas()) {
+        if let Some(hit) = cache().lock().ok().and_then(|c| c.get(&mode, text)) {
+            return Ok(hit);
+        }
     }
     let config = config.clone();
     let text = text.to_string();
