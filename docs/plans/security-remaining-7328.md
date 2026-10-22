@@ -572,13 +572,14 @@ locally, and hosted `native-resource-live`, module tests, coverage, clippy,
 formatting, MSRV, supply-chain, and Linux/Windows checks pass. The hosted macOS
 module E2E check is still running. Keep PR #103 in draft until a compatible
 TinyBox release is available and OpenHuman's host adapter is updated.
-The spawner inventory now distinguishes `sandbox/ops.rs`'s module-planned
-operator host-run mode from an untrusted direct bypass: the module registers
-that source `TrustedHost`, while scheduled/hook text has a separate
-`UntrustedSkill` source that cannot receive a host-run plan. The inventory
-still reports one untrusted direct spawner: `install_tool`, whose host package
-manager command has no TinySecurity/TinyBox plan yet. Its human approval and
-SaaS denial do not satisfy Task 14; a safe scoped install design remains open.
+The spawner inventory distinguishes `sandbox/ops.rs`'s module-planned operator
+host-run mode from an untrusted direct bypass: the module registers that source
+`TrustedHost`, while scheduled/hook text has a separate `UntrustedSkill` source
+that cannot receive a host-run plan. `install_tool` currently returns an
+unavailable result after its access and approval gates and contains no process
+spawn; the sandbox README now records that accurately. Installing packages
+remains an unimplemented capability until a safe scoped installer can run through
+the TinySecurity plan and TinyBox executor.
 
 ## Task 15 — Host audit, scan/consequence gates and crypto facades
 
