@@ -1,7 +1,7 @@
 use super::*;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -170,10 +170,7 @@ async fn sandbox_required_tools_are_denied_by_the_shared_gate_without_a_sandboxe
         )])),
     ));
     let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
-    stack.push_tool_middleware(Arc::new(gate(
-        Arc::new(policy),
-        Arc::new(Human::default()),
-    )));
+    stack.push_tool_middleware(Arc::new(gate(Arc::new(policy), Arc::new(Human::default()))));
     let runs = Arc::new(AtomicUsize::new(0));
     let ctx = RunContext::new(RunConfig::new("security-gate"), OpenHumanRunContext::new());
     let result = stack

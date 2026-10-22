@@ -22,9 +22,7 @@ pub(crate) struct SandboxRequirementPolicy {
 }
 
 impl SandboxRequirementPolicy {
-    pub(crate) fn from_tool_sets(
-        tool_sets: &[Arc<Vec<Box<dyn tinytools::Tool>>>],
-    ) -> Self {
+    pub(crate) fn from_tool_sets(tool_sets: &[Arc<Vec<Box<dyn tinytools::Tool>>>]) -> Self {
         let policies = tool_sets
             .iter()
             .flat_map(|set| set.iter())

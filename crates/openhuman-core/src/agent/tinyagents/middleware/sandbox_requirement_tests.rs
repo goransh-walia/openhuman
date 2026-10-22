@@ -34,14 +34,15 @@ async fn sandbox_required_tool_is_denied_without_a_sandboxed_workspace() {
         .check(&context(), &call("send_email"))
         .await;
 
-    assert!(matches!(decision, PolicyDecision::Deny { reason } if reason.contains("requires a sandbox")));
+    assert!(
+        matches!(decision, PolicyDecision::Deny { reason } if reason.contains("requires a sandbox"))
+    );
 }
 
 #[tokio::test]
 async fn sandbox_required_tool_is_allowed_in_a_sandboxed_workspace() {
     let ctx = context().with_workspace(
-        tinytools::WorkspaceDescriptor::new("/workspace")
-            .with_sandbox(SandboxMode::Required),
+        tinytools::WorkspaceDescriptor::new("/workspace").with_sandbox(SandboxMode::Required),
     );
     let decision = policy(SandboxMode::Required)
         .check(&ctx, &call("send_email"))
