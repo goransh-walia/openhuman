@@ -70,6 +70,8 @@ pub enum PlanMappingError {
     DiskLimitUnenforceable,
     /// The host's one-shot Docker bus request does not expose a PID limit.
     PidsLimitUnenforceable,
+    /// The host executor has no path for enforcing resource bounds.
+    HostResourceLimitUnenforceable,
     /// A grant path is not valid UTF-8 text for the bus.
     InvalidGrant,
     /// A plan marked as a run on the host that also claims a jail, grants or constraints.
@@ -92,6 +94,9 @@ impl std::fmt::Display for PlanMappingError {
                 "the sandbox plan requests a disk quota TinyBox cannot enforce"
             }
             Self::PidsLimitUnenforceable => "the Docker sandbox request cannot enforce a PID limit",
+            Self::HostResourceLimitUnenforceable => {
+                "the host sandbox executor cannot enforce resource limits"
+            }
             Self::InvalidGrant => "the sandbox plan carries a grant that is not valid text",
             Self::MalformedHostRun => "the sandbox plan for a run on the host claims a jail",
         })
@@ -194,6 +199,13 @@ impl BoxPlan {
         {
             return Err(PlanMappingError::MalformedHostRun);
         }
+        let resources = resources(artifact)?;
+        if resources.cpu_millis.is_some()
+            || resources.memory_bytes.is_some()
+            || resources.pids_max.is_some()
+        {
+            return Err(PlanMappingError::HostResourceLimitUnenforceable);
+        }
         Ok(Self {
             executor: PlannedExecutor::Host,
             jail: NativeJailConfig {
@@ -207,7 +219,7 @@ impl BoxPlan {
                 resources: None,
             },
             network: NetworkPolicy::Open,
-            resources: resources(artifact)?,
+            resources,
             workspace: true,
         })
     }
