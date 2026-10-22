@@ -24,11 +24,11 @@ use axum::{
     Router,
 };
 use openhuman_core::{
-    agent::turn_origin::{self, AgentTurnOrigin},
     config::Config,
     security::approval::{
         gate::ApprovalGate, ApprovalChatContext, ApprovalTurnContext, GateOutcome,
     },
+    security::turn_origin::{self, AgentTurnOrigin},
 };
 use serde_json::{json, Value};
 use tower::ServiceExt;
