@@ -314,9 +314,13 @@ with all eleven host checksums from its release manifest. The v0.17 bus adds
 `RevokeToolById2`; the host approval engine and `approval.list_tool_trust` /
 `approval.revoke_tool_trust` controllers now expose the tenant-scoped durable
 grant lifecycle. The new native regression passes against the published Linux
-archive. That required TinyBus's already-merged secure-extraction fix at
-`11b0a72`, because v0.17 release archives mark their root directory group
-writable. UI management and a fresh three-OS released-artifact run remain open.
+archive. The settings history panel now lists those grants and revokes the
+selected opaque grant id, with translations in all supported locales and a
+passing component/API test. A Windows native run also exposed a Unix-only
+absolute-path fixture; it now uses the platform temp directory and its focused
+test passes locally. That required TinyBus's already-merged secure-extraction
+fix at `11b0a72`, because v0.17 release archives mark their root directory
+group writable. A fresh three-OS released-artifact run remains open.
 
 ## Task 8 — Rules and optional Jev judge
 
