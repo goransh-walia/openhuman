@@ -212,6 +212,9 @@ fn the_browser_policy_adds_only_a_browser_preflight() {
     let policy = browser_preflight_policy(subject(), tinysecurity_bus::PrivacyMode::Standard);
     assert!(policy.open_public);
     assert_eq!(policy.preflight_transports, vec![EgressTransport::Browser]);
+    assert!(policy
+        .data_categories
+        .contains(&tinysecurity_bus::DataCategory::OpaqueBrowserTraffic));
     assert!(policy.destinations.is_empty() && policy.local_capabilities.is_empty());
 }
 
