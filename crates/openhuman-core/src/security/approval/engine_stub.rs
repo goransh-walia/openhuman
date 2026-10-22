@@ -502,7 +502,10 @@ impl ApprovalEngine for StubEngine {
         if self.refuse.load(Ordering::SeqCst) {
             return Err(EngineError::Unavailable("the stub engine refuses".into()));
         }
-        self.grants.lock().unwrap_or_else(PoisonError::into_inner).insert(tool.to_owned());
+        self.grants
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(tool.to_owned());
         Ok(())
     }
 }

@@ -9,12 +9,14 @@ use tinysecurity_bus::{
     ApprovalLifecycle2, ApprovalRecordRequest2, ApprovalRow2, AuditCorrelation2, CallerContext,
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
     ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
-    GrantFlowToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo, RecordExecutionRequest2,
-    RevokeFlowToolRequest2, SubjectScope, ToolCall, Verdict, GrantToolRequest2, ToolTrustReceipt2,
+    GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo,
+    RecordExecutionRequest2, RevokeFlowToolRequest2, SubjectScope, ToolCall, ToolTrustReceipt2,
+    Verdict,
 };
 
 use super::super::engine::{
-    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Posture, Sealed, Variant,
+    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Posture, Sealed,
+    Variant,
 };
 use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
 use super::scopes::{self, ScopeEntry};
@@ -310,12 +312,8 @@ impl ApprovalEngine for NativeEngine {
         .await
         .map_err(EngineError::Unavailable)?;
         if input.variant == Variant::Standard && !input.posture.tool_grants.is_empty() {
-            super::history_import::import_tool_grants(
-                &proxy,
-                &scope,
-                &input.posture.tool_grants,
-            )
-            .await;
+            super::history_import::import_tool_grants(&proxy, &scope, &input.posture.tool_grants)
+                .await;
         }
         self.sweep(&proxy, &scope, generation).await;
 
@@ -651,18 +649,32 @@ impl ApprovalEngine for NativeEngine {
             &self.config,
             &proxy,
             subject,
-            &Posture { require_approval: true, ..Default::default() },
+            &Posture {
+                require_approval: true,
+                ..Default::default()
+            },
             generation,
-        ).await.map_err(EngineError::Unavailable)?;
+        )
+        .await
+        .map_err(EngineError::Unavailable)?;
         let _guard = scope.stream.lock().await;
         let generation = Self::generation(&proxy).await?;
         let audit = Self::correlation(&scope, generation).await?;
-        let receipt: ToolTrustReceipt2 = proxy.call_confidential(
-            names::methods::GRANT_TOOL2,
-            (GrantToolRequest2 { scope_id: scope.scope_id.clone(), tool: tool.to_owned(), audit },),
-        ).await.map_err(|error| unavailable(format!("TinySecurity GrantTool2 failed: {error}")))?;
+        let receipt: ToolTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::GRANT_TOOL2,
+                (GrantToolRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    tool: tool.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| unavailable(format!("TinySecurity GrantTool2 failed: {error}")))?;
         if receipt.scope_id != scope.scope_id {
-            return Err(unavailable("TinySecurity returned a receipt for another scope"));
+            return Err(unavailable(
+                "TinySecurity returned a receipt for another scope",
+            ));
         }
         Ok(())
     }
