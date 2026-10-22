@@ -119,11 +119,10 @@ impl ApprovalGate {
                 anyhow::bail!("the approval engine could not apply the decision: {message}")
             }
         }
-        // `ApproveAlwaysForTool` persistence (append to `autonomy.auto_approve`
-        // + reload the live policy) is handled by the `approval_decide` RPC
-        // handler, which is async and owns the config save+reload path. The
-        // engine only records the decision for this one call; the next call
-        // reads the saved list as its posture.
+        // `ApproveAlwaysForTool` is persisted by the `approval_decide` RPC
+        // handler through the approval engine after this one-time decision.
+        // The module owns the durable grant; legacy `autonomy.auto_approve`
+        // entries are imported through immutable receipts and are not scope grants.
         if let Some(tx) = self.parked.take_waiter(request_id) {
             let _ = tx.send(decision);
         }
