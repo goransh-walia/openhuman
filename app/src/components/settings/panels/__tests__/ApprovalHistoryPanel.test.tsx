@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type ApprovalAuditEntry,
-  fetchToolTrust,
   fetchRecentApprovalDecisions,
+  fetchToolTrust,
   revokeToolTrust,
 } from '../../../../services/api/approvalApi';
 import { renderWithProviders } from '../../../../test/test-utils';
