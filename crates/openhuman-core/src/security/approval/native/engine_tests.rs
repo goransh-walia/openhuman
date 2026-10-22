@@ -298,6 +298,41 @@ async fn a_durable_operator_tool_grant_is_reused_by_the_module() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn operator_tool_trust_can_be_listed_and_revoked_by_durable_id() {
+    let world = world().await;
+    let tenant = crate::core::runtime::Tenant::default();
+    world
+        .engine
+        .grant_tool_trust(&tenant, "gmail_send")
+        .await
+        .expect("the module persists the grant");
+
+    let grants = world.engine.tool_trust(&tenant).await.unwrap();
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].tool, "gmail_send");
+    let request_id = grants[0].request_id.clone();
+
+    assert!(world
+        .engine
+        .revoke_tool_trust(&tenant, &request_id)
+        .await
+        .unwrap());
+    assert!(world.engine.tool_trust(&tenant).await.unwrap().is_empty());
+    assert!(!world
+        .engine
+        .revoke_tool_trust(&tenant, &request_id)
+        .await
+        .unwrap());
+
+    let shown = Arc::new(Shown::default());
+    assert!(matches!(
+        world.engine.check(input("gmail_send", &shown)).await.unwrap(),
+        Checked::Pending { .. }
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn legacy_auto_approve_is_imported_as_durable_tool_trust() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
