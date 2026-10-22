@@ -64,6 +64,7 @@ pub(super) fn input(tool: &str, surface: &Arc<Shown>) -> CheckInput {
             require_approval: true,
             ..Posture::default()
         },
+        legacy_tool_grants: Vec::new(),
         call_id: format!("{:08x}", rand_id()),
         tool: tool.to_string(),
         args: serde_json::json!({"to": "someone", "token": "not-a-real-token-value"}),
@@ -189,7 +190,7 @@ async fn the_users_tool_grant_approves_without_a_prompt_and_is_audited() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
     let mut granted = input("gmail_send", &shown);
-    granted.posture.tool_grants = vec!["gmail_send".into()];
+    granted.legacy_tool_grants = vec!["gmail_send".into()];
     let checked = world.engine.check(granted).await.unwrap();
     let Checked::Approved { request_id } = checked else {
         panic!("a granted tool is approved without a human: {checked:?}");
@@ -209,7 +210,7 @@ async fn the_users_tool_grant_approves_without_a_prompt_and_is_audited() {
 
     // Another tool is not covered by the grant.
     let mut other = input("slack_post", &shown);
-    other.posture.tool_grants = vec!["gmail_send".into()];
+    other.legacy_tool_grants = vec!["gmail_send".into()];
     assert!(matches!(
         world.engine.check(other).await.unwrap(),
         Checked::Pending { .. }
@@ -222,7 +223,7 @@ async fn an_imported_tool_grant_survives_an_empty_transient_grant_list() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
     let mut granted = input("gmail_send", &shown);
-    granted.posture.tool_grants = vec!["gmail_send".into()];
+    granted.legacy_tool_grants = vec!["gmail_send".into()];
     assert!(matches!(
         world.engine.check(granted).await.unwrap(),
         Checked::Approved { .. }
@@ -257,7 +258,7 @@ async fn a_flow_grant_applies_to_that_flow_only() {
     in_flow.variant = Variant::FlowStrict;
     in_flow.flow = Some("flow-1".into());
     // The global tool list never approves a strict flow, only its own trust.
-    in_flow.posture.tool_grants = vec!["slack_post".into()];
+    in_flow.legacy_tool_grants = vec!["slack_post".into()];
     assert!(matches!(
         world.engine.check(in_flow).await.unwrap(),
         Checked::Approved { .. }
@@ -310,7 +311,7 @@ async fn legacy_auto_approve_is_imported_as_durable_tool_trust() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
     let mut legacy = input("gmail_send", &shown);
-    legacy.posture.tool_grants = vec!["gmail_send".into()];
+    legacy.legacy_tool_grants = vec!["gmail_send".into()];
 
     assert!(matches!(
         world.engine.check(legacy).await.unwrap(),
@@ -338,7 +339,7 @@ async fn auto_approve_all_is_the_posture_and_a_forced_call_ignores_it() {
     let shown = Arc::new(Shown::default());
     let mut all = input("gmail_send", &shown);
     all.posture.auto_approve_all = true;
-    all.posture.tool_grants = vec!["gmail_send".into()];
+    all.legacy_tool_grants = vec!["gmail_send".into()];
     let checked = world.engine.check(all).await.unwrap();
     assert!(matches!(checked, Checked::Approved { .. }));
     let history = {

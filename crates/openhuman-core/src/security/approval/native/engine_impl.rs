@@ -24,12 +24,12 @@ impl ApprovalEngine for NativeEngine {
         .map_err(EngineError::Unavailable)?;
         if !crate::core::runtime::is_saas()
             && input.variant == Variant::Standard
-            && !input.posture.tool_grants.is_empty()
+            && !input.legacy_tool_grants.is_empty()
         {
             super::super::history_import::import_tool_grants(
                 &proxy,
                 &scope,
-                &input.posture.tool_grants,
+                &input.legacy_tool_grants,
             )
             .await;
         }

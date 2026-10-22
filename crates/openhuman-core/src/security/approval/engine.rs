@@ -64,8 +64,6 @@ pub(crate) struct Posture {
     pub require_approval: bool,
     /// The user opted into approving everything.
     pub auto_approve_all: bool,
-    /// Tool names the user chose to always allow.
-    pub tool_grants: Vec<String>,
 }
 
 /// The verified origin class the module sees. The module, not the host, decides
@@ -88,7 +86,7 @@ pub(crate) enum CallOrigin {
     /// module approves it automatically, audited.
     LocalOperator,
     /// A call whose origin nobody labelled: the module denies it unless the
-    /// posture's tool grants name the tool.
+    /// durable whole-tool trust names the tool.
     Unlabelled,
 }
 
@@ -100,6 +98,9 @@ pub(crate) struct CheckInput {
     pub variant: Variant,
     /// The user's configured posture for this subject, read live.
     pub posture: Posture,
+    /// Legacy `auto_approve` entries carried only so the native engine can
+    /// import them once as durable module trust; they are not runtime posture.
+    pub legacy_tool_grants: Vec<String>,
     /// The correlation the prompt surface finds the call by. Eight lowercase hex
     /// characters, which the module's identifier hashing leaves unchanged.
     pub call_id: String,

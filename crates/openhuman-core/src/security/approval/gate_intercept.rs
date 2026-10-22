@@ -329,6 +329,11 @@ impl ApprovalGate {
             tenant: route_tenant,
             variant,
             posture: self.posture(&turn_ctx, variant),
+            legacy_tool_grants: if variant == Variant::Standard {
+                self.live_auto_approve(&turn_ctx)
+            } else {
+                Vec::new()
+            },
             call_id: fresh_call_id(),
             tool: tool_name.to_string(),
             args: object_arguments(args_redacted),
@@ -466,6 +471,7 @@ impl ApprovalGate {
                 require_approval: false,
                 ..Posture::default()
             },
+            legacy_tool_grants: Vec::new(),
             call_id: fresh_call_id(),
             tool: tool_name.to_string(),
             args: object_arguments(args_redacted),

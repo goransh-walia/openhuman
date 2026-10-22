@@ -38,7 +38,7 @@ async fn the_module_decides_what_each_origin_class_is_allowed() {
     );
     let mut granted = input("gmail_send", &shown);
     granted.origin = CallOrigin::Unlabelled;
-    granted.posture.tool_grants = vec!["gmail_send".into()];
+    granted.legacy_tool_grants = vec!["gmail_send".into()];
     assert!(matches!(
         world.engine.check(granted).await.unwrap(),
         Checked::Approved { .. }

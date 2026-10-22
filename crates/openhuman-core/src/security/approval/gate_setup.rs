@@ -156,14 +156,6 @@ impl ApprovalGate {
         Posture {
             require_approval: !ctx.approvals_disabled(),
             auto_approve_all: self.is_auto_approve_all_enabled(ctx),
-            // A workflow whose flow requires approval is never auto-allowed by
-            // the global tool list. Its per-flow trust is the module's own
-            // durable state, so it is not part of the posture.
-            tool_grants: if variant == Variant::Standard {
-                self.live_auto_approve(ctx)
-            } else {
-                Vec::new()
-            },
         }
     }
 
