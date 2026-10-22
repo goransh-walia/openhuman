@@ -264,7 +264,10 @@ pub(crate) fn remember_browser_dial_binding_for_test(
     .expect("browser binding registry is available");
 }
 
-fn browser_dial_binding(policy_id: &EgressPolicyId, generation: u64) -> Result<BrowserDialBinding, String> {
+fn browser_dial_binding(
+    policy_id: &EgressPolicyId,
+    generation: u64,
+) -> Result<BrowserDialBinding, String> {
     browser_dial_bindings()
         .lock()
         .map_err(|_| "TinySecurity browser binding registry is unavailable")?
@@ -291,7 +294,7 @@ pub(crate) async fn browser_dial_config(config: &Config) -> Result<(String, u64)
     let policy = browser_preflight_policy(owner, privacy);
     let policy_id = cached_policy_id(&config, policy).await?;
     let proxy = egress_proxy(&config).await?;
-    let info = super::security::policy_info(&config).await?;
+    let info = super::policy_info(&config).await?;
     if info.generation == 0 {
         return Err("TinySecurity browser policy generation is unavailable".into());
     }
@@ -303,7 +306,9 @@ pub(crate) async fn browser_dial_config(config: &Config) -> Result<(String, u64)
     Ok((policy_id.0, info.generation))
 }
 
-fn browser_request(target: &tinycomputer_bus::browser_egress::BrowserEgressTarget) -> Result<tinysecurity_bus::BrowserDialRequest, String> {
+fn browser_request(
+    target: &tinycomputer_bus::browser_egress::BrowserEgressTarget,
+) -> Result<tinysecurity_bus::BrowserDialRequest, String> {
     Ok(tinysecurity_bus::BrowserDialRequest {
         policy_id: EgressPolicyId(target.policy_id.clone()),
         expected_generation: target.expected_generation,
@@ -335,7 +340,9 @@ pub(crate) async fn authorize_browser_dial(
     }
     let authorization = match (response.authorization, response.denial) {
         (Some(authorization), None) => authorization,
-        (None, Some(denial)) => return Err(format!("TinySecurity denied browser dial: {denial:?}")),
+        (None, Some(denial)) => {
+            return Err(format!("TinySecurity denied browser dial: {denial:?}"))
+        }
         _ => return Err("TinySecurity browser authorization response was ambiguous".into()),
     };
     if authorization.policy_id != request.policy_id
@@ -346,7 +353,10 @@ pub(crate) async fn authorize_browser_dial(
         || authorization.port != request.port
         || authorization.addresses.is_empty()
         || authorization.addresses.len() > 64
-        || authorization.addresses.iter().any(|address| address.port() != request.port)
+        || authorization
+            .addresses
+            .iter()
+            .any(|address| address.port() != request.port)
     {
         return Err("TinySecurity returned a mismatched browser authorization".into());
     }

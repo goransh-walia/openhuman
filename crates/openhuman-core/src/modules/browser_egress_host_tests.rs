@@ -15,7 +15,11 @@ fn target(policy_id: &str, generation: u64, hostname: &str, port: u16) -> Browse
     }
 }
 
-async fn callback_bus() -> (MemoryBus, Connection, tokio::task::JoinHandle<tinybus::Result<()>>) {
+async fn callback_bus() -> (
+    MemoryBus,
+    Connection,
+    tokio::task::JoinHandle<tinybus::Result<()>>,
+) {
     let transport = MemoryBus::new();
     let broker = Broker::new();
     let task = broker.spawn(transport.clone());
@@ -33,10 +37,17 @@ async fn browser_egress_callback_rejects_unauthenticated_peers() {
         .await
         .unwrap();
     let proxy = caller
-        .proxy(contract::INTERFACE, contract::OBJECT_PATH, contract::INTERFACE)
+        .proxy(
+            contract::INTERFACE,
+            contract::OBJECT_PATH,
+            contract::INTERFACE,
+        )
         .unwrap();
     let result: tinybus::Result<contract::BrowserEgressGrant> = proxy
-        .call(methods::AUTHORIZE, (target("host-policy", 1, "8.8.8.8", 443),))
+        .call(
+            methods::AUTHORIZE,
+            (target("host-policy", 1, "8.8.8.8", 443),),
+        )
         .await;
     assert!(result.is_err(), "an unclaimed bus peer must be refused");
 }
@@ -52,10 +63,17 @@ async fn browser_egress_callback_fails_closed_without_a_host_registered_scope() 
         .await
         .unwrap();
     let proxy = caller
-        .proxy(contract::INTERFACE, contract::OBJECT_PATH, contract::INTERFACE)
+        .proxy(
+            contract::INTERFACE,
+            contract::OBJECT_PATH,
+            contract::INTERFACE,
+        )
         .unwrap();
     let result: tinybus::Result<contract::BrowserEgressGrant> = proxy
-        .call(methods::AUTHORIZE, (target("unregistered", 1, "8.8.8.8", 443),))
+        .call(
+            methods::AUTHORIZE,
+            (target("unregistered", 1, "8.8.8.8", 443),),
+        )
         .await;
     assert!(result.is_err(), "unknown host policy IDs must be refused");
 }
@@ -65,9 +83,9 @@ async fn browser_egress_callback_fails_closed_without_a_host_registered_scope() 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires OPENHUMAN_TEST_SECURITY_MODULE pointing to the locally built TinySecurity module"]
 async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
-    use crate::modules::security::native_tests::native_fixture;
+    use crate::modules::security::native_tests::native_fixture_configured;
 
-    let fixture = native_fixture().await;
+    let fixture = native_fixture_configured(false, |_| {}).await;
     install(&fixture.client).await.unwrap();
     let owner = tinysecurity_bus::SubjectScope {
         user: "native-test-user".into(),
@@ -112,7 +130,11 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
         .await
         .unwrap();
     let proxy = caller
-        .proxy(contract::INTERFACE, contract::OBJECT_PATH, contract::INTERFACE)
+        .proxy(
+            contract::INTERFACE,
+            contract::OBJECT_PATH,
+            contract::INTERFACE,
+        )
         .unwrap();
 
     let target = target(&policy_id.0, info.generation, "8.8.8.8", 443);
