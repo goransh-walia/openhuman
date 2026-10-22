@@ -233,6 +233,15 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
         )
         .unwrap();
 
+    let direct = crate::modules::security::egress::authorize_browser_dial(target(
+        &policy_id.0,
+        info.generation,
+        "8.8.8.8",
+        443,
+    ))
+    .await
+    .expect("direct host adapter authorization should expose authority decoding errors");
+    assert!(!direct.authorization.is_empty());
     let target = target(&policy_id.0, info.generation, "8.8.8.8", 443);
     let grant: contract::BrowserEgressGrant = proxy
         .call("Authorize", (target.clone(),))
