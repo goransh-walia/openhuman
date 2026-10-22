@@ -53,11 +53,13 @@ Namespace `approval` (registered via `all_approval_registered_controllers`, cons
 | --- | --- | --- |
 | `approval.list_pending` | none | `pending: PendingApproval[]` |
 | `approval.list_recent_decisions` | `limit?: u64` (1-500, default 50) | `decisions: ApprovalAuditEntry[]` |
+| `approval.list_tool_trust` | none | `grants: ApprovalToolTrustGrant[]` (current tenant only) |
+| `approval.revoke_tool_trust` | `request_id: string` | `revoked: bool` (opaque grant id from `list_tool_trust`) |
 | `approval.get_gate_state` | none | `state: ApprovalGateBootState` (installed / disabled-by-env / override-ignored / host tag) |
 | `approval.decide` | `request_id: string`, `decision: string` (`approve_once` / `approve_always_for_tool` / `approve_always_for_flow` / `deny`) | `decided: PendingApproval` |
 | `approval.preauthorize_flow` | `flow_id: string`, `tool_names: string[]` | `result: FlowPreauthorizationResult` (idempotent flow-scoped trust grants; succeeds with `gate_installed=false` when the gate is off) |
 
-`list_pending` / `list_recent_decisions` return empty (not an error) when the gate is not installed; `decide` errors when the gate is absent or the `request_id` is unknown/already decided. `list_pending` lists the requests parked in this process; `list_recent_decisions` is the module's decided rows plus the history older installs wrote.
+`list_pending` / `list_recent_decisions` / `list_tool_trust` return empty (not an error) when the gate is not installed; `decide` and `revoke_tool_trust` error when the gate is absent. `list_pending` lists the requests parked in this process; `list_recent_decisions` is the module's decided rows plus the history older installs wrote. Tool-grant revocation uses TinySecurity's opaque durable row id and is tenant-scoped; the caller cannot name another tenant's scope or tool.
 
 ## Agent tools
 
