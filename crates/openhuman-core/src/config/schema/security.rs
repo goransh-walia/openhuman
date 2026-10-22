@@ -1,13 +1,13 @@
-//! The single `[security]` table: autonomy, sandbox, privacy, approval and
-//! automatic approval policy.
+//! The single `[security]` table: approval, auto-approve and the overlay that carries
+//! the sandbox, autonomy and privacy policy.
 //!
 //! Policy settings historically lived in three top-level tables (`[autonomy]`,
-//! `[sandbox]`, `[privacy]`). The pre-decode rewrite in
-//! [`crate::config::migrations::security_policy`] folds them into this table
-//! key by key, with `[security.*]` values taking precedence. The policy stays
-//! off unless `[security.autonomy].enabled = true`.
+//! `[sandbox]`, `[privacy]`). `[security.autonomy]`, `[security.sandbox]` and
+//! `[security.privacy]` are the canonical spelling; the pre-decode rewrite in
+//! [`crate::config::migrations::security_policy`] folds them into `[security]`
+//! before the typed decode, with explicitly nested values winning key by key.
+//! The policy stays off unless `[security.autonomy].enabled = true`.
 
-use super::{AutonomyConfig, PrivacyConfig};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -15,12 +15,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(default)]
 pub struct SecurityConfig {
-    /// `[security.autonomy]`: command and tool policy.
-    pub autonomy: AutonomyConfig,
-    /// `[security.sandbox]`: sandbox backend preferences.
-    pub sandbox: SandboxConfig,
+    /// `[security.autonomy]`: action permissions and command limits.
+    pub autonomy: super::AutonomyConfig,
+    /// `[security.sandbox]`: execution isolation selection.
+    pub sandbox: super::SandboxConfig,
     /// `[security.privacy]`: data-egress posture.
-    pub privacy: PrivacyConfig,
+    pub privacy: super::PrivacyConfig,
     /// `[security.approval]`: interactive approval timing.
     pub approval: ApprovalSettings,
     /// `[security.auto_approve]`: automatic approval beyond the per-tool list.

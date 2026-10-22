@@ -12104,6 +12104,7 @@ async fn json_rpc_flows_full_arc_discover_build_create_run_inner() {
         ..openhuman_core::config::Config::default()
     };
     approval_config
+        .security
         .autonomy
         .auto_approve
         .push("run_flow".to_string());

@@ -39,6 +39,14 @@ if [[ "${OPENHUMAN_SECURITY_PERF_BUDGET:-}" == "1" ]]; then
   mkdir -p "$(dirname "$OPENHUMAN_SECURITY_PERF_OUT")"
 fi
 
-bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib "$@" \
-  --no-default-features --features inference,web3,modules,security-module \
-  modules::security -- --include-ignored --nocapture
+for test_filter in \
+  modules::security \
+  security::approval \
+  security::egress \
+  security::redact \
+  sandbox::spawn_plan \
+  tools::implementations; do
+  bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib "$@" \
+    --no-default-features --features inference,web3,modules,security-module \
+    "$test_filter" -- --include-ignored --nocapture
+done

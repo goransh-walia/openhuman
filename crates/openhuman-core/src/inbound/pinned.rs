@@ -94,12 +94,11 @@ impl PinnedAgent for AgentChatPinned {
             None,
             AgentChatEnv::default(),
         );
-        let outcome = crate::security::turn_origin::with_origin(
-            external_inbound_origin(&run.source, &run.turn_id),
-            turn,
-        )
-        .await
-        .map_err(anyhow::Error::msg)?;
+        let outcome = ctx
+            .with_turn_origin(external_inbound_origin(&run.source, &run.turn_id))
+            .enter(turn)
+            .await
+            .map_err(anyhow::Error::msg)?;
         Ok(outcome.value)
     }
 }

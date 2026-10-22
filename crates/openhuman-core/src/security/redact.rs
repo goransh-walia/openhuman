@@ -26,14 +26,12 @@ pub fn endpoint_host(url: &str) -> String {
 /// failure lines and artifact bodies. Waits up to [`TEXT_TIMEOUT`] for the
 /// module.
 ///
-/// This text is data the user still needs (an artifact the model re-reads, an
-/// audit row), so unlike an endpoint field it is not blanked when the module
-/// cannot answer. The fixed boot floor (`core::log_redaction`, ADR 7) is
-/// applied instead, line by line so a large body is not suppressed whole; the
-/// original text is never returned unfiltered.
+/// If the module cannot answer, the complete value is suppressed. The fixed
+/// diagnostic floor is reserved for log fields and never authorizes persisted
+/// or model-visible content.
 #[must_use]
 pub fn text(text: &str) -> String {
-    answer_or_floor(module_text(text), text)
+    answer_or_suppress(module_text(text))
 }
 
 /// Structured tool-call arguments with content, credentials and home paths
@@ -65,24 +63,12 @@ pub fn arguments(args: &serde_json::Value) -> serde_json::Value {
 /// whole; real credentials are far shorter than a chunk and ordinary text has
 /// line breaks.
 ///
-/// Fail closed once the module is serving: when it was armed and cannot answer
-/// (faulted, timed out, a chunk refused) the result is `None` and the caller
-/// withholds it. Where no module is serving at all (a build without
-/// `security-module`, a host that never loaded it, a unit test) there is no
-/// module to fail, and the harness's own credential scrub answers instead: the
-/// documented floor for tool results, as `core::log_redaction` is for logs.
-/// Neither path ever returns the original text.
+/// Fail closed whenever the module cannot answer, including when it is not
+/// built or has not been armed. The fixed diagnostic floor is for logs only;
+/// it does not authorize model-visible tool output.
 #[must_use]
 pub fn credentials(text: &str) -> Option<String> {
-    credentials_with(text, |chunk| {
-        module_credentials(chunk).unwrap_or_else(|| Some(floor_credentials(chunk)))
-    })
-}
-
-/// The floor for tool results where no module serves: the shared credential
-/// scrubber the harness itself uses.
-fn floor_credentials(chunk: &str) -> String {
-    tinyinference_core::sanitize::scrub_credentials(chunk)
+    credentials_with(text, |chunk| module_credentials(chunk).flatten())
 }
 
 /// Largest slice handed to the module in one `CredentialsOnly` call.
@@ -192,12 +178,9 @@ fn module_arguments(_args: &serde_json::Value) -> Option<String> {
     None
 }
 
-/// The module's `answer` when it gave one, otherwise the floor over `input`.
-fn answer_or_floor(answer: Option<String>, input: &str) -> String {
-    match answer {
-        Some(redacted) => redacted,
-        None => crate::core::log_redaction::floor_scrub_text(input),
-    }
+/// The module's `answer` when it gave one, otherwise the suppression marker.
+fn answer_or_suppress(answer: Option<String>) -> String {
+    answer.unwrap_or_else(|| crate::core::log_redaction::SUPPRESSED.to_string())
 }
 
 #[cfg(feature = "security-module")]
@@ -206,7 +189,9 @@ fn module_text(input: &str) -> Option<String> {
     match try_redact(RedactMode::Text, input, Some(TEXT_TIMEOUT)) {
         Ok(redacted) => Some(redacted),
         Err(error) => {
-            log::debug!("[security][redact] module text pass unavailable, floor applies: {error}");
+            log::debug!(
+                "[security][redact] module text pass unavailable, content suppressed: {error}"
+            );
             None
         }
     }

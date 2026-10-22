@@ -173,22 +173,15 @@ fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
 }
 
 #[test]
-fn text_falls_back_to_the_floor_never_the_original_or_a_blank() {
-    let out = answer_or_floor(
-        None,
-        "retry failed: Authorization: Bearer abcdefghijklmnop\nok",
-    );
-    assert!(!out.contains("abcdefghijklmnop"), "{out}");
-    assert!(
-        out.starts_with("retry failed:") && out.ends_with("\nok"),
-        "{out}"
-    );
+fn text_suppresses_the_whole_value_when_module_cannot_answer() {
+    let out = answer_or_suppress(None);
+    assert_eq!(out, crate::core::log_redaction::SUPPRESSED);
 }
 
 #[test]
 fn text_prefers_the_module_answer() {
     assert_eq!(
-        answer_or_floor(Some("module said".into()), "raw"),
+        answer_or_suppress(Some("module said".into())),
         "module said"
     );
 }
@@ -346,14 +339,10 @@ fn credentials_fail_when_any_chunk_cannot_be_answered() {
     assert!(out.is_none());
 }
 
-/// With no module serving (this unit-test process never arms the bridge), a
-/// tool result is answered by the floor scrub: a credential goes, ordinary text
-/// stays, and the original secret is never returned.
+/// Tool results are withheld when TinySecurity is not built: the diagnostic
+/// floor is not the authority for model-visible tool output.
+#[cfg(not(feature = "security-module"))]
 #[test]
-fn credentials_without_a_serving_module_use_the_floor_never_the_original() {
-    // Built at runtime so no credential-shaped literal sits in the source.
-    let key = format!("{}-{}", "sk", "abcdefghijklmnopqrstuvwxyz123456");
-    let out = credentials(&format!("deploy with api_key={key} now")).unwrap();
-    assert!(!out.contains(&key), "{out}");
-    assert_eq!(credentials("hello world").unwrap(), "hello world");
+fn credentials_without_security_module_withholds_tool_results() {
+    assert_eq!(credentials("hello world"), None);
 }

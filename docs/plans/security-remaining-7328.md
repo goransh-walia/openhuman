@@ -8,16 +8,12 @@ Binding owner design: `vendor/tinysecurity/docs/specs/security-module.md`,
 
 ## Delivery boundary and starting evidence
 
-Bootstrap plus immutable path scopes exist. TinySecurity #4 merged at
-`f2b7ebd77c1f1109e08f6f38de87ad594841a0e3`. The module currently advertises
-Evaluate, Check, PolicyInfo and four immutable path members. Its command engine
-only allows argument-free diagnostics. `future.rs` contains reserved payloads,
-not working approvals, scans, egress, audit or sandbox engines. The host's
-`modules/security.rs::module_config` deliberately returns bootstrap defaults.
-Do not treat any reserved type or passing bootstrap test as tracker completion.
-Root is releasing that path milestone as v0.2.3 (run 38080694935). The next owner
-implementer is already executing Task 3's immutable command registry. Finish and
-review that task first; do not restart it or wait for the full migration plan.
+TinySecurity v0.17.0 is published and pinned. It includes immutable command
+policy registration, command classification and execution checks with atomic
+hourly reservations, plus scoped policy and durable approval operations. OpenHuman
+has host clients for those contracts. The remaining owner engines and host
+consumers listed below are still required; a reserved bus type or a passing
+bootstrap test is not evidence that its engine is implemented.
 
 Deliver **one further cumulative TinySecurity PR**, against canonical upstream,
 containing all owner work below. Continue the existing OpenHuman #7331 for host
@@ -162,27 +158,34 @@ missing behaviors are RED, not removed or marked successful.
    config/env fallback for SaaS. Secret settings never enter PolicyInfo or logs.
 **Exit:** round-trip old config fixtures and isolated new effective policies pass.
 
-**Host status (TinySecurity v0.16.0, published 2026-10-22):** done: `[security]` table
+**Host status (TinySecurity v0.17.0, published 2026-10-22):** done: `[security]` table
 (`config/schema/security.rs`, audit and approval TTL wired from it, folded
 `[security.autonomy|sandbox|privacy]` overlay), migration 14->15
 (`security_policy.rs`, `max_cost_per_day_cents` deleted with a notice), single
 translator (`modules/security_policy.rs`), scoped client with generation-keyed
 decision cache (`modules/security_scoped.rs`), `live_policy::reload_from_config`
 driver, `SecurityPolicy::from_full_config` (privacy no longer hard-coded), the
-trusted-host binding in `module_config`, a released-module two-tenant test, and
-the canonical typed `Config.security.{autonomy,sandbox,privacy}` fields. Legacy
-top-level tables are folded key by key into `[security]`, with canonical values
-winning; saves emit only `[security.*]` policy tables.
-Open: routing shell/filesystem/network gates through the client and deleting the
-`tinybox_core::shell` calls in `command_checks.rs` (needs `security-module`
-default-on and a sync-to-async seam) and scoped audited variants. The host
-already subscribes to `PolicyChanged`; the earlier inventory entry was stale.
-Task 7's released durable whole-tool grant support is tracked below.
+trusted-host binding in `module_config`, and a released-module two-tenant test.
+Host follow-up is done: `Config.security` owns typed autonomy, sandbox and
+privacy fields; the pre-decode rewrite folds legacy top-level tables into the
+canonical nested shape with nested values taking precedence. Save emits only
+`[security.*]`. Config consumers across core/embed/TinyHumans and profile-owned
+config overlays use the nested fields. The config RPC snapshot now uses
+TinySecurity endpoint-origin redaction for storage URLs as well as inbound queue
+URLs, suppressing unsupported schemes and database names. Stale characterization
+imports were updated to current security-owned turn-origin, approval-gate and
+prompt-scan APIs. Regression coverage checks legacy decode, precedence, save
+shape, sandbox retirement, profile refresh and endpoint suppression.
+Filesystem, network and shell gates route through TinySecurity clients; the
+former TinyBox shell calls are gone from `command_checks.rs`, which now only
+parses the model's escalate-only class hint. The host subscribes to
+`PolicyChanged`. Still open: scoped audited variants and completing the
+redaction/egress consumers in Task 12. Task 7's released durable whole-tool
+grant support is tracked below.
 
 ## Task 3 — Command grammar, tool rules and action accounting
 
-**In progress:** root has dispatched this task; resume its result/review instead
-of dispatching a second implementer. The agreed contract is immutable
+**Released and integrated (TinySecurity v0.17.0):** the owner implements immutable
 `CommandPolicy { enabled, autonomy, allowed_commands, max_actions_per_hour,
 require_approval_for_medium_risk, block_high_risk_commands, action_dir, home_dir,
 execution_mode }`, opaque `CommandPolicyId`, RegisterCommandPolicy,
@@ -213,7 +216,12 @@ context. Keep these distinctions in characterization and native tests.
    reserve. Reinit/cache cannot replenish or bypass active reservations.
 5. Preserve merged path registry tests, adding full-policy binding and real native
    Windows/APFS/Linux cases; no second path normalizer.
-**Exit:** complete command/rule/rate parity through native Evaluate/Check.
+**Evidence:** the `command_registry` filter passes 12 tests, and the full
+`tinysecurity-policy` package suite passes at v0.17.0. OpenHuman's
+`modules/security_command.rs` registers immutable host-derived scopes and uses
+`ClassifyCommand` for authorization and `CheckCommand` for execution; native
+production tests exercise the released adapter. Remaining duplicate host
+redaction and egress consumers are tracked under Task 12, not this command task.
 
 ## Task 4 — One redactor and integrated scans
 
@@ -399,6 +407,18 @@ encrypted_store,encrypted_file_backend,backend}.rs`, `security/devices/crypto.rs
    dispatch semantic release workflow. Verify published artifacts by real loader
    allow/deny/callback flow. Only now can production host pins change.
 
+**Upstream checkpoint (2026-10-22):** TinySecurity PR #42 (redaction) merged as
+`0990d97159ddb12a214749d6aa03a4fbf022779f`, but no release containing it is
+published; the host must keep its current pin. PR #43
+([abandoned execution outcome](https://github.com/tinyhumansai/tinysecurity/pull/43))
+adds the incompatible `ExecutionOutcome::Abandoned` bus variant and bumps the
+contract to 2.0. Its CI exposed and fixed an old-major reinit fixture and a
+Windows native verifier assumption; hosted checks are still running on
+`611590fb15145dcf4d3ce6d57ce79d45c7ac8f64`. The earlier CodeRabbit finding has
+no unresolved thread, and re-review has been requested. PR #43 is a focused
+slice, not the cumulative owner migration required by this task; Tasks 1–10
+remain prerequisites before release and host pin changes.
+
 ## Task 12 — Host pins and config/command/redaction migration
 
 **Files:** registry security record, `scripts/ci/check-module-pins.mjs`,
@@ -419,6 +439,41 @@ encrypted_store,encrypted_file_backend,backend}.rs`, `security/devices/crypto.rs
 5. Install pinned URL transport/egress/scans at every Task 5 consumer and
    agent/bus.rs, session_host/runtime/run_loop.rs, mcp/registry. Verify secret
    suppression in Sentry/logs/approval/audit and real redirect/rebinding denial.
+
+**Host follow-up (2026-10-22):** storage open and workspace-rebind logs use
+TinySecurity `EndpointOrigin`, so database names and local SQLite paths do not
+reach logs or the `Rebound` display fields. Inference URL migration logs use the
+same mode; regressions assert paths and credentials stay out of captured logs.
+Config snapshot URL suppression is covered under Task 2.
+RPC dispatch parameter logs now use TinySecurity `StructuredLogArguments`;
+unavailable or malformed responses suppress the complete parameter value.
+`core::rpc_log` regression tests cover valid JSON projection and suppression.
+Flow memory writes now route both agent-tool and TinyFlows node guards through
+the released module's `CredentialsOnly` redactor and fail closed when it cannot
+answer. The existing `api_key=abc123` characterization exposed a short-value
+parity gap in v0.17.0. TinySecurity PR [#42](https://github.com/tinyhumansai/tinysecurity/pull/42)
+merged upstream at `0990d97159ddb12a214749d6aa03a4fbf022779f`, adding the short-key
+case while preserving source identifiers. A release containing that merge is
+still required before the host integration is publishable. The host guard tests
+and no-security-module RPC-log suppression test pass locally;
+the flow-node short-key test remains red against the currently pinned archive.
+Network destination gates also deny when `security-module` is compiled out;
+regressions cover both direct and routed gates, and the enabled native gate
+suite passes.
+Composio result and error handling now sends every distinct string (including
+object keys and strings without the configured Composio credential) through the
+shared redactor. It withholds results on unavailable, incomplete, oversized or
+credential-preserving answers; batches are bounded to 256 strings, 512 KiB and
+15 seconds. Regressions cover unrelated bearer credentials, incomplete module
+answers and the size limit.
+Tool-result credential scrubbing also withholds when TinySecurity is not built
+or armed; the diagnostic floor no longer authorizes unverified model-visible
+tool output. A feature-off regression first failed by returning the unchanged
+result, then passed after removing the harness scrubber fallback.
+The synchronous `Text` redactor now suppresses the complete value when the
+module cannot answer. Its consumers persist artifact bodies or put failure text
+back into model context, so the log-only floor no longer substitutes for the
+module there; the feature-off regression pins the suppression marker.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
@@ -449,18 +504,13 @@ origins remain denied. Durable tool-grant list/revoke, the localized history
 panel, and judged-verdict scores/expiry are implemented; component tests cover
 those states, and a Playwright browser test now exercises judged history and
 grant revocation through mocked core RPC. The targeted SaaS gate/profile tests
-pass. Task 13's single-middleware consolidation and full interactive prompt /
-decision browser flow remain open.
-
-The TinySecurity tool-call adapter now sends the effective caller tier derived
-from the registered autonomy level and the dispatch's narrower agent ceiling;
-it no longer hard-codes `Full`. The tier mapping regression and all 15 focused
-adapter tests pass. Interactive approval browser coverage is already present
-in `agent-harness-behaviors.spec.ts`: it drives the TinySecurity-backed
-outermost gate through approve and deny, then proves the tool execution outcome.
-Its targeted run currently cannot start in this container because `xvfb-run` is
-missing. Duplicate host access-policy enforcement remains in place until the
-complete middleware consolidation and replacement coverage land.
+pass. The existing interactive browser harness covers the approval prompt,
+approve-once execution and denial without execution
+(`app/test/e2e/specs/agent-harness-behaviors.spec.ts`). Task 13's
+single-middleware consolidation remains open. The unused OpenHuman
+`ToolPolicyMiddleware` wrapper and trait implementation are removed; the
+security gate now calls the session policy adapters directly, and their tests
+exercise the session host state without constructing a second middleware.
 
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
@@ -498,15 +548,32 @@ registry until the owner publishes the new artifact and checksum.
 [#103](https://github.com/tinyhumansai/tinybox/pull/103) remains draft and adds
 Linux native resource limits; it is only part of the TinyBox #27 work and does
 not complete cross-platform jail, microVM, Docker, or process-launch coverage.
+TinyBox PR [#112](https://github.com/tinyhumansai/tinybox/pull/112) has since
+merged as `b0b5969ab6d04b64c478e1f012b6af2ac53fc171`, bringing canonical TSD v2
+storage to main. PR #103 conflicted with that storage migration in
+`grants_manifest_e2e.rs`; its updated head `873f9789fa0cca5006ddb0779462be441d40a836`
+merges current main and preserves both the storage test host and canonical
+private staging path. GitHub reports it mergeable and CI is running. Keep it in
+draft until a compatible TinyBox release is available and OpenHuman's host
+adapter is updated.
+The first post-merge CI run passed all 51 native jail unit tests but failed the
+separate resource cancellation proof because it constructed production storage
+without a served host callback. The test now uses TinyBox's testkit-backed
+`Resources::test_resources()` fixture (`586e883bf81bda850c5358de4c2755cc77413736`).
+That run exposed that the test's current-thread Tokio runtime cannot service the
+testkit's synchronous storage calls. Commit `5110ce7693f718441a652f3ffd28d90ffb9b3232`
+uses a two-worker runtime for this storage-backed test; the focused test passes
+locally, and hosted `native-resource-live`, module tests, coverage, clippy,
+formatting, MSRV, supply-chain, and Linux/Windows checks pass. The hosted macOS
+module E2E check is still running. Keep PR #103 in draft until a compatible
+TinyBox release is available and OpenHuman's host adapter is updated.
 The spawner inventory now distinguishes `sandbox/ops.rs`'s module-planned
 operator host-run mode from an untrusted direct bypass: the module registers
 that source `TrustedHost`, while scheduled/hook text has a separate
-`UntrustedSkill` source that cannot receive a host-run plan. `install_tool` no
-longer launches host package managers. Its enabled path returns a clear refusal
-until package-manager scripts can run in an approved isolated environment, and
-the regression test verifies the refused call. The spawner inventory now
-reports zero untrusted direct spawners. A sandboxed package installer remains
-unavailable; do not restore host execution to make the tool appear functional.
+`UntrustedSkill` source that cannot receive a host-run plan. The inventory
+still reports one untrusted direct spawner: `install_tool`, whose host package
+manager command has no TinySecurity/TinyBox plan yet. Its human approval and
+SaaS denial do not satisfy Task 14; a safe scoped install design remains open.
 
 ## Task 15 — Host audit, scan/consequence gates and crypto facades
 
@@ -532,18 +599,16 @@ socket to either the old allowed listener or the denied rebound listener. This
 does not supply TinyComputer consequence/payment gates or prove native OS process
 confinement; both remain open under Tasks 14–15.
 
-**Consequence callback dependency (2026-10-22):** TinyComputer PR
-[#153](https://github.com/tinyhumansai/tinycomputer/pull/153) now carries opaque
-`host_context` only through a confidential callback addressed to a unique
-host-prepared recipient; requests fail closed when that callback is absent. Its
-Describe schema omits this host-only field from model-visible tool arguments.
-The PR is open and its new CI run is in progress. OpenHuman cannot configure the
-callback yet: the host uses TinyBus's generic release `Resolver`, while scoped
-host callbacks are currently available only through `ModuleHost::prepare_host_callbacks`
-plus `load_file_with_host_callbacks`, outside the resolver ladder. Add the
-module-scoped verified callback load path in TinyBus upstream first; then wire
-OpenHuman's consequence review adapter and update the TinyComputer gitlink only
-after the owner changes merge and release.
+The consequence gate still lacks a trusted host caller context: the module
+callback knows the paused task and action, but not the tenant-bound dispatch
+context that initiated `ContinueTask`. TinyComputer PR
+[#153](https://github.com/tinyhumansai/tinycomputer/pull/153) adds an opaque,
+redacted `HostContext` field to `ContinueTask`, relays it to
+`ConsequenceHost.Review`, and bumps the wire contract to 2.27. It is awaiting
+upstream CI/review. OpenHuman must wait for that owner change to land and be
+released before adding the host adapter; the adapter must validate and consume
+the short-lived host-issued context, bind the exact task/action, and fail
+closed on missing, stale, mismatched or reused context.
 
 ## Task 16 — Final matrix, documentation and completion evidence
 

@@ -743,3 +743,6 @@ async fn a_hand_written_empty_allowlist_is_also_widened() {
 
 #[path = "mod_tests/provider_migration_tests.rs"]
 mod provider_migration_tests;
+
+#[path = "mod_policy_tests.rs"]
+mod policy_tests;

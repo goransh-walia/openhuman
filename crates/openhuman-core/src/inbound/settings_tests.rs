@@ -161,13 +161,13 @@ fn configured_sources_lead_the_pipeline_sources() {
             "ack": "after_ingest",
             "weight": 50,
             "cadence": "instant",
-            "coalesce": {"debounce_ms": 30_000, "max_wait_ms": 300_000, "max_events": 20},
+            "budget": {"max_turns": 20},
         })
     );
     assert_eq!(sources.len(), shipped().pipeline.sources.len() + 1);
     // The parsed pipeline agrees: the first match wins for the source.
     let policy = resolved.pipeline.source_policy("x:mentions");
     assert_eq!(policy.weight, 50);
-    assert_eq!(policy.coalesce.unwrap().max_events, Some(20));
+    assert_eq!(policy.budget.unwrap().max_turns, 20);
     assert_eq!(resolved.pipeline.source_policy("composio:gmail").weight, 0);
 }

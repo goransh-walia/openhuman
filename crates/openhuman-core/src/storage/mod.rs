@@ -170,7 +170,7 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
     tracing::info!(
         target: "openhuman::storage",
         driver = parsed.driver(),
-        url = %crate::core::log_redaction::scrub_secrets(url),
+        url = %crate::security::redact::endpoint_origin(url),
         "[storage] opening the configured backend"
     );
     // Every opened backend checks the process's lease fences on write; with

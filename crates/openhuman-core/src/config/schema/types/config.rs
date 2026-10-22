@@ -225,8 +225,8 @@ pub struct Config {
     #[serde(default)]
     pub hooks: HooksConfig,
 
-    /// The single `[security]` table: policy, sandboxing, privacy and approval
-    /// settings. Legacy top-level policy tables are folded here before decode.
+    /// The single `[security]` table for autonomy, sandboxing, privacy,
+    /// approvals and automatic approval settings.
     #[serde(default)]
     pub security: SecurityConfig,
 

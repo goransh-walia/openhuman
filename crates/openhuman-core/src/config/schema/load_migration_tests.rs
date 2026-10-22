@@ -315,6 +315,9 @@ fn migrate_legacy_inference_url_moves_external_chat_completions() {
     );
 }
 
+#[path = "load_migration_redaction_tests.rs"]
+mod redaction_tests;
+
 #[test]
 fn migrate_legacy_inference_url_clears_managed_backend_form() {
     let mut cfg = Config::default();

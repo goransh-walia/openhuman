@@ -129,8 +129,9 @@ fn crypto_config(dir: &std::path::Path) -> CryptoConfig2 {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn password_crypt_opens_legacy_host_payloads_and_interoperates() {
-    let fx =
-        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    let directory = fx_dir();
+    let fx = super::super::native_tests::native_fixture_with(Some(crypto_config(directory.path())))
+        .await;
     let payload: LegacyPayload = serde_json::from_str(LEGACY_PAYLOAD).unwrap();
     let opened = password_decrypt(&fx.proxy, FIXTURE_PASSWORD.into(), payload)
         .await
@@ -199,8 +200,9 @@ fn corpus_payload() -> (String, String, LegacyPayload) {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn corpus_payload_decrypts_and_tampering_is_refused_through_the_module() {
-    let fx =
-        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    let directory = fx_dir();
+    let fx = super::super::native_tests::native_fixture_with(Some(crypto_config(directory.path())))
+        .await;
     let (password, plaintext, payload) = corpus_payload();
     let opened = password_decrypt(&fx.proxy, password.clone(), payload.clone())
         .await
@@ -236,8 +238,9 @@ async fn corpus_payload_decrypts_and_tampering_is_refused_through_the_module() {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn module_encryptions_never_reuse_a_nonce_and_carry_a_gcm_tag() {
-    let fx =
-        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    let directory = fx_dir();
+    let fx = super::super::native_tests::native_fixture_with(Some(crypto_config(directory.path())))
+        .await;
     let a = password_encrypt(&fx.proxy, "pw".into(), b"same plaintext".to_vec(), None)
         .await
         .unwrap();
@@ -254,8 +257,9 @@ async fn module_encryptions_never_reuse_a_nonce_and_carry_a_gcm_tag() {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn module_refuses_payloads_over_the_configured_limit() {
-    let fx =
-        super::super::native_tests::native_fixture_with(Some(crypto_config(fx_dir().path()))).await;
+    let directory = fx_dir();
+    let fx = super::super::native_tests::native_fixture_with(Some(crypto_config(directory.path())))
+        .await;
     let oversized = vec![0u8; 65_536 + 1];
     assert!(password_encrypt(&fx.proxy, "pw".into(), oversized, None)
         .await
@@ -263,7 +267,8 @@ async fn module_refuses_payloads_over_the_configured_limit() {
 }
 
 fn fx_dir() -> tempfile::TempDir {
-    tempfile::tempdir_in(std::env::temp_dir()).unwrap()
+    let temp_root = std::env::temp_dir().canonicalize().unwrap();
+    tempfile::tempdir_in(temp_root).unwrap()
 }
 
 /// Keyring round trip through the module's encrypted-file backend, with the
@@ -274,14 +279,9 @@ fn fx_dir() -> tempfile::TempDir {
 async fn keyring_round_trip_through_the_served_consent_callback() {
     let _consent_test_guard = KEYRING_CONSENT_TEST_LOCK.lock().await;
     use crate::security::keyring_consent::policy;
-    let config = crypto_config(fx_dir().path());
+    let directory = fx_dir();
+    let config = crypto_config(directory.path());
     let fx = super::super::native_tests::native_fixture_with(Some(config.clone())).await;
-    crate::modules::security_host::install(
-        &fx.client,
-        config.keyring.as_ref().map(|k| k.backend.clone()),
-    )
-    .await
-    .unwrap();
     policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
     let name = "user:token-7328";
 
@@ -323,12 +323,6 @@ async fn declined_keyring_consent_refuses_the_store_through_the_module() {
     let directory = fx_dir();
     let config = crypto_config(directory.path());
     let fx = super::super::native_tests::native_fixture_with(Some(config.clone())).await;
-    crate::modules::security_host::install(
-        &fx.client,
-        config.keyring.as_ref().map(|k| k.backend.clone()),
-    )
-    .await
-    .unwrap();
     let name = "user:declined-7328";
 
     policy::apply_consent(&policy::build_consent_preference("declined"));

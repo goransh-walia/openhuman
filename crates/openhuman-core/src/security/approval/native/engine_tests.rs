@@ -18,7 +18,7 @@ mod tool_trust_tests;
 
 /// A prompt surface that records what the engine asked it to show.
 #[derive(Default)]
-struct Shown {
+pub(super) struct Shown {
     deliveries: Mutex<Vec<Delivery>>,
 }
 
@@ -30,14 +30,14 @@ impl PromptSurface for Shown {
     }
 }
 
-struct World {
+pub(super) struct World {
     fixture: NativeFixture,
     _dir: tempfile::TempDir,
     engine: NativeEngine,
     config: Config,
 }
 
-async fn world() -> World {
+pub(super) async fn world() -> World {
     let fixture = native_approval_fixture().await;
     let dir = tempfile::tempdir_in(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp"),
@@ -56,7 +56,7 @@ async fn world() -> World {
     }
 }
 
-fn input(tool: &str, surface: &Arc<Shown>) -> CheckInput {
+pub(super) fn input(tool: &str, surface: &Arc<Shown>) -> CheckInput {
     CheckInput {
         tenant: crate::core::runtime::Tenant::default(),
         variant: Variant::Standard,
@@ -681,46 +681,5 @@ async fn a_flow_trust_the_module_holds_approves_that_tool_in_that_flow_after_a_r
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn the_module_decides_what_each_origin_class_is_allowed() {
-    let world = world().await;
-    let shown = Arc::new(Shown::default());
-    for origin in [CallOrigin::LocalOperator, CallOrigin::TrustedAutomation] {
-        let mut call = input("gmail_send", &shown);
-        call.origin = origin;
-        assert!(
-            matches!(
-                world.engine.check(call).await.unwrap(),
-                Checked::Approved { .. }
-            ),
-            "{origin:?} is an audited automatic approval"
-        );
-    }
-    assert!(
-        shown.deliveries.lock().unwrap().is_empty(),
-        "nobody was asked"
-    );
-
-    let mut cron = input("gmail_send", &shown);
-    cron.origin = CallOrigin::Cron;
-    assert_eq!(
-        world.engine.check(cron).await.unwrap_err(),
-        EngineError::Refused
-    );
-
-    let mut unlabelled = input("gmail_send", &shown);
-    unlabelled.origin = CallOrigin::Unlabelled;
-    assert_eq!(
-        world.engine.check(unlabelled).await.unwrap_err(),
-        EngineError::Refused
-    );
-    let mut granted = input("gmail_send", &shown);
-    granted.origin = CallOrigin::Unlabelled;
-    granted.posture.tool_grants = vec!["gmail_send".into()];
-    assert!(matches!(
-        world.engine.check(granted).await.unwrap(),
-        Checked::Approved { .. }
-    ));
-    assert!(shown.deliveries.lock().unwrap().is_empty());
-}
+#[path = "engine_origin_tests.rs"]
+mod origin_tests;

@@ -226,7 +226,7 @@ fn first_difference_at(prior: &str, next: &str) -> Option<usize> {
 /// Summarise a differing signature field without printing it.
 ///
 /// `autonomy_signature` and `model_registry_signature` are whole JSON subtrees
-/// of `Config` — `config.autonomy` carries the user's `action_dir` and other
+/// of `Config` — `config.security.autonomy` carries the user's `action_dir` and other
 /// filesystem paths, and the registry is long. Logging either raw would be both
 /// a log bomb on the chat hot path and a needless disclosure, so the log names
 /// the field and gives the reader enough to find the change in their own config:

@@ -341,7 +341,16 @@ impl OpenHumanMemory {
         // up front rather than spend that approval round-trip on a write
         // that was always going to be rejected (review fix — see #5227).
         let content = value_to_content(&value);
-        if tinyredact::has_likely_secret(&content) {
+        let contains_credentials =
+            super::super::memory_guard::contains_credentials(&self.config, &content)
+                .await
+                .map_err(|_| {
+                    EngineError::Capability(
+                        "memory node: secure credential check unavailable; write refused"
+                            .to_string(),
+                    )
+                })?;
+        if contains_credentials {
             tracing::warn!(
                 target: "flows",
                 key_chars = key.chars().count(),

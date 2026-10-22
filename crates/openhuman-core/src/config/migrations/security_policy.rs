@@ -3,8 +3,9 @@
 //! Runs on the parsed document before the typed decode, on every load, so the
 //! result does not depend on whether the workspace crossed schema version 15:
 //!
-//! * Legacy top-level `[autonomy]`, `[sandbox]` and `[privacy]` tables are
-//!   moved under `[security]`. Existing `[security.*]` values win key by key.
+//! * `[security.autonomy]`, `[security.sandbox]` and `[security.privacy]` are
+//!   canonical. Legacy top-level tables are folded into `[security]` before
+//!   typed decode; explicitly nested `[security.*]` values win key by key.
 //! * A document with neither spelling is untouched, so the policy stays off
 //!   (`autonomy.enabled` defaults to `false`).
 //! * `autonomy.max_cost_per_day_cents` is deleted: nothing enforced it, and the
@@ -14,8 +15,8 @@
 //!   `sandbox.firejail_args` is deleted. Neither backend ever had an execution
 //!   path (selecting one made every command fail), so the choice is migrated to
 //!   the TinyBox-selected jail, which is the isolation they asked for and keeps
-//!   the fail-closed floor for untrusted code. Both the legacy `[sandbox]` and
-//!   the `[security.sandbox]` spelling are rewritten, each with a [`Notice`].
+//!   the fail-closed floor for untrusted code. Both spellings are rewritten,
+//!   each with a [`Notice`].
 
 use toml::Value;
 
@@ -27,7 +28,7 @@ const FOLDED: [&str; 3] = ["autonomy", "sandbox", "privacy"];
 pub(crate) enum Notice {
     /// A retired `max_cost_per_day_cents` key was dropped from this table.
     DroppedMaxCost { table: &'static str },
-    /// A legacy top-level security table was folded into `[security.<table>]`.
+    /// A legacy top-level table was folded into `[security]`.
     Overlaid { table: &'static str },
     /// A retired sandbox backend (`firejail`, `bubblewrap`) was moved to `auto`.
     RetiredSandboxBackend {
@@ -64,8 +65,9 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
     let Some(root) = document.as_table_mut() else {
         return notices;
     };
-    let security_value = root.remove("security");
-    let mut security = match security_value {
+    let original_security = root.remove("security");
+    let had_security = original_security.is_some();
+    let mut security = match original_security {
         Some(Value::Table(table)) => table,
         Some(other) => {
             root.insert("security".to_owned(), other);
@@ -73,43 +75,43 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
         }
         None => Default::default(),
     };
-    let had_security = !security.is_empty();
     for name in FOLDED {
-        let legacy = root.remove(name);
-        let canonical = security.remove(name);
-        let mut merged = match legacy {
-            Some(Value::Table(mut table)) => {
-                if name == "autonomy" && table.remove("max_cost_per_day_cents").is_some() {
-                    notices.push(Notice::DroppedMaxCost { table: "autonomy" });
-                }
-                if name == "sandbox" {
-                    notices.extend(retire_sandbox_keys(&mut table, "sandbox"));
-                }
-                table
+        let legacy = match root.remove(name) {
+            Some(Value::Table(table)) => Some(table),
+            Some(other) => {
+                root.insert(name.to_owned(), other);
+                None
             }
-            _ => Default::default(),
+            None => None,
         };
-        let canonical = match canonical {
-            Some(Value::Table(mut table)) => {
-                if name == "autonomy" && table.remove("max_cost_per_day_cents").is_some() {
-                    notices.push(Notice::DroppedMaxCost {
-                        table: "security.autonomy",
-                    });
-                }
-                if name == "sandbox" {
-                    notices.extend(retire_sandbox_keys(&mut table, "security.sandbox"));
-                }
-                Some(table)
+        let current = match security.remove(name) {
+            Some(Value::Table(table)) => Some(table),
+            Some(other) => {
+                security.insert(name.to_owned(), other);
+                None
             }
-            _ => None,
+            None => None,
         };
-        if let Some(canonical) = canonical {
-            for (key, value) in canonical {
+        if legacy.is_none() && current.is_none() {
+            continue;
+        }
+        let had_legacy = legacy.is_some();
+        let mut merged = legacy.unwrap_or_default();
+        if let Some(current) = current {
+            for (key, value) in current {
                 merged.insert(key, value);
             }
         }
-        if !merged.is_empty() {
-            security.insert(name.to_owned(), Value::Table(merged));
+        if name == "autonomy" && merged.remove("max_cost_per_day_cents").is_some() {
+            notices.push(Notice::DroppedMaxCost {
+                table: "security.autonomy",
+            });
+        }
+        if name == "sandbox" {
+            notices.extend(retire_sandbox_keys(&mut merged, "security.sandbox"));
+        }
+        security.insert(name.to_owned(), Value::Table(merged));
+        if had_legacy {
             notices.push(Notice::Overlaid { table: name });
         }
     }
@@ -130,13 +132,9 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
                 "[migrations][security] removed retired {table}.firejail_args: no Firejail backend exists"
             ),
             Notice::Overlaid { table } => {
-                log::debug!("[migrations][security] folded [{table}] into [security.{table}]")
+                log::debug!("[migrations][security] legacy [{table}] folded into [security.{table}]")
             }
         }
     }
     notices
 }
-
-#[cfg(test)]
-#[path = "security_policy_tests.rs"]
-mod tests;
