@@ -35,6 +35,16 @@ fn fingerprint(value: &serde_json::Value) -> u64 {
 /// Load the module, refresh its private configuration when it changed, and
 /// return a proxy for its one interface (desktop, browser and task members).
 pub(crate) async fn proxy(config: &Config) -> Result<Proxy, String> {
+    proxy_with_browser_egress(config, false).await
+}
+
+/// Browser calls opt into a policy scope captured by TinyComputer's private
+/// module configuration. Desktop-only calls do not need that network grant.
+pub(crate) async fn browser_proxy(config: &Config) -> Result<Proxy, String> {
+    proxy_with_browser_egress(config, true).await
+}
+
+async fn proxy_with_browser_egress(config: &Config, browser_egress: bool) -> Result<Proxy, String> {
     crate::modules::ops::ensure_loaded_within(
         config,
         MODULE_ID,
@@ -52,7 +62,7 @@ pub(crate) async fn proxy(config: &Config) -> Result<Proxy, String> {
     // The lock makes credential rotation atomic across concurrent tool calls.
     let mut configuration = module_config(config);
     #[cfg(feature = "security-module")]
-    {
+    if browser_egress {
         if config.browser.chrome_path.is_some() {
             return Err(
                 "TinyComputer browser egress cannot be combined with a configured executable".into(),
