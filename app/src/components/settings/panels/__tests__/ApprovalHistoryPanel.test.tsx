@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type ApprovalAuditEntry,
+  fetchToolTrust,
   fetchRecentApprovalDecisions,
+  revokeToolTrust,
 } from '../../../../services/api/approvalApi';
 import { renderWithProviders } from '../../../../test/test-utils';
 import ApprovalHistoryPanel from '../ApprovalHistoryPanel';
@@ -16,9 +18,15 @@ vi.mock('../../hooks/useSettingsNavigation', () => ({
   }),
 }));
 
-vi.mock('../../../../services/api/approvalApi', () => ({ fetchRecentApprovalDecisions: vi.fn() }));
+vi.mock('../../../../services/api/approvalApi', () => ({
+  fetchRecentApprovalDecisions: vi.fn(),
+  fetchToolTrust: vi.fn(),
+  revokeToolTrust: vi.fn(),
+}));
 
 const mockFetch = vi.mocked(fetchRecentApprovalDecisions);
+const mockFetchTrust = vi.mocked(fetchToolTrust);
+const mockRevokeTrust = vi.mocked(revokeToolTrust);
 
 const auditRow = (overrides: Partial<ApprovalAuditEntry> = {}): ApprovalAuditEntry => ({
   request_id: 'req-1',
@@ -36,6 +44,32 @@ const auditRow = (overrides: Partial<ApprovalAuditEntry> = {}): ApprovalAuditEnt
 describe('ApprovalHistoryPanel', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    mockFetchTrust.mockReset();
+    mockRevokeTrust.mockReset();
+    mockFetchTrust.mockResolvedValue([]);
+  });
+
+  it('lists durable grants and revokes the selected opaque grant id', async () => {
+    mockFetch.mockResolvedValueOnce([]);
+    mockFetchTrust
+      .mockResolvedValueOnce([
+        { tool: 'gmail_send', request_id: 'grant-1', granted_at_ms: 123 },
+        { tool: 'slack_post', request_id: 'grant-2', granted_at_ms: 456 },
+      ])
+      .mockResolvedValueOnce([{ tool: 'slack_post', request_id: 'grant-2', granted_at_ms: 456 }]);
+    mockRevokeTrust.mockResolvedValueOnce();
+
+    renderWithProviders(<ApprovalHistoryPanel />, {
+      initialEntries: ['/settings/approval-history'],
+    });
+
+    expect(await screen.findByTestId('approval-tool-trust-row')).toBeInTheDocument();
+    expect(screen.getByText('gmail_send')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('approval-tool-trust-revoke-grant-1'));
+
+    await waitFor(() => expect(mockRevokeTrust).toHaveBeenCalledWith('grant-1'));
+    await waitFor(() => expect(screen.queryByText('gmail_send')).not.toBeInTheDocument());
+    expect(screen.getByText('slack_post')).toBeInTheDocument();
   });
 
   it('renders the loaded list of decided approvals', async () => {

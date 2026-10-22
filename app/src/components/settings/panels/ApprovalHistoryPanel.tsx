@@ -6,10 +6,14 @@ import { useT } from '../../../lib/i18n/I18nContext';
 import {
   type ApprovalAuditEntry,
   type ApprovalDecision,
+  type ApprovalToolTrustGrant,
   fetchRecentApprovalDecisions,
+  fetchToolTrust,
+  revokeToolTrust,
 } from '../../../services/api/approvalApi';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
+import Card from '../../ui/Card';
 import DataTable, { type DataTableColumn } from '../../ui/DataTable';
 import EmptyState from '../../ui/EmptyState';
 import { TableCell, TableRow } from '../../ui/Table';
@@ -98,8 +102,12 @@ const ApprovalHistoryPanel = () => {
   const { t } = useT();
 
   const [entries, setEntries] = useState<ApprovalAuditEntry[]>([]);
+  const [toolGrants, setToolGrants] = useState<ApprovalToolTrustGrant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [trustLoading, setTrustLoading] = useState(true);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [trustError, setTrustError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedDecisions, setSelectedDecisions] = useState<ReadonlySet<string>>(new Set());
 
@@ -138,6 +146,35 @@ const ApprovalHistoryPanel = () => {
   useEffect(() => {
     void runLoad(++loadSeqRef.current);
   }, [runLoad]);
+
+  const loadToolTrust = useCallback(async () => {
+    try {
+      setToolGrants(await fetchToolTrust());
+      setTrustError(null);
+    } catch (e) {
+      log('tool trust load failed %o', e);
+      setTrustError(t('settings.approvalHistory.toolTrustError'));
+    } finally {
+      setTrustLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void loadToolTrust();
+  }, [loadToolTrust]);
+
+  const handleRevokeToolTrust = async (requestId: string) => {
+    setRevokingId(requestId);
+    try {
+      await revokeToolTrust(requestId);
+      await loadToolTrust();
+    } catch (e) {
+      log('tool trust revoke failed %o', e);
+      setTrustError(t('settings.approvalHistory.toolTrustError'));
+    } finally {
+      setRevokingId(null);
+    }
+  };
 
   const handleRefresh = () => {
     setIsLoading(true);
@@ -209,6 +246,50 @@ const ApprovalHistoryPanel = () => {
       description={t('settings.approvalHistory.subtitle')}
       scrollable={false}
       bodyClassName="flex h-full min-h-0 flex-col gap-4">
+      <Card
+        title={t('settings.approvalHistory.toolTrustTitle')}
+        description={t('settings.approvalHistory.toolTrustDescription')}
+        data-testid="approval-tool-trust">
+        {trustError ? (
+          <div className="p-4" data-testid="approval-tool-trust-error">
+            <SettingsStatusLine saving={false} error={trustError} savingLabel="" />
+          </div>
+        ) : trustLoading ? (
+          <p className="p-4 text-sm text-content-muted" data-testid="approval-tool-trust-loading">
+            {t('common.loading')}
+          </p>
+        ) : toolGrants.length === 0 ? (
+          <p className="p-4 text-sm text-content-muted" data-testid="approval-tool-trust-empty">
+            {t('settings.approvalHistory.toolTrustEmpty')}
+          </p>
+        ) : (
+          toolGrants.map(grant => (
+            <div
+              key={grant.request_id}
+              className="flex items-center justify-between gap-3 px-4 py-3"
+              data-testid="approval-tool-trust-row">
+              <div className="min-w-0">
+                <p className="truncate font-mono text-xs text-content" title={grant.tool}>
+                  {grant.tool}
+                </p>
+                <p className="text-xs text-content-muted">
+                  {new Date(grant.granted_at_ms).toLocaleString()}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="tertiary"
+                tone="danger"
+                size="xs"
+                disabled={revokingId !== null}
+                onClick={() => void handleRevokeToolTrust(grant.request_id)}
+                data-testid={`approval-tool-trust-revoke-${grant.request_id}`}>
+                {t('common.remove')}
+              </Button>
+            </div>
+          ))
+        )}
+      </Card>
       <DataTable<ApprovalAuditEntry>
         title={t('settings.approvalHistory.tableTitle')}
         description={t('settings.approvalHistory.tableDesc')}
