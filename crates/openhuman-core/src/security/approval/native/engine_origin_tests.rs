@@ -1,5 +1,5 @@
 use super::{input, world, Shown};
-use crate::security::approval::engine::{CallOrigin, Checked, EngineError};
+use crate::security::approval::engine::{ApprovalEngine, CallOrigin, Checked, EngineError};
 use std::sync::Arc;
 
 #[tokio::test(flavor = "multi_thread")]
