@@ -21,7 +21,7 @@ use tinysecurity_bus::{
 };
 
 use crate::modules::tinybox::contract::{
-    JailEnforcement, NativeJailConfig, NetworkPolicy, ResourceLimits,
+    JailEnforcement, NativeJailConfig, NativeJailResourceRequest, NetworkPolicy,
 };
 
 /// The TinyBox executor a plan selects.
@@ -46,8 +46,8 @@ pub struct BoxPlan {
     pub jail: NativeJailConfig,
     /// Network policy for the box.
     pub network: NetworkPolicy,
-    /// Resource bounds for the box.
-    pub resources: ResourceLimits,
+    /// Explicit resource bounds the selected executor can enforce.
+    pub resources: NativeJailResourceRequest,
     /// Whether the executor mounts the workspace. `false` for a plan the module made
     /// with no workspace grant (a container with nothing mounted).
     pub workspace: bool,
@@ -66,6 +66,8 @@ pub enum PlanMappingError {
     CpuTimeUnenforceable,
     /// A zero bound is never a limit.
     ZeroLimit,
+    /// TinyBox's native resource backend cannot enforce a disk quota.
+    DiskLimitUnenforceable,
     /// A grant path is not valid UTF-8 text for the bus.
     InvalidGrant,
     /// A plan marked as a run on the host that also claims a jail, grants or constraints.
@@ -84,6 +86,9 @@ impl std::fmt::Display for PlanMappingError {
                 "the sandbox plan bounds CPU time, which TinyBox cannot enforce"
             }
             Self::ZeroLimit => "the sandbox plan carries a zero resource bound",
+            Self::DiskLimitUnenforceable => {
+                "the sandbox plan requests a disk quota TinyBox cannot enforce"
+            }
             Self::InvalidGrant => "the sandbox plan carries a grant that is not valid text",
             Self::MalformedHostRun => "the sandbox plan for a run on the host claims a jail",
         })
@@ -156,7 +161,10 @@ impl BoxPlan {
             } else {
                 super::local_grants::credential_store_paths(home)
             },
-            resources: Some(resources),
+            // Resource-aware members carry explicit limits separately. The
+            // legacy field has concrete defaults and would invent bounds the
+            // policy module did not request.
+            resources: None,
         };
         Ok(Self {
             executor,
@@ -199,25 +207,25 @@ impl BoxPlan {
     }
 }
 
-fn resources(artifact: &SandboxArtifact2) -> Result<ResourceLimits, PlanMappingError> {
+fn resources(artifact: &SandboxArtifact2) -> Result<NativeJailResourceRequest, PlanMappingError> {
     let limits = &artifact.limits;
     if limits.cpu_time_ms.is_some() {
         return Err(PlanMappingError::CpuTimeUnenforceable);
     }
+    if limits.disk_bytes.is_some() {
+        return Err(PlanMappingError::DiskLimitUnenforceable);
+    }
     if limits.cpu_millicores == Some(0)
         || limits.memory_bytes == Some(0)
         || limits.pids_max == Some(0)
-        || limits.disk_bytes == Some(0)
     {
         return Err(PlanMappingError::ZeroLimit);
     }
-    // An absent bound keeps TinyBox's own default ceiling, never "unlimited".
-    let defaults = ResourceLimits::default();
-    Ok(ResourceLimits {
-        cpu_millis: limits.cpu_millicores.unwrap_or(defaults.cpu_millis),
-        memory_bytes: limits.memory_bytes.unwrap_or(defaults.memory_bytes),
-        pids_max: limits.pids_max.unwrap_or(defaults.pids_max),
-        disk_bytes: limits.disk_bytes.unwrap_or(defaults.disk_bytes),
+    Ok(NativeJailResourceRequest {
+        cpu_millis: limits.cpu_millicores,
+        memory_bytes: limits.memory_bytes,
+        pids_max: limits.pids_max,
+        disk_bytes: None,
     })
 }
 

@@ -14,7 +14,12 @@ use crate::modules::tinybox::{self, contract};
 /// The jail the module planned for one spawn, in TinyBox's vocabulary. The host
 /// never derives grants, network or enforcement of its own.
 #[cfg(feature = "modules")]
-pub(crate) type PlannedJail = contract::NativeJailConfig;
+pub(crate) struct PlannedJail {
+    /// Planned grants and confinement requirements.
+    pub(crate) config: contract::NativeJailConfig,
+    /// Explicit optional resource limits from the same plan.
+    pub(crate) resources: contract::NativeJailResourceRequest,
+}
 /// Without the module there is no plan to carry.
 #[cfg(not(feature = "modules"))]
 #[derive(Debug)]
@@ -173,8 +178,8 @@ async fn execute_owned(
     stdin: Option<Vec<u8>>,
 ) -> anyhow::Result<SandboxExecResult> {
     tracing::debug!(
-        allow_net = jail.allow_net,
-        require_process_isolation = jail.require_process_isolation,
+        allow_net = jail.config.allow_net,
+        require_process_isolation = jail.config.require_process_isolation,
         "[sandbox:local] running in the native jail the module planned"
     );
 
@@ -184,7 +189,7 @@ async fn execute_owned(
     run.env = approved_environment(extra_env)?;
     // The jail's `allow_net` is what confines the command; keep the resource's
     // declared policy in step with it.
-    run.isolate_network = !jail.allow_net;
+    run.isolate_network = !jail.config.allow_net;
     run.preserve_pipeline_status = preserve_pipeline_status;
     run.meter = meter;
     run.stdin = stdin;
@@ -192,7 +197,16 @@ async fn execute_owned(
     // points TMPDIR, TMP and TEMP at it unless the caller overrides them. The
     // grants, network, subprocess rule and isolation requirement are the
     // module's plan, mapped by `sandbox::plan`, not derived here.
-    run.jail = Some(jail);
+    let resources = jail.resources;
+    run.resource_limits = if resources.cpu_millis.is_some()
+        || resources.memory_bytes.is_some()
+        || resources.pids_max.is_some()
+    {
+        Some(resources)
+    } else {
+        None
+    };
+    run.jail = Some(jail.config);
     super::shell_exec::run(config, run).await
 }
 

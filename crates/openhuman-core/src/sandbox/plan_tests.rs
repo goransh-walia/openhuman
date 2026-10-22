@@ -51,8 +51,11 @@ fn a_jail_plan_maps_grants_network_and_isolation_floor() {
     assert_eq!(plan.jail.enforcement, JailEnforcement::Enforced);
     assert!(plan.jail.require_process_isolation);
     assert_eq!(plan.network, NetworkPolicy::Denied);
-    assert_eq!(plan.resources, ResourceLimits::default());
-    assert_eq!(plan.jail.resources, Some(plan.resources));
+    assert_eq!(plan.resources.cpu_millis, None);
+    assert_eq!(plan.resources.memory_bytes, None);
+    assert_eq!(plan.resources.pids_max, None);
+    assert_eq!(plan.resources.disk_bytes, None);
+    assert_eq!(plan.jail.resources, None);
 }
 
 #[test]
@@ -75,14 +78,23 @@ fn planned_bounds_override_defaults_and_absent_bounds_keep_them() {
     };
     planned.constraints.push(SandboxConstraint2::Subprocesses);
     let plan = BoxPlan::from_artifact(&planned, None).unwrap();
-    let defaults = ResourceLimits::default();
     assert_eq!(plan.executor, PlannedExecutor::Docker);
-    assert_eq!(plan.resources.cpu_millis, 500);
-    assert_eq!(plan.resources.memory_bytes, 64 << 20);
-    assert_eq!(plan.resources.pids_max, defaults.pids_max);
-    assert_eq!(plan.resources.disk_bytes, defaults.disk_bytes);
-    assert_eq!(plan.jail.resources, Some(plan.resources));
+    assert_eq!(plan.resources.cpu_millis, Some(500));
+    assert_eq!(plan.resources.memory_bytes, Some(64 << 20));
+    assert_eq!(plan.resources.pids_max, None);
+    assert_eq!(plan.resources.disk_bytes, None);
+    assert_eq!(plan.jail.resources, None);
     assert!(!plan.jail.allow_subprocess);
+}
+
+#[test]
+fn a_disk_limit_is_refused_instead_of_silently_dropped() {
+    let mut planned = artifact(SandboxBackend::Jail);
+    planned.limits.disk_bytes = Some(1 << 30);
+    assert_eq!(
+        BoxPlan::from_artifact(&planned, None),
+        Err(PlanMappingError::DiskLimitUnenforceable)
+    );
 }
 
 #[test]

@@ -398,7 +398,10 @@ async fn admit_request(
             super::plan::PlannedExecutor::Docker => Executor::Docker,
         },
         policy: planned.apply(request.policy),
-        jail: planned.plan.jail,
+        jail: super::native_jail::PlannedJail {
+            config: planned.plan.jail,
+            resources: planned.plan.resources,
+        },
     })
 }
 
