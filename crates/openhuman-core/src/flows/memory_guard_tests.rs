@@ -29,3 +29,11 @@ async fn credential_guard_propagates_redaction_failure() {
 
     assert_eq!(result, Err("TinySecurity unavailable"));
 }
+
+#[tokio::test]
+async fn flow_memory_guard_fails_closed_when_tinysecurity_is_disabled() {
+    let mut config = crate::config::Config::default();
+    config.modules.enabled = false;
+
+    assert!(contains_credentials(&config, "ordinary content").await.is_err());
+}
