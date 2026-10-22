@@ -14,7 +14,7 @@ use std::time::Instant;
 
 use tinysecurity_bus::{
     names, AccessTier, ApprovalGrants2, ApprovalScope2, ApprovalScopeReceipt2,
-    RegisterApprovalScopeRequest2, SubjectScope, MAX_TOOL_GRANTS2,
+    RegisterApprovalScopeRequest2, SubjectScope,
 };
 
 use super::super::engine::Posture;
