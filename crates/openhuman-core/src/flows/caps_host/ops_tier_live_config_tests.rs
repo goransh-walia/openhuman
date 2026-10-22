@@ -38,6 +38,15 @@ async fn save_tier_config(config: &Config) {
     config.save().await.unwrap();
 }
 
+fn tiered_policy(config: &Config) -> crate::security::SecurityPolicy {
+    crate::security::SecurityPolicy::from_config(
+        &config.autonomy,
+        &config.workspace_dir,
+        &config.action_dir,
+    )
+    .with_gateway(crate::security::policy::native_commands_stub::StubGateway::tiered())
+}
+
 fn has_issue48_workflow_origin(ctx: &crate::core::runtime::DispatchCtx) -> bool {
     matches!(
         ctx.turn_origin(),
@@ -71,8 +80,7 @@ async fn one_live_capability_observes_full_readonly_full_updates() {
     };
     let ctx = live_tier_context(&config).with_turn_origin(origin.clone());
     assert!(has_issue48_workflow_origin(&ctx));
-    let mut baseline =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+    let mut baseline = tiered_policy(&config);
     baseline.trusted_roots.push(crate::security::TrustedRoot {
         path: dir.path().join("trusted").display().to_string(),
         access: crate::security::TrustedAccess::ReadWrite,
@@ -128,8 +136,7 @@ async fn live_tier_reload_failure_fails_closed() {
     let config = persisted_tier_config(dir.path(), true, AutonomyLevel::Full);
     std::fs::create_dir_all(&config.config_path).unwrap();
     let ctx = live_tier_context(&config);
-    let baseline =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+    let baseline = tiered_policy(&config);
     let error =
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
             .await
@@ -153,8 +160,7 @@ async fn malformed_live_config_is_denied_without_echoing_its_contents() {
     )
     .unwrap();
     let ctx = live_tier_context(&config);
-    let baseline =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+    let baseline = tiered_policy(&config);
     let error =
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
             .await
@@ -187,11 +193,7 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
     captured_overlay.autonomy_tier_source =
         Some(crate::core::runtime::AutonomyTierSource::Captured);
     let captured_ctx = crate::core::runtime::DispatchCtx::new(parent.derive_with(captured_overlay));
-    let captured_policy = SecurityPolicy::from_config(
-        &captured.autonomy,
-        &captured.workspace_dir,
-        &captured.action_dir,
-    );
+    let captured_policy = tiered_policy(&captured);
     assert!(enforce_current_node_tier_gate(
         &captured_ctx,
         &captured,
@@ -213,11 +215,7 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
     capped_overlay.autonomy_tier_ceiling = Some(AutonomyLevel::Supervised);
     let capped_ctx =
         crate::core::runtime::DispatchCtx::new(parent.derive_with(capped_overlay.clone()));
-    let baseline = SecurityPolicy::from_config(
-        &captured.autonomy,
-        &captured.workspace_dir,
-        &captured.action_dir,
-    );
+    let baseline = tiered_policy(&captured);
     let effective =
         tier_policy_from_config(&capped_ctx, &captured, Some(&parent_file), &baseline).unwrap();
     assert_eq!(effective.autonomy, AutonomyLevel::Supervised);
@@ -292,11 +290,7 @@ async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
 
     let code = OpenHumanCode {
         ctx: crate::core::runtime::DispatchCtx::new(context),
-        security: Arc::new(SecurityPolicy::from_config(
-            &config.autonomy,
-            &config.workspace_dir,
-            &config.action_dir,
-        )),
+        security: Arc::new(tiered_policy(&config)),
         config: Arc::new(config.clone()),
         approval: Default::default(),
     };
@@ -335,11 +329,7 @@ async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
     let tools = OpenHumanTools {
         ctx: live_tier_context(&captured),
         config: Arc::new(captured.clone()),
-        security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
-            &captured.workspace_dir,
-            &captured.action_dir,
-        )),
+        security: Arc::new(tiered_policy(&captured)),
         approval: Default::default(),
     };
     tools
@@ -367,11 +357,7 @@ async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
     let tools = OpenHumanTools {
         ctx,
         config: Arc::new(captured.clone()),
-        security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
-            &captured.workspace_dir,
-            &captured.action_dir,
-        )),
+        security: Arc::new(tiered_policy(&captured)),
         approval: Default::default(),
     };
 
@@ -420,11 +406,7 @@ async fn http_adapter_passes_its_live_upgrade_to_the_http_gate_without_egress() 
     let http = OpenHumanHttp {
         ctx: live_tier_context(&captured),
         config: Arc::new(captured.clone()),
-        security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
-            &captured.workspace_dir,
-            &captured.action_dir,
-        )),
+        security: Arc::new(tiered_policy(&captured)),
         http_config: HttpRequestConfig {
             allowed_domains: vec!["example.com".to_string()],
             ..Default::default()
