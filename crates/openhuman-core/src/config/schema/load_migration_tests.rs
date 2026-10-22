@@ -344,6 +344,7 @@ fn migrate_legacy_inference_url_log_omits_credentials_and_path() {
         "https://alice:hunter2@api.openai.com/v1/private/chat/completions?token=sk-secret"
             .to_owned(),
     );
+    cfg.inference_url = None;
     migrate_legacy_inference_url(&mut cfg);
 
     let output = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
