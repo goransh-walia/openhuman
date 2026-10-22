@@ -6,7 +6,7 @@
 //! obvious one produces an agent that looks configured and silently refuses to
 //! act:
 //!
-//! 1. **The autonomy tier** (`config.autonomy.level`) drives `SecurityPolicy` —
+//! 1. **The autonomy tier** (`config.security.autonomy.level`) drives `SecurityPolicy` —
 //!    which command classes are allowed, prompted, or blocked.
 //! 2. **The turn origin** (a task-local, [`AgentTurnOrigin`]) is the caller's
 //!    statement of authority, and the approval gate is *fail-closed* on it. An
@@ -193,7 +193,7 @@ impl Access {
     pub(crate) fn apply(&self, config: &mut openhuman_core::config::Config) {
         config.security.autonomy.level = self.level;
         // The tier only binds while the policy is on, and the core ships it
-        // off (`[autonomy] enabled = false`). Without this, `readonly()` and
+        // off (`[security.autonomy] enabled = false`). Without this, `readonly()` and
         // `supervised()` would leave shell and file writes wide open. `full()`
         // keeps whatever the base config says, so existing automation hosts
         // see no change.

@@ -25,7 +25,7 @@ pub struct AutonomyConfig {
     /// unreachable. Deliberate floor, documented on
     /// [`crate::security::SecurityPolicy::enabled`].
     ///
-    /// Set `[autonomy] enabled = true` to restore the full policy; `level`,
+    /// Set `[security.autonomy] enabled = true` to restore the full policy; `level`,
     /// `workspace_only` and the rest then behave exactly as they always have.
     #[serde(default)]
     pub enabled: bool,

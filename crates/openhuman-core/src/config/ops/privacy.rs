@@ -1,7 +1,7 @@
 //! Privacy Mode config operations (#4435).
 //!
 //! Mirrors the autonomy settings ops (`agent.rs`): a `get` that reads the
-//! `[privacy]` block and a `set` that persists the new mode AND hot-swaps the
+//! `[security.privacy]` block and a `set` that persists the new mode AND hot-swaps the
 //! live `SecurityPolicy` so the inference chokepoint enforces the change
 //! immediately, without a core restart.
 
@@ -9,7 +9,7 @@ use crate::config::{Config, PrivacyMode};
 use crate::core::runtime::DispatchCtx;
 use crate::core::Outcome;
 
-/// Partial update for the `[privacy]` block. `None` leaves the mode unchanged.
+/// Partial update for the `[security.privacy]` block. `None` leaves the mode unchanged.
 #[derive(Debug, Clone, Default)]
 pub struct PrivacySettingsPatch {
     /// `"local_only" | "standard" | "sensitive"` (case-insensitive; a few
@@ -39,11 +39,11 @@ fn privacy_mode_value(mode: PrivacyMode) -> serde_json::Value {
     serde_json::json!({ "mode": mode })
 }
 
-/// Returns the current `[privacy]` mode as `{ "mode": "<snake_case>" }`.
+/// Returns the current `[security.privacy]` mode as `{ "mode": "<snake_case>" }`.
 pub async fn get_privacy_mode(ctx: &DispatchCtx) -> Result<Outcome<serde_json::Value>, String> {
     let config = ctx.load_config().await?;
     log::debug!(
-        "[privacy][rpc] get_privacy_mode -> {:?}",
+        "[security.privacy][rpc] get_privacy_mode -> {:?}",
         config.security.privacy.mode
     );
     Ok(Outcome::single_log(
@@ -62,7 +62,7 @@ pub async fn apply_privacy_settings(
     if let Some(raw) = update.mode {
         let mode = parse_privacy_mode(&raw)?;
         log::debug!(
-            "[privacy][rpc] apply_privacy_settings: {:?} -> {:?}",
+            "[security.privacy][rpc] apply_privacy_settings: {:?} -> {:?}",
             config.security.privacy.mode,
             mode
         );
@@ -76,11 +76,11 @@ pub async fn apply_privacy_settings(
     // persisted value will be picked up on the next `install`; log and continue.
     match crate::security::live_policy::reload_privacy(config.security.privacy.mode) {
         Ok(generation) => log::debug!(
-            "[privacy][rpc] live policy reloaded to {:?} (generation={generation})",
+            "[security.privacy][rpc] live policy reloaded to {:?} (generation={generation})",
             config.security.privacy.mode
         ),
         Err(e) => log::debug!(
-            "[privacy][rpc] live policy not reloaded ({e}); persisted value applies on next install"
+            "[security.privacy][rpc] live policy not reloaded ({e}); persisted value applies on next install"
         ),
     }
 

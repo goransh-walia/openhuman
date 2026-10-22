@@ -9,7 +9,7 @@
 //!
 //! ## What this migration does
 //!
-//! 1. **Merges new commands** into `config.autonomy.allowed_commands`. Only
+//! 1. **Merges new commands** into `config.security.autonomy.allowed_commands`. Only
 //!    commands not already present are added, so additional entries a user has
 //!    made are preserved.
 //!
@@ -28,7 +28,7 @@
 //!    `CURRENT_SCHEMA_VERSION` on creation (`schema/load/impl_load.rs`), so the
 //!    fresh-install path is unaffected. Set `schema_version` explicitly to opt
 //!    out.
-//! 2. **Merges new auto-approve tools** into `config.autonomy.auto_approve`
+//! 2. **Merges new auto-approve tools** into `config.security.autonomy.auto_approve`
 //!    with the same additive-only merge logic.
 //! 3. **Bumps `max_actions_per_hour`** from 20 (the old hard-coded default)
 //!    to `u32::MAX` only when the persisted value is exactly 20. Users who

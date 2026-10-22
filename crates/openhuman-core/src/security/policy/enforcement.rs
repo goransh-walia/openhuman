@@ -37,7 +37,7 @@ impl SecurityPolicy {
         );
         if !autonomy_config.enabled {
             log::info!(
-                "[openhuman:policy] autonomy policy DISABLED ([autonomy] enabled = false) —                  command classification, the approval gate, the command allowlist, the action                  budget and workspace containment are all inert. Credential stores and system                  roots (the protected-path floor) remain blocked."
+                "[openhuman:policy] autonomy policy DISABLED ([security.autonomy] enabled = false) —                  command classification, the approval gate, the command allowlist, the action                  budget and workspace containment are all inert. Credential stores and system                  roots (the protected-path floor) remain blocked."
             );
         }
 
@@ -156,10 +156,10 @@ impl SecurityPolicy {
             enabled: autonomy_config.enabled,
             autonomy: autonomy_config.level,
             // Privacy mode is not carried on `AutonomyConfig` (it lives in the
-            // separate `[privacy]` block), and `from_config` has ~40 call sites
+            // separate `[security.privacy]` block), and `from_config` has ~40 call sites
             // that only hold the autonomy block — so we default to `Standard`
             // here and let the install / reload chokepoints layer the real
-            // `config.privacy.mode` on via [`with_privacy_mode`]. The live-policy
+            // `config.security.privacy.mode` on via [`with_privacy_mode`]. The live-policy
             // paths (`install` seeds from the built policy, `reload_from`
             // re-applies the stored mode, `reload_privacy` swaps it) keep the
             // effective enforcement mode correct without touching every caller.
@@ -186,7 +186,7 @@ impl SecurityPolicy {
     }
 
     /// Build the policy from the whole [`Config`]: autonomy, workspace roots and
-    /// the `[privacy]` mode together, so the egress posture is never silently
+    /// the `[security.privacy]` mode together, so the egress posture is never silently
     /// `Standard`. Prefer this over [`from_config`](Self::from_config) wherever a
     /// `Config` is in hand.
     #[must_use]
@@ -200,14 +200,14 @@ impl SecurityPolicy {
     }
 
     /// Return a copy of this policy with `privacy_mode` set. Used by the live-
-    /// policy install / reload chokepoints to layer `config.privacy.mode` onto a
+    /// policy install / reload chokepoints to layer `config.security.privacy.mode` onto a
     /// policy that [`from_config`](Self::from_config) built with the `Standard`
     /// default. Builder-style so call sites read as
-    /// `SecurityPolicy::from_config(..).with_privacy_mode(config.privacy.mode)`.
+    /// `SecurityPolicy::from_config(..).with_privacy_mode(config.security.privacy.mode)`.
     #[must_use]
     pub fn with_privacy_mode(mut self, privacy_mode: crate::config::PrivacyMode) -> Self {
         log::debug!(
-            "[privacy][policy] privacy_mode set on SecurityPolicy: {:?} (was {:?})",
+            "[security.privacy][policy] privacy_mode set on SecurityPolicy: {:?} (was {:?})",
             privacy_mode,
             self.privacy_mode
         );

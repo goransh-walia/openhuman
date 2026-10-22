@@ -79,7 +79,7 @@ namespace, and the RPC server asks [`pairing.rs`](./pairing.rs) whether a bind n
 
 `SecurityPolicy` ([`policy/types.rs`](./policy/types.rs)) is the value every tool receives. It is
 built once per agent session by `SecurityPolicy::from_config`
-([`policy/enforcement.rs`](./policy/enforcement.rs)) from the `[autonomy]` config block, the workspace dir
+([`policy/enforcement.rs`](./policy/enforcement.rs)) from the `[security.autonomy]` config block, the workspace dir
 and the action dir. That constructor is the single chokepoint between config
 and policy, so it also injects the default trusted roots: the projects home
 (`~/OpenHuman/projects`) as read-write, the configured `action_dir` as
@@ -138,7 +138,7 @@ Only `from_config` carries the shipped `false`.
 
 ### With the policy enabled
 
-Set `[autonomy] enabled = true` and the full policy applies. Commands are
+Set `[security.autonomy] enabled = true` and the full policy applies. Commands are
 classified, then gated by tier:
 
 ```text
@@ -235,7 +235,7 @@ settings change would otherwise wait for a new session. [`live_policy.rs`](./liv
 the current policy in a process-global cell. `install` is called at bootstrap
 (`core/runtime/bootstrap.rs`) and at channel startup, and `reload_from` is
 called by the config save path (`config/ops/agent.rs`) so `current()` reflects
-the new `[autonomy]` block immediately. The approval gate reads the user's
+the new `[security.autonomy]` block immediately. The approval gate reads the user's
 "Always allow" list (`autonomy.auto_approve`) through `current()`. Today tools
 observe the swap at the next session boundary.
 

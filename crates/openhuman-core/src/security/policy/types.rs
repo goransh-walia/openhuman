@@ -241,7 +241,7 @@ pub struct SecurityPolicy {
     /// blocked legitimate agent work, and removing it is a one-line change if
     /// a host genuinely wants no path policy at all.
     ///
-    /// Set `[autonomy] enabled = true` to restore the full policy.
+    /// Set `[security.autonomy] enabled = true` to restore the full policy.
     ///
     /// Note the asymmetry with [`Default`]: a policy built from config defaults
     /// to disabled, a policy built with no config at all defaults to enabled.
@@ -252,7 +252,7 @@ pub struct SecurityPolicy {
     /// governs act-power. `LocalOnly` blocks external model calls at the
     /// inference chokepoint (see
     /// [`create_chat_provider_from_string`](crate::inference::provider::factory)).
-    /// Sourced from `config.privacy.mode` at policy-build time and hot-swapped
+    /// Sourced from `config.security.privacy.mode` at policy-build time and hot-swapped
     /// via [`live_policy::reload_privacy`](crate::security::live_policy::reload_privacy).
     ///
     /// HOOK (later slices): `Sensitive` mode enforcement (approval / redaction /

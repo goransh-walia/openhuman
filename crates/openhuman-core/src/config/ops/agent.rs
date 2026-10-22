@@ -8,7 +8,7 @@ use crate::core::Outcome;
 use super::loader::snapshot_config_json;
 use super::tool_dispatcher as td;
 
-/// Partial update for the `[autonomy]` block — the agent's filesystem access
+/// Partial update for the `[security.autonomy]` block — the agent's filesystem access
 /// mode. Each `None` field is left unchanged. `trusted_roots`, `allowed_commands`,
 /// `forbidden_paths`, and `auto_approve`, when `Some`, REPLACE the corresponding
 /// array wholesale.
@@ -74,7 +74,7 @@ pub struct AgentPathsPatch {
     pub files_dir: Option<String>,
 }
 
-/// Updates the `[autonomy]` (agent access mode) settings in the configuration.
+/// Updates the `[security.autonomy]` (agent access mode) settings in the configuration.
 ///
 /// After saving, publishes a `DomainEvent::System(AutonomyConfigChanged)` so that
 /// live agent sessions can rebuild their `SecurityPolicy` without a core restart
@@ -154,7 +154,7 @@ pub async fn load_and_apply_autonomy_settings(
     apply_autonomy_settings(&mut config, update).await
 }
 
-/// Returns the current `[autonomy]` settings block as JSON (no secrets).
+/// Returns the current `[security.autonomy]` settings block as JSON (no secrets).
 pub async fn get_autonomy_settings(
     ctx: &DispatchCtx,
 ) -> Result<Outcome<serde_json::Value>, String> {
