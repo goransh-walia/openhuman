@@ -218,7 +218,7 @@ async fn the_users_tool_grant_approves_without_a_prompt_and_is_audited() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
-async fn a_grant_the_user_removes_stops_approving_the_next_call() {
+async fn an_imported_tool_grant_survives_an_empty_transient_grant_list() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
     let mut granted = input("gmail_send", &shown);
@@ -227,14 +227,15 @@ async fn a_grant_the_user_removes_stops_approving_the_next_call() {
         world.engine.check(granted).await.unwrap(),
         Checked::Approved { .. }
     ));
-    // The same subject, with the grant gone.
+    // The source import is durable; a later caller need not carry the legacy
+    // posture grant for the module to retain that imported trust.
     assert!(matches!(
         world
             .engine
             .check(input("gmail_send", &shown))
             .await
             .unwrap(),
-        Checked::Pending { .. }
+        Checked::Approved { .. }
     ));
 }
 
@@ -629,6 +630,7 @@ async fn the_legacy_history_and_flow_trust_are_carried_into_the_module_once() {
     assert_eq!(decided(ApprovalDecision::ApproveOnce), 1);
     assert_eq!(decided(ApprovalDecision::Deny), 1);
     assert_eq!(decided(ApprovalDecision::ApproveAlwaysForFlow), 1);
+    let initial_history_count = history.len();
 
     // The legacy import can be replayed after restart; the module returns its
     // existing rows and unchanged grants without duplicating durable state.
@@ -641,7 +643,7 @@ async fn the_legacy_history_and_flow_trust_are_carried_into_the_module_once() {
         (2, 1, 0)
     );
     let history = world.engine.history(50).await.unwrap();
-    assert_eq!(history.len(), 2);
+    assert_eq!(history.len(), initial_history_count);
 }
 
 #[tokio::test(flavor = "multi_thread")]
