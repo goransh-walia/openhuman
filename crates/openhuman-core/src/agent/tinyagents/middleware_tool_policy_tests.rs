@@ -1,7 +1,5 @@
 use super::*;
-use crate::agent::tinyagents::middleware::tool_policy::{
-    session_policy_host, ToolPolicyHostState,
-};
+use crate::agent::tinyagents::middleware::tool_policy::{session_policy_host, ToolPolicyHostState};
 
 // ── the listing must agree with the gate (#workflow-routing) ────────────────
 //

@@ -24,6 +24,25 @@ pub(crate) struct ToolPolicyHostState {
     channel: String,
 }
 
+/// The session-less allow-all policy used when the builder has no custom rule.
+#[derive(Debug, Default)]
+pub(crate) struct AllowAllToolPolicy;
+
+#[async_trait]
+impl ToolCallPolicy<OpenHumanRunContext> for AllowAllToolPolicy {
+    fn name(&self) -> &str {
+        "allow_all"
+    }
+
+    async fn check(
+        &self,
+        _ctx: &RunContext<OpenHumanRunContext>,
+        _call: &TaToolCall,
+    ) -> PolicyDecision {
+        PolicyDecision::Allow
+    }
+}
+
 pub(crate) fn session_policy_host(
     session: tinytools::ToolPolicySession,
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
@@ -384,4 +403,3 @@ impl ToolCallPolicy<OpenHumanRunContext> for DesktopApprovalPolicy {
         }
     }
 }
-
