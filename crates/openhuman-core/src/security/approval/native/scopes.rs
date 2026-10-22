@@ -134,7 +134,7 @@ impl ScopeEntry {
         posture: &Posture,
         generation: u64,
     ) -> Result<(), String> {
-        let grants = grants(posture);
+        let grants = grants();
         let fingerprint = serde_json::to_string(&(
             posture.require_approval,
             posture.auto_approve_all,
@@ -199,25 +199,9 @@ impl ScopeEntry {
 /// it refuses (a human-only or native tool) can never be granted, so it is dropped
 /// here rather than failing the whole registration. Per-flow trust is not part of
 /// the posture: the module keeps it durably (`GrantFlowTool2`).
-fn grants(posture: &Posture) -> ApprovalGrants2 {
-    let accepted = |tools: &[String]| {
-        ApprovalGrants2 {
-            tools: tools.to_vec(),
-            flows: Vec::new(),
-        }
-        .is_valid()
-    };
-    let mut tools: Vec<String> = posture
-        .tool_grants
-        .iter()
-        .filter(|tool| accepted(std::slice::from_ref(tool)))
-        .cloned()
-        .collect();
-    tools.sort();
-    tools.dedup();
-    tools.truncate(MAX_TOOL_GRANTS2);
+fn grants() -> ApprovalGrants2 {
     ApprovalGrants2 {
-        tools,
+        tools: Vec::new(),
         flows: Vec::new(),
     }
 }

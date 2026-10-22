@@ -20,7 +20,7 @@ use sha2::{Digest, Sha256};
 use tinybus::Proxy;
 use tinysecurity_bus::{
     names, AccessTier, ApprovalHistoryImport2, ApprovalRecord, ApprovalRow2, ApprovalState,
-    CallerContext, Origin,
+    CallerContext, ImportTrustItem2, ImportTrustReceipt2, ImportTrustSourceRequest2, Origin,
 };
 
 use super::super::engine::{ApprovalEngine, EngineError, Posture, Variant};
@@ -38,6 +38,14 @@ pub(super) const HISTORY_LIMIT: usize = 500;
 
 /// How long a request lived when the legacy row recorded no expiry.
 const DEFAULT_WINDOW_MS: u64 = 600_000;
+
+/// Legacy tool grants whose immutable module receipts have been observed in this
+/// process. Failed imports are not cached, so the next gated call retries them.
+fn imported_tool_grants() -> &'static tokio::sync::Mutex<HashSet<(String, String)>> {
+    static IMPORTED: std::sync::OnceLock<tokio::sync::Mutex<HashSet<(String, String)>>> =
+        std::sync::OnceLock::new();
+    IMPORTED.get_or_init(|| tokio::sync::Mutex::new(HashSet::new()))
+}
 
 /// The workspaces this process already tried, so the importer runs at most once
 /// per process (a failure is retried on the next start, not on every call).
@@ -190,6 +198,58 @@ pub(super) async fn run(
         }
     }
     Ok(Some(report))
+}
+
+/// Import the legacy `autonomy.auto_approve` entries into durable module grants.
+/// Scope registration deliberately carries no transient tool grants; an import
+/// receipt makes this safe to retry after restart without reviving a revoked row.
+pub(super) async fn import_tool_grants(
+    proxy: &Proxy,
+    scope: &std::sync::Arc<ScopeEntry>,
+    tools: &[String],
+) {
+    for tool in tools {
+        if !tinysecurity_bus::is_host_tool_name2(tool) {
+            continue;
+        }
+        let key = (scope.scope_id.clone(), tool.clone());
+        if imported_tool_grants().lock().await.contains(&key) {
+            continue;
+        }
+        let _guard = scope.stream.lock().await;
+        let result = async {
+            let generation = NativeEngine::generation(proxy).await?;
+            let audit = NativeEngine::correlation(scope, generation).await?;
+            let receipt: ImportTrustReceipt2 = proxy
+                .call_confidential(
+                    names::methods::IMPORT_TRUST_SOURCE2,
+                    (ImportTrustSourceRequest2 {
+                        scope_id: scope.scope_id.clone(),
+                        source_id: "openhuman.autonomy.auto_approve".into(),
+                        source_version: "1".into(),
+                        item: ImportTrustItem2::Tool { tool: tool.clone() },
+                        audit,
+                    },),
+                )
+                .await
+                .map_err(|error| format!("TinySecurity ImportTrustSource2 failed: {error}"))?;
+            if receipt.scope_id != scope.scope_id {
+                return Err("TinySecurity returned a receipt for another approval scope".into());
+            }
+            Ok::<(), String>(())
+        }
+        .await;
+        match result {
+            Ok(()) => {
+                imported_tool_grants().lock().await.insert(key);
+            }
+            Err(error) => tracing::warn!(
+                tool,
+                error = %error,
+                "{LOG} legacy tool trust was not imported; the tool will require approval"
+            ),
+        }
+    }
 }
 
 async fn import_row(

@@ -309,6 +309,14 @@ impl ApprovalEngine for NativeEngine {
         )
         .await
         .map_err(EngineError::Unavailable)?;
+        if input.variant == Variant::Standard && !input.posture.tool_grants.is_empty() {
+            super::history_import::import_tool_grants(
+                &proxy,
+                &scope,
+                &input.posture.tool_grants,
+            )
+            .await;
+        }
         self.sweep(&proxy, &scope, generation).await;
 
         let arguments_json =
