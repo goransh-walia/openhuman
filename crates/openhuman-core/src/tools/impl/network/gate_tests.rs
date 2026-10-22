@@ -487,13 +487,18 @@ async fn a_destination_the_module_refuses_is_a_policy_message_not_addresses() {
     }
 }
 
-/// A build without the module leaves the tool's own DNS check in force.
+/// A build without the module denies network destinations; it cannot bypass the
+/// module's destination policy by falling back to a tool-local DNS check.
 #[cfg(not(feature = "security-module"))]
 #[tokio::test]
-async fn without_the_module_the_tool_keeps_its_own_destination_check() {
+async fn without_the_module_network_destination_is_denied() {
     let security = SecurityPolicy::default();
     let destination = destination_of("https://example.com/");
-    assert!(NetGate::authorize_destination(&security, &destination)
-        .await
-        .is_none());
+    let routed = RoutedGate::new(Arc::new(security.clone()), None, &json!({}));
+    for answer in [
+        NetGate::authorize_destination(&security, &destination).await,
+        routed.authorize_destination(&destination).await,
+    ] {
+        assert!(matches!(answer, Some(Err(_))), "missing module must deny");
+    }
 }
