@@ -13,6 +13,10 @@ pub(crate) async fn with_scanner<F: Future>(
     SCOPED.scope(scanner, future).await
 }
 
+pub(crate) fn current_scoped() -> Option<Arc<dyn PromptScanner>> {
+    SCOPED.try_with(Arc::clone).ok()
+}
+
 #[test]
 fn text_that_fits_is_one_window() {
     let text = "a".repeat(WINDOW_BYTES);

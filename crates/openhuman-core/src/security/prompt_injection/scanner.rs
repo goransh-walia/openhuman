@@ -113,6 +113,10 @@ pub const TOTAL_DEADLINE: Duration = Duration::from_secs(10);
 
 /// The production scanner is always the TinySecurity module.
 pub(super) fn current() -> Arc<dyn PromptScanner> {
+    #[cfg(test)]
+    if let Some(scanner) = tests::current_scoped() {
+        return scanner;
+    }
     super::module_scanner::production()
 }
 
