@@ -26,8 +26,12 @@ impl ApprovalEngine for NativeEngine {
             && input.variant == Variant::Standard
             && !input.posture.tool_grants.is_empty()
         {
-            super::history_import::import_tool_grants(&proxy, &scope, &input.posture.tool_grants)
-                .await;
+            super::super::history_import::import_tool_grants(
+                &proxy,
+                &scope,
+                &input.posture.tool_grants,
+            )
+            .await;
         }
         self.sweep(&proxy, &scope, generation).await;
 
@@ -307,13 +311,13 @@ impl ApprovalEngine for NativeEngine {
     }
 
     async fn is_decided(&self, request_id: &str) -> Result<Option<bool>, EngineError> {
-        super::view::row_decided(&self.config, request_id)
+        super::super::view::row_decided(&self.config, request_id)
             .await
             .map_err(|error| unavailable(error.to_string()))
     }
 
     async fn history(&self, limit: usize) -> Result<Vec<ApprovalAuditEntry>, EngineError> {
-        super::view::decided_history(&self.config, limit)
+        super::super::view::decided_history(&self.config, limit)
             .await
             .map_err(|error| unavailable(error.to_string()))
     }
