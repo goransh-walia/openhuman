@@ -231,6 +231,22 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
         tool: &str,
     ) -> Result<(), EngineError>;
 
+    /// Read the live whole-tool grants of a registered standard approval scope.
+    async fn tool_trust(
+        &self,
+        tenant: &Tenant,
+        variant: Variant,
+    ) -> Result<Vec<super::types::ToolTrustEntry>, EngineError>;
+
+    /// Revoke one live whole-tool grant by the opaque ID returned from
+    /// [`Self::tool_trust`]. `Ok(false)` means the ID is absent in this scope.
+    async fn revoke_tool_trust_by_id(
+        &self,
+        tenant: &Tenant,
+        variant: Variant,
+        request_id: &str,
+    ) -> Result<bool, EngineError>;
+
     /// Durably trust `tool` inside `flow_id` for the tenant: the engine keeps the
     /// grant across restarts and approves that exact tool in that exact flow
     /// without a prompt. Granting a live pair changes nothing.
@@ -339,6 +355,21 @@ impl ApprovalEngine for UnavailableEngine {
         _variant: Variant,
         _tool: &str,
     ) -> Result<(), EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
+    async fn tool_trust(
+        &self,
+        _tenant: &Tenant,
+        _variant: Variant,
+    ) -> Result<Vec<super::types::ToolTrustEntry>, EngineError> {
+        Err(EngineError::Unavailable(UNAVAILABLE.into()))
+    }
+    async fn revoke_tool_trust_by_id(
+        &self,
+        _tenant: &Tenant,
+        _variant: Variant,
+        _request_id: &str,
+    ) -> Result<bool, EngineError> {
         Err(EngineError::Unavailable(UNAVAILABLE.into()))
     }
     async fn grant_flow_trust(

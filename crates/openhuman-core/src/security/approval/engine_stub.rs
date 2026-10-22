@@ -432,6 +432,27 @@ impl ApprovalEngine for StubEngine {
         Ok(())
     }
 
+    async fn tool_trust(
+        &self,
+        _tenant: &Tenant,
+        _variant: Variant,
+    ) -> Result<Vec<super::types::ToolTrustEntry>, EngineError> {
+        Err(EngineError::Unavailable(
+            "the stub engine does not model durable tool grants".into(),
+        ))
+    }
+
+    async fn revoke_tool_trust_by_id(
+        &self,
+        _tenant: &Tenant,
+        _variant: Variant,
+        _request_id: &str,
+    ) -> Result<bool, EngineError> {
+        Err(EngineError::Unavailable(
+            "the stub engine does not model durable tool grants".into(),
+        ))
+    }
+
     async fn grant_flow_trust(
         &self,
         _tenant: &Tenant,
