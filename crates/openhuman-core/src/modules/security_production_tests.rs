@@ -284,8 +284,8 @@ async fn production_client_gates_shell_and_network_on_the_released_archive_inner
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key (downloads the published archive)"]
 async fn production_keyring_is_denied_and_creates_no_store_on_the_released_archive() {
-    let _module_name_guard = super::native_tests::lock_module_name().await;
     let _consent_test_guard = crypto::KEYRING_CONSENT_TEST_LOCK.lock().await;
+    let _module_name_guard = super::native_tests::lock_module_name().await;
     use crate::security::keyring_consent::policy;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp");
     std::fs::create_dir_all(&root).unwrap();
