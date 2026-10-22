@@ -70,7 +70,7 @@ fn every_agent_answers_policy_from_its_own_tier() {
                         .definition(shell_only()),
                 )
                 .expect("a instantiates");
-            assert_eq!(a.config().autonomy.level, AutonomyLevel::ReadOnly);
+            assert_eq!(a.config().security.autonomy.level, AutonomyLevel::ReadOnly);
             let a_out = a.run("write the marker").await.expect("a's turn returns");
             assert!(!a_file.exists(), "a read-only agent must not write");
             // The scripted final reply is advisory; the tool result sent back

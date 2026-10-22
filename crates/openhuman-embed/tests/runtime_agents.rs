@@ -376,11 +376,11 @@ fn one_runtime_hosts_independently_configured_agents() {
                 assert!(beta.config().mcp_client.servers.is_empty());
             }
             assert_eq!(
-                alpha.config().autonomy.level,
+                alpha.config().security.autonomy.level,
                 openhuman_core::security::AutonomyLevel::ReadOnly
             );
             assert_eq!(
-                beta.config().autonomy.level,
+                beta.config().security.autonomy.level,
                 openhuman_core::security::AutonomyLevel::Full
             );
             assert!(alpha.access().turn_origin().is_none());
