@@ -334,6 +334,7 @@ fn migrate_legacy_inference_url_log_omits_credentials_and_path() {
     let subscriber = tracing_subscriber::fmt()
         .with_writer(move || writer.clone())
         .with_ansi(false)
+        .with_max_level(tracing::Level::TRACE)
         .finish();
     let _guard = tracing::subscriber::set_default(subscriber);
     tracing::callsite::rebuild_interest_cache();
