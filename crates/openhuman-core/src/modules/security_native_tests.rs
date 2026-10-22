@@ -49,7 +49,6 @@ pub(super) async fn native_fixture() -> NativeFixture {
 pub(super) async fn native_fixture_with(
     crypto: Option<tinysecurity_bus::CryptoConfig2>,
 ) -> NativeFixture {
-    let module_name_guard = lock_module_name().await;
     native_fixture_configured(false, |configuration| configuration.crypto = crypto).await
 }
 
@@ -67,6 +66,7 @@ pub(crate) async fn native_fixture_configured(
     approvals: bool,
     adjust: impl FnOnce(&mut ModuleConfig),
 ) -> NativeFixture {
+    let module_name_guard = lock_module_name().await;
     let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
     std::fs::create_dir_all(&target).unwrap();
     let fixture_root = std::env::var_os("OPENHUMAN_TEST_SECURITY_FIXTURE_DIR")
