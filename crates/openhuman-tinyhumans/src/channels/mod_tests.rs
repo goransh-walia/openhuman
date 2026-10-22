@@ -5,7 +5,7 @@ use tinychannels_bus::module_progressive::{
     ProgressiveTransportRequest, ProgressiveTransportResult,
 };
 use tokio_util::sync::CancellationToken;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::client::HostedApiError;
@@ -22,9 +22,12 @@ fn ctx(
 }
 
 fn typing(channel: &str) -> ChannelBackendRequest {
-    ChannelBackendRequest::ProgressiveTransport(ProgressiveTransportRequest::Typing {
+    ChannelBackendRequest::ProgressiveTransport(Box::new(ProgressiveTransportRequest::Typing {
         channel: channel.to_string(),
-    })
+        turn_id: None,
+        channel_ref: None,
+        conversation: None,
+    }))
 }
 
 // Route absence and message absence need different recoveries in the
@@ -98,6 +101,64 @@ async fn typing_posts_to_the_channel_route_with_the_session_credential() {
         }
         _ => panic!("expected a transport success"),
     }
+}
+
+#[tokio::test]
+async fn progressive_send_forwards_turn_and_delivery_context() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/channels/telegram/messages"))
+        .and(body_json(json!({
+            "text": "hello",
+            "transportContext": {
+                "turnId": "turn-7",
+                "channelRef": {"id": "telegram", "accountId": "account-2"},
+                "conversation": {
+                    "kind": "dm",
+                    "id": "chat-3",
+                    "scopeId": null,
+                    "parentId": null,
+                    "threadId": null,
+                    "topicId": null
+                },
+                "sequence": 4,
+                "idempotencyKey": "turn-7:reply"
+            }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"success": true, "data": {"id": "message-9"}})),
+        )
+        .mount(&server)
+        .await;
+
+    let config = test_support::signed_in(&tmp, &server.uri());
+    let answer = serve(
+        ctx(config, Some("telegram")),
+        ChannelBackendRequest::ProgressiveTransport(Box::new(ProgressiveTransportRequest::Send {
+            channel: "telegram".into(),
+            turn_id: Some("turn-7".into()),
+            channel_ref: Some(tinychannels_bus::ChannelRef {
+                id: "telegram".into(),
+                account_id: Some("account-2".into()),
+            }),
+            conversation: Some(tinychannels_bus::ConversationRef {
+                kind: tinychannels_bus::ConversationKind::Dm,
+                id: "chat-3".into(),
+                ..Default::default()
+            }),
+            sequence: Some(4),
+            idempotency_key: Some("turn-7:reply".into()),
+            message: json!({"text": "hello"}),
+        })),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        answer,
+        ChannelBackendResult::ProgressiveTransport(ProgressiveTransportResult::Success(_))
+    ));
 }
 
 #[tokio::test]

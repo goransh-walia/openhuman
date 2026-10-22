@@ -14,6 +14,7 @@ fn channel_origin(reply_target: &str) -> JobOrigin {
         history_key: format!("telegram-user-{reply_target}"),
         sender: Some("alice".into()),
         thread_id: None,
+        session_identity: None,
     }
 }
 

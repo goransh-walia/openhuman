@@ -14,6 +14,8 @@ fn activity(rounds: usize, tools: &[&str]) -> FinishActivity {
     FinishActivity {
         tool_rounds: rounds,
         tools_called: tools.iter().map(|t| (*t).to_string()).collect(),
+        tools_executed: Default::default(),
+        tools_with_side_effects: Default::default(),
     }
 }
 

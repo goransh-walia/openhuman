@@ -17,9 +17,9 @@ use super::*;
 use crate::config::{Config, HttpRequestConfig};
 use crate::modules::tinyflows as module;
 use crate::security::credentials::{HttpCredential, HttpCredentialsStore};
+use crate::security::policy::CommandClass;
 use crate::security::SecurityPolicy;
 use crate::tools::http_request_tool;
-use tinysecurity_bus::CommandClass;
 use tinytools::Tool as _;
 
 use super::{

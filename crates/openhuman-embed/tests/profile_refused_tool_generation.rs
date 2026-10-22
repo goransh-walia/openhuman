@@ -1,3 +1,5 @@
+#![cfg(feature = "testkit")]
+
 //! A refused tool call must not rewrite an earlier turn's result. Providers
 //! reuse tool-call ids across turns (`call_1` again), so a failure in this turn
 //! used to mark the earlier turn's successful `cron` result as failed; the

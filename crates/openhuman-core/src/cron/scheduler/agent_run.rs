@@ -71,10 +71,11 @@ pub(super) async fn run_agent_job_for_run(
                 // on. Inherit / Exact keep their literal `resolve()`
                 // behaviour because neither relies on the `-v1` trick.
                 use tinyagents_definition::ModelSpec;
-                let fallback_model = effective
-                    .default_model
-                    .clone()
-                    .unwrap_or_else(|| crate::config::DEFAULT_MODEL.to_string());
+                let fallback_model = effective.default_model.clone().or_else(|| {
+                    crate::inference::registry::provider_default_model(
+                        crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+                    )
+                });
                 let resolved_model = match &def.model {
                     ModelSpec::Hint(workload) => {
                         // Resolve the workload's configured model id via the crate
@@ -97,7 +98,7 @@ pub(super) async fn run_agent_job_for_run(
                                     model = %m,
                                     "[cron] resolved Hint via workload factory"
                                 );
-                                m
+                                Some(m)
                             }
                             Err(e) => {
                                 tracing::warn!(
@@ -105,7 +106,7 @@ pub(super) async fn run_agent_job_for_run(
                                     agent_id = %agent_id,
                                     workload = %workload,
                                     error = %e,
-                                    fallback = %fallback_model,
+                                    fallback = ?fallback_model,
                                     "[cron] workload factory failed; using fallback model"
                                 );
                                 fallback_model.clone()
@@ -113,9 +114,11 @@ pub(super) async fn run_agent_job_for_run(
                         }
                     }
                     ModelSpec::Inherit => fallback_model.clone(),
-                    ModelSpec::Exact(name) => name.clone(),
+                    ModelSpec::Exact(name) => Some(name.clone()),
                 };
-                effective.default_model = Some(resolved_model);
+                if let Some(model) = resolved_model {
+                    effective.default_model = Some(model);
+                }
                 // Issue #4868 — the iteration cap is no longer set here. The
                 // session builder (`build_session_agent_inner`) resolves it
                 // from `def.effective_max_iterations()` directly, which (unlike

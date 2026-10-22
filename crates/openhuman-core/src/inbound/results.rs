@@ -17,33 +17,26 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tinystoragedrivers::schema::{Schema, ScopeClass};
 use tinystoragedrivers::{CollectionSpec, ErrorKind, Filter, IndexSpec, Precondition, Query, Sort};
 
 use crate::config::Config;
 use crate::storage::documents::{compare_and_swap, Repo};
-use crate::storage::schema_support::{key_of, owner};
+use crate::storage::schema_support::key_of;
 use crate::storage::DocumentStoreExt;
 
 /// The results collection.
 pub const RESULTS: &str = "inbound.results";
 const DOMAIN: &str = "inbound::results";
-const SCHEMA: u32 = 1;
 
 /// What the inbound host keeps: the results of pinned sources' turns.
-#[must_use]
-pub fn storage_schema() -> Schema {
-    Schema::new(owner("inbound")).collection_with(SCHEMA, spec(), ScopeClass::Tenant)
+pub fn collection_specs() -> Vec<CollectionSpec> {
+    vec![spec()]
 }
 
 fn spec() -> CollectionSpec {
     CollectionSpec::new(RESULTS)
         .index(IndexSpec::new("by_status", ["status", "created_ms"]))
         .index(IndexSpec::new("by_source", ["source", "created_ms"]))
-}
-
-fn specs() -> Vec<CollectionSpec> {
-    vec![spec()]
 }
 
 /// Where a turn stands.
@@ -215,13 +208,13 @@ impl Results {
         Ok(Self(Repo::current_for(
             &config.workspace_dir,
             DOMAIN,
-            specs,
+            collection_specs,
         )?))
     }
 
     #[cfg(test)]
-    pub(crate) fn over(scoped: &crate::storage::ScopedStorage) -> Self {
-        Self(Repo::over(scoped, DOMAIN, specs))
+    pub(crate) fn over(scoped: &crate::storage::Storage) -> Self {
+        Self(Repo::over(scoped, DOMAIN, collection_specs))
     }
 
     /// Record `stored` unless its turn is already recorded; either way, the

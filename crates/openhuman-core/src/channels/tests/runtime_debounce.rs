@@ -5,7 +5,6 @@ use super::common::{RecordingChannel, SlowModel, TelegramRecordingChannel};
 use crate::agent::bus::{mock_agent_run_turn, AgentTurnRequest, AgentTurnResponse};
 use crate::config::InboundDebounceConfig;
 use crate::core::bus_testing::MockBusGuard;
-use crate::inference::provider;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -100,7 +99,7 @@ fn runtime_with(channel: Arc<dyn Channel>) -> Arc<ChannelRuntimeContext> {
         api_url: None,
         inference_url: None,
         reliability: Arc::new(crate::config::ReliabilityConfig::default()),
-        provider_runtime_options: provider::ProviderRuntimeOptions::default(),
+        provider_runtime_options: crate::tools::delegate::ProviderRuntimeOptions::default(),
         workspace_dir: Arc::new(std::env::temp_dir()),
         message_timeout_secs: CHANNEL_MESSAGE_TIMEOUT_SECS,
         multimodal: crate::config::MultimodalConfig::default(),
@@ -142,6 +141,8 @@ impl Running {
             timestamp: ts,
             thread_ts: None,
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         }
     }
 
@@ -157,6 +158,7 @@ impl Running {
             message: message.clone(),
             envelope: Default::default(),
             history_key: history_key.clone(),
+            history_key_ignores_thread: false,
             thread_id: history_key.clone(),
             client_id: self.channel.to_string(),
             session_key: history_key,

@@ -1,4 +1,9 @@
 use super::*;
+use crate::inference::registry::{
+    register_backend_error_classifier, BackendErrorClassification, BackendErrorKind,
+};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[cfg(feature = "crash-reporting")]
 fn event_with_tags(pairs: &[(&str, &str)]) -> sentry::protocol::Event<'static> {
@@ -32,9 +37,64 @@ fn channel_message_404_event(method: &str) -> sentry::protocol::Event<'static> {
 }
 
 fn managed_body(status: &str, code: &str) -> String {
-    format!(
+    let body = format!(
         "OpenHuman API error ({status}): {{\"error\":{{\"errorCode\":\"{code}\",\"message\":\"x\"}}}}"
-    )
+    );
+    register_backend_classifier_fixture(
+        &body,
+        BackendErrorClassification {
+            provider_owned: true,
+            backend_owned: true,
+            reportable: false,
+            token: Some("fixture-owned".to_string()),
+            kind: Some(BackendErrorKind::Internal),
+            malformed_bad_request: false,
+        },
+    );
+    body
+}
+
+/// Installs exact-message metadata for core tests of the generic classifier
+/// hook. The tests supply ownership and reportability directly; this fixture
+/// deliberately contains no hosted token parser or vocabulary.
+fn register_backend_classifier_fixture(message: &str, classification: BackendErrorClassification) {
+    static FIXTURES: OnceLock<Arc<Mutex<HashMap<String, BackendErrorClassification>>>> =
+        OnceLock::new();
+    let fixtures = Arc::clone(FIXTURES.get_or_init(|| Arc::new(Mutex::new(HashMap::new()))));
+    let classifier_fixtures = Arc::clone(&fixtures);
+    register_backend_error_classifier(Arc::new(move |_provider, error| {
+        classifier_fixtures
+            .lock()
+            .expect("classifier fixture lock")
+            .get(error)
+            .cloned()
+            .unwrap_or(BackendErrorClassification {
+                provider_owned: false,
+                backend_owned: false,
+                reportable: true,
+                token: None,
+                kind: None,
+                malformed_bad_request: false,
+            })
+    }));
+    fixtures
+        .lock()
+        .expect("classifier fixture lock")
+        .insert(message.to_string(), classification);
+}
+
+fn reportable_fixture(
+    kind: BackendErrorKind,
+    malformed_bad_request: bool,
+) -> BackendErrorClassification {
+    BackendErrorClassification {
+        provider_owned: true,
+        backend_owned: true,
+        reportable: true,
+        token: Some("fixture-reportable".to_string()),
+        kind: Some(kind),
+        malformed_bad_request,
+    }
 }
 
 #[cfg(feature = "crash-reporting")]

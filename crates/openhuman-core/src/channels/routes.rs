@@ -2,21 +2,38 @@
 
 use super::context::{clear_sender_history, ChannelRouteSelection, ChannelRuntimeContext};
 use super::{Channel, ChannelSendExt, SendMessage};
-use crate::inference::provider;
 use std::sync::Arc;
 use tinychannels_bus as traits;
 use tinychannels_bus::module_control::{
     ChannelControlRequest, ChannelControlResult, ProviderDescriptor,
 };
 
-fn provider_descriptors() -> Vec<ProviderDescriptor> {
-    provider::list_providers()
-        .into_iter()
+fn provider_descriptors(config: &crate::config::Config) -> Vec<ProviderDescriptor> {
+    config
+        .cloud_providers
+        .iter()
         .map(|provider| ProviderDescriptor {
-            name: provider.name.to_string(),
-            aliases: provider.aliases.iter().map(ToString::to_string).collect(),
+            name: provider.slug.clone(),
+            aliases: if crate::config::schema::cloud_providers::is_hosted_cloud_identity(
+                &provider.slug,
+            ) || crate::config::schema::cloud_providers::is_hosted_auth_style(
+                provider.auth_style,
+            ) {
+                vec!["backend".to_string(), "openhuman-backend".to_string()]
+            } else {
+                Vec::new()
+            },
         })
         .collect()
+}
+
+#[cfg(test)]
+pub(crate) fn register_hosted_route_test_policy() {
+    use crate::config::schema::cloud_providers::AuthStyle;
+    crate::config::schema::cloud_providers::register_hosted_cloud_provider_policy(
+        Arc::new(|slug| slug == "openhuman"),
+        Arc::new(|style| style == AuthStyle::OpenhumanJwt),
+    );
 }
 
 fn default_route_selection(ctx: &ChannelRuntimeContext) -> ChannelRouteSelection {
@@ -176,12 +193,17 @@ pub(crate) async fn handle_runtime_command_if_needed(
                 (ChannelControlRequest::Route {
                     workspace_dir: ctx.workspace_dir.to_string_lossy().into_owned(),
                     message: Box::new(msg.clone()),
+                    capabilities: None,
                     route: tinychannels_bus::module_remote::RemoteRoute {
                         provider: current.provider,
                         model: current.model,
                     },
                     history_len,
-                    providers: provider_descriptors(),
+                    providers: ctx
+                        .config
+                        .as_deref()
+                        .map(provider_descriptors)
+                        .unwrap_or_default(),
                 },),
             )
             .await;
@@ -246,3 +268,7 @@ pub(crate) async fn handle_runtime_command_if_needed(
 #[cfg(test)]
 #[path = "routes_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "routes_provider_tests.rs"]
+mod provider_tests;

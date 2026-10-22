@@ -91,6 +91,8 @@ async fn remote_status(ws: &Path, channel: &str, reply_target: &str) -> Option<S
                         timestamp: 0,
                         thread_ts: None,
                         sender_name: None,
+                        reply_to_id: None,
+                        topic_id: None,
                     },
                     route: tinychannels_bus::module_remote::RemoteRoute {
                         provider: "openai".into(),

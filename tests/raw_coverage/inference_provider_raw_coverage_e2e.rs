@@ -24,7 +24,7 @@ use tinyinference_local::service::LocalAiService;
 use openhuman_core::inference::provider::factory::{
     auth_key_for_slug, create_chat_model_from_string_with_model_id, provider_for_role,
 };
-use openhuman_core::inference::provider::list_configured_models;
+use openhuman_core::inference::provider::models::catalog_listing::list_configured_models_from_config;
 use openhuman_core::security::credentials::{
     AuthService, APP_SESSION_PROVIDER, DEFAULT_AUTH_PROFILE_NAME,
 };
@@ -164,14 +164,14 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
         };
     assert!(empty_model.to_string().contains("empty model"));
 
-    let listed = list_configured_models("custom")
+    let listed = list_configured_models_from_config("custom", &config)
         .await
         .expect("list models")
         .value;
     assert_eq!(listed["models"][0]["id"], "demo-chat");
     assert_eq!(listed["models"][1]["context_window"], 8192);
 
-    let local_listed = list_configured_models("ollama")
+    let local_listed = list_configured_models_from_config("ollama", &config)
         .await
         .expect("synthetic ollama list")
         .value;
@@ -180,7 +180,7 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
     // PR #2959 reverted the list_models 404 suppression: a 404 from /models
     // now surfaces as a real error instead of a synthetic `unsupported: true`
     // success, so the failure fires to Sentry for a root-cause fix.
-    let missing_err = list_configured_models("missing")
+    let missing_err = list_configured_models_from_config("missing", &config)
         .await
         .expect_err("404 list_models now surfaces as an error");
     assert!(
@@ -188,14 +188,14 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
         "404 list_models error should surface the status: {missing_err:?}"
     );
 
-    let openrouter = list_configured_models("openrouter")
+    let openrouter = list_configured_models_from_config("openrouter", &config)
         .await
         .expect("openrouter key validation and list")
         .value;
     assert_eq!(openrouter["models"][0]["owned_by"], "test-suite");
 
     for provider_id in ["html", "wrong-data", "error-payload", ""] {
-        let err = list_configured_models(provider_id)
+        let err = list_configured_models_from_config(provider_id, &config)
             .await
             .expect_err("invalid model listing");
         assert!(

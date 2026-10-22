@@ -1,6 +1,7 @@
 use super::super::tier::{escalated_origin_for_nested_harness, escalated_origin_for_prompt};
 use super::*;
 use crate::config::HttpRequestConfig;
+use crate::security::policy::CommandClass;
 use crate::security::GateDecision;
 use serde_json::json;
 use std::sync::Arc;
@@ -381,6 +382,7 @@ fn nested_harness_does_not_escalate_without_an_origin() {
 /// provider to exercise).
 #[tokio::test]
 async fn agent_node_runtime_resolves_to_the_definitions_effective_iteration_cap() {
+    crate::agent::session_host::test_support::install_model_fixture();
     let tmp = tempfile::TempDir::new().unwrap();
     let config = agent_test_config(&tmp);
     assert_eq!(config.agent.max_tool_iterations, 10);

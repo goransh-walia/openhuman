@@ -152,6 +152,8 @@ impl RelayInboundParams {
                 .sender_name
                 .clone()
                 .filter(|name| !name.trim().is_empty()),
+            reply_to_id: None,
+            topic_id: None,
         }
     }
 }

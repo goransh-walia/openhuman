@@ -56,7 +56,7 @@ pub(super) fn overlay_response_usage(
 /// strictly less capable, so the facade uses the wider surface and lets
 /// [`Route`] be `None` when the account's own route is what is wanted.
 ///
-/// `INFERENCE_AGENT_CHAT` is owned by the inference domain; referencing it
+/// `INFERENCE_AGENT_CHAT` is owned by the agent-runs domain; referencing it
 /// keeps this facade's dispatch string in lockstep with the registered
 /// controller rather than duplicating the wire name.
 ///

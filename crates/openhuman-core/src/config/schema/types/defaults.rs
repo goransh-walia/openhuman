@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 use super::config::default_temperature_unsupported_models;
 use super::config::DEFAULT_TEMPERATURE;
-use super::model_ids::DEFAULT_MODEL;
 use crate::config::schema::*;
 
 impl Default for Config {
@@ -41,7 +40,9 @@ impl Default for Config {
             inference_url: None,
             ephemeral_route: None,
             resolved_endpoints: Default::default(),
-            default_model: Some(DEFAULT_MODEL.to_string()),
+            default_model: crate::inference::registry::provider_default_model(
+                crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+            ),
             default_temperature: DEFAULT_TEMPERATURE,
             output_language: None,
             user_timezone: None,

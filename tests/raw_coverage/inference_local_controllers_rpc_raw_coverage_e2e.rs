@@ -1,4 +1,5 @@
-//! Controller-boundary E2E coverage for the six `inference.*` local controllers.
+//! Controller-boundary E2E coverage for the four local runtime controllers and
+//! the two agent-owned inference chat controllers.
 //!
 //! # Why this suite exists alongside the others
 //!
@@ -18,7 +19,7 @@
 //!    `rpc_method_name()` (`crates/openhuman-core/src/core/all.rs:1069`) is the contract; this is the
 //!    only place it is pinned.
 //!
-//! 2. **The controller boundary itself for the four that had none**:
+//! 2. **The controller boundary itself for the controllers that had none**:
 //!    `agent_chat_simple`, `transcribe`, `transcribe_bytes` and `tts`. The handlers deserialize params, load the ambient
 //!    config, and trim string inputs before delegating
 //!    (`crates/openhuman-core/src/inference/local/schemas.rs:309-395`). None of that is
@@ -51,7 +52,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use openhuman_core::config::Config;
-use openhuman_core::core::all::RegisteredController;
+use openhuman_core::core::all::{all_registered_controllers, RegisteredController};
 use openhuman_core::inference::host_runtime::all_local_inference_registered_controllers;
 use serde_json::{json, Value};
 use tempfile::{tempdir, TempDir};
@@ -150,12 +151,21 @@ fn write_stub_piper(dir: &Path, name: &str, transcript: &Path) -> PathBuf {
     )
 }
 
-/// The six controllers `all_registered_controllers` builds
-/// (`crates/openhuman-core/src/inference/local/schemas.rs:92-138`), paired with the wire
-/// method name each one must dispatch under.
+/// The four local runtime and two agent-owned chat controllers, paired with
+/// the wire method name each one must dispatch under.
 const EXPECTED_WIRE_METHODS: &[(&str, &str)] = &[
     ("agent_chat", "openhuman.inference_agent_chat"),
     ("agent_chat_simple", "openhuman.inference_agent_chat_simple"),
+    ("transcribe", "openhuman.inference_transcribe"),
+    ("transcribe_bytes", "openhuman.inference_transcribe_bytes"),
+    ("tts", "openhuman.inference_tts"),
+    ("test_connection", "openhuman.inference_test_connection"),
+];
+
+/// Controllers that remain owned by inference's local runtime after chat moves
+/// to `agent_runs`; pin this exact inventory so a new local controller cannot
+/// slip into the broader registry check without a wire-name entry.
+const EXPECTED_LOCAL_RUNTIME_METHODS: &[(&str, &str)] = &[
     ("transcribe", "openhuman.inference_transcribe"),
     ("transcribe_bytes", "openhuman.inference_transcribe_bytes"),
     ("tts", "openhuman.inference_tts"),
@@ -170,7 +180,33 @@ const EXPECTED_WIRE_METHODS: &[(&str, &str)] = &[
 /// break every caller.
 #[test]
 fn local_inference_controllers_pin_their_registered_wire_method_names() {
-    let controllers = all_local_inference_registered_controllers();
+    let local_controllers = all_local_inference_registered_controllers();
+    assert_eq!(
+        local_controllers.len(),
+        EXPECTED_LOCAL_RUNTIME_METHODS.len(),
+        "local inference controller inventory changed; add its wire name to the expected list"
+    );
+    for (function, wire) in EXPECTED_LOCAL_RUNTIME_METHODS {
+        let registered = controller(&local_controllers, function);
+        assert_eq!(registered.rpc_method_name(), *wire);
+        assert_eq!(registered.schema.namespace, "inference");
+    }
+    assert!(
+        local_controllers.iter().all(|registered| {
+            !matches!(registered.schema.function, "agent_chat" | "agent_chat_simple")
+        }),
+        "agent chat controllers belong to agent_runs, not inference's local runtime"
+    );
+
+    let controllers: Vec<_> = all_registered_controllers()
+        .into_iter()
+        .filter(|controller| {
+            controller.schema.namespace == "inference"
+                && EXPECTED_WIRE_METHODS
+                    .iter()
+                    .any(|(function, _)| controller.schema.function == *function)
+        })
+        .collect();
 
     assert_eq!(
         controllers.len(),
@@ -275,7 +311,7 @@ async fn inference_tts_controller_covers_disabled_missing_binary_and_stubbed_syn
         let piper = write_stub_piper(scripts.path(), "stub-piper", &transcript);
         let _piper_guard = EnvVarGuard::set("PIPER_BIN", &piper);
 
-        let out_path = tmp.path().join("nested").join("speech.wav");
+        let out_path = config.workspace_dir.join("nested").join("speech.wav");
         let spoken = call(
             tts,
             json!({
@@ -433,7 +469,7 @@ async fn inference_agent_chat_simple_controller_covers_params_and_prompt_guard()
     config.save().await.expect("save config");
     let _workspace = EnvVarGuard::set("OPENHUMAN_WORKSPACE", tmp.path().join(".openhuman"));
 
-    let controllers = all_local_inference_registered_controllers();
+    let controllers = all_registered_controllers();
     let chat_simple = controller(&controllers, "agent_chat_simple");
 
     let missing = call(chat_simple, json!({}))

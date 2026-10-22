@@ -243,7 +243,7 @@ pub enum DomainEvent {
     /// A BYO (bring-your-own-key) chat provider rejected the configured API
     /// key with `401` / `403` — the third-party key is invalid or revoked.
     ///
-    /// Published by `inference::provider::ops::http_error::
+    /// Published by `inference::provider::http_error::
     /// log_byo_provider_auth_failure` (once per failure episode, via the
     /// `auth_error_registry` latch — the underlying 401 repeats per retry).
     /// The same rejection demotes the raw error from Sentry (it's

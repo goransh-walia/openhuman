@@ -522,17 +522,17 @@ fn build_registered_controllers() -> Vec<GroupedController> {
         DomainGroup::Platform,
         crate::platform::service::all_service_registered_controllers(),
     );
-    // Unified inference domain: text / vision / local runtime / cloud providers.
-    // (Formerly split across inference, local AI, and providers modules.)
+    let mut inference_controllers = crate::inference::all_inference_registered_controllers();
+    // Agent-owned chat keeps inference's capability group and contract order.
+    // Append it before the local runtime's speech controllers.
+    // This remains the registry's sole registration site for these methods.
+    inference_controllers
+        .extend(crate::agent_runs::all_inference_agent_chat_registered_controllers());
+    inference_controllers.extend(crate::inference::all_local_inference_registered_controllers());
     push(
         &mut controllers,
         DomainGroup::Inference,
-        crate::inference::all_inference_registered_controllers(),
-    );
-    push(
-        &mut controllers,
-        DomainGroup::Inference,
-        crate::inference::all_local_inference_registered_controllers(),
+        inference_controllers,
     );
     // Embedding provider configuration and embed RPC.
     push(
@@ -671,8 +671,11 @@ fn build_registered_controllers() -> Vec<GroupedController> {
         crate::desktop::notifications::all_notifications_registered_controllers(),
     );
     // Storage layout v1 -> v2 migration, status and restore
-    #[rustfmt::skip]
+    #[cfg(feature = "legacy-import")]
+    {
+        #[rustfmt::skip]
     push(&mut controllers, DomainGroup::Config, crate::storage::layout::schemas::all_registered_controllers());
+    }
     // Mobile device pairing and management
     push(
         &mut controllers,
@@ -1084,10 +1087,8 @@ pub fn all_http_method_schemas() -> Vec<HttpMethodSchemaDefinition> {
 
 /// Shared test helper: assert a domain's controller-schema list and
 /// registered-controller list stay in lockstep, and that a known function is
-/// present. Replaces the brittle `assert_eq!(schemas().len(), N)` magic-number
-/// pattern repeated across ~15 domains (plan.md §3/§6) — a legitimate new
-/// controller no longer breaks the count, but a schema/handler desync or a
-/// dropped op still fails.
+/// present. Replaces the brittle magic-number count pattern repeated across
+/// domains: new controllers do not break it, but schema/handler drift still fails.
 #[cfg(test)]
 pub(crate) fn assert_schema_controller_parity(
     schemas: &[ControllerSchema],
@@ -1104,11 +1105,9 @@ pub(crate) fn assert_schema_controller_parity(
         "expected a `{known_function}` controller schema to be registered",
     );
 }
-
 #[path = "all_invoke.rs"]
 mod invoke_registered;
 pub use invoke_registered::try_invoke_registered_rpc;
-
 #[cfg(test)]
 #[path = "all_tests.rs"]
 mod tests;

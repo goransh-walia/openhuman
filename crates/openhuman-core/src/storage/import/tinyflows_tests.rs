@@ -1,10 +1,12 @@
 use super::*;
 use crate::cron::client::testing as cron_store;
-use crate::storage::{MemoryStorage, Scope};
+use crate::storage::test_support::{sqlite_backend, SqliteBackend};
+use crate::storage::Scope;
 use serde_json::json;
 use serde_json::Value;
 use sha2::Digest;
 use std::collections::BTreeMap;
+use std::ops::Deref;
 use tempfile::TempDir;
 use tinyflows::engine::Checkpointer;
 use tinyflows_drivers::catalog::FlowCatalogDocuments;
@@ -42,8 +44,18 @@ fn workspace() -> (TempDir, Config) {
     (dir, config)
 }
 
-fn backend() -> Arc<dyn StorageBackend> {
-    Arc::new(MemoryStorage::new())
+struct TestBackend(SqliteBackend);
+
+impl Deref for TestBackend {
+    type Target = Arc<dyn StorageBackend>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.backend
+    }
+}
+
+fn backend() -> TestBackend {
+    TestBackend(sqlite_backend().unwrap())
 }
 
 /// Every file under `root` with a digest of its bytes. SQLite's `-shm` index
@@ -75,7 +87,7 @@ fn tree(root: &Path) -> BTreeMap<String, String> {
 fn documents(
     backend: &Arc<dyn StorageBackend>,
     scope: &Scope,
-) -> Arc<dyn tinystoragedrivers::DocumentStore> {
+) -> Arc<dyn crate::storage::DocumentStore> {
     Arc::clone(backend.for_scope(scope).unwrap().documents())
 }
 
@@ -425,6 +437,7 @@ async fn fallback_backend_migrates_legacy_catalog_state_without_importing_files(
     }
 
     let (dir, mut config) = workspace();
+    let _slot = crate::storage::test_support::lock_storage_slot();
     config.components.tinyflows = true;
     let legacy_dir = dir.path().join("flows");
     let legacy_files_before = tree(&legacy_dir);
@@ -576,7 +589,7 @@ fn a_corrupt_legacy_file_fails_without_a_marker_and_is_retried() {
 fn a_run_that_skipped_records_leaves_no_marker_so_it_is_retried() {
     let dir = TempDir::new().unwrap();
     let backend = backend();
-    let skipped = marked(&backend, dir.path(), "skipdomain", || Ok(Some((3, 2, 1)))).unwrap();
+    let skipped = marked(&backend, dir.path(), "skipdomain", |_| Ok(Some((3, 2, 1)))).unwrap();
     assert_eq!(
         skipped,
         Outcome::Incomplete {
@@ -586,7 +599,7 @@ fn a_run_that_skipped_records_leaves_no_marker_so_it_is_retried() {
         }
     );
     // No marker: the next boot runs the body again instead of `AlreadyDone`.
-    let again = marked(&backend, dir.path(), "skipdomain", || Ok(Some((3, 3, 0)))).unwrap();
+    let again = marked(&backend, dir.path(), "skipdomain", |_| Ok(Some((3, 3, 0)))).unwrap();
     assert_eq!(
         again,
         Outcome::Imported {
@@ -594,6 +607,6 @@ fn a_run_that_skipped_records_leaves_no_marker_so_it_is_retried() {
             written: 3
         }
     );
-    let done = marked(&backend, dir.path(), "skipdomain", || Ok(Some((3, 3, 0)))).unwrap();
+    let done = marked(&backend, dir.path(), "skipdomain", |_| Ok(Some((3, 3, 0)))).unwrap();
     assert_eq!(done, Outcome::AlreadyDone);
 }

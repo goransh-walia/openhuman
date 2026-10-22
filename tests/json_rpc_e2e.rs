@@ -3007,7 +3007,20 @@ async fn json_rpc_cron_manual_worker_survives_caller_cancel_on_published_tinyflo
         .expect("the published module admitted the run and entered the host callback")
         .expect("manual host handler start signal remains open");
     caller.abort();
-    assert!(caller.await.unwrap_err().is_cancelled());
+    match caller.await {
+        Err(error) => assert!(
+            error.is_cancelled(),
+            "caller task failed unexpectedly: {error}"
+        ),
+        Ok(response) => {
+            let queued_ack = peel_logs_envelope(assert_no_jsonrpc_error(
+                &response,
+                "cron_run may acknowledge before the caller aborts",
+            ));
+            assert_eq!(queued_ack["job_id"], job.id);
+            assert_eq!(queued_ack["status"], "queued");
+        }
+    }
     let queued_response = post_json_rpc(
         &rpc_base,
         80_006,

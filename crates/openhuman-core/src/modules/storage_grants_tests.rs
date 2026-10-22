@@ -133,8 +133,9 @@ fn an_object_the_grant_does_not_hold_is_refused() {
 
 #[test]
 fn capabilities_are_answered_for_an_object_the_grant_does_not_hold() {
-    // The module's client probes every object's capabilities when it connects
-    // (tinymcp 0.18.0 holds no blobs); refusing the probe left it without storage.
+    // The module's client probes all six objects when it connects; refusing a
+    // capability probe leaves it without storage, even if the object itself
+    // is not granted.
     let documents_only = StorageGrant {
         collections: vec![CollectionSpec::new("notes")],
         writable: true,
@@ -148,6 +149,14 @@ fn capabilities_are_answered_for_an_object_the_grant_does_not_hold() {
             "max_key_len": 0,
         })))
     );
+    assert_eq!(
+        authorize(&documents_only, Object::Streams, "Capabilities", &json!({})),
+        Ok(Plan::Answer(json!({ "capabilities": [] })))
+    );
+    assert_eq!(
+        authorize(&documents_only, Object::Secrets, "Capabilities", &json!({})),
+        Ok(Plan::Answer(json!({ "enumerable": false })))
+    );
     // Anything else on that object is still refused.
     assert_eq!(
         authorize(
@@ -155,6 +164,24 @@ fn capabilities_are_answered_for_an_object_the_grant_does_not_hold() {
             Object::Blobs,
             "Head",
             &json!({"key": "files/a"})
+        ),
+        Err(Denied::Object)
+    );
+    assert_eq!(
+        authorize(
+            &documents_only,
+            Object::Streams,
+            "Len",
+            &json!({ "stream": "x" })
+        ),
+        Err(Denied::Object)
+    );
+    assert_eq!(
+        authorize(
+            &documents_only,
+            Object::Secrets,
+            "Get",
+            &json!({ "name": "x" })
         ),
         Err(Denied::Object)
     );

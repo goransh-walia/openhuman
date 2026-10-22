@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use tinybus::EventHandler;
-use tinychannels::routes::resolve_provider_alias;
 use tinychannels_bus::context::ChatMessage;
 use tinychannels_bus::ChannelMessage;
 use tinytools::{Tool, ToolResult};
@@ -38,8 +37,8 @@ impl Tool for DummyTool {
 }
 
 #[derive(Default)]
-struct RecordingChannel {
-    sent: Mutex<Vec<SendMessage>>,
+pub(super) struct RecordingChannel {
+    pub(super) sent: Mutex<Vec<SendMessage>>,
 }
 
 #[async_trait]
@@ -58,7 +57,7 @@ impl Channel for RecordingChannel {
     }
 }
 
-fn runtime_context(workspace_dir: PathBuf) -> ChannelRuntimeContext {
+pub(super) fn runtime_context(workspace_dir: PathBuf) -> ChannelRuntimeContext {
     let model: Arc<dyn tinyinference_llm::model::ChatModel<()>> =
         Arc::new(tinyagents_harness::testkit::ScriptedModel::replies(vec![
             "ok",
@@ -79,7 +78,7 @@ fn runtime_context(workspace_dir: PathBuf) -> ChannelRuntimeContext {
         api_url: None,
         inference_url: None,
         reliability: Arc::new(crate::config::ReliabilityConfig::default()),
-        provider_runtime_options: crate::inference::provider::ProviderRuntimeOptions::default(),
+        provider_runtime_options: crate::tools::delegate::ProviderRuntimeOptions::default(),
         workspace_dir: Arc::new(workspace_dir),
         message_timeout_secs: 60,
         multimodal: crate::config::MultimodalConfig::default(),
@@ -109,12 +108,15 @@ async fn module_route_help_response(
             timestamp: 0,
             thread_ts: None,
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         }),
         route: RemoteRoute {
             provider: "openai".into(),
             model: "gpt-5".into(),
         },
         history_len: 0,
+        capabilities: None,
         providers,
     };
     let response: ChannelControlResult = crate::channels::module_fixture::client()
@@ -136,16 +138,6 @@ async fn module_route_help_response(
 
 #[test]
 fn provider_alias_and_route_selection_round_trip() {
-    let first_provider = provider::list_providers()
-        .into_iter()
-        .next()
-        .expect("provider registry should not be empty");
-    assert_eq!(
-        resolve_provider_alias(first_provider.name, &provider_descriptors()).as_deref(),
-        Some(first_provider.name)
-    );
-    assert!(resolve_provider_alias("   ", &provider_descriptors()).is_none());
-
     let ctx = runtime_context(PathBuf::from("/tmp"));
     let sender_key = "telegram_alice_reply";
     assert_eq!(
@@ -174,6 +166,45 @@ fn provider_alias_and_route_selection_round_trip() {
 
     set_route_selection(&ctx, sender_key, default_route_selection(&ctx));
     assert!(ctx.route_overrides.lock().unwrap().is_empty());
+}
+
+#[test]
+fn provider_descriptors_use_configured_slugs_and_keep_managed_aliases() {
+    use crate::config::schema::{AuthStyle, CloudProviderCreds};
+
+    super::register_hosted_route_test_policy();
+    let config = crate::config::Config {
+        cloud_providers: vec![
+            CloudProviderCreds {
+                id: "p_custom_a8c3f".into(),
+                slug: "custom-provider".into(),
+                label: "Custom Provider Label".into(),
+                endpoint: "https://inference.example.test/v1".into(),
+                auth_style: AuthStyle::Bearer,
+                default_model: None,
+            },
+            CloudProviderCreds {
+                id: "p_openhuman_managed".into(),
+                slug: "openhuman".into(),
+                label: "Managed Route".into(),
+                endpoint: "https://api.openhuman.ai/v1".into(),
+                auth_style: AuthStyle::OpenhumanJwt,
+                default_model: None,
+            },
+        ],
+        ..crate::config::Config::default()
+    };
+
+    let providers = provider_descriptors(&config);
+    assert_eq!(
+        providers
+            .iter()
+            .map(|provider| provider.name.as_str())
+            .collect::<Vec<_>>(),
+        ["custom-provider", "openhuman"]
+    );
+    assert_eq!(providers[0].aliases, Vec::<String>::new());
+    assert_eq!(providers[1].aliases, ["backend", "openhuman-backend"]);
 }
 
 #[cfg(feature = "modules")]
@@ -235,6 +266,8 @@ fn model_command_messages_use_thread_aware_history_keys() {
         timestamp: 0,
         thread_ts: Some("thread-1".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
     assert_eq!(
         super::super::context::conversation_history_key(&msg),
@@ -321,6 +354,8 @@ async fn handle_runtime_command_unknown_provider_sends_helpful_error() {
         timestamp: 0,
         thread_ts: Some("thread-1".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let handled = handle_runtime_command_if_needed(
@@ -359,6 +394,8 @@ async fn handle_runtime_command_set_model_clears_sender_history_and_persists_rou
         timestamp: 0,
         thread_ts: None,
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let handled = handle_runtime_command_if_needed(
@@ -403,6 +440,8 @@ async fn handle_runtime_command_telegram_status_replies_without_agent() {
         timestamp: 0,
         thread_ts: Some("42".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let handled = handle_runtime_command_if_needed(
@@ -436,6 +475,8 @@ async fn handle_runtime_command_without_target_channel_still_consumes_command() 
         timestamp: 0,
         thread_ts: None,
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let handled =
@@ -457,6 +498,8 @@ async fn handle_runtime_command_telegram_help_replies_with_remote_command_list()
         timestamp: 0,
         thread_ts: Some("42".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let handled = handle_runtime_command_if_needed(
@@ -494,6 +537,8 @@ async fn handle_runtime_command_telegram_sessions_reports_empty_store() {
         timestamp: 0,
         thread_ts: Some("42".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let handled = handle_runtime_command_if_needed(
@@ -536,6 +581,8 @@ async fn handle_runtime_command_telegram_new_status_and_sessions_round_trip() {
         timestamp: 0,
         thread_ts: Some("42".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
     assert!(
         handle_runtime_command_if_needed(
@@ -589,6 +636,8 @@ async fn handle_runtime_command_telegram_new_status_and_sessions_round_trip() {
         timestamp: 0,
         thread_ts: Some("42".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
     assert!(
         handle_runtime_command_if_needed(
@@ -609,6 +658,8 @@ async fn handle_runtime_command_telegram_new_status_and_sessions_round_trip() {
         timestamp: 0,
         thread_ts: Some("42".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
     assert!(
         handle_runtime_command_if_needed(
@@ -663,6 +714,8 @@ async fn handle_runtime_command_telegram_new_reports_unavailable_storage() {
         timestamp: 0,
         thread_ts: Some("42".into()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
     assert!(
         handle_runtime_command_if_needed(

@@ -89,6 +89,7 @@ pub async fn spawn_workflow_run_background(
                  detail: {body}"
             );
             if let Err(e) = run_log::write_header(
+                &workspace,
                 &gate_log_path,
                 &skill.definition.id,
                 &gate_run_id,
@@ -102,7 +103,9 @@ pub async fn spawn_workflow_run_background(
                     "[skills] preflight gate: failed to write run-log header"
                 );
             }
-            if let Err(e) = run_log::write_footer(&gate_log_path, "FAILED", 0, &body).await {
+            if let Err(e) =
+                run_log::write_footer(&workspace, &gate_log_path, "FAILED", 0, &body).await
+            {
                 tracing::warn!(
                     error = %e,
                     "[skills] preflight gate: failed to write run-log footer"
@@ -157,11 +160,19 @@ pub async fn spawn_workflow_run_background(
         let workflow_id = workflow_id.clone();
         let inputs = inputs.clone();
         let log_path = log_path.clone();
+        let workspace = workspace.clone();
         let inherited_origin = inherited_origin.clone();
         let ctx = ctx.clone();
         tokio::spawn(async move {
-            if let Err(e) =
-                run_log::write_header(&log_path, &workflow_id, &run_id, &inputs, &task_prompt).await
+            if let Err(e) = run_log::write_header(
+                &workspace,
+                &log_path,
+                &workflow_id,
+                &run_id,
+                &inputs,
+                &task_prompt,
+            )
+            .await
             {
                 tracing::warn!(run_id = %run_id, error = %e, "[skills] workflow_run: header write failed");
             }
@@ -169,6 +180,7 @@ pub async fn spawn_workflow_run_background(
                 Ok(c) => c,
                 Err(e) => {
                     let _ = run_log::write_footer(
+                        &workspace,
                         &log_path,
                         "FAILED",
                         0,
@@ -189,6 +201,7 @@ pub async fn spawn_workflow_run_background(
                     Ok(a) => a,
                     Err(e) => {
                         let _ = run_log::write_footer(
+                            &workspace,
                             &log_path,
                             "FAILED",
                             0,
@@ -219,7 +232,11 @@ pub async fn spawn_workflow_run_background(
             ));
             let (tx, rx) = tokio::sync::mpsc::channel(256);
             agent.set_on_progress(Some(tx));
-            let bridge = tokio::spawn(run_log::drain_to_log(rx, log_path.clone()));
+            let bridge = tokio::spawn(run_log::drain_to_log(
+                rx,
+                workspace.clone(),
+                log_path.clone(),
+            ));
 
             // Register the cancellation token now (after the run can actually
             // start) so `skills_cancel` can stop it; a config/agent-build
@@ -252,9 +269,14 @@ pub async fn spawn_workflow_run_background(
             run_log::unregister_run_cancel(&run_id);
             match result {
                 None => {
-                    let _ =
-                        run_log::write_footer(&log_path, "CANCELLED", ms, "Run stopped by user.")
-                            .await;
+                    let _ = run_log::write_footer(
+                        &workspace,
+                        &log_path,
+                        "CANCELLED",
+                        ms,
+                        "Run stopped by user.",
+                    )
+                    .await;
                     tracing::info!(run_id = %run_id, "[workflows] workflow_run: cancelled");
                 }
                 Some(Ok(out)) if stop.is_some() => {
@@ -265,7 +287,7 @@ pub async fn spawn_workflow_run_background(
                         .as_ref()
                         .map(|s| s.status_message())
                         .unwrap_or_default();
-                    let _ = run_log::write_footer(&log_path, "STOPPED", ms, &out).await;
+                    let _ = run_log::write_footer(&workspace, &log_path, "STOPPED", ms, &out).await;
                     tracing::warn!(
                         run_id = %run_id,
                         "[skills] workflow_run: turn stopped early, not marking DONE {summary}"
@@ -281,19 +303,29 @@ pub async fn spawn_workflow_run_background(
                              repeated line (truncated to 160 chars):\n  {preview}\n\n\
                              full final output follows below for forensic review:\n\n{out}",
                         );
-                        let _ = run_log::write_footer(&log_path, "DEGENERATE", ms, &body).await;
+                        let _ =
+                            run_log::write_footer(&workspace, &log_path, "DEGENERATE", ms, &body)
+                                .await;
                         tracing::warn!(
                             run_id = %run_id,
                             repeats = count,
                             "[skills] workflow_run: degenerate final response rejected"
                         );
                     } else {
-                        let _ = run_log::write_footer(&log_path, "DONE", ms, &out).await;
+                        let _ =
+                            run_log::write_footer(&workspace, &log_path, "DONE", ms, &out).await;
                         tracing::info!(run_id = %run_id, "[skills] workflow_run: completed");
                     }
                 }
                 Some(Err(e)) => {
-                    let _ = run_log::write_footer(&log_path, "FAILED", ms, &format!("{e:#}")).await;
+                    let _ = run_log::write_footer(
+                        &workspace,
+                        &log_path,
+                        "FAILED",
+                        ms,
+                        &format!("{e:#}"),
+                    )
+                    .await;
                     tracing::warn!(run_id = %run_id, error = ?e, "[skills] workflow_run: failed");
                 }
             }
@@ -317,6 +349,7 @@ pub async fn spawn_workflow_run_background(
 /// the model issues one `run_workflow` tool call and gets either the result
 /// or a "still running" handle back, never a busy-wait it has to drive.
 pub async fn await_run_outcome(
+    workspace: &std::path::Path,
     log_path: &std::path::Path,
     budget: std::time::Duration,
 ) -> Option<run_log::RunOutcome> {
@@ -325,7 +358,7 @@ pub async fn await_run_outcome(
     const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(750);
     let deadline = tokio::time::Instant::now() + budget;
     loop {
-        if let Some(outcome) = run_log::read_terminal_outcome(log_path) {
+        if let Some(outcome) = run_log::read_terminal_outcome(workspace, log_path) {
             return Some(outcome);
         }
         if tokio::time::Instant::now() >= deadline {

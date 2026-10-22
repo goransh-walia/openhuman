@@ -33,6 +33,8 @@ pub(crate) mod prompt;
 pub mod providers;
 #[cfg(feature = "channels")]
 mod routes;
+#[cfg(all(test, feature = "channels"))]
+pub(crate) use routes::register_hosted_route_test_policy;
 #[cfg(feature = "channels")]
 mod runtime;
 #[cfg(feature = "channels")]

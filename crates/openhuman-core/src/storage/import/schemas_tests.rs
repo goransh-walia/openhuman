@@ -73,6 +73,8 @@ fn an_unknown_function_gets_the_error_schema() {
 /// touches the operator's home.
 async fn run_import(workspace: Option<&std::path::Path>) -> Value {
     let configured = tempfile::TempDir::new().unwrap();
+    #[cfg(feature = "storage-sqlite")]
+    crate::storage::local::use_persistent_default_for_test(&configured.path().join("workspace"));
     let _env = crate::config::test_env::EnvVarGuard::workspace_async(configured.path()).await;
     let mut params = Map::new();
     if let Some(workspace) = workspace {
@@ -86,14 +88,16 @@ async fn run_import(workspace: Option<&std::path::Path>) -> Value {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn a_real_run_on_an_empty_configured_workspace_reports_each_domain() {
     let result = run_import(None).await;
-    assert_eq!(result["dry_run"], Value::Bool(false));
+    assert_eq!(result["dry_run"], Value::Bool(false), "{result:#}");
     assert!(result["imports"].is_array());
     assert!(result["sources"].is_object());
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn a_real_run_on_an_overridden_workspace_opens_that_workspaces_backend() {
     let other = tempfile::TempDir::new().unwrap();
     let result = run_import(Some(other.path())).await;

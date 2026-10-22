@@ -535,6 +535,31 @@ checked by `scripts/ci/check-feature-forwarding.mjs`. The same gate checks the
 library chain: a core gate must be forwarded by `openhuman-embed`, then
 `openhuman-tinyhumans`, then `openhuman-rpc`, then the `openhuman-cli` and
 `openhuman-tui` hosts (each to `openhuman-rpc/<gate>`), or be listed in
+
+## Storage engine ownership
+
+tinystoragedrivers (`vendor/tinystoragedrivers`) is the only crate family that may
+depend on a storage engine. Engines (rusqlite, mongodb, aws-sdk-s3, lapin,
+object_store, sqlx, redb, sled, rocksdb, fs2, and their transitive deps) are
+reachable only from the following composition roots, which are the only
+packages listed in the ALLOWLIST in `scripts/ci/check-storage-owner.mjs`:
+
+  openhuman          core storage domain (installs and owns the backend)
+  openhuman-app      keyring secrets via rusqlite
+  openhuman-cli      keyring secrets via rusqlite
+  openhuman-tui      keyring secrets via rusqlite
+  openhuman-rpc      keyring secrets via rusqlite
+  tinychannels       iMessage chat.db reader (read-only SQLite)
+  tinybox-cli        bin target, bundles engine
+  tinyjuice          bin target, bundles engine
+
+Every other first-party crate must reach tinystoragedrivers only through
+`tinystoragedrivers-types`, `tinystoragedrivers-api`, `tinystoragedrivers-bus`
+or `tinystoragedrivers-busproxy`. The gate `node scripts/ci/check-storage-owner.mjs`
+walks the normal+build dependency closure of `--all-features` from every
+non-root first-party package and fails if it reaches an engine crate.
+Run in `pnpm rust:layout`.
+
 `CHAIN_GATES_NOT_FORWARDED` / `CHAIN_LOCAL_GATES` with a reason. Test both enabled and disabled
 builds after changing a gate. Use `scripts/assert-shed.sh` or
 `scripts/dep-sim.py` before claiming a dependency reduction.

@@ -1,11 +1,12 @@
 //! Tests for the store of pinned-agent results.
 
 use super::*;
-use crate::storage::{MemoryStorage, Scope, StorageBackend};
+use crate::storage::Scope;
+use tinystoragedrivers_testkit::memory_storage;
 
 fn results() -> Results {
-    let storage = MemoryStorage::new();
-    Results::over(&storage.for_scope(&Scope::new("local").unwrap()).unwrap())
+    let storage = memory_storage(&Scope::new("local").unwrap());
+    Results::over(&storage)
 }
 
 fn running(turn_id: &str, source: &str, created_ms: u64) -> Stored {

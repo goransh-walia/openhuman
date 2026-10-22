@@ -209,6 +209,9 @@ describe('rpcMethods catalog', () => {
       readWithParts('../../../../crates/openhuman-core/src/inference/schemas.rs'),
       readWithParts('../../../../crates/openhuman-core/src/inference/host_runtime/schemas.rs'),
       readWithParts('../../../../crates/openhuman-core/src/inference/embedding_host/schemas.rs'),
+      // Agent chat is owned by agent_runs; core/all.rs composes these host-side
+      // controllers into the inference capability group.
+      readWithParts('../../../../crates/openhuman-core/src/agent_runs/schemas.rs'),
       // The MCP registry split its schemas module into a directory. Controller
       // definitions (and therefore the mcp_clients literals this guard owns)
       // live in `registry.rs`; keep this path explicit so another move fails

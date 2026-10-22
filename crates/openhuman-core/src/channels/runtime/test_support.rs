@@ -12,8 +12,8 @@ use crate::channels::ChannelSystemPrompt;
 use crate::config::{MultimodalConfig, MultimodalFileConfig, ReliabilityConfig};
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
-use crate::inference::provider::ProviderRuntimeOptions;
 use crate::progress::AgentProgress;
+use crate::tools::delegate::ProviderRuntimeOptions;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -446,6 +446,8 @@ pub async fn run_dispatch_harness(options: DispatchHarnessOptions) -> DispatchHa
         timestamp: 1,
         thread_ts: options.thread_ts,
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
     if let Some(inbound_envelope) = options.inbound_envelope {
         process_channel_runtime_message(

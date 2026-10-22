@@ -120,7 +120,7 @@ fn make_discord_ctx(
         api_url: None,
         inference_url: None,
         reliability: Arc::new(crate::config::ReliabilityConfig::default()),
-        provider_runtime_options: crate::inference::provider::ProviderRuntimeOptions::default(),
+        provider_runtime_options: crate::tools::delegate::ProviderRuntimeOptions::default(),
         workspace_dir: Arc::new(std::env::temp_dir()),
         message_timeout_secs: CHANNEL_MESSAGE_TIMEOUT_SECS,
         multimodal: crate::config::MultimodalConfig::default(),
@@ -158,6 +158,8 @@ async fn discord_inbound_dispatches_through_full_pipeline() {
             timestamp: 1,
             thread_ts: None,
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         },
     )
     .await;
@@ -209,6 +211,8 @@ async fn discord_threaded_message_does_not_emit_reaction_ack() {
             timestamp: 1,
             thread_ts: Some("thread-42".to_string()),
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         },
     )
     .await;
@@ -258,6 +262,8 @@ async fn discord_thread_ts_splits_conversation_history_end_to_end() {
         timestamp: 1,
         thread_ts: Some("thread-A".to_string()),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let second = traits::ChannelMessage {

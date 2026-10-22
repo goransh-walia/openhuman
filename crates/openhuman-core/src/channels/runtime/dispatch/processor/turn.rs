@@ -347,7 +347,10 @@ pub(crate) async fn run_admitted_turn(ctx: Arc<ChannelRuntimeContext>, admitted:
     // "no chat context -> allow straight through" branch silently bypasses
     // every `Prompt`-class tool call, voiding the `supervised` autonomy tier
     // on the channel.
-    let approval = if channel_has_approval_surface(&msg.channel) {
+    let approval = if target_channel
+        .as_ref()
+        .is_some_and(|channel| channel_has_approval_surface(&channel.capabilities()))
+    {
         crate::security::approval::ApprovalTurnContext::chat(
             crate::security::approval::ApprovalChatContext {
                 thread_id: history_key.clone(),

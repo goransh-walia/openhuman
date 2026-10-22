@@ -25,8 +25,10 @@ use env_guard::EnvVarGuard;
 use scripted_stack::{
     assert_no_jsonrpc_error, current_user, lock_or_recover, text_completion, tool_calls_completion,
 };
+use std::io::{BufRead, BufReader};
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -46,6 +48,7 @@ use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
 use openhuman_rpc::server::build_core_http_router;
 
 const TEST_RPC_TOKEN: &str = "json-rpc-e2e-local-token";
+const MANAGED_CAPTURE_PROMPT_CLOCK: &str = "2024-01-15T12:00:00Z";
 
 // ─── Env serialization (same rationale as json_rpc_e2e.rs:61-79) ───────────
 
@@ -81,6 +84,7 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
 
 static SCRIPTED_COMPLETIONS: OnceLock<Mutex<std::collections::VecDeque<Value>>> = OnceLock::new();
 static CAPTURED_COMPLETION_REQUESTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
+static CAPTURED_PROXY_REQUESTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
 const SCRIPT_DISCOVERED_MCP_TOOL: &str = "__script_discovered_mcp_tool__";
 
 fn with_scripted<T>(f: impl FnOnce(&mut std::collections::VecDeque<Value>) -> T) -> T {
@@ -94,6 +98,15 @@ fn with_scripted<T>(f: impl FnOnce(&mut std::collections::VecDeque<Value>) -> T)
 
 fn with_captured<T>(f: impl FnOnce(&mut Vec<Value>) -> T) -> T {
     let m = CAPTURED_COMPLETION_REQUESTS.get_or_init(|| Mutex::new(Vec::new()));
+    let mut guard = match m.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    f(&mut guard)
+}
+
+fn with_captured_proxy_requests<T>(f: impl FnOnce(&mut Vec<Value>) -> T) -> T {
+    let m = CAPTURED_PROXY_REQUESTS.get_or_init(|| Mutex::new(Vec::new()));
     let mut guard = match m.lock() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
@@ -292,12 +305,26 @@ async fn hold_for_canary_peer(canary: String) {
 
 async fn scripted_chat_completions(
     uri: Uri,
-    _headers: HeaderMap,
+    headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> axum::response::Response {
     use axum::response::IntoResponse;
 
     let streaming = body.get("stream").and_then(Value::as_bool).unwrap_or(false);
+    let authorization = headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    with_captured_proxy_requests(|requests| {
+        requests.push(json!({
+            "path": uri.path(),
+            "authorization_present": authorization.is_some(),
+            "authorization_bearer": authorization.is_some_and(|value| {
+                value
+                    .get(..7)
+                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case("Bearer "))
+            }),
+        }));
+    });
     // Web chat also asks for follow-up suggestions in a separate model call.
     // Answer it without consuming the turn's scripted agent completions.
     if body
@@ -460,6 +487,40 @@ async fn serve_on_ephemeral(
     SocketAddr,
     tokio::task::JoinHandle<Result<(), std::io::Error>>,
 ) {
+    ensure_test_rpc_auth();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    serve_on_listener(app, listener).await
+}
+
+async fn serve_on_address(
+    app: Router,
+    address: SocketAddr,
+) -> (
+    SocketAddr,
+    tokio::task::JoinHandle<Result<(), std::io::Error>>,
+) {
+    ensure_test_rpc_auth();
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .unwrap_or_else(|error| panic!("bind {address}: {error}"));
+    serve_on_listener(app, listener).await
+}
+
+async fn serve_on_listener(
+    app: Router,
+    listener: tokio::net::TcpListener,
+) -> (
+    SocketAddr,
+    tokio::task::JoinHandle<Result<(), std::io::Error>>,
+) {
+    let addr = listener.local_addr().expect("addr");
+    let handle = tokio::spawn(async move { axum::serve(listener, app).await });
+    (addr, handle)
+}
+
+fn ensure_test_rpc_auth() {
     // Mirrors json_rpc_e2e.rs::ensure_test_rpc_auth — init the shared RPC bearer once.
     static AUTH_INIT: OnceLock<()> = OnceLock::new();
     AUTH_INIT.get_or_init(|| {
@@ -468,12 +529,6 @@ async fn serve_on_ephemeral(
         let token_dir = std::env::temp_dir().join("openhuman-agent-harness-e2e-auth");
         init_rpc_token(&token_dir).expect("init rpc auth token for agent_harness_e2e");
     });
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind");
-    let addr = listener.local_addr().expect("addr");
-    let handle = tokio::spawn(async move { axum::serve(listener, app).await });
-    (addr, handle)
 }
 
 async fn post_json_rpc(rpc_base: &str, id: i64, method: &str, params: Value) -> Value {
@@ -509,10 +564,10 @@ default_model = "e2e-mock-model"
 default_temperature = 0.7
 chat_onboarding_completed = true
 
+{extra_config}
+
 [secrets]
 encrypt = false
-
-{extra_config}
 "#
     );
     fn write_config_file(config_dir: &Path, cfg: &str) {
@@ -526,8 +581,11 @@ encrypt = false
     {
         write_config_file(&openhuman_dir.join("users").join("local"), &cfg);
     }
-    let _: openhuman_core::config::Config =
+    let parsed: openhuman_core::config::Config =
         toml::from_str(&cfg).expect("config toml must match Config schema");
+    if extra_config.contains("user_timezone = \"UTC\"") {
+        assert_eq!(parsed.user_timezone.as_deref(), Some("UTC"));
+    }
 }
 
 // ─── SSE collector ──────────────────────────────────────────────────────────
@@ -668,22 +726,41 @@ struct Stack {
     _backend_guard: EnvVarGuard,
     _vite_guard: EnvVarGuard,
     _tmp: tempfile::TempDir,
-    mock_join: tokio::task::JoinHandle<Result<(), std::io::Error>>,
-    rpc_join: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    mock_join: Option<tokio::task::JoinHandle<Result<(), std::io::Error>>>,
+    rpc_join: Option<tokio::task::JoinHandle<Result<(), std::io::Error>>>,
 }
 
 impl Stack {
     fn shutdown(&self) {
-        self.mock_join.abort();
-        self.rpc_join.abort();
+        if let Some(mock_join) = &self.mock_join {
+            mock_join.abort();
+        }
+        if let Some(rpc_join) = &self.rpc_join {
+            rpc_join.abort();
+        }
+    }
+
+    async fn shutdown_and_wait(mut self) {
+        if let Some(mock_join) = self.mock_join.take() {
+            mock_join.abort();
+            let _ = mock_join.await;
+        }
+        if let Some(rpc_join) = self.rpc_join.take() {
+            rpc_join.abort();
+            let _ = rpc_join.await;
+        }
     }
 }
 
 // Abort server tasks even when a test assertion panics before shutdown().
 impl Drop for Stack {
     fn drop(&mut self) {
-        self.mock_join.abort();
-        self.rpc_join.abort();
+        if let Some(mock_join) = &self.mock_join {
+            mock_join.abort();
+        }
+        if let Some(rpc_join) = &self.rpc_join {
+            rpc_join.abort();
+        }
     }
 }
 
@@ -699,6 +776,18 @@ async fn boot_stack() -> Stack {
 const SUPERVISED_AUTONOMY_CONFIG: &str = "[autonomy]\nenabled = true\nlevel = \"supervised\"\n";
 
 async fn boot_stack_with_config(extra_config: &str) -> Stack {
+    boot_stack_with_options(extra_config, None, None).await
+}
+
+async fn boot_stack_with_capture_endpoint(api_origin: String, home: PathBuf) -> Stack {
+    boot_stack_with_options("user_timezone = \"UTC\"\n", Some(api_origin), Some(home)).await
+}
+
+async fn boot_stack_with_options(
+    extra_config: &str,
+    api_origin_override: Option<String>,
+    home_override: Option<PathBuf>,
+) -> Stack {
     // This suite boots the core in-process, so install the hosted backend
     // transport before any RPC can reach backend-backed providers.
     tinyhumans_boot::boot();
@@ -714,20 +803,36 @@ async fn boot_stack_with_config(extra_config: &str) -> Stack {
     // it every turn fails with `chat_error.inference`.
     tinyhumans_boot::boot();
 
+    let home_is_override = home_override.is_some();
     let tmp = tempdir().expect("tempdir");
-    let home = tmp.path().to_path_buf();
+    let home = home_override.unwrap_or_else(|| tmp.path().to_path_buf());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700))
+            .expect("make test HOME private");
+    }
     let openhuman_home = home.join(".openhuman");
     let action_dir = home.join("OpenHuman/projects");
     std::fs::create_dir_all(&action_dir).expect("create action directory");
 
     let home_guard = EnvVarGuard::set_to_path("HOME", &home);
     let action_dir_guard = EnvVarGuard::set_to_path("OPENHUMAN_ACTION_DIR", &action_dir);
-    let workspace_guard = EnvVarGuard::unset("OPENHUMAN_WORKSPACE");
+    let workspace_guard = if home_is_override {
+        EnvVarGuard::set_to_path("OPENHUMAN_WORKSPACE", &home.join("workspace"))
+    } else {
+        EnvVarGuard::unset("OPENHUMAN_WORKSPACE")
+    };
     let backend_guard = EnvVarGuard::unset("BACKEND_URL");
     let vite_guard = EnvVarGuard::unset("VITE_BACKEND_URL");
 
-    let (mock_addr, mock_join) = serve_on_ephemeral(scripted_upstream_router()).await;
-    let mock_origin = format!("http://{mock_addr}");
+    let (mock_origin, mock_join) = match api_origin_override {
+        Some(api_origin) => (api_origin, None),
+        None => {
+            let (mock_addr, mock_join) = serve_on_ephemeral(scripted_upstream_router()).await;
+            (format!("http://{mock_addr}"), Some(mock_join))
+        }
+    };
     write_min_config(&openhuman_home, &mock_origin, extra_config);
     // Pre-write user-scoped config so it's found after auth_store_session activates "e2e-user".
     write_min_config(
@@ -764,7 +869,7 @@ async fn boot_stack_with_config(extra_config: &str) -> Stack {
         _vite_guard: vite_guard,
         _tmp: tmp,
         mock_join,
-        rpc_join,
+        rpc_join: Some(rpc_join),
     }
 }
 
@@ -799,6 +904,432 @@ async fn send_web_chat(
         .and_then(Value::as_str)
         .unwrap_or_else(|| panic!("accepted web chat has no request_id: {result}"))
         .to_owned()
+}
+
+struct CaptureProxy {
+    child: Child,
+    stdout_drain: Option<std::thread::JoinHandle<()>>,
+    port: u16,
+}
+
+struct AbortOnDropMock {
+    join: Option<tokio::task::JoinHandle<Result<(), std::io::Error>>>,
+}
+
+impl AbortOnDropMock {
+    async fn shutdown_and_wait(mut self) {
+        if let Some(join) = self.join.take() {
+            join.abort();
+            let _ = join.await;
+        }
+    }
+}
+
+impl Drop for AbortOnDropMock {
+    fn drop(&mut self) {
+        if let Some(join) = &self.join {
+            join.abort();
+        }
+    }
+}
+
+impl Drop for CaptureProxy {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        if let Some(stdout_drain) = self.stdout_drain.take() {
+            let _ = stdout_drain.join();
+        }
+    }
+}
+
+fn start_capture_proxy(
+    upstream: &str,
+    capture_dir: &Path,
+    requested_port: Option<u16>,
+) -> CaptureProxy {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let script = manifest_dir.join("../../scripts/debug/capture-first-inference.mjs");
+    let mut child = Command::new("node")
+        .arg(script)
+        .env("CAPTURE_HOST", "127.0.0.1")
+        .env(
+            "CAPTURE_PORT",
+            requested_port.map_or_else(|| "0".into(), |p| p.to_string()),
+        )
+        .env("CAPTURE_UPSTREAM", upstream)
+        .env("CAPTURE_ALL", "1")
+        .env("CAPTURE_ALL_DIR", capture_dir.join("requests"))
+        .env("CAPTURE_OUTPUT", capture_dir.join("first-request.json"))
+        .env("CAPTURE_LOG", capture_dir.join("summary.ndjson"))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("start capture-first-inference.mjs");
+    let stdout = child.stdout.take().expect("capture proxy stdout");
+    let (startup_tx, startup_rx) = std::sync::mpsc::sync_channel(1);
+    let stdout_drain = std::thread::spawn(move || {
+        let mut stdout = BufReader::new(stdout);
+        let mut startup = String::new();
+        let startup_result = match stdout.read_line(&mut startup) {
+            Ok(0) => Err("stdout closed before the proxy announced its port".to_owned()),
+            Ok(_) => Ok(startup),
+            Err(error) => Err(format!("reading proxy startup line failed: {error}")),
+        };
+        if startup_tx.send(startup_result).is_err() {
+            return;
+        }
+        let mut discarded = String::new();
+        while stdout
+            .read_line(&mut discarded)
+            .is_ok_and(|count| count > 0)
+        {
+            discarded.clear();
+        }
+    });
+    let mut proxy = CaptureProxy {
+        child,
+        stdout_drain: Some(stdout_drain),
+        port: 0,
+    };
+    let startup = match startup_rx.recv_timeout(Duration::from_secs(10)) {
+        Ok(Ok(startup)) => startup,
+        Ok(Err(error)) => panic!("capture proxy failed during startup: {error}"),
+        Err(error) => {
+            let status = proxy.child.try_wait().ok().flatten();
+            panic!("capture proxy did not report startup within 10s ({error}; exit={status:?})")
+        }
+    };
+    let address = startup
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("http://127.0.0.1:"))
+        .and_then(|value| value.split(';').next())
+        .unwrap_or_else(|| panic!("capture proxy did not report a loopback port: {startup}"));
+    proxy.port = address
+        .parse()
+        .unwrap_or_else(|_| panic!("capture proxy reported an invalid port: {startup}"));
+    if let Some(expected) = requested_port {
+        assert_eq!(
+            proxy.port, expected,
+            "capture proxy changed the configured port"
+        );
+    }
+    proxy
+}
+
+fn capture_request_files(directory: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<_> = std::fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("read captures in {}: {error}", directory.display()))
+        .map(|entry| entry.expect("capture dir entry").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("req-") && name.ends_with(".json"))
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+fn capture_request_bodies(files: &[PathBuf]) -> Vec<Vec<u8>> {
+    files
+        .iter()
+        .map(|path| {
+            std::fs::read(path)
+                .unwrap_or_else(|error| panic!("read capture {}: {error}", path.display()))
+        })
+        .collect()
+}
+
+fn managed_capture_identity() -> Value {
+    json!({
+        "thread_id": "managed-capture-thread",
+        "model": "e2e-mock-model",
+        "message": "Compare the managed inference request shape.",
+        "profile_path": "state/home",
+        "workspace_path": "state/home/workspace",
+        "config": "default_model=e2e-mock-model; temperature=0.7; user_timezone=UTC",
+        "time_zone": "UTC",
+        "prompt_clock": MANAGED_CAPTURE_PROMPT_CLOCK,
+        "session": "same synthetic e2e user and JWT",
+    })
+}
+
+async fn wait_for_capture_summaries(directory: &Path, expected_count: usize) -> Vec<Value> {
+    let summary_path = directory.join("summary.ndjson");
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        let summaries = std::fs::read_to_string(&summary_path)
+            .unwrap_or_default()
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("valid capture summary JSON"))
+            .collect::<Vec<Value>>();
+        if summaries.len() >= expected_count {
+            return summaries;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for {expected_count} completed proxy responses; saw {}",
+            summaries.len()
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+async fn run_managed_capture_turn(
+    api_origin: String,
+    home: PathBuf,
+    capture_dir: &Path,
+    expected_summary_count: usize,
+) -> Vec<Value> {
+    reset_script(vec![text_completion(
+        "The managed gateway request is stable.",
+    )]);
+    with_captured_proxy_requests(|requests| requests.clear());
+    let workspace_dir = home.join("workspace");
+    let stack = boot_stack_with_capture_endpoint(api_origin, home).await;
+    let mut events = spawn_sse_collector(format!(
+        "{}/events?client_id=managed-capture-client",
+        stack.rpc_base
+    ))
+    .await;
+    let request_id = send_web_chat(
+        &stack.rpc_base,
+        702,
+        "managed-capture-client",
+        "managed-capture-thread",
+        "Compare the managed inference request shape.",
+    )
+    .await;
+    let terminal =
+        wait_for_terminal_request(&mut events, Duration::from_secs(60), Some(&request_id)).await;
+    assert_eq!(
+        terminal.get("event").and_then(Value::as_str),
+        Some("chat_done"),
+        "managed capture turn failed: {}",
+        terminal
+            .get("event")
+            .and_then(Value::as_str)
+            .unwrap_or("missing")
+    );
+    let completed = wait_for_capture_summaries(capture_dir, expected_summary_count).await;
+    assert!(
+        completed[..expected_summary_count]
+            .iter()
+            .all(|summary| summary.get("status").and_then(Value::as_u64) == Some(200)),
+        "mock inference responses did not all complete successfully: {completed:?}"
+    );
+    drop(events);
+    stack.shutdown_and_wait().await;
+    // The bare test router dispatches RPC with DispatchCtx::unbound(). Its
+    // cached web-chat agent outlives a router shutdown, so remove that session
+    // from the same process-default slot before the fixture resets its files.
+    openhuman_core::web_chat::invalidate_thread_sessions(
+        &openhuman_core::core::runtime::DispatchCtx::unbound(),
+        "managed-capture-thread",
+    )
+    .await;
+    // Session transcript stores and their SQLite backend are also cached by
+    // workspace path; release them before the next repetition removes it.
+    openhuman_core::storage::sessions::release_workspace(&workspace_dir);
+
+    with_captured_proxy_requests(|requests| requests.clone())
+}
+
+#[test]
+fn managed_host_requests_repeat_with_the_same_capture_identity() {
+    run_on_agent_stack(
+        "managed_host_requests_repeat_with_the_same_capture_identity",
+        managed_host_requests_repeat_with_the_same_capture_identity_inner,
+    );
+}
+
+async fn managed_host_requests_repeat_with_the_same_capture_identity_inner() {
+    let _lock = env_lock();
+    let _prompt_clock = openhuman_core::prompts::register_prompt_clock(|| {
+        chrono::DateTime::parse_from_rfc3339(MANAGED_CAPTURE_PROMPT_CLOCK)
+            .expect("fixed capture instant")
+            .with_timezone(&chrono::Utc)
+    });
+    let phase = std::env::var("OPENHUMAN_MANAGED_CAPTURE_PHASE")
+        .unwrap_or_else(|_| "self-contained".to_owned());
+    let (capture_root, _temp_guard) = match std::env::var_os("OPENHUMAN_MANAGED_CAPTURE_DIR") {
+        Some(path) => (PathBuf::from(path), None),
+        None => {
+            assert_eq!(
+                phase, "self-contained",
+                "capture phases need a persistent artifact root"
+            );
+            let temp = tempdir().expect("managed capture artifact tempdir");
+            (temp.path().to_path_buf(), Some(temp))
+        }
+    };
+    assert!(
+        matches!(phase.as_str(), "before" | "after" | "self-contained"),
+        "capture phase must be before, after, or self-contained"
+    );
+    std::fs::create_dir_all(&capture_root).expect("create managed capture artifact root");
+    let endpoint_file = capture_root.join("endpoints.json");
+    let identity = managed_capture_identity();
+
+    let endpoints = if phase == "after" {
+        let endpoints: Value = serde_json::from_slice(
+            &std::fs::read(&endpoint_file).expect("before phase endpoint metadata"),
+        )
+        .expect("before phase endpoint metadata JSON");
+        assert_eq!(endpoints.get("identity"), Some(&identity));
+        Some(endpoints)
+    } else {
+        let mut entries = std::fs::read_dir(&capture_root).expect("read fresh capture root");
+        assert!(
+            entries.next().is_none(),
+            "before capture root must start empty"
+        );
+        None
+    };
+    let (actual_mock_addr, mock_join) = match endpoints.as_ref() {
+        Some(endpoints) => {
+            let address = endpoints
+                .get("mock_origin")
+                .and_then(Value::as_str)
+                .and_then(|origin| origin.strip_prefix("http://"))
+                .and_then(|address| address.parse::<SocketAddr>().ok())
+                .expect("recorded loopback mock origin");
+            serve_on_address(scripted_upstream_router(), address).await
+        }
+        None => serve_on_ephemeral(scripted_upstream_router()).await,
+    };
+    let mock_join = AbortOnDropMock {
+        join: Some(mock_join),
+    };
+    let mock_origin = format!("http://{actual_mock_addr}");
+    if let Some(endpoints) = endpoints.as_ref() {
+        assert_eq!(
+            endpoints.get("mock_origin").and_then(Value::as_str),
+            Some(mock_origin.as_str())
+        );
+    }
+    let requested_proxy_port = endpoints.as_ref().map(|endpoints| {
+        endpoints
+            .get("proxy_port")
+            .and_then(Value::as_u64)
+            .expect("recorded capture proxy port") as u16
+    });
+
+    let capture_phase = match phase.as_str() {
+        "before" => "before",
+        "after" => "after",
+        _ => "self-contained",
+    };
+    let capture_dir = capture_root.join("captures").join(capture_phase);
+    let request_dir = capture_dir.join("requests");
+    if request_dir.exists() {
+        assert!(
+            std::fs::read_dir(&request_dir)
+                .expect("read fresh request capture directory")
+                .next()
+                .is_none(),
+            "capture phase request directory must start empty"
+        );
+    }
+    std::fs::create_dir_all(&request_dir).expect("create raw request capture directory");
+    let proxy = start_capture_proxy(&mock_origin, &capture_dir, requested_proxy_port);
+    let proxy_origin = format!("http://127.0.0.1:{}", proxy.port);
+    if phase != "after" {
+        std::fs::write(
+            &endpoint_file,
+            serde_json::to_vec_pretty(&json!({
+                "identity": identity,
+                "mock_origin": mock_origin,
+                "proxy_port": proxy.port,
+            }))
+            .expect("serialize capture endpoint metadata"),
+        )
+        .expect("persist capture endpoint metadata");
+    }
+
+    let mut batches = Vec::new();
+    let mut prior_count = 0;
+    for _ in 0..2 {
+        let home = capture_root.join("state/home");
+        if home.exists() {
+            std::fs::remove_dir_all(&home).expect("reset only the managed capture profile");
+        }
+        std::fs::create_dir_all(&home).expect("create managed capture profile");
+        let expected_summary_count = prior_count + 2;
+        let metadata = run_managed_capture_turn(
+            proxy_origin.clone(),
+            home,
+            &capture_dir,
+            expected_summary_count,
+        )
+        .await;
+        assert_eq!(
+            metadata.len(),
+            2,
+            "expected one managed turn and one completed follow-up-suggestions request"
+        );
+        assert!(
+            !metadata.is_empty(),
+            "the mock saw no managed inference requests"
+        );
+        assert!(
+            metadata.iter().all(|request| {
+                request.get("path").and_then(Value::as_str) == Some("/openai/v1/chat/completions")
+                    && request.get("authorization_present") == Some(&json!(true))
+                    && request.get("authorization_bearer") == Some(&json!(true))
+            }),
+            "the proxy did not forward the managed path and bearer presence"
+        );
+
+        let files = capture_request_files(&request_dir);
+        assert!(
+            files.len() > prior_count,
+            "the host turn produced no raw inference capture"
+        );
+        let batch = capture_request_bodies(&files[prior_count..]);
+        assert!(!batch.is_empty());
+        assert!(
+            batch.iter().any(|body| {
+                let request: Value = serde_json::from_slice(body).expect("captured request JSON");
+                request.get("thread_id").and_then(Value::as_str) == Some("managed-capture-thread")
+                    && request
+                        .get("prompt_cache_key")
+                        .and_then(Value::as_str)
+                        .is_some_and(|key| !key.is_empty())
+            }),
+            "the captured turn did not carry its generated thread and prompt-cache identity"
+        );
+        prior_count = files.len();
+        batches.push(batch);
+    }
+    assert!(
+        batches[0] == batches[1],
+        "raw request bytes changed between restored identical turns"
+    );
+    if phase == "after" {
+        let before = capture_request_bodies(&capture_request_files(
+            &capture_root.join("captures/before/requests"),
+        ));
+        assert!(
+            before.len() == batches[0].len() * 2
+                && before
+                    .chunks_exact(batches[0].len())
+                    .all(|batch| batch == batches[0]),
+            "before baseline batches were not two identical captures"
+        );
+        let after = capture_request_bodies(&capture_request_files(&request_dir));
+        assert!(
+            after.len() == batches[1].len() * 2
+                && after
+                    .chunks_exact(batches[1].len())
+                    .all(|batch| batch == batches[1])
+                && before == after,
+            "managed request bytes changed between before and after migration"
+        );
+    }
+    drop(proxy);
+    mock_join.shutdown_and_wait().await;
 }
 
 async fn bind_thread_action_dir(stack: &Stack, thread_id: &str, action_dir: &Path) {

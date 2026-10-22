@@ -462,6 +462,7 @@ fn resolve_subagent_source_hint_with_no_config_falls_back() {
 
 #[test]
 fn resolve_subagent_source_hint_with_config_routes_via_factory() {
+    crate::agent::session_host::test_support::install_model_fixture();
     // The Hint arm with a real config takes the workload-factory path.
     // We don't assert the *resulting* provider identity here (the
     // factory may return a fresh OpenHuman backend or whatever
@@ -469,15 +470,15 @@ fn resolve_subagent_source_hint_with_config_routes_via_factory() {
     // is the workload's canonical managed tier — NOT `default_model`,
     // and NOT the parent's model.
     //
-    // Every managed role runs on the managed default model; a retired tier
-    // slug in `default_model` is not a pin and must not leak to the backend.
+    // The provider hook resolves the role through the generic factory; a
+    // different configured chat model must not replace the role's selection.
     use crate::config::Config;
     let mut config = Config::default();
     // Route `agentic` to the OpenHuman backend explicitly, and set a
     // distinct `default_model` so the assertion proves the role — not the
     // global default — drives the resolved tier.
     config.agentic_provider = Some("openhuman".to_string());
-    config.default_model = Some("chat-v1".to_string());
+    config.default_model = Some("fixture-reasoning".to_string());
 
     let parent: Arc<dyn ChatModel<()>> = ScriptedProvider::new(vec![]);
     let (_resolved_source, resolved_model) = super::super::resolve_subagent_source(
@@ -491,9 +492,8 @@ fn resolve_subagent_source_hint_with_config_routes_via_factory() {
         0.0,
     );
     assert_eq!(
-        resolved_model,
-        crate::config::MODEL_MANAGED_DEFAULT,
-        "Hint must resolve to the managed default model, not a retired tier \
+        resolved_model, "test/session-fixture",
+        "Hint must resolve through the registered provider model policy, not a retired tier \
          slug from default_model or the parent's model"
     );
 }

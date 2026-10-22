@@ -63,19 +63,8 @@ async fn file_storage_probe_reads_existing_directory_and_never_creates_it() {
 }
 
 #[tokio::test]
-async fn composite_storage_checks_supported_children_and_skips_unprobeable_s3() {
-    let findings = inspect_storage_config(
-        "storage/connect",
-        StorageConfig::Composite {
-            records: Box::new(StorageConfig::Memory),
-            blobs: Box::new(tinystoragedrivers::BlobConfig::S3 {
-                url: "s3://fixture-bucket".to_owned(),
-            }),
-        },
-        0,
-    )
-    .await;
-    assert_eq!(findings.len(), 2);
+async fn memory_storage_probe_reports_the_backend_as_available() {
+    let findings = inspect_storage_config("storage/connect", StorageConfig::Memory).await;
+    assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].severity, FindingSeverity::Pass);
-    assert_eq!(findings[1].severity, FindingSeverity::Skipped);
 }

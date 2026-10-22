@@ -223,15 +223,14 @@ async fn run_pending_rolls_back_schema_version_when_save_fails() {
 }
 
 #[tokio::test]
-async fn run_pending_v7_to_v8_rolls_back_default_model_when_save_fails() {
+async fn run_pending_v7_to_v8_rolls_back_schema_version_when_save_fails() {
     let tmp = TempDir::new().unwrap();
     fs::create_dir_all(tmp.path().join("workspace")).unwrap();
 
     let mut config = config_in(&tmp);
     config.schema_version = 7;
     config.default_model = Some("reasoning-v1".to_string());
-    // Force save() to fail after normalize_default_model_tier mutates
-    // default_model, so the 7->8 rollback path runs.
+    // Force save() to fail so the generic 7->8 schema gate remains retryable.
     let blocker = tmp.path().join("blocker");
     fs::write(&blocker, "not a directory").unwrap();
     config.config_path = blocker.join("nested").join("config.toml");
@@ -250,7 +249,7 @@ async fn run_pending_v7_to_v8_rolls_back_default_model_when_save_fails() {
 }
 
 #[tokio::test]
-async fn run_pending_v12_to_v13_retires_persisted_tier_slugs() {
+async fn bare_core_v12_to_v13_preserves_provider_model_values() {
     let tmp = TempDir::new().unwrap();
     fs::create_dir_all(tmp.path().join("workspace")).unwrap();
 
@@ -262,20 +261,17 @@ async fn run_pending_v12_to_v13_retires_persisted_tier_slugs() {
     run_pending(&mut config).await;
 
     assert_eq!(config.schema_version, CURRENT_SCHEMA_VERSION);
-    assert_eq!(
-        config.default_model.as_deref(),
-        Some(crate::config::MODEL_MANAGED_DEFAULT)
-    );
-    assert_eq!(
-        config.orchestrator.model.as_deref(),
-        Some(crate::config::MODEL_MANAGED_DEFAULT)
-    );
+    assert_eq!(config.default_model.as_deref(), Some("chat-v1"));
+    assert_eq!(config.orchestrator.model.as_deref(), Some("reasoning-v1"));
     let on_disk = std::fs::read_to_string(&config.config_path).unwrap();
     assert!(
-        !on_disk.contains("chat-v1") && !on_disk.contains("reasoning-v1"),
-        "no retired tier slug may survive on disk, got:\n{on_disk}"
+        on_disk.contains("chat-v1") && on_disk.contains("reasoning-v1"),
+        "bare core must leave provider-owned values unchanged, got:\n{on_disk}"
     );
 }
+
+#[path = "config_normalizer_tests.rs"]
+mod config_normalizer;
 
 #[tokio::test]
 async fn run_pending_v12_to_v13_rolls_back_when_save_fails() {
@@ -740,9 +736,50 @@ async fn a_hand_written_empty_allowlist_is_also_widened() {
 ///
 /// The user-visible consequence is that `inference_list_models("openhuman")`
 /// fails its provider lookup before making any HTTP request, so the model
+/// picker's managed pane renders "Could not load models from this provider."
+#[tokio::test]
+async fn bare_core_v10_workspace_advances_schema_without_hosted_policy() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("workspace")).unwrap();
+
+    let mut config = config_in(&tmp);
+    config.schema_version = 10;
+    config.cloud_providers = Vec::new();
+
+    run_pending(&mut config).await;
+
+    assert!(config.cloud_providers.is_empty());
+    assert_eq!(config.schema_version, CURRENT_SCHEMA_VERSION);
+}
 
 #[path = "mod_tests/provider_migration_tests.rs"]
 mod provider_migration_tests;
 
 #[path = "mod_policy_tests.rs"]
 mod policy_tests;
+
+/// Generic schema progression preserves a user-owned provider entry.
+#[tokio::test]
+async fn bare_core_v10_workspace_preserves_user_cloud_providers() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("workspace")).unwrap();
+
+    let mut config = config_in(&tmp);
+    config.schema_version = 10;
+    config.cloud_providers = vec![crate::config::schema::cloud_providers::CloudProviderCreds {
+        id: "prov_user_owned".to_string(),
+        slug: "custom".to_string(),
+        label: "My own endpoint".to_string(),
+        endpoint: "https://llm.example.com/v1".to_string(),
+        ..Default::default()
+    }];
+
+    run_pending(&mut config).await;
+
+    assert_eq!(
+        config.cloud_providers.len(),
+        1,
+        "an existing provider list must not be added to"
+    );
+    assert_eq!(config.cloud_providers[0].id, "prov_user_owned");
+}

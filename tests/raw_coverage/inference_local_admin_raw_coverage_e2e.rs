@@ -24,7 +24,7 @@ use openhuman_core::config::schema::cloud_providers::{
 use openhuman_core::config::Config;
 use tinyinference_local::service::LocalAiService;
 use openhuman_core::inference::provider::factory::auth_key_for_slug;
-use openhuman_core::inference::provider::list_configured_models;
+use openhuman_core::inference::provider::models::catalog_listing::list_configured_models_from_config;
 use openhuman_core::security::credentials::{AuthService, DEFAULT_AUTH_PROFILE_NAME};
 
 /// One captured mock request: method/path, optional auth header, JSON body.
@@ -173,24 +173,24 @@ async fn provider_model_listing_covers_local_synthesis_and_openrouter_failures()
     let _workspace = EnvVarGuard::set("OPENHUMAN_WORKSPACE", config.config_path.parent().unwrap());
     let _ollama_base = EnvVarGuard::set("OPENHUMAN_OLLAMA_BASE_URL", &base);
 
-    let local = list_configured_models("ollama")
+    let local = list_configured_models_from_config("ollama", &config)
         .await
         .expect("synthetic ollama")
         .value;
     assert_eq!(local["models"][0]["id"], "bge-m3");
 
-    let array_err = list_configured_models("array-body")
+    let array_err = list_configured_models_from_config("array-body", &config)
         .await
         .expect_err("top-level array");
     assert!(array_err.contains("not a JSON object"));
 
-    let status_err = list_configured_models("status-body")
+    let status_err = list_configured_models_from_config("status-body", &config)
         .await
         .expect_err("non-success");
     assert!(status_err.contains("provider returned 500"));
     assert!(!status_err.contains("sk-status-secret"));
 
-    let openrouter_err = list_configured_models("openrouter")
+    let openrouter_err = list_configured_models_from_config("openrouter", &config)
         .await
         .expect_err("openrouter key validation error payload");
     assert!(openrouter_err.contains("OpenRouter key validation returned error payload"));

@@ -35,11 +35,17 @@ use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::middleware;
 use crate::agent::tinyagents::middleware::turn_context::TurnContextMiddleware;
 use crate::agent::tinyagents::observability::{ProviderUsageCarry, SubagentScope, ToolFailureMap};
-use crate::agent::tinyagents::routes;
 use crate::agent::tinyagents::verify_before_finish;
-use crate::inference::provider::model::TurnChatModel;
 
 use super::ToolPolicyEnforcement;
+
+struct OpenHumanCostEstimator;
+
+impl tinyagents_harness::middleware::library::CostEstimator for OpenHumanCostEstimator {
+    fn estimate(&self, model: &str, usage: &tinyinference_llm::usage::BilledUsage) -> Option<f64> {
+        crate::agent::cost::estimate_call_cost_usd(model, usage)
+    }
+}
 
 /// What the middleware stack needs to know about the turn.
 pub(super) struct TurnMiddlewareInputs {
@@ -82,7 +88,7 @@ pub(super) struct TurnMiddlewareInputs {
     /// This turn's memory binding: the compaction summarizer recalls under it.
     pub(super) memory_turn: Option<Arc<crate::memory::lifecycle::hooks::MemoryTurn>>,
     /// The context-window summarizer's model.
-    pub(super) summarizer_model: TurnChatModel,
+    pub(super) summarizer_model: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
     /// Shared `call_id -> (success, failure, elapsed_ms, output_chars)` side
     /// channel: middleware records each outcome for the bridge's
     /// `ToolCallCompleted`.
@@ -184,9 +190,7 @@ pub(super) fn install_turn_middleware(
     let usage_carry = provider_usage_carry.clone();
     harness.push_model_middleware(Arc::new(
         tinyagents_harness::middleware::library::UsageCarryMiddleware::new(move |response| {
-            if let Some(usage) =
-                crate::inference::provider::model::usage_info_from_response(response)
-            {
+            if let Some(usage) = tinyinference_llm::usage::usage_info_from_response(response) {
                 usage_carry
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -195,14 +199,38 @@ pub(super) fn install_turn_middleware(
         }),
     ));
 
-    // Route audit capture is a typed run-context concern. The canonical
-    // TinyInference decorator attached in `turn_models` stamps the successful
-    // unary response and the streamed terminal response, and this middleware
-    // moves that metadata into the explicit OpenHuman carrier.
-    harness.push_model_middleware(Arc::new(routes::ResolvedRouteMiddleware::new(
-        provider_id,
-        model,
-    )));
+    // Native route enrichment records the canonical resolved route in this
+    // run's explicit host carrier; pricing and cost remain host-owned.
+    harness.push_model_middleware(Arc::new(
+        tinyagents_harness::middleware::library::ResolvedRouteMiddleware::new(
+            provider_id,
+            model,
+            OpenHumanCostEstimator,
+            |data: &OpenHumanRunContext, route| {
+                *data
+                    .resolved_route
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(route);
+            },
+        )
+        .with_pricing_lookup(|model| {
+            if crate::agent::cost::is_free_model(model) {
+                Some(tinyagents_harness::events::GenerationPricing {
+                    input_per_mtok_usd: Some(0.0),
+                    cached_input_per_mtok_usd: Some(0.0),
+                    output_per_mtok_usd: Some(0.0),
+                })
+            } else {
+                tinyagents_registry::pricing::lookup(model).map(|price| {
+                    tinyagents_harness::events::GenerationPricing {
+                        input_per_mtok_usd: Some(price.input_per_mtok_usd),
+                        cached_input_per_mtok_usd: Some(price.cached_input_per_mtok_usd),
+                        output_per_mtok_usd: Some(price.output_per_mtok_usd),
+                    }
+                })
+            }
+        }),
+    ));
 
     // Per-call capability gate (issue #4249, Workstream 02.1): when the turn has
     // derivable capability needs (today: vision for a `hint:vision` turn), stamp

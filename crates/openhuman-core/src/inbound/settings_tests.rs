@@ -113,7 +113,15 @@ async fn the_module_config_is_what_the_storage_grant_declares() {
     assert_eq!(blob["queues"]["queues"][0]["max_attempts"], 4);
     assert_eq!(blob["pipeline"]["version"], 1);
     let grant = queue_grant().unwrap();
-    assert_eq!(grant.manifest.queues[0].max_attempts, 4);
+    assert_eq!(
+        grant
+            .manifest
+            .get("teq.ingress")
+            .unwrap()
+            .spec()
+            .max_attempts,
+        4
+    );
     assert_eq!(grant.backend, QueueConfig::Storage);
     assert_eq!(current().manifest, grant.manifest);
 

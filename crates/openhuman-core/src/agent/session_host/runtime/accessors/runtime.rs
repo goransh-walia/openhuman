@@ -175,7 +175,7 @@ impl OpenHumanSessionHost {
     /// for callers that construct the agent through
     /// [`OpenHumanSessionHost::from_config`](crate::agent::OpenHumanSessionHost::from_config) and
     /// therefore never see the builder — notably the per-turn `cwd` of
-    /// [`agent_chat`](crate::inference::host_runtime::ops::agent_chat).
+    /// [`agent_chat`](crate::agent_runs::agent_chat::agent_chat).
     ///
     /// The descriptor is threaded onto the turn's run context, so it also
     /// propagates to sub-agents spawned from this session. `None` restores the

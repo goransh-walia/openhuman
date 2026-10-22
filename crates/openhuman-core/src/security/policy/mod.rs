@@ -2,6 +2,7 @@
 //! for the invariants this module enforces (workspace-internal path
 //! protection, fail-closed command classification, always-forbidden paths).
 
+mod command_analysis;
 mod command_checks;
 mod enforcement;
 mod module_gate;
@@ -16,6 +17,10 @@ pub(crate) use path_checks::home_credential_stores;
 
 mod types;
 
+pub(crate) use command_analysis::CommandAnalysis;
+#[cfg(test)]
+pub(crate) use command_analysis::CommandSegment;
+
 pub use enforcement::validate_path_within_root;
 pub use enforcement::{ensure_openhuman_scratch_dir, openhuman_scratch_dir};
 pub use module_gate::{host_action_class, Budget, PathKind};
@@ -24,8 +29,8 @@ pub use native_commands::{
     SharedCommandGateway,
 };
 pub use types::{
-    tool_result_artifacts_dir, AutonomyLevel, GateDecision, SecurityPolicy, TrustedAccess,
-    TrustedRoot,
+    tool_result_artifacts_dir, ActionTracker, AutonomyLevel, CommandClass, CommandRiskLevel,
+    GateDecision, SecurityPolicy, ToolOperation, TrustedAccess, TrustedRoot,
 };
 
 #[cfg(test)]

@@ -1,5 +1,9 @@
 use super::*;
 use tinyinference_llm::message::Message;
+use tinyinference_llm::usage::BilledUsage;
+use tinytools_agent::dialect::NativeToolCall;
+
+type ChatResponse = tinyinference_llm::model::ChatResponse<BilledUsage, NativeToolCall>;
 
 // #6725: the repeated-failure breaker's corrective nudge reaches the next model
 // request only. It used to be a steering `InjectMessage`, which joined the
@@ -54,11 +58,9 @@ impl ChatModel<()> for RecordingProvider {
                 guard.remove(0)
             }
         };
-        Ok(
-            crate::inference::provider::model::native_model_response_for_request(
-                &response, &request,
-            ),
-        )
+        Ok(tinyinference_llm::model::response_to_model_response(
+            &response, &request,
+        ))
     }
 }
 

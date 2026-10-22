@@ -373,8 +373,8 @@ Capability {
         category: CapabilityCategory::Settings,
         description: "Dedicated action directory for agent tools (shell, file, git), separate \
                       from internal application state. Agent tools default their working directory \
-                      and path resolution to the action sandbox, preventing accidental modification \
-                      of memory databases, session transcripts, tokens, and other internal state.",
+                      and path resolution to the action sandbox, preventing accidental changes to \
+                      local internal files or records in the configured storage backend.",
         how_to: "Settings → Agent OS access",
         status: CapabilityStatus::Stable,
         privacy: None,

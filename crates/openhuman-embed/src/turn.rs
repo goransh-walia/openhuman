@@ -10,7 +10,7 @@
 //! # Why the params are a struct rather than `json!`
 //!
 //! The controller behind this method deserializes
-//! [`AgentChatParams`](openhuman_core::inference::host_runtime::schemas) — which
+//! the `agent_runs::agent_chat` controller params — which
 //! carries no `#[serde(rename_all)]`, so its wire names are the Rust field names
 //! exactly as spelled. Every embedder that hand-writes that JSON is therefore
 //! depending on an unmarked, unversioned naming coincidence: rename a field
@@ -42,8 +42,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::error::CoreError;
+use openhuman_core::agent_runs::INFERENCE_AGENT_CHAT as AGENT_CHAT;
 use openhuman_core::core::runtime::CoreRuntime;
-use openhuman_core::inference::INFERENCE_AGENT_CHAT as AGENT_CHAT;
 use openhuman_core::progress::AgentProgress;
 use openhuman_core::security::turn_origin::AgentTurnOrigin;
 
@@ -560,7 +560,7 @@ struct AgentTurnOptions {
     attachments: Vec<openhuman_core::agent::HostAttachment>,
     /// The explicit per-turn values the core honours: live progress and the
     /// host environment (budget, depth, cancellation, hooks, tool-belt authority).
-    chat_env: openhuman_core::inference::host_runtime::ops::AgentChatEnv,
+    chat_env: openhuman_core::agent_runs::agent_chat::AgentChatEnv,
 }
 
 async fn dispatch(

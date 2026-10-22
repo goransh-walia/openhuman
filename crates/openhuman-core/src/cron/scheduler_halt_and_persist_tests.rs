@@ -328,6 +328,7 @@ async fn run_agent_job_returns_error_without_provider_key() {
 
 #[tokio::test]
 async fn cron_agent_job_uses_agent_definition_tool_scope() {
+    crate::agent::session_host::test_support::install_model_fixture();
     // The embedding seam fails loudly when unwired. Installed here rather
     // than relied upon from another test: `install_for_tests` is
     // `Once`-guarded, so a test that omits it passes only while some

@@ -317,7 +317,19 @@ impl SessionHostBuilder {
 
         let model_name = self
             .model_name
-            .unwrap_or_else(|| crate::config::DEFAULT_MODEL.into());
+            .or_else(|| {
+                self.runtime_config
+                    .as_ref()
+                    .and_then(|config| config.default_model.clone())
+            })
+            .or_else(|| {
+                crate::inference::registry::provider_default_model(
+                    crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+                )
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!("model_name or configured provider default is required")
+            })?;
 
         let context_config = self.context_config.unwrap_or_default();
 

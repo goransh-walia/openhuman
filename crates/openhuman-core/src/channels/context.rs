@@ -53,7 +53,7 @@ pub(crate) struct ChannelRuntimeContext {
     pub(crate) api_url: Option<String>,
     pub(crate) inference_url: Option<String>,
     pub(crate) reliability: Arc<crate::config::ReliabilityConfig>,
-    pub(crate) provider_runtime_options: crate::inference::provider::ProviderRuntimeOptions,
+    pub(crate) provider_runtime_options: crate::tools::delegate::ProviderRuntimeOptions,
     pub(crate) workspace_dir: Arc<PathBuf>,
     pub(crate) message_timeout_secs: u64,
     pub(crate) multimodal: crate::config::MultimodalConfig,

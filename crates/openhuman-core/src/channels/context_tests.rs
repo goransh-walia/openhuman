@@ -45,7 +45,7 @@ fn runtime_context() -> ChannelRuntimeContext {
         api_url: None,
         inference_url: None,
         reliability: Arc::new(crate::config::ReliabilityConfig::default()),
-        provider_runtime_options: crate::inference::provider::ProviderRuntimeOptions::default(),
+        provider_runtime_options: crate::tools::delegate::ProviderRuntimeOptions::default(),
         workspace_dir: Arc::new(PathBuf::from("/tmp")),
         message_timeout_secs: CHANNEL_MESSAGE_TIMEOUT_SECS,
         multimodal: crate::config::MultimodalConfig::default(),
@@ -65,6 +65,8 @@ fn channel_message(channel: &str) -> traits::ChannelMessage {
         thread_ts: Some("thread-1".into()),
         timestamp: 0,
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     }
 }
 

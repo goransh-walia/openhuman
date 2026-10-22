@@ -1,11 +1,10 @@
 use super::*;
+use crate::storage::{Scope, Storage};
 use sha2::Digest;
-use tinystoragedrivers::{MemoryStorage, Scope, StorageBackend};
+use tinystoragedrivers_testkit::memory_storage;
 
-fn scoped() -> ScopedStorage {
-    MemoryStorage::new()
-        .for_scope(&Scope::new("module:tinywallet@local").unwrap())
-        .unwrap()
+fn scoped() -> Storage {
+    memory_storage(&Scope::new("module:tinywallet@local").unwrap())
 }
 
 fn record(id: &str, status: &str) -> String {

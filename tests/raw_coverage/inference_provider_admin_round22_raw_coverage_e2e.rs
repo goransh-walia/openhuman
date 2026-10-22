@@ -27,7 +27,7 @@ use tinyinference_local::service::LocalAiService;
 use openhuman_core::inference::provider::factory::{
     auth_key_for_slug, create_chat_model_from_string_with_model_id,
 };
-use openhuman_core::inference::provider::list_configured_models;
+use openhuman_core::inference::provider::models::catalog_listing::list_configured_models_from_config;
 use openhuman_core::security::credentials::{
     AuthService, APP_SESSION_PROVIDER, DEFAULT_AUTH_PROFILE_NAME,
 };
@@ -104,18 +104,18 @@ async fn provider_admin_model_listing_covers_openrouter_validation_and_local_syn
     let _workspace = EnvVarGuard::set("OPENHUMAN_WORKSPACE", config.config_path.parent().unwrap());
     let _ollama_base = EnvVarGuard::set("OPENHUMAN_OLLAMA_BASE_URL", &base);
 
-    let openrouter = list_configured_models("openrouter")
+    let openrouter = list_configured_models_from_config("openrouter", &config)
         .await
         .expect("openrouter models")
         .value;
     assert_eq!(openrouter["models"][0]["id"], "or-model");
 
-    let object_error = list_configured_models("object-error")
+    let object_error = list_configured_models_from_config("object-error", &config)
         .await
         .expect_err("object error payload");
     assert!(object_error.contains("nested provider failure"));
 
-    let synthetic_ollama = list_configured_models("ollama")
+    let synthetic_ollama = list_configured_models_from_config("ollama", &config)
         .await
         .expect("synthetic ollama /v1 models")
         .value;
@@ -137,7 +137,7 @@ async fn provider_admin_model_listing_covers_openrouter_validation_and_local_syn
         true,
     )
     .expect("store bad openrouter key");
-    let bad_key = list_configured_models("openrouter")
+    let bad_key = list_configured_models_from_config("openrouter", &config)
         .await
         .expect_err("openrouter key validation body");
     assert!(bad_key.contains("OpenRouter key validation returned error payload"));
@@ -153,6 +153,7 @@ async fn provider_admin_model_listing_covers_openrouter_validation_and_local_syn
 
 #[tokio::test]
 async fn factory_covers_legacy_api_key_scoping_and_abstract_model_errors() {
+    crate::tinyhumans_boot::boot();
     let _env = env_lock_async().await;
     let (base, state) = serve_mock().await;
     let tmp = tempdir().expect("tempdir");

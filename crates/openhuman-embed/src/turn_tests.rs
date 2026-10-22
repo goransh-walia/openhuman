@@ -14,10 +14,13 @@ use serde_json::json;
 /// controller it is sent to.
 #[test]
 fn turn_request_field_names_match_the_controller() {
-    let schema = openhuman_core::inference::host_runtime::all_local_inference_controller_schemas()
+    let schema = openhuman_core::core::all::all_registered_controllers()
         .into_iter()
-        .find(|s| s.namespace == "inference" && s.function == "agent_chat")
+        .find(|controller| {
+            controller.schema.namespace == "inference" && controller.schema.function == "agent_chat"
+        })
         .expect("inference.agent_chat is a registered controller");
+    let schema = schema.schema;
 
     let declared: std::collections::HashSet<&str> =
         schema.inputs.iter().map(|field| field.name).collect();
@@ -232,10 +235,13 @@ fn sanitize_redacts_unparseable_urls() {
 /// discovered by an agent answering with no memory of the conversation.
 #[test]
 fn the_controller_declares_nowhere_for_a_seed_to_travel() {
-    let schema = openhuman_core::inference::host_runtime::all_local_inference_controller_schemas()
+    let schema = openhuman_core::core::all::all_registered_controllers()
         .into_iter()
-        .find(|s| s.namespace == "inference" && s.function == "agent_chat")
+        .find(|controller| {
+            controller.schema.namespace == "inference" && controller.schema.function == "agent_chat"
+        })
         .expect("inference.agent_chat is a registered controller");
+    let schema = schema.schema;
 
     // An allowlist, not a denylist of suspicious names: a future input called
     // `context` or `transcript` could carry history just as well, and a

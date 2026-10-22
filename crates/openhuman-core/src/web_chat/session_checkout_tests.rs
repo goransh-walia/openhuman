@@ -23,6 +23,7 @@ use tinyagents_session::transcript::TranscriptMessage;
 use tinytools_agent::dialect::TranscriptEntry;
 
 pub(super) fn test_config(tmp: &tempfile::TempDir) -> Config {
+    crate::agent::session_host::test_support::install_model_fixture();
     let config = Config {
         workspace_dir: tmp.path().join("workspace"),
         action_dir: tmp.path().join("workspace"),

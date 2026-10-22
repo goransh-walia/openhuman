@@ -242,8 +242,8 @@ impl RuntimeBuilder {
     ///
     /// For a host serving many users from one process out of its own
     /// database; pair it with [`Workspace::Stateless`] so nothing durable is
-    /// left on disk. [`InMemorySessionStores`](crate::InMemorySessionStores)
-    /// keeps everything in memory. It is process-wide, as the runtime is, and
+    /// left on disk. A provider from the `testkit` feature can keep everything
+    /// in memory. It is process-wide, as the runtime is, and
     /// is removed with the runtime.
     pub fn session_store(mut self, provider: Arc<dyn SessionStoreProvider>) -> Self {
         self.session_store = Some(provider);

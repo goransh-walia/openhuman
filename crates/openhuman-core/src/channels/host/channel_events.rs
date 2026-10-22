@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tinybus::module::ModuleClient;
 use tinybus::EventHandler;
-use tinychannels_bus::{capabilities_for, ChannelMessage};
+use tinychannels_bus::ChannelMessage;
 
 #[derive(Clone)]
 struct ReplyContext {
@@ -74,7 +74,11 @@ impl EventHandler<DomainEvent> for ChannelApprovalSurfaceSubscriber {
                 inbound_envelope,
                 workspace_dir,
             } => {
-                if !capabilities_for(channel).chat_approvals {
+                if !self
+                    .channels
+                    .get(channel)
+                    .is_some_and(|channel| channel.capabilities().chat_approvals)
+                {
                     return;
                 }
                 if self
@@ -99,6 +103,8 @@ impl EventHandler<DomainEvent> for ChannelApprovalSurfaceSubscriber {
                                 timestamp: 0,
                                 thread_ts: thread_ts.clone(),
                                 sender_name: None,
+                                reply_to_id: None,
+                                topic_id: None,
                             },
                             envelope: inbound_envelope.clone(),
                         },
@@ -125,7 +131,11 @@ impl EventHandler<DomainEvent> for ChannelApprovalSurfaceSubscriber {
                 client_id: Some(channel_name),
                 ..
             } => {
-                if !capabilities_for(channel_name).chat_approvals {
+                if !self
+                    .channels
+                    .get(channel_name)
+                    .is_some_and(|channel| channel.capabilities().chat_approvals)
+                {
                     return;
                 }
                 let reply = self
@@ -178,13 +188,18 @@ impl EventHandler<DomainEvent> for ChannelApprovalSurfaceSubscriber {
 /// Projects host turn lifecycle facts into module-owned remote status storage.
 pub struct ChannelTurnStateSubscriber {
     workspace_dir: PathBuf,
+    channels: Arc<HashMap<String, Arc<dyn Channel>>>,
     config: Option<Arc<crate::config::Config>>,
     cancellation: tokio_util::sync::CancellationToken,
 }
 impl ChannelTurnStateSubscriber {
-    pub fn with_config(config: Arc<crate::config::Config>) -> Self {
+    pub fn with_config(
+        channels: Arc<HashMap<String, Arc<dyn Channel>>>,
+        config: Arc<crate::config::Config>,
+    ) -> Self {
         Self {
             workspace_dir: config.workspace_dir.clone(),
+            channels,
             config: Some(config),
             cancellation: super::super::runtime::session::channel_session(),
         }
@@ -193,13 +208,17 @@ impl ChannelTurnStateSubscriber {
     pub fn new(workspace_dir: PathBuf) -> Self {
         Self {
             workspace_dir,
+            channels: Arc::new(HashMap::new()),
             config: None,
             cancellation: tokio_util::sync::CancellationToken::new(),
         }
     }
     async fn mark(&self, channel: &str, reply_target: &str, event_ws: &PathBuf, busy: bool) {
         if self.cancellation.is_cancelled()
-            || !capabilities_for(channel).remote_control
+            || !self
+                .channels
+                .get(channel)
+                .is_some_and(|channel| channel.capabilities().remote_control)
             || *event_ws != self.workspace_dir
         {
             return;

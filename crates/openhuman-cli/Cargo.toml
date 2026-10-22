@@ -138,6 +138,13 @@ name = "storage_flows_e2e"
 path = "../../tests/storage_flows_e2e.rs"
 
 [[test]]
+# Starts with no configured backend to exercise TinyFlows' workspace fallback
+# in an isolated module runtime.
+name = "storage_flows_fallback_e2e"
+path = "../../tests/storage_flows_fallback_e2e.rs"
+required-features = ["flows", "modules", "linked-modules", "storage-sqlite"]
+
+[[test]]
 # Its own binary: it installs a storage backend into the process-wide slot and
 # sets the keyring master-key environment.
 name = "storage_secrets_e2e"
@@ -163,6 +170,13 @@ path = "../../tests/storage_delegation_e2e.rs"
 # Its own binary: it boots a core with `[components]` switches off.
 name = "components_e2e"
 path = "../../tests/components_e2e.rs"
+
+[[test]]
+# Boots a signed-in profile through the desktop host's storage migration and
+# reads its historical records through their owning domains.
+name = "storage_legacy_profile_boot_e2e"
+path = "../../tests/storage_legacy_profile_boot_e2e.rs"
+required-features = ["storage-sqlite", "modules", "flows", "linked-modules"]
 
 [[test]]
 name = "embedded_server_shutdown_e2e"
@@ -282,7 +296,7 @@ required-features = ["voice", "http-server"]
 # installs a storage backend into the process-wide slot.
 name = "storage_desktop_upgrade_e2e"
 path = "../../tests/storage_desktop_upgrade_e2e.rs"
-required-features = ["storage-sqlite", "modules"]
+required-features = ["storage-sqlite", "modules", "flows", "linked-modules"]
 
 [[test]]
 # The released TinyMCP cdylib under the real host: add a server, restart the
@@ -406,8 +420,9 @@ tinyinference-llm = { path = "../../vendor/tinyagents/vendor/tinyinference/crate
 # The owning PII safety contract, for the shared security redaction corpus.
 tinymemory-api = { path = "../../vendor/tinymemory/crates/tinymemory-api", features = ["local-safety"] }
 # The document-port contract for failure injection in cron storage regressions.
-tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
-tinystoragedrivers = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0", default-features = false, features = ["sqlite"] }
+tinystoragedrivers-api = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456" }
+tinystoragedrivers = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456", default-features = false, features = ["sqlite"] }
+zeroize = "1"
 # The shell command-class vocabulary, for the security policy characterization.
 tinybox-bus = { path = "../../vendor/tinybox/crates/tinybox-bus" }
 tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools" }
@@ -477,6 +492,9 @@ default = [
     "tinymemes",
     "inbound-queues",
     "storage-sqlite",
+    "storage-file",
+    "secret-file",
+    "legacy-import",
 ]
 # Every gate forwards to `openhuman-rpc` alone (chain: rpc -> tinyhumans ->
 # embed -> core); `scripts/ci/check-feature-forwarding.mjs` checks the link.
@@ -497,6 +515,9 @@ storage-sqlite = ["openhuman-rpc/storage-sqlite"]
 storage-mongodb = ["openhuman-rpc/storage-mongodb"]
 storage-s3 = ["openhuman-rpc/storage-s3"]
 storage-file = ["openhuman-rpc/storage-file"]
+storage-rabbitmq = ["openhuman-rpc/storage-rabbitmq"]
+secret-file = ["openhuman-rpc/secret-file"]
+legacy-import = ["openhuman-rpc/legacy-import"]
 media = ["openhuman-rpc/media"]
 flows = ["openhuman-rpc/flows"]
 skills = ["openhuman-rpc/skills"]
@@ -527,3 +548,8 @@ path = "../../tests/doctor_e2e.rs"
 [[test]]
 name = "embeddings_opt_out"
 path = "../../tests/embeddings_opt_out.rs"
+
+[[test]]
+name = "storage_backend_capabilities"
+path = "../../tests/storage_backend_capabilities.rs"
+required-features = ["storage-sqlite"]

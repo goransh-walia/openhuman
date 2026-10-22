@@ -12,12 +12,13 @@ use serde_json::{json, Value};
 
 use super::*;
 use crate::config::Config;
-use crate::sandbox::{execute_in_sandbox, spawn_policy, SandboxBackendKind};
+use crate::sandbox::{execute_in_sandbox, resolve_sandbox_policy};
+use crate::security::policy::CommandClass;
 use crate::security::SecurityPolicy;
-use tinysecurity_bus::CommandClass;
+use tinyagents_definition::SandboxMode;
 
 /// [`CodeRunner`] adapter running sandboxed user code via
-/// `crates/openhuman-core/src/sandbox/ops.rs` (`spawn_policy` +
+/// `crates/openhuman-core/src/sandbox/ops.rs` (`resolve_sandbox_policy` +
 /// `execute_in_sandbox`), modeled on
 /// the shell tool sandbox runner.
 ///
@@ -79,7 +80,7 @@ impl OpenHumanCode {
         // acting adapters.
         let action = json!({ "language": format!("{language:?}"), "source": source });
         let summary = crate::security::approval::summarize_action("flows_code", &action);
-        let redacted = crate::security::redact::arguments(&action);
+        let redacted = crate::security::approval::redact_args(&action);
         let (gate_outcome, audit_id) = gate_call_for_tier(
             &self.ctx,
             &self.approval,
@@ -95,19 +96,14 @@ impl OpenHumanCode {
 
         let dispatch = self.ctx.clone();
         let outcome: Result<Value> = async {
-        let mut policy = spawn_policy(
+        let policy = resolve_sandbox_policy(
+            &dispatch,
+            SandboxMode::Sandboxed,
             &self.config.action_dir,
             &self.config.workspace_dir,
-            &self.config.security.sandbox,
             &self.config.runtime,
             false,
         );
-        // A code node is always untrusted, even when ordinary commands may run
-        // on the host. Honor an explicit Docker requirement; otherwise request
-        // TinyBox's native jail and fail closed if it is unavailable.
-        if policy.backend == SandboxBackendKind::None {
-            policy.backend = SandboxBackendKind::Local;
-        }
 
         // Work dir lives under `action_dir` (the sandbox workspace root). We keep
         // its path *relative* to `action_dir` so the run command works on every

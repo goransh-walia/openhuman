@@ -104,6 +104,17 @@ test('a git or registry tinystoragedrivers package fails and names its dependent
   assert.equal(reg[0].kind, 'tsd-not-vendored');
 });
 
+test('the standalone storage types contract may come from a pinned git revision', () => {
+  const rev = 'git+https://github.com/tinyhumansai/tinystoragedrivers?rev=05eaada962decbab33bafa4763d2bd1a67f6b456#05eaada';
+  const v = checkMetadata({
+    packages: [
+      pkg('tinyjuice-bus', ['tinystoragedrivers-types']),
+      pkg('tinystoragedrivers-types', [], rev, '/home/u/.cargo/git/checkouts/tsd/abc/crates/tinystoragedrivers-types/Cargo.toml'),
+    ],
+  });
+  assert.deepEqual(v, []);
+});
+
 test('a path tinystoragedrivers package outside the vendored checkout fails', () => {
   const v = checkMetadata({
     packages: [pkg('tinystoragedrivers-core', [], null, '/repo/vendor/tinyagents/vendor/tinystoragedrivers/crates/x/Cargo.toml')],

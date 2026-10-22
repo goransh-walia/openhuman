@@ -387,6 +387,8 @@ async fn persist_channel_turn(
                             timestamp: 0,
                             thread_ts: descriptor.thread_ts.map(ToOwned::to_owned),
                             sender_name: None,
+                            reply_to_id: None,
+                            topic_id: None,
                         },
                         envelope: descriptor.inbound_envelope.cloned(),
                     },
@@ -396,12 +398,14 @@ async fn persist_channel_turn(
         .await
         .map_err(|error| error.to_string())?;
     let thread_id = format!("channel:{}", prepared.history_key);
+    let history_key_ignores_thread = prepared.history_key_ignores_thread;
     let session_key = descriptor.inbound_envelope.map(|_| prepared.session_key);
     let title = channel_thread_title(
         descriptor.channel,
         descriptor.sender,
         descriptor.reply_target,
         descriptor.thread_ts,
+        history_key_ignores_thread,
     );
     let created_at = Utc::now().to_rfc3339();
 
@@ -488,6 +492,8 @@ fn persisted_channel_thread_id(
         timestamp: 0,
         thread_ts: thread_ts.map(ToOwned::to_owned),
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     });
     format!("channel:{key}")
 }
@@ -497,13 +503,12 @@ fn channel_thread_title(
     sender: &str,
     reply_target: &str,
     thread_ts: Option<&str>,
+    history_key_ignores_thread: bool,
 ) -> String {
     match thread_ts.and_then(non_empty_trimmed) {
         // Providers whose thread_ts is only a reply target (Telegram topics)
         // share one conversation, so the title leaves it out too.
-        Some(thread_ts)
-            if !tinychannels_bus::capabilities_for(channel).history_key_ignores_thread =>
-        {
+        Some(thread_ts) if !history_key_ignores_thread => {
             format!("{channel} · {sender} · {reply_target} · thread {thread_ts}")
         }
         _ => format!("{channel} · {sender} · {reply_target}"),

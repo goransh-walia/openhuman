@@ -19,6 +19,11 @@ fn fixture_dir() -> tempfile::TempDir {
     let dir = tempfile::tempdir_in("/private/tmp").unwrap();
     #[cfg(not(target_os = "macos"))]
     let dir = tempfile::TempDir::new().unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
     let path = dir.path().join("secrets.enc");
     std::fs::write(&path, SECRETS_ENC).unwrap();
     #[cfg(unix)]

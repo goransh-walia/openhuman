@@ -1,3 +1,5 @@
+#![cfg(feature = "testkit")]
+
 //! End-to-end proof that a host session store owns every conversation.
 //!
 //! A stateless runtime with an [`InMemorySessionStores`] runs two agents

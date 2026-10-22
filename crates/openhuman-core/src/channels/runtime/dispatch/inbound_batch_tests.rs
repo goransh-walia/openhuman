@@ -14,6 +14,8 @@ fn queued(seq: u64, id: &str, timestamp: u64, content: &str) -> QueuedInbound {
                 timestamp,
                 thread_ts: Some(format!("thread-{id}")),
                 sender_name: None,
+                reply_to_id: None,
+                topic_id: None,
             },
             history_key: "telegram_alice_reply".to_string(),
         },

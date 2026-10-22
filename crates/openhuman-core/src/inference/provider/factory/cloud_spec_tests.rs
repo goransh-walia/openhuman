@@ -58,7 +58,7 @@ fn managed_jwt_style_never_maps_onto_the_registry() {
 
 #[test]
 fn registry_builds_a_model_for_every_unmanaged_builtin_preset() {
-    for preset in crate::config::schema::cloud_providers::BUILTIN_CLOUD_PROVIDERS.iter() {
+    for preset in crate::config::schema::cloud_providers::builtin_cloud_providers().iter() {
         if preset.auth_style == AuthStyle::OpenhumanJwt {
             continue;
         }

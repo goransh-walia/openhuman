@@ -10,6 +10,7 @@
 
 use super::*;
 use tinyinference_llm::providers::openai::codex::OpenAiCodexRouting;
+use tinyinference_llm::providers::openai::AuthStyle as CompatAuthStyle;
 use tinyinference_llm::providers::registry::{ProviderBuildOptions, ProviderRegistry};
 use tinyinference_llm::{ProviderKind, ProviderSpec};
 
@@ -19,7 +20,7 @@ use crate::config::schema::cloud_providers::CloudProviderCreds;
 /// spec. Credentials are resolved by the host beforehand, so no env var is
 /// named and a key is not required at the spec level (a blank key is a host
 /// decision, made in `resolve_cloud_slug`).
-pub(super) fn cloud_provider_spec(entry: &CloudProviderCreds, model: &str) -> ProviderSpec {
+pub(crate) fn cloud_provider_spec(entry: &CloudProviderCreds, model: &str) -> ProviderSpec {
     ProviderSpec {
         kind: match entry.auth_style {
             AuthStyle::Anthropic => ProviderKind::Anthropic,
@@ -30,6 +31,26 @@ pub(super) fn cloud_provider_spec(entry: &CloudProviderCreds, model: &str) -> Pr
         base_url: entry.endpoint.clone(),
         api_key_env: None,
         requires_api_key: false,
+    }
+}
+
+/// Credential resolver retained for host call sites that need the registry
+/// directly. The host resolves policy and auth before handing the key here.
+pub(crate) struct CloudCredentialResolver<'a>(pub(crate) &'a str);
+
+impl tinyinference_llm::providers::registry::CredentialResolver for CloudCredentialResolver<'_> {
+    fn resolve(&self, _spec: &ProviderSpec) -> tinyinference_llm::Result<String> {
+        Ok(self.0.to_owned())
+    }
+}
+
+impl From<AuthStyle> for CompatAuthStyle {
+    fn from(style: AuthStyle) -> Self {
+        match style {
+            AuthStyle::Bearer => Self::Bearer,
+            AuthStyle::Anthropic => Self::Anthropic,
+            AuthStyle::None | AuthStyle::OpenhumanJwt => Self::None,
+        }
     }
 }
 
@@ -106,6 +127,9 @@ pub(super) fn build_cloud_model(build: CloudBuild<'_>) -> anyhow::Result<Arc<dyn
 pub(super) fn cloud_discovery_request(
     build: &CloudBuild<'_>,
 ) -> Option<tinyinference_llm::model::discover::DiscoveryRequest> {
+    if build.codex.is_some_and(|codex| codex.using_oauth) {
+        return None;
+    }
     match build
         .registry()
         .discovery_request(&build.spec, &build.options())

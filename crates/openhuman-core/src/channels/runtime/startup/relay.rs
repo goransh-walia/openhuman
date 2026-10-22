@@ -29,7 +29,12 @@ impl tinychannels::relay::RelayInboundHandler for RelayInboundMessageHandler {
                     "invalid inbound envelope: {error}"
                 ))
             })?;
-        let msg = tinychannels::legacy_message_from_inbound_envelope(&envelope, 0);
+        let msg =
+            tinychannels::legacy_message_from_inbound_envelope(&envelope, 0).map_err(|error| {
+                tinychannels::relay::RelayTransportError::Handler(format!(
+                    "invalid legacy inbound projection: {error}"
+                ))
+            })?;
         self.tx
             .send(RuntimeChannelMessage::with_inbound_envelope(msg, envelope))
             .await

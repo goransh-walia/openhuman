@@ -3,9 +3,9 @@ use super::*;
 #[tokio::test]
 async fn profile_context_conflict_refresh_keeps_host_owned_restrictions() {
     let tmp = tempfile::tempdir().unwrap();
-    let storage = MemoryStorage::new();
+    let storage = memory_backend();
     let _forced = ForcedDocumentSource::new(
-        scoped(&storage, "tenant-profile-refresh"),
+        scoped(storage.as_ref(), "tenant-profile-refresh"),
         Scope::new("tenant-profile-refresh").unwrap(),
         keys(16),
     );

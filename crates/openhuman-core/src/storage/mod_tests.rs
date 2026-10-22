@@ -1,5 +1,31 @@
 use super::*;
 
+fn round_trip_through_storage_bridge() -> serde_json::Value {
+    let backend: Arc<dyn StorageBackend> =
+        Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
+    let storage = backend
+        .for_scope(&Scope::new("bridge-test").unwrap())
+        .unwrap();
+    let docs = Arc::clone(storage.documents());
+    block_on(async move {
+        docs.ensure_collection(&CollectionSpec::new("bridge.records"))
+            .await?;
+        docs.put(
+            "bridge.records",
+            "record-1",
+            serde_json::json!({"value": 42}),
+            Precondition::Absent,
+        )
+        .await?;
+        Ok(docs
+            .get("bridge.records", "record-1")
+            .await?
+            .expect("record was written")
+            .doc)
+    })
+    .unwrap()
+}
+
 fn config_with(url: Option<&str>) -> Config {
     let mut config = Config::default();
     config.storage.url = url.map(str::to_string);
@@ -53,7 +79,22 @@ fn the_default_url_is_a_directory_under_the_workspace() {
 #[tokio::test]
 async fn opens_memory_and_refuses_garbage() {
     let backend = open("memory").await.unwrap();
-    assert_eq!(backend.driver(), "memory");
+    let scope = backend.for_scope(&Scope::local()).unwrap();
+    let docs = Arc::clone(scope.documents());
+    block_on(async move {
+        docs.ensure_collection(&CollectionSpec::new("probe"))
+            .await?;
+        docs.put(
+            "probe",
+            "opened",
+            serde_json::json!({"ok": true}),
+            Precondition::Absent,
+        )
+        .await?;
+        assert_eq!(docs.get("probe", "opened").await?.unwrap().doc["ok"], true);
+        Ok(())
+    })
+    .unwrap();
     assert!(open("ftp://nope").await.is_err());
 }
 
@@ -63,14 +104,12 @@ fn install_installed_and_clear() {
     // test's storage calls while this one runs.
     let slot = Slot::default();
     assert!(slot.installed().is_none());
-    let backend: Arc<dyn StorageBackend> = Arc::new(tinystoragedrivers::MemoryStorage::new());
+    let backend = test_support::memory_backend();
     assert!(slot.install(Arc::clone(&backend)).is_none());
     assert!(slot
         .installed()
         .is_some_and(|got| Arc::ptr_eq(&got, &backend)));
-    assert!(slot
-        .install(Arc::new(tinystoragedrivers::MemoryStorage::new()))
-        .is_some());
+    assert!(slot.install(test_support::memory_backend()).is_some());
     assert!(slot.clear());
     assert!(!slot.clear());
 }
@@ -131,13 +170,48 @@ fn block_on_runs_a_future_from_sync_code() {
     assert_eq!(error.message(), "raced");
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn block_on_works_inside_a_current_thread_runtime() {
+    assert_eq!(
+        round_trip_through_storage_bridge(),
+        serde_json::json!({"value": 42})
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
-async fn block_on_works_inside_a_runtime_too() {
-    let answer = tokio::task::spawn_blocking(|| block_on(async { Ok::<_, StorageError>(7) }))
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(answer, 7);
+async fn block_on_works_inside_a_multi_thread_runtime() {
+    assert_eq!(
+        round_trip_through_storage_bridge(),
+        serde_json::json!({"value": 42})
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn bridge_runtime_keeps_background_tasks_running_between_sync_calls() {
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+    let (progress_tx, progress_rx) = std::sync::mpsc::channel();
+    block_on(async move {
+        tokio::spawn(async move {
+            let _ = ready_tx.send(());
+            if release_rx.await.is_ok() {
+                let _ = progress_tx.send(());
+            }
+        });
+        ready_rx
+            .await
+            .map_err(|error| StorageError::backend(error.to_string()))?;
+        Ok(())
+    })
+    .unwrap();
+
+    // The task was spawned on the bridge runtime and the request has returned.
+    // It must still make progress while the bridge owner waits for its next
+    // synchronous request.
+    release_tx.send(()).unwrap();
+    progress_rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .expect("bridge runtime polled its background task while idle");
 }
 
 #[test]
@@ -159,19 +233,24 @@ fn only_mongodb_and_sqlite_have_cross_process_cas() {
 }
 
 #[tokio::test]
-async fn the_driver_name_check_agrees_with_what_each_backend_claims() {
+#[cfg(all(feature = "storage-sqlite", feature = "storage-file"))]
+async fn local_drivers_do_not_claim_cross_process_cas() {
     let dir = tempfile::tempdir().unwrap();
-    for url in [
-        "memory".to_string(),
-        format!("sqlite:{}", dir.path().join("cas.db").display()),
-        format!("file:{}", dir.path().join("files").display()),
+    for (url, expected) in [
+        ("memory".to_string(), false),
+        (
+            format!("sqlite:{}", dir.path().join("cas.db").display()),
+            true,
+        ),
+        (
+            format!("file:{}", dir.path().join("files").display()),
+            false,
+        ),
     ] {
         let backend = open(&url).await.unwrap();
-        assert_eq!(
-            backend_has_cross_process_cas(backend.as_ref()),
-            driver_has_cross_process_cas(backend.driver()),
-            "{}",
-            backend.driver()
+        assert!(
+            backend_has_cross_process_cas(backend.as_ref()) == expected,
+            "unexpected CAS capability for {url}"
         );
     }
 }

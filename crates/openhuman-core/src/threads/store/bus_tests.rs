@@ -29,6 +29,8 @@ async fn persists_inbound_and_processed_turns_into_workspace_thread() {
             thread_ts: Some("thread-1".into()),
             timestamp: 0,
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         });
     inbound_envelope.conversation.kind = tinychannels_bus::channel::ConversationKind::Channel;
     inbound_envelope.conversation.scope_id = Some("T123".into());
@@ -169,11 +171,11 @@ fn persisted_channel_thread_id_ignores_blank_thread_ts() {
 #[test]
 fn channel_thread_title_uses_thread_suffix_only_for_non_telegram_threads() {
     assert_eq!(
-        channel_thread_title("slack", "alice", "general", Some(" 123 ")),
+        channel_thread_title("slack", "alice", "general", Some(" 123 "), false),
         "slack · alice · general · thread 123"
     );
     assert_eq!(
-        channel_thread_title("telegram", "alice", "chat-1", Some("123")),
+        channel_thread_title("telegram", "alice", "chat-1", Some("123"), true),
         "telegram · alice · chat-1"
     );
 }

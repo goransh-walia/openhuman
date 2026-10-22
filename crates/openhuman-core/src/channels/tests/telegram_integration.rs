@@ -96,7 +96,7 @@ fn make_test_context(
         api_url: None,
         inference_url: None,
         reliability: Arc::new(crate::config::ReliabilityConfig::default()),
-        provider_runtime_options: crate::inference::provider::ProviderRuntimeOptions::default(),
+        provider_runtime_options: crate::tools::delegate::ProviderRuntimeOptions::default(),
         workspace_dir: Arc::new(std::env::temp_dir()),
         message_timeout_secs: CHANNEL_MESSAGE_TIMEOUT_SECS,
         multimodal: crate::config::MultimodalConfig::default(),
@@ -129,6 +129,8 @@ async fn inbound_thread_ts_is_forwarded_to_channel_send() {
             timestamp: 1,
             thread_ts: Some("99".to_string()),
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         },
     )
     .await;
@@ -167,6 +169,8 @@ async fn no_thread_ts_on_inbound_message_results_in_none_on_send() {
             timestamp: 1,
             thread_ts: None,
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         },
     )
     .await;
@@ -205,6 +209,8 @@ async fn reaction_marker_in_llm_response_is_passed_to_channel_send() {
             timestamp: 1,
             thread_ts: Some("42".to_string()), // message_id the reaction targets
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         },
     )
     .await;
@@ -257,6 +263,8 @@ async fn typing_indicator_starts_and_stops_once_per_message() {
             timestamp: 1,
             thread_ts: None,
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         },
     )
     .await;
@@ -287,6 +295,8 @@ fn telegram_channel_history_key_ignores_thread_ts() {
         timestamp: 1,
         thread_ts: None,
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let msg_with_thread = traits::ChannelMessage {
@@ -381,6 +391,8 @@ async fn telegram_threaded_inbound_emits_ack_reaction_then_reply() {
             timestamp: 1,
             thread_ts: Some("77".to_string()),
             sender_name: None,
+            reply_to_id: None,
+            topic_id: None,
         },
     )
     .await;
@@ -447,6 +459,8 @@ fn non_telegram_channel_history_key_includes_thread_ts() {
         timestamp: 1,
         thread_ts: None,
         sender_name: None,
+        reply_to_id: None,
+        topic_id: None,
     };
 
     let msg_in_thread = traits::ChannelMessage {

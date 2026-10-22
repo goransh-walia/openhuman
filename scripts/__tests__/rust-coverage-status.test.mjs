@@ -468,6 +468,7 @@ test("nextest product suites are one build and one run over the union of their f
   // suites keep their own resolutions.
   assert.doesNotMatch(source, /-p openhuman-cli --tests/);
   assert.doesNotMatch(source, /-E "\$\{FILTER_(CORE|EMBED|TINYHUMANS|CLI_TESTS)\}"/);
+
   assert.match(source, /suite "openhuman-rpc" llvm_cov_package .*-p openhuman-rpc --all-targets/);
   assert.match(source, /suite "openhuman-tui" llvm_cov_package .*-p openhuman-tui --all-targets/);
   assert.match(source, /suite "openhuman-embed \(default\)" llvm_cov_package .*-p openhuman-embed --all-targets/);

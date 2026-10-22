@@ -68,7 +68,7 @@ test("does not reseed conversations after deleting everything until reset", asyn
 });
 
 test("keeps server-controlled ids on create and patch routes", async () => {
-  const started = await startMockServer(18578, { retryIfInUse: true });
+  const started = await startMockServer(0);
   const baseUrl = `http://127.0.0.1:${started.port}`;
 
   const createdConversation = await fetch(`${baseUrl}/conversations`, {
