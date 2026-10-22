@@ -130,6 +130,6 @@ fn retired_sandbox_backend_in_the_security_table_wins_as_auto() {
 fn supported_sandbox_backends_are_left_alone() {
     let mut d = doc("[sandbox]\nbackend = \"docker\"\n");
     assert!(rewrite_document(&mut d).contains(&Notice::Overlaid { table: "sandbox" }));
-    assert_eq!(d["security"]["sandbox"]["backend"], "docker");
+    assert_eq!(d["security"]["sandbox"]["backend"].as_str(), Some("docker"));
     assert!(d.get("sandbox").is_none());
 }
