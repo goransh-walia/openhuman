@@ -265,17 +265,13 @@ async fn every_terminal_outcome_is_audited_once_without_recording_payloads() {
 
     for (index, (expected, outcome)) in outcomes.into_iter().enumerate() {
         let ticket = format!("terminal-{index}");
-        resolver
-            .audit_tickets
-            .lock()
-            .unwrap()
-            .insert(
-                ticket.clone(),
-                OrdinaryAuditTicket {
-                    tool_name: "send_external".into(),
-                    dispatch: dispatch.clone(),
-                },
-            );
+        resolver.audit_tickets.lock().unwrap().insert(
+            ticket.clone(),
+            OrdinaryAuditTicket {
+                tool_name: "send_external".into(),
+                dispatch: dispatch.clone(),
+            },
+        );
         let captured = recorded.clone();
         let write_count = writes.clone();
         resolver.record_terminal_with(None, &ticket, outcome, move |_dispatch, event| {
@@ -296,7 +292,10 @@ async fn every_terminal_outcome_is_audited_once_without_recording_payloads() {
         );
         assert_eq!(writes.load(Ordering::SeqCst), index + 1);
         let event = recorded.lock().unwrap().last().unwrap().clone();
-        assert_eq!(event.kind, crate::security::audit_record::HostAuditKind::Execution);
+        assert_eq!(
+            event.kind,
+            crate::security::audit_record::HostAuditKind::Execution
+        );
         assert_eq!(event.attribution, "tool:send_external");
         let arguments = event.arguments.to_string();
         assert!(arguments.contains(expected), "{arguments}");
@@ -306,7 +305,10 @@ async fn every_terminal_outcome_is_audited_once_without_recording_payloads() {
             "sensitive failure",
             "sensitive control payload",
         ] {
-            assert!(!arguments.contains(secret), "audit payload leaked: {arguments}");
+            assert!(
+                !arguments.contains(secret),
+                "audit payload leaked: {arguments}"
+            );
         }
     }
 
