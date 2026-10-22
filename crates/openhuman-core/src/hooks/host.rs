@@ -28,7 +28,6 @@ impl PromptEvaluator for HostPromptEvaluator {
 
 fn environment() -> HookEnvironment {
     HookEnvironment::new(PRODUCT_NAME, dirs::home_dir())
-        .with_shell(super::shell::command)
         .with_command_spawner(Arc::new(super::spawner::SandboxedHookSpawner))
         .with_prompt_evaluator(Arc::new(HostPromptEvaluator))
 }
@@ -52,9 +51,6 @@ pub async fn reload(
     project_dir: Option<std::path::PathBuf>,
     workspace_dir: Option<std::path::PathBuf>,
 ) -> Arc<HookConfig> {
-    // Hook commands are routed through the untrusted sandbox; retain the
-    // module-selected shell for engine environments that use the shell seam.
-    super::shell::resolve(ctx).await;
     let current = environment();
     let loaded = tokio::task::spawn_blocking(move || {
         config::load(&current, project_dir.as_deref(), workspace_dir.as_deref())
@@ -72,3 +68,7 @@ pub async fn reload(
     ENGINE.install(loaded).await;
     ENGINE.snapshot().await
 }
+
+#[cfg(test)]
+#[path = "host_tests.rs"]
+mod tests;

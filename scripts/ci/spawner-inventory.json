@@ -81,15 +81,6 @@
       "test": "n/a"
     },
     {
-      "file": "crates/openhuman-core/src/hooks/shell.rs",
-      "spawns": 2,
-      "trust": "untrusted",
-      "plan": "operator-configured command hooks -> TinyBox shell selection, but the TinyAgents hook engine still creates the child process directly",
-      "executor": "jailed",
-      "test": "crates/openhuman-core/src/hooks/spawner_tests.rs",
-      "note": "TinyBox SelectShell chooses argv; SandboxedHookSpawner routes untrusted hook commands through sandbox::untrusted::run and fails closed when no jail is available"
-    },
-    {
       "file": "crates/openhuman-core/src/inference/host_runtime/service/speech.rs",
       "spawns": 1,
       "trust": "host-probe",
