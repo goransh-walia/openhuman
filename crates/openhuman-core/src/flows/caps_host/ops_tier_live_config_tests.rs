@@ -346,9 +346,6 @@ async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
             None,
         )
         .await;
-    if let Err(error) = &result {
-        eprintln!("native upgrade invoke error: {error:?}");
-    }
     result.expect("live Full tier and downstream filesystem gate must allow the write");
     assert_eq!(
         std::fs::read_to_string(captured.action_dir.join("tier-upgrade.txt")).unwrap(),
