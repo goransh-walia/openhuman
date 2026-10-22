@@ -430,8 +430,9 @@ encrypted_store,encrypted_file_backend,backend}.rs`, `security/devices/crypto.rs
 
 **Host follow-up (2026-10-22):** storage open and workspace-rebind logs use
 TinySecurity `EndpointOrigin`, so database names and local SQLite paths do not
-reach logs or the `Rebound` display fields. The rebind suite asserts workspace
-paths are absent. Config snapshot URL suppression is covered under Task 2.
+reach logs or the `Rebound` display fields. Inference URL migration logs use the
+same mode; regressions assert paths and credentials stay out of captured logs.
+Config snapshot URL suppression is covered under Task 2.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
