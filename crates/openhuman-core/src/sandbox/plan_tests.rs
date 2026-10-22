@@ -101,9 +101,9 @@ fn a_disk_limit_is_refused_instead_of_silently_dropped() {
 fn a_docker_pid_limit_is_refused_instead_of_silently_dropped() {
     let mut planned = artifact(SandboxBackend::Docker);
     planned.limits.pids_max = Some(64);
-    assert!(
-        BoxPlan::from_artifact(&planned, None).is_err(),
-        "DockerRunRequest has no PID limit field, so this plan cannot be launched safely"
+    assert_eq!(
+        BoxPlan::from_artifact(&planned, None),
+        Err(PlanMappingError::PidsLimitUnenforceable)
     );
 }
 

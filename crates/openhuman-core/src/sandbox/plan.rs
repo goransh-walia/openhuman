@@ -68,6 +68,8 @@ pub enum PlanMappingError {
     ZeroLimit,
     /// TinyBox's native resource backend cannot enforce a disk quota.
     DiskLimitUnenforceable,
+    /// The host's one-shot Docker bus request does not expose a PID limit.
+    PidsLimitUnenforceable,
     /// A grant path is not valid UTF-8 text for the bus.
     InvalidGrant,
     /// A plan marked as a run on the host that also claims a jail, grants or constraints.
@@ -88,6 +90,9 @@ impl std::fmt::Display for PlanMappingError {
             Self::ZeroLimit => "the sandbox plan carries a zero resource bound",
             Self::DiskLimitUnenforceable => {
                 "the sandbox plan requests a disk quota TinyBox cannot enforce"
+            }
+            Self::PidsLimitUnenforceable => {
+                "the Docker sandbox request cannot enforce a PID limit"
             }
             Self::InvalidGrant => "the sandbox plan carries a grant that is not valid text",
             Self::MalformedHostRun => "the sandbox plan for a run on the host claims a jail",
@@ -121,6 +126,9 @@ impl BoxPlan {
             PlannedNetwork::EgressProxy => return Err(PlanMappingError::EgressProxyUnavailable),
         };
         let resources = resources(artifact)?;
+        if executor == PlannedExecutor::Docker && resources.pids_max.is_some() {
+            return Err(PlanMappingError::PidsLimitUnenforceable);
+        }
 
         let mut read_only = Vec::new();
         let mut read_write = Vec::new();
