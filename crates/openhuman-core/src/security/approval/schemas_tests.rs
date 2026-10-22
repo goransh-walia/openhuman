@@ -27,18 +27,33 @@ fn schemas_decide_requires_request_id_and_decision() {
 #[test]
 fn all_registered_controllers_has_handler_per_schema() {
     let controllers = all_registered_controllers();
-    assert_eq!(controllers.len(), 5);
+    assert_eq!(controllers.len(), 7);
     let names: Vec<_> = controllers.iter().map(|c| c.schema.function).collect();
     assert_eq!(
         names,
         vec![
             "list_pending",
             "list_recent_decisions",
+            "list_tool_trust",
+            "revoke_tool_trust",
             "decide",
             "get_gate_state",
             "preauthorize_flow",
         ]
     );
+}
+
+#[test]
+fn tool_trust_schemas_list_grants_and_revoke_by_opaque_id() {
+    let list = schemas("list_tool_trust");
+    assert!(list.inputs.is_empty());
+    assert_eq!(list.outputs[0].name, "grants");
+
+    let revoke = schemas("revoke_tool_trust");
+    assert_eq!(revoke.inputs.len(), 1);
+    assert_eq!(revoke.inputs[0].name, "request_id");
+    assert!(revoke.inputs[0].required);
+    assert_eq!(revoke.outputs[0].name, "revoked");
 }
 
 #[test]
