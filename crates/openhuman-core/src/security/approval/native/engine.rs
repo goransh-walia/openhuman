@@ -189,6 +189,30 @@ impl NativeEngine {
         .map_err(EngineError::Unavailable)
     }
 
+    /// The standard subject used by the live whole-tool grant management API.
+    /// Register it with the restrictive posture until a gated call supplies the
+    /// user's current settings.
+    async fn tool_scope(
+        &self,
+        proxy: &Proxy,
+        tenant: &crate::core::runtime::Tenant,
+    ) -> Result<std::sync::Arc<ScopeEntry>, EngineError> {
+        let subject = self.subject(tenant, Variant::Standard)?;
+        let generation = Self::generation(proxy).await?;
+        scopes::ensure(
+            &self.config,
+            proxy,
+            subject,
+            &super::super::engine::Posture {
+                require_approval: true,
+                ..Default::default()
+            },
+            generation,
+        )
+        .await
+        .map_err(EngineError::Unavailable)
+    }
+
     /// The module's current generation, which every correlation carries.
     pub(super) async fn generation(proxy: &Proxy) -> Result<u64, EngineError> {
         let info: PolicyInfo = proxy
@@ -664,10 +688,7 @@ impl ApprovalEngine for NativeEngine {
             ));
         }
         let proxy = self.proxy().await?;
-        let subject = self.subject(tenant, variant)?;
-        let scope = scopes::existing(&subject)
-            .await
-            .ok_or_else(|| unavailable("the TinySecurity approval scope is unavailable"))?;
+        let scope = self.tool_scope(&proxy, tenant).await?;
         let _guard = scope.stream.lock().await;
         let listed: ToolTrustList2 = proxy
             .call_confidential(
@@ -701,10 +722,7 @@ impl ApprovalEngine for NativeEngine {
             ));
         }
         let proxy = self.proxy().await?;
-        let subject = self.subject(tenant, variant)?;
-        let scope = scopes::existing(&subject)
-            .await
-            .ok_or_else(|| unavailable("the TinySecurity approval scope is unavailable"))?;
+        let scope = self.tool_scope(&proxy, tenant).await?;
         let _guard = scope.stream.lock().await;
         let generation = Self::generation(&proxy).await?;
         let audit = Self::correlation(&scope, generation).await?;
