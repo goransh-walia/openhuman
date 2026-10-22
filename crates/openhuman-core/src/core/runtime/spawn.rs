@@ -19,6 +19,26 @@ use tokio::task::JoinHandle;
 use super::{CoreContext, DispatchCtx};
 
 impl DispatchCtx {
+    /// Run a future on a dedicated current-thread runtime while preserving
+    /// this dispatch context. This is for synchronous APIs that must bridge to
+    /// async module calls and may be called outside a Tokio runtime.
+    pub fn block_on<F, T>(&self, future: F) -> Result<T, ()>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let dispatch = self.clone();
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|_| ())?;
+            Ok(runtime.block_on(dispatch.enter(future)))
+        })
+        .join()
+        .map_err(|_| ())?
+    }
+
     /// `fut`, wrapped to run under this context wherever it is polled. An
     /// unbound context runs it bare, which in SaaS fails closed.
     pub fn enter<F>(&self, fut: F) -> impl Future<Output = F::Output> + Send
