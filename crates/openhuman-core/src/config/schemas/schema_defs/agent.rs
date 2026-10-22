@@ -11,7 +11,7 @@ pub(super) fn lookup(function: &str) -> Option<ControllerSchema> {
             function: "get_autonomy_settings",
             description: "Get the agent access-mode settings (autonomy level, workspace confinement, trusted roots, command allow-list, forbidden paths).",
             inputs: vec![],
-            outputs: vec![json_output("autonomy", "Current [autonomy] config block.")],
+            outputs: vec![json_output("autonomy", "Current [security.autonomy] config block.")],
         }),
 "update_autonomy_settings" => Some( ControllerSchema {
             namespace: "config",

@@ -21,7 +21,7 @@ is mounted as a submodule of [`load/dirs.rs`](./load/dirs.rs) via `#[path]`.
 | `[security.autonomy]` | [`autonomy.rs`](./autonomy.rs) | `AutonomyConfig`: feeds `security::SecurityPolicy` |
 | `[[capability_providers]]` | [`capability_providers.rs`](./capability_providers.rs) | `CapabilityProviderConfig` |
 | `[channels_config]` | [`channels.rs`](./channels.rs) | `ChannelsConfig` and per-provider configs re-exported from `tinychannels_bus` |
-| `[security]`, `[sandbox]` | [`security.rs`](./security.rs) | `SecurityConfig`, approval settings, and `SandboxConfig` |
+| `[security]`, `[security.sandbox]` | [`security.rs`](./security.rs) | `SecurityConfig`, `SandboxConfig`, and approval settings |
 | `[claude_agent_sdk]` | [`claude_agent_sdk.rs`](./claude_agent_sdk.rs) | `ClaudeAgentSdkConfig` |
 | `[[cloud_providers]]`, `primary_cloud`, `*_provider` slugs | [`cloud_providers.rs`](./cloud_providers.rs) | `CloudProviderCreds`, `AuthStyle` |
 | `[context]` | [`context.rs`](./context.rs) | `ContextConfig` |

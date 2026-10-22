@@ -169,13 +169,15 @@ missing behaviors are RED, not removed or marked successful.
 translator (`modules/security_policy.rs`), scoped client with generation-keyed
 decision cache (`modules/security_scoped.rs`), `live_policy::reload_from_config`
 driver, `SecurityPolicy::from_full_config` (privacy no longer hard-coded), the
-trusted-host binding in `module_config`, and a released-module two-tenant test.
+trusted-host binding in `module_config`, a released-module two-tenant test, and
+the canonical typed `Config.security.{autonomy,sandbox,privacy}` fields. Legacy
+top-level tables are folded key by key into `[security]`, with canonical values
+winning; saves emit only `[security.*]` policy tables.
 Open: routing shell/filesystem/network gates through the client and deleting the
 `tinybox_core::shell` calls in `command_checks.rs` (needs `security-module`
-default-on and a sync-to-async seam), scoped audited variants, and physically
-moving `[autonomy]/[sandbox]/[privacy]` under `[security]` in `Config`. The
-host already subscribes to `PolicyChanged`; the earlier inventory entry was
-stale. Task 7's released durable whole-tool grant support is tracked below.
+default-on and a sync-to-async seam) and scoped audited variants. The host
+already subscribes to `PolicyChanged`; the earlier inventory entry was stale.
+Task 7's released durable whole-tool grant support is tracked below.
 
 ## Task 3 — Command grammar, tool rules and action accounting
 
