@@ -35,8 +35,8 @@ use crate::memory::types::{ForgetParams, ItemsListParams, LearnParams, RecallPar
 use crate::security::policy::GateDecision;
 use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::security::SecurityPolicy;
-use tinysecurity_bus::CommandClass;
 use tinymemory_api::{Error, Result};
+use tinysecurity_bus::CommandClass;
 
 /// Prefix of a flow's own tag (see [`flow_tag`]).
 pub const FLOW_TAG_PREFIX: &str = "flow:";

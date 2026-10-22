@@ -44,10 +44,10 @@ use crate::memory::types::{FetchParams, RecallParams};
 use crate::security::approval::{summarize_action, GateOutcome};
 use crate::security::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 use crate::security::SecurityPolicy;
-use tinysecurity_bus::CommandClass;
 use tinymemory_api::wrap_untrusted_for_agent;
 use tinymemory_api::Error;
 use tinymemory_api::{Hit, LearningKind, MemoryMeta, MetaFilter, SourceKind};
+use tinysecurity_bus::CommandClass;
 
 use super::{enforce_current_node_tier_gate, gate_call_for_tier, EngineError, Result};
 
