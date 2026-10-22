@@ -115,13 +115,13 @@ fn the_desktop_exception_is_off_when_the_tool_is_unknown() {
 #[test]
 fn a_latched_audit_failure_routes_external_tools_even_when_desktop_approvals_are_off() {
     assert!(ApprovalSecurityMiddleware::requires_resolver(
-        true, true, true,
+        true, true, true, true,
     ));
     assert!(!ApprovalSecurityMiddleware::requires_resolver(
-        true, false, true,
+        true, true, false, true,
     ));
     assert!(!ApprovalSecurityMiddleware::requires_resolver(
-        false, true, false,
+        false, true, true, false,
     ));
 }
 
@@ -402,7 +402,7 @@ async fn an_external_audit_failure_keeps_the_result_and_denies_later_admissions(
 #[test]
 fn a_missing_approval_gate_routes_external_effects_to_the_deny_path() {
     assert!(ApprovalSecurityMiddleware::requires_resolver(
-        true, false, true,
+        true, false, false, true,
     ));
 }
 
