@@ -250,6 +250,20 @@ fn remember_browser_dial_binding(binding: BrowserDialBinding) -> Result<(), Stri
     Ok(())
 }
 
+#[cfg(test)]
+pub(crate) fn remember_browser_dial_binding_for_test(
+    policy_id: EgressPolicyId,
+    generation: u64,
+    proxy: tinybus::Proxy,
+) {
+    remember_browser_dial_binding(BrowserDialBinding {
+        policy_id,
+        generation,
+        proxy,
+    })
+    .expect("browser binding registry is available");
+}
+
 fn browser_dial_binding(policy_id: &EgressPolicyId, generation: u64) -> Result<BrowserDialBinding, String> {
     browser_dial_bindings()
         .lock()
@@ -274,15 +288,7 @@ pub(crate) async fn browser_dial_config(config: &Config) -> Result<(String, u64)
     let privacy = super::policy_translation::privacy_mode(
         crate::security::live_policy::current_privacy_mode(),
     );
-    let mut policy = browser_preflight_policy(owner, privacy);
-    if !policy
-        .data_categories
-        .contains(&tinysecurity_bus::DataCategory::OpaqueBrowserTraffic)
-    {
-        policy
-            .data_categories
-            .push(tinysecurity_bus::DataCategory::OpaqueBrowserTraffic);
-    }
+    let policy = browser_preflight_policy(owner, privacy);
     let policy_id = cached_policy_id(&config, policy).await?;
     let proxy = egress_proxy(&config).await?;
     let info = super::security::policy_info(&config).await?;
@@ -425,7 +431,11 @@ pub(crate) fn browser_preflight_policy(
     owner: tinysecurity_bus::SubjectScope,
     privacy: tinysecurity_bus::PrivacyMode,
 ) -> EgressPolicy {
-    policy_for(owner, privacy, vec![EgressTransport::Browser])
+    let mut policy = policy_for(owner, privacy, vec![EgressTransport::Browser]);
+    policy
+        .data_categories
+        .push(tinysecurity_bus::DataCategory::OpaqueBrowserTraffic);
+    policy
 }
 
 fn policy_for(
