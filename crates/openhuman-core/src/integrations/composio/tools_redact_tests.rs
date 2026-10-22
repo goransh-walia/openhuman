@@ -178,15 +178,17 @@ async fn every_result_string_is_sent_to_the_module() {
 #[tokio::test]
 async fn an_oversized_result_is_withheld_before_module_calls() {
     use std::sync::{
-        Arc,
         atomic::{AtomicUsize, Ordering},
+        Arc,
     };
 
     let calls = Arc::new(AtomicUsize::new(0));
     let called = Arc::clone(&calls);
     let values = (0..257).map(|index| format!("result field {index}"));
     let outcome = redact_outcome_with(
-        Ok(tinytools::ToolResult::json(json!(values.collect::<Vec<_>>()))),
+        Ok(tinytools::ToolResult::json(json!(
+            values.collect::<Vec<_>>()
+        ))),
         &keys(),
         move |strings| {
             called.fetch_add(1, Ordering::SeqCst);

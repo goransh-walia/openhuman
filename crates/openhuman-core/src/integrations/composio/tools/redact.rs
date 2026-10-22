@@ -18,6 +18,8 @@ use tinytools::{ToolContent, ToolResult};
 use crate::config::Config;
 
 const MIN_SECRET_LEN: usize = 8;
+const MAX_OUTCOME_STRINGS: usize = 256;
+const MAX_OUTCOME_REDACTION_BYTES: usize = 512 * 1024;
 
 /// The Composio keys `config` can resolve to: a host-pinned key, the inline
 /// `composio.api_key`, and in unpinned direct mode the stored key.
@@ -48,6 +50,23 @@ pub(crate) const WITHHELD: &str = "Composio result withheld: the security module
 
 fn contains_configured_secret(text: &str, secrets: &[String]) -> bool {
     secrets.iter().any(|secret| text.contains(secret))
+}
+
+fn within_redaction_limits<'a>(texts: impl IntoIterator<Item = &'a str>, count: usize) -> bool {
+    if count > MAX_OUTCOME_STRINGS {
+        return false;
+    }
+    let mut bytes = 0usize;
+    for text in texts {
+        let Some(next) = bytes.checked_add(text.len()) else {
+            return false;
+        };
+        if next > MAX_OUTCOME_REDACTION_BYTES {
+            return false;
+        }
+        bytes = next;
+    }
+    true
 }
 
 /// Every string the outcome carries that could contain a key: text, JSON string
@@ -163,6 +182,9 @@ where
             if strings.is_empty() {
                 return Ok(result);
             }
+            if !within_redaction_limits(strings.iter().map(String::as_str), strings.len()) {
+                return Err(anyhow::anyhow!(WITHHELD));
+            }
             match redactor(strings.clone()).await {
                 Ok(answers) => {
                     if strings.iter().any(|text| {
@@ -170,6 +192,10 @@ where
                             .get(text)
                             .is_none_or(|answer| contains_configured_secret(answer, secrets))
                     }) {
+                        return Err(anyhow::anyhow!(WITHHELD));
+                    }
+                    if !within_redaction_limits(answers.values().map(String::as_str), answers.len())
+                    {
                         return Err(anyhow::anyhow!(WITHHELD));
                     }
                     apply_answers(&mut result, &answers);
@@ -183,9 +209,15 @@ where
         }
         Err(error) => {
             let rendered = format!("{error:#}");
+            if !within_redaction_limits(std::iter::once(rendered.as_str()), 1) {
+                return Err(anyhow::anyhow!(WITHHELD));
+            }
             match redactor(vec![rendered.clone()]).await {
                 Ok(answers) => match answers.get(&rendered) {
                     Some(redacted) if contains_configured_secret(redacted, secrets) => {
+                        Err(anyhow::anyhow!(WITHHELD))
+                    }
+                    Some(redacted) if redacted.len() > MAX_OUTCOME_REDACTION_BYTES => {
                         Err(anyhow::anyhow!(WITHHELD))
                     }
                     Some(redacted) if *redacted != rendered => {
@@ -247,12 +279,17 @@ async fn redact_one(_config: &Config, _text: &str, _secrets: &[String]) -> Resul
 /// and return that same redacted copy for the caller's own error text.
 pub(crate) async fn redact_and_report(config: &Config, operation: &str, rendered: &str) -> String {
     let secrets = composio_secrets(config);
-    let redacted = match redact_one(config, rendered, &secrets).await {
-        Ok(redacted) if contains_configured_secret(&redacted, &secrets) => WITHHELD.to_string(),
-        Ok(redacted) => redacted,
-        Err(error) => {
-            tracing::warn!("[composio] error text withheld: {error}");
-            WITHHELD.to_string()
+    let redacted = if !within_redaction_limits(std::iter::once(rendered), 1) {
+        WITHHELD.to_string()
+    } else {
+        match redact_one(config, rendered, &secrets).await {
+            Ok(redacted) if contains_configured_secret(&redacted, &secrets) => WITHHELD.to_string(),
+            Ok(redacted) if redacted.len() > MAX_OUTCOME_REDACTION_BYTES => WITHHELD.to_string(),
+            Ok(redacted) => redacted,
+            Err(error) => {
+                tracing::warn!("[composio] error text withheld: {error}");
+                WITHHELD.to_string()
+            }
         }
     };
     super::super::ops::report_composio_op_error(operation, &redacted);
