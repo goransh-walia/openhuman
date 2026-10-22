@@ -436,6 +436,13 @@ Config snapshot URL suppression is covered under Task 2.
 RPC dispatch parameter logs now use TinySecurity `StructuredLogArguments`;
 unavailable or malformed responses suppress the complete parameter value.
 `core::rpc_log` regression tests cover valid JSON projection and suppression.
+Flow memory writes now route both agent-tool and TinyFlows node guards through
+the released module's `CredentialsOnly` redactor and fail closed when it cannot
+answer. The existing `api_key=abc123` characterization exposed a short-value
+parity gap in v0.17.0; TinySecurity PR #42 adds that case while preserving source
+identifiers and must release before the host integration is publishable. The
+host guard tests and no-security-module RPC-log suppression test pass locally;
+the flow-node short-key test remains red against the currently pinned archive.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
