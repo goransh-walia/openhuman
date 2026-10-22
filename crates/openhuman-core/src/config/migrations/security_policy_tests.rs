@@ -85,7 +85,9 @@ fn max_cost_is_deleted_with_a_notice_everywhere_it_appears() {
     assert!(notices.contains(&Notice::DroppedMaxCost {
         table: "security.autonomy"
     }));
-    assert!(d["autonomy"].get("max_cost_per_day_cents").is_none());
+    assert!(d["security"]["autonomy"]
+        .get("max_cost_per_day_cents")
+        .is_none());
 }
 
 #[test]
@@ -95,7 +97,7 @@ fn rewritten_document_round_trips_through_save_shape() {
     let saved = toml::to_string(&config).unwrap();
     assert!(!saved.contains("max_cost_per_day_cents"));
     let again = crate::config::schema::config_from_toml_str(&saved).unwrap();
-    assert!(again.autonomy.enabled);
+    assert!(again.security.autonomy.enabled);
 }
 
 #[test]
