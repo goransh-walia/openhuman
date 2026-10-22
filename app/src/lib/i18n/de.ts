@@ -3542,14 +3542,17 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'Lokal verschlüsselten Speicher erlauben',
   'keyring.settings.revokeConsent': 'Lokalen Speicher ablehnen',
   'keyring.settings.toolTrustTitle': 'Vertrauenswürdige Tools',
-  'keyring.settings.toolTrustDescription': 'Tools, die Sie immer zulassen, können ohne erneute Nachfrage ausgeführt werden. Widerrufen Sie eine Freigabe, damit wieder um Bestätigung gebeten wird.',
+  'keyring.settings.toolTrustDescription':
+    'Tools, die Sie immer zulassen, können ohne erneute Nachfrage ausgeführt werden. Widerrufen Sie eine Freigabe, damit wieder um Bestätigung gebeten wird.',
   'keyring.settings.toolTrustLoading': 'Vertrauenswürdige Tools werden geladen…',
   'keyring.settings.toolTrustEmpty': 'Keine vertrauenswürdigen Tools',
   'keyring.settings.toolTrustRevoke': 'Widerrufen',
   'keyring.settings.toolTrustRevoking': 'Wird widerrufen…',
   'keyring.settings.toolTrustRetry': 'Erneut versuchen',
-  'keyring.settings.toolTrustLoadFailed': 'Vertrauenswürdige Tools konnten nicht geladen werden. Versuchen Sie es erneut.',
-  'keyring.settings.toolTrustRevokeFailed': 'Die Freigabe für das Tool konnte nicht widerrufen werden. Versuchen Sie es erneut.',
+  'keyring.settings.toolTrustLoadFailed':
+    'Vertrauenswürdige Tools konnten nicht geladen werden. Versuchen Sie es erneut.',
+  'keyring.settings.toolTrustRevokeFailed':
+    'Die Freigabe für das Tool konnte nicht widerrufen werden. Versuchen Sie es erneut.',
   'pages.settings.account.security': 'Sicherheit',
   'pages.settings.account.securityDesc': 'Geheimnisspeicher-Modus und Schlüsselbund-Status',
   // Chat: agent-generated artifacts (#2779)

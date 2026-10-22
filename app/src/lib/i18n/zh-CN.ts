@@ -3244,7 +3244,8 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': '允许本地加密存储',
   'keyring.settings.revokeConsent': '拒绝本地存储',
   'keyring.settings.toolTrustTitle': '受信任的工具',
-  'keyring.settings.toolTrustDescription': '你选择始终允许的工具可以无需再次询问而运行。撤销授权后将恢复审批提示。',
+  'keyring.settings.toolTrustDescription':
+    '你选择始终允许的工具可以无需再次询问而运行。撤销授权后将恢复审批提示。',
   'keyring.settings.toolTrustLoading': '正在加载受信任的工具…',
   'keyring.settings.toolTrustEmpty': '没有受信任的工具',
   'keyring.settings.toolTrustRevoke': '撤销',

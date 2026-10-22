@@ -304,12 +304,16 @@ describe('SecurityPanel — whole-tool trust grants', () => {
     mockFetchToolTrust.mockResolvedValue([
       { tool: 'Browser search', request_id: 'opaque-grant-7', granted_at_ms: 1_800_000_000_000 },
     ]);
-    mockRevokeToolTrust.mockRejectedValueOnce(new Error('private failure detail')).mockResolvedValue(true);
+    mockRevokeToolTrust
+      .mockRejectedValueOnce(new Error('private failure detail'))
+      .mockResolvedValue(true);
 
     renderWithProviders(<SecurityPanel />);
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
 
-    expect(await screen.findByText('Could not revoke trusted tool. Try again.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Could not revoke trusted tool. Try again.')
+    ).toBeInTheDocument();
     expect(screen.getByText('Browser search')).toBeInTheDocument();
     expect(screen.queryByText('private failure detail')).not.toBeInTheDocument();
 

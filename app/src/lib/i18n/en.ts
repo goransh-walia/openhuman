@@ -4010,7 +4010,8 @@ const en: TranslationMap = {
   'keyring.settings.grantConsent': 'Allow local encrypted storage',
   'keyring.settings.revokeConsent': 'Decline local storage',
   'keyring.settings.toolTrustTitle': 'Trusted tools',
-  'keyring.settings.toolTrustDescription': 'Tools you chose to always allow can run without asking again. Revoke a grant to restore approval prompts.',
+  'keyring.settings.toolTrustDescription':
+    'Tools you chose to always allow can run without asking again. Revoke a grant to restore approval prompts.',
   'keyring.settings.toolTrustLoading': 'Loading trusted tools…',
   'keyring.settings.toolTrustEmpty': 'No trusted tools',
   'keyring.settings.toolTrustRevoke': 'Revoke',

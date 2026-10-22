@@ -3480,14 +3480,17 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'Разрешить локальное зашифрованное хранилище',
   'keyring.settings.revokeConsent': 'Отклонить локальное хранилище',
   'keyring.settings.toolTrustTitle': 'Доверенные инструменты',
-  'keyring.settings.toolTrustDescription': 'Инструменты, которым вы разрешили работать всегда, могут запускаться без повторного запроса. Отзовите разрешение, чтобы снова получать запросы на подтверждение.',
+  'keyring.settings.toolTrustDescription':
+    'Инструменты, которым вы разрешили работать всегда, могут запускаться без повторного запроса. Отзовите разрешение, чтобы снова получать запросы на подтверждение.',
   'keyring.settings.toolTrustLoading': 'Загрузка доверенных инструментов…',
   'keyring.settings.toolTrustEmpty': 'Нет доверенных инструментов',
   'keyring.settings.toolTrustRevoke': 'Отозвать',
   'keyring.settings.toolTrustRevoking': 'Отзывается…',
   'keyring.settings.toolTrustRetry': 'Повторить',
-  'keyring.settings.toolTrustLoadFailed': 'Не удалось загрузить доверенные инструменты. Попробуйте ещё раз.',
-  'keyring.settings.toolTrustRevokeFailed': 'Не удалось отозвать разрешение для инструмента. Попробуйте ещё раз.',
+  'keyring.settings.toolTrustLoadFailed':
+    'Не удалось загрузить доверенные инструменты. Попробуйте ещё раз.',
+  'keyring.settings.toolTrustRevokeFailed':
+    'Не удалось отозвать разрешение для инструмента. Попробуйте ещё раз.',
   'pages.settings.account.security': 'Безопасность',
   'pages.settings.account.securityDesc': 'Режим хранения секретов и статус связки ключей',
   // Chat: agent-generated artifacts (#2779)

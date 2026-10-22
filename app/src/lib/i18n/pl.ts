@@ -3491,14 +3491,17 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'Zezwól na lokalne zaszyfrowane przechowywanie',
   'keyring.settings.revokeConsent': 'Odmów lokalnego przechowywania',
   'keyring.settings.toolTrustTitle': 'Zaufane narzędzia',
-  'keyring.settings.toolTrustDescription': 'Narzędzia, którym zezwolono zawsze, mogą działać bez ponownego pytania. Cofnij zgodę, aby znów wymagać zatwierdzenia.',
+  'keyring.settings.toolTrustDescription':
+    'Narzędzia, którym zezwolono zawsze, mogą działać bez ponownego pytania. Cofnij zgodę, aby znów wymagać zatwierdzenia.',
   'keyring.settings.toolTrustLoading': 'Wczytywanie zaufanych narzędzi…',
   'keyring.settings.toolTrustEmpty': 'Brak zaufanych narzędzi',
   'keyring.settings.toolTrustRevoke': 'Cofnij',
   'keyring.settings.toolTrustRevoking': 'Cofanie…',
   'keyring.settings.toolTrustRetry': 'Ponów próbę',
-  'keyring.settings.toolTrustLoadFailed': 'Nie udało się wczytać zaufanych narzędzi. Spróbuj ponownie.',
-  'keyring.settings.toolTrustRevokeFailed': 'Nie udało się cofnąć zaufania do narzędzia. Spróbuj ponownie.',
+  'keyring.settings.toolTrustLoadFailed':
+    'Nie udało się wczytać zaufanych narzędzi. Spróbuj ponownie.',
+  'keyring.settings.toolTrustRevokeFailed':
+    'Nie udało się cofnąć zaufania do narzędzia. Spróbuj ponownie.',
   'pages.settings.account.security': 'Bezpieczeństwo',
   'pages.settings.account.securityDesc': 'Tryb przechowywania sekretów i stan pęku kluczy',
   // Chat: agent-generated artifacts (#2779)

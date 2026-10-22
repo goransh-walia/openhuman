@@ -3468,7 +3468,8 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'Izinkan penyimpanan lokal terenkripsi',
   'keyring.settings.revokeConsent': 'Tolak penyimpanan lokal',
   'keyring.settings.toolTrustTitle': 'Alat tepercaya',
-  'keyring.settings.toolTrustDescription': 'Alat yang Anda pilih untuk selalu diizinkan dapat berjalan tanpa bertanya lagi. Cabut izin agar permintaan persetujuan muncul kembali.',
+  'keyring.settings.toolTrustDescription':
+    'Alat yang Anda pilih untuk selalu diizinkan dapat berjalan tanpa bertanya lagi. Cabut izin agar permintaan persetujuan muncul kembali.',
   'keyring.settings.toolTrustLoading': 'Memuat alat tepercaya…',
   'keyring.settings.toolTrustEmpty': 'Tidak ada alat tepercaya',
   'keyring.settings.toolTrustRevoke': 'Cabut',

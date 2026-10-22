@@ -3404,14 +3404,17 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': '로컬 암호화 저장소 허용',
   'keyring.settings.revokeConsent': '로컬 저장소 거부',
   'keyring.settings.toolTrustTitle': '신뢰할 수 있는 도구',
-  'keyring.settings.toolTrustDescription': '항상 허용하도록 선택한 도구는 다시 묻지 않고 실행할 수 있습니다. 권한을 취소하면 다시 승인을 요청합니다.',
+  'keyring.settings.toolTrustDescription':
+    '항상 허용하도록 선택한 도구는 다시 묻지 않고 실행할 수 있습니다. 권한을 취소하면 다시 승인을 요청합니다.',
   'keyring.settings.toolTrustLoading': '신뢰할 수 있는 도구 불러오는 중…',
   'keyring.settings.toolTrustEmpty': '신뢰할 수 있는 도구가 없습니다',
   'keyring.settings.toolTrustRevoke': '취소',
   'keyring.settings.toolTrustRevoking': '취소 중…',
   'keyring.settings.toolTrustRetry': '재시도',
-  'keyring.settings.toolTrustLoadFailed': '신뢰할 수 있는 도구를 불러오지 못했습니다. 다시 시도하세요.',
-  'keyring.settings.toolTrustRevokeFailed': '신뢰할 수 있는 도구를 취소하지 못했습니다. 다시 시도하세요.',
+  'keyring.settings.toolTrustLoadFailed':
+    '신뢰할 수 있는 도구를 불러오지 못했습니다. 다시 시도하세요.',
+  'keyring.settings.toolTrustRevokeFailed':
+    '신뢰할 수 있는 도구를 취소하지 못했습니다. 다시 시도하세요.',
   'pages.settings.account.security': '보안',
   'pages.settings.account.securityDesc': '비밀 저장 모드 및 키체인 상태',
   // Chat: agent-generated artifacts (#2779)

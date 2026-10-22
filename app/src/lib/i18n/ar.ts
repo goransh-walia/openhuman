@@ -3371,7 +3371,8 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'السماح بالتخزين المشفّر المحلي',
   'keyring.settings.revokeConsent': 'رفض التخزين المحلي',
   'keyring.settings.toolTrustTitle': 'الأدوات الموثوقة',
-  'keyring.settings.toolTrustDescription': 'يمكن تشغيل الأدوات التي اخترت السماح بها دائمًا دون السؤال مجددًا. ألغِ الإذن لاستعادة طلبات الموافقة.',
+  'keyring.settings.toolTrustDescription':
+    'يمكن تشغيل الأدوات التي اخترت السماح بها دائمًا دون السؤال مجددًا. ألغِ الإذن لاستعادة طلبات الموافقة.',
   'keyring.settings.toolTrustLoading': 'جارٍ تحميل الأدوات الموثوقة…',
   'keyring.settings.toolTrustEmpty': 'لا توجد أدوات موثوقة',
   'keyring.settings.toolTrustRevoke': 'إلغاء الإذن',

@@ -3692,7 +3692,8 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'Yerel şifreli depolamaya izin ver',
   'keyring.settings.revokeConsent': 'Yerel depolamayı reddet',
   'keyring.settings.toolTrustTitle': 'Güvenilen araçlar',
-  'keyring.settings.toolTrustDescription': 'Her zaman izin vermeyi seçtiğiniz araçlar tekrar sormadan çalışabilir. İzni iptal ederek onay istemlerini yeniden etkinleştirin.',
+  'keyring.settings.toolTrustDescription':
+    'Her zaman izin vermeyi seçtiğiniz araçlar tekrar sormadan çalışabilir. İzni iptal ederek onay istemlerini yeniden etkinleştirin.',
   'keyring.settings.toolTrustLoading': 'Güvenilen araçlar yükleniyor…',
   'keyring.settings.toolTrustEmpty': 'Güvenilen araç yok',
   'keyring.settings.toolTrustRevoke': 'İptal et',

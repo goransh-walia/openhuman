@@ -3509,14 +3509,17 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'Permitir almacenamiento local cifrado',
   'keyring.settings.revokeConsent': 'Rechazar almacenamiento local',
   'keyring.settings.toolTrustTitle': 'Herramientas de confianza',
-  'keyring.settings.toolTrustDescription': 'Las herramientas que elegiste permitir siempre pueden ejecutarse sin volver a preguntar. Revoca un permiso para volver a solicitar aprobación.',
+  'keyring.settings.toolTrustDescription':
+    'Las herramientas que elegiste permitir siempre pueden ejecutarse sin volver a preguntar. Revoca un permiso para volver a solicitar aprobación.',
   'keyring.settings.toolTrustLoading': 'Cargando herramientas de confianza…',
   'keyring.settings.toolTrustEmpty': 'No hay herramientas de confianza',
   'keyring.settings.toolTrustRevoke': 'Revocar',
   'keyring.settings.toolTrustRevoking': 'Revocando…',
   'keyring.settings.toolTrustRetry': 'Reintentar',
-  'keyring.settings.toolTrustLoadFailed': 'No se pudieron cargar las herramientas de confianza. Inténtalo de nuevo.',
-  'keyring.settings.toolTrustRevokeFailed': 'No se pudo revocar la herramienta de confianza. Inténtalo de nuevo.',
+  'keyring.settings.toolTrustLoadFailed':
+    'No se pudieron cargar las herramientas de confianza. Inténtalo de nuevo.',
+  'keyring.settings.toolTrustRevokeFailed':
+    'No se pudo revocar la herramienta de confianza. Inténtalo de nuevo.',
   'pages.settings.account.security': 'Seguridad',
   'pages.settings.account.securityDesc': 'Modo de almacenamiento de secretos y estado del llavero',
   // Chat: agent-generated artifacts (#2779)

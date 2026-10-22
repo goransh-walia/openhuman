@@ -3,7 +3,11 @@ import { useEffect, useState } from 'react';
 
 import { useT } from '../../../lib/i18n/I18nContext';
 import { useCoreState } from '../../../providers/CoreStateProvider';
-import { fetchToolTrust, revokeToolTrust, type ToolTrustGrant } from '../../../services/api/approvalApi';
+import {
+  fetchToolTrust,
+  revokeToolTrust,
+  type ToolTrustGrant,
+} from '../../../services/api/approvalApi';
 import { decideKeyringConsent, retryKeyringProbe } from '../../../services/keyringApi';
 import Button from '../../ui/Button';
 import Card from '../../ui/Card';
@@ -82,7 +86,7 @@ const SecurityPanel = () => {
     setToolTrustError(null);
     try {
       await revokeToolTrust(requestId);
-      setToolTrust((current) => current.filter((grant) => grant.request_id !== requestId));
+      setToolTrust(current => current.filter(grant => grant.request_id !== requestId));
     } catch {
       setToolTrustError(t('keyring.settings.toolTrustRevokeFailed'));
     } finally {
@@ -213,7 +217,11 @@ const SecurityPanel = () => {
             ) : toolTrustError && toolTrust.length === 0 ? (
               <div className="flex flex-wrap items-center gap-3" role="alert">
                 <p className="text-sm text-danger-700 dark:text-danger-300">{toolTrustError}</p>
-                <Button type="button" variant="secondary" size="sm" onClick={() => void loadToolTrust()}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void loadToolTrust()}>
                   {t('keyring.settings.toolTrustRetry')}
                 </Button>
               </div>
@@ -221,9 +229,13 @@ const SecurityPanel = () => {
               <p className="text-sm text-content-muted">{t('keyring.settings.toolTrustEmpty')}</p>
             ) : (
               <ul className="divide-y divide-line">
-                {toolTrust.map((grant) => (
-                  <li key={grant.request_id} className="flex items-center justify-between gap-3 py-3">
-                    <span className="min-w-0 truncate text-sm text-content-primary">{grant.tool}</span>
+                {toolTrust.map(grant => (
+                  <li
+                    key={grant.request_id}
+                    className="flex items-center justify-between gap-3 py-3">
+                    <span className="min-w-0 truncate text-sm text-content-primary">
+                      {grant.tool}
+                    </span>
                     <Button
                       type="button"
                       variant="secondary"

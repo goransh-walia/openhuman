@@ -4040,14 +4040,17 @@ const messages: TranslationMap = {
   'keyring.settings.grantConsent': 'ローカル暗号化ストレージを許可',
   'keyring.settings.revokeConsent': 'ローカルストレージを拒否',
   'keyring.settings.toolTrustTitle': '信頼済みツール',
-  'keyring.settings.toolTrustDescription': '常に許可したツールは、再確認なしで実行できます。許可を取り消すと、再び承認を求めるようになります。',
+  'keyring.settings.toolTrustDescription':
+    '常に許可したツールは、再確認なしで実行できます。許可を取り消すと、再び承認を求めるようになります。',
   'keyring.settings.toolTrustLoading': '信頼済みツールを読み込み中…',
   'keyring.settings.toolTrustEmpty': '信頼済みツールはありません',
   'keyring.settings.toolTrustRevoke': '取り消す',
   'keyring.settings.toolTrustRevoking': '取り消し中…',
   'keyring.settings.toolTrustRetry': '再試行',
-  'keyring.settings.toolTrustLoadFailed': '信頼済みツールを読み込めませんでした。もう一度お試しください。',
-  'keyring.settings.toolTrustRevokeFailed': 'ツールの許可を取り消せませんでした。もう一度お試しください。',
+  'keyring.settings.toolTrustLoadFailed':
+    '信頼済みツールを読み込めませんでした。もう一度お試しください。',
+  'keyring.settings.toolTrustRevokeFailed':
+    'ツールの許可を取り消せませんでした。もう一度お試しください。',
   'pages.settings.account.security': 'セキュリティ',
   'pages.settings.account.securityDesc': 'シークレットの保存モードとキーチェーンの状態',
   'settings.keychain.title': 'キーチェーン',
