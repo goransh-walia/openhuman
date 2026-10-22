@@ -79,7 +79,7 @@ fn planned_bounds_override_defaults_and_absent_bounds_keep_them() {
     planned.constraints.push(SandboxConstraint2::Subprocesses);
     let plan = BoxPlan::from_artifact(&planned, None).unwrap();
     assert_eq!(plan.executor, PlannedExecutor::Docker);
-    assert_eq!(plan.resources.cpu_millis, Some(500));
+    assert_eq!(plan.resources.cpu_millis, Some(500_u64));
     assert_eq!(plan.resources.memory_bytes, Some(64 << 20));
     assert_eq!(plan.resources.pids_max, None);
     assert_eq!(plan.resources.disk_bytes, None);

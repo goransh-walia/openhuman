@@ -14,6 +14,7 @@ use crate::modules::tinybox::{self, contract};
 /// The jail the module planned for one spawn, in TinyBox's vocabulary. The host
 /// never derives grants, network or enforcement of its own.
 #[cfg(feature = "modules")]
+#[derive(Debug)]
 pub(crate) struct PlannedJail {
     /// Planned grants and confinement requirements.
     pub(crate) config: contract::NativeJailConfig,

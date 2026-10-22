@@ -222,9 +222,9 @@ fn resources(artifact: &SandboxArtifact2) -> Result<NativeJailResourceRequest, P
         return Err(PlanMappingError::ZeroLimit);
     }
     Ok(NativeJailResourceRequest {
-        cpu_millis: limits.cpu_millicores,
+        cpu_millis: limits.cpu_millicores.map(u64::from),
         memory_bytes: limits.memory_bytes,
-        pids_max: limits.pids_max,
+        pids_max: limits.pids_max.map(u64::from),
         disk_bytes: None,
     })
 }
