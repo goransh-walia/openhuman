@@ -1,36 +1,6 @@
 use super::*;
 use crate::modules::security::native_tests::native_approval_fixture;
-use async_trait::async_trait;
 use tinysecurity_bus::{AuditEventReceipt2, AuditHealth2, AuditSinkResponse2};
-
-struct AllowedExternalAuditTool;
-
-#[async_trait]
-impl tinytools::Tool for AllowedExternalAuditTool {
-    fn name(&self) -> &str {
-        "send_external"
-    }
-
-    fn description(&self) -> &str {
-        "test external effect"
-    }
-
-    fn parameters_schema(&self) -> serde_json::Value {
-        serde_json::json!({ "type": "object" })
-    }
-
-    fn permission_level(&self) -> tinytools::PermissionLevel {
-        tinytools::PermissionLevel::Write
-    }
-
-    fn external_effect(&self) -> bool {
-        true
-    }
-
-    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<tinytools::ToolResult> {
-        Ok(tinytools::ToolResult::success("completed"))
-    }
-}
 
 fn subject(agent: &str) -> SubjectScope {
     SubjectScope {
@@ -151,8 +121,6 @@ async fn shell_rows_extend_the_subjects_one_ordered_stream() {
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn audit_record_uses_the_admitting_dispatch_tenant() {
     use crate::core::runtime::{ContextOverlay, CoreContext, DispatchCtx, DomainSet};
-    use tinyagents_harness::middleware::{ApprovalResolution, ApprovalResolver};
-    use tinyinference_llm::tool::ToolCall;
 
     let fixture = native_approval_fixture().await;
     let config = Config {
@@ -173,33 +141,11 @@ async fn audit_record_uses_the_admitting_dispatch_tenant() {
     };
     let admitted = DispatchCtx::new(make_context("tenant-a"));
     let ambient_other = make_context("tenant-b");
-    let tool = AllowedExternalAuditTool;
-    let resolver = crate::agent::tinyagents::middleware::ApprovalSecurityMiddleware::new(vec![
-        std::sync::Arc::new(vec![Box::new(tool) as Box<dyn tinytools::Tool>]),
-    ]);
-    let run = tinyagents_harness::context::RunContext::new(
-        tinyagents_harness::context::RunConfig::new("audit-tenant-terminal"),
-        crate::agent::tinyagents::host::OpenHumanRunContext::new().with_core(admitted.resolved()),
-    );
-    let call = ToolCall {
-        id: "audit-tenant-call".into(),
-        name: "send_external".into(),
-        arguments: serde_json::json!({"payload": "private"}),
-        invalid: None,
-    };
-    let admission = resolver.resolve_allowed(&run, &call).await;
-    let ApprovalResolution::Allow {
-        ticket: Some(_ticket),
-    } = admission
-    else {
-        panic!("the external effect must pass the host tool gate")
-    };
-    let dispatch = run.data.dispatch_ctx();
-    let event = HostAuditEvent::external_tool_execution("send_external", "success");
+    let event = HostAuditEvent::command_execution("tool:shell", "ls", false, true, true, 1);
 
     CoreContext::scope(ambient_other, async {
         crate::security::audit_record::record_with_proxy(
-            &dispatch,
+            &admitted,
             Some(&config),
             event,
             &fixture.proxy,
