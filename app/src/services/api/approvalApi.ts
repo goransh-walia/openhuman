@@ -86,6 +86,13 @@ export interface ApprovalJudgeVerdict {
   cached: boolean;
 }
 
+/** A live durable whole-tool grant, identified by its opaque revocation id. */
+export interface ApprovalToolTrustGrant {
+  tool: string;
+  request_id: string;
+  granted_at_ms: number;
+}
+
 /**
  * Normalize the two possible wire shapes into a plain row array:
  * - gate installed → `{ result: T[], logs: string[] }`
@@ -119,6 +126,20 @@ export const fetchRecentApprovalDecisions = async (
 export const fetchPendingApprovals = async (): Promise<PendingApproval[]> => {
   const raw = await callCoreRpc<unknown>({ method: 'openhuman.approval_list_pending' });
   return unwrapRows<PendingApproval>(raw);
+};
+
+/** List durable whole-tool grants in the current signed-in tenant's scope. */
+export const fetchToolTrust = async (): Promise<ApprovalToolTrustGrant[]> => {
+  const raw = await callCoreRpc<unknown>({ method: 'openhuman.approval_list_tool_trust' });
+  return unwrapRows<ApprovalToolTrustGrant>(raw);
+};
+
+/** Revoke one durable whole-tool grant by the opaque id returned by `fetchToolTrust`. */
+export const revokeToolTrust = async (requestId: string): Promise<void> => {
+  await callCoreRpc({
+    method: 'openhuman.approval_revoke_tool_trust',
+    params: { request_id: requestId },
+  });
 };
 
 /**

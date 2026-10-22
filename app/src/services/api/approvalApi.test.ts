@@ -5,7 +5,9 @@ import {
   decideApproval,
   fetchPendingApprovals,
   fetchRecentApprovalDecisions,
+  fetchToolTrust,
   preauthorizeFlow,
+  revokeToolTrust,
   unwrapRows,
 } from './approvalApi';
 
@@ -119,6 +121,33 @@ describe('decideApproval', () => {
     expect(mockCallCoreRpc).toHaveBeenCalledWith({
       method: 'openhuman.approval_decide',
       params: { request_id: 'req-1', decision: 'approve_always_for_flow' },
+    });
+  });
+});
+
+describe('durable tool trust', () => {
+  beforeEach(() => mockCallCoreRpc.mockReset());
+
+  it('lists grants and unwraps the outcome envelope', async () => {
+    mockCallCoreRpc.mockResolvedValueOnce({
+      result: [{ tool: 'gmail_send', request_id: 'grant-1', granted_at_ms: 123 }],
+      logs: [],
+    });
+
+    await expect(fetchToolTrust()).resolves.toEqual([
+      { tool: 'gmail_send', request_id: 'grant-1', granted_at_ms: 123 },
+    ]);
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({ method: 'openhuman.approval_list_tool_trust' });
+  });
+
+  it('revokes a listed grant by its opaque id', async () => {
+    mockCallCoreRpc.mockResolvedValueOnce({ result: true, logs: [] });
+
+    await revokeToolTrust('grant-1');
+
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({
+      method: 'openhuman.approval_revoke_tool_trust',
+      params: { request_id: 'grant-1' },
     });
   });
 });
