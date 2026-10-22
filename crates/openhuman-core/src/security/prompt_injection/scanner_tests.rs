@@ -1,5 +1,14 @@
 use super::*;
 use crate::security::prompt_injection::scanner_stub::StubScanner;
+use std::future::Future;
+
+tokio::task_local! {
+    static SCOPED: Arc<dyn PromptScanner>;
+}
+
+pub(crate) async fn with_scanner<F: Future>(scanner: Arc<dyn PromptScanner>, future: F) -> F::Output {
+    SCOPED.scope(scanner, future).await
+}
 
 #[test]
 fn text_that_fits_is_one_window() {
