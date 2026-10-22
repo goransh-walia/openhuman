@@ -47,6 +47,12 @@ fn tiered_policy(config: &Config) -> crate::security::SecurityPolicy {
     .with_gateway(crate::security::policy::native_commands_stub::StubGateway::tiered())
 }
 
+fn allow_tinysecurity_gap() -> crate::modules::security_gap::PortGuard {
+    crate::modules::security_gap::install_port(Arc::new(
+        crate::modules::security_gap::stub::StubPort::allowing(),
+    ))
+}
+
 fn has_issue48_workflow_origin(ctx: &crate::core::runtime::DispatchCtx) -> bool {
     matches!(
         ctx.turn_origin(),
@@ -319,6 +325,7 @@ async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
 async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
     use crate::security::{AutonomyLevel, SecurityPolicy};
 
+    let _gap_port = allow_tinysecurity_gap();
     let dir = tempfile::tempdir().unwrap();
     let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
     save_tier_config(&captured).await;
@@ -350,6 +357,7 @@ async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
 async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
     use crate::security::{AutonomyLevel, SecurityPolicy};
 
+    let _gap_port = allow_tinysecurity_gap();
     let dir = tempfile::tempdir().unwrap();
     let mut captured = persisted_tier_config(dir.path(), true, AutonomyLevel::Full);
     save_tier_config(&captured).await;
@@ -397,6 +405,7 @@ async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
 async fn http_adapter_passes_its_live_upgrade_to_the_http_gate_without_egress() {
     use crate::security::{AutonomyLevel, SecurityPolicy};
 
+    let _gap_port = allow_tinysecurity_gap();
     let dir = tempfile::tempdir().unwrap();
     let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
     save_tier_config(&captured).await;
