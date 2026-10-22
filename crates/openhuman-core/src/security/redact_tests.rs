@@ -346,14 +346,10 @@ fn credentials_fail_when_any_chunk_cannot_be_answered() {
     assert!(out.is_none());
 }
 
-/// With no module serving (this unit-test process never arms the bridge), a
-/// tool result is answered by the floor scrub: a credential goes, ordinary text
-/// stays, and the original secret is never returned.
+/// Tool results are withheld when TinySecurity is not built: the diagnostic
+/// floor is not the authority for model-visible tool output.
+#[cfg(not(feature = "security-module"))]
 #[test]
-fn credentials_without_a_serving_module_use_the_floor_never_the_original() {
-    // Built at runtime so no credential-shaped literal sits in the source.
-    let key = format!("{}-{}", "sk", "abcdefghijklmnopqrstuvwxyz123456");
-    let out = credentials(&format!("deploy with api_key={key} now")).unwrap();
-    assert!(!out.contains(&key), "{out}");
-    assert_eq!(credentials("hello world").unwrap(), "hello world");
+fn credentials_without_security_module_withholds_tool_results() {
+    assert_eq!(credentials("hello world"), None);
 }
