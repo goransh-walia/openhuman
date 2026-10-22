@@ -631,20 +631,6 @@
   },
   {
     "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/modules/security_config.rs",
-    "line": 60,
-    "text": "let document = tokio::task::spawn_blocking(move || toml::from_str::<ModuleDocument>(&text))",
-    "occurrence": 1
-  },
-  {
-    "rule": "home-dir",
-    "path": "crates/openhuman-core/src/modules/security_scoped.rs",
-    "line": 276,
-    "text": "let command = translate::command_policy(config, mode, dirs::home_dir());",
-    "occurrence": 1
-  },
-  {
-    "rule": "bare-spawn",
     "path": "crates/openhuman-core/src/platform/llm_gate/throttle.rs",
     "line": 140,
     "text": "tokio::spawn(async move {",
@@ -701,13 +687,6 @@
   },
   {
     "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/security/approval/native/history_import.rs",
-    "line": 158,
-    "text": "tokio::task::spawn_blocking(move || read_legacy(&config))",
-    "occurrence": 1
-  },
-  {
-    "rule": "bare-spawn",
     "path": "crates/openhuman-core/src/security/credentials/ops/gated_services.rs",
     "line": 22,
     "text": "tokio::spawn(async move {",
@@ -719,27 +698,6 @@
     "line": 98,
     "text": "tokio::spawn(async move {",
     "occurrence": 2
-  },
-  {
-    "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/security/policy/native_commands.rs",
-    "line": 154,
-    "text": "std::thread::spawn(move || {",
-    "occurrence": 1
-  },
-  {
-    "rule": "home-dir",
-    "path": "crates/openhuman-core/src/security/policy/native_commands.rs",
-    "line": 263,
-    "text": "home_dir: dirs::home_dir().filter(|home| home.is_absolute()),",
-    "occurrence": 1
-  },
-  {
-    "rule": "home-dir",
-    "path": "crates/openhuman-core/src/security/policy/native_paths.rs",
-    "line": 66,
-    "text": "home_dir: dirs::home_dir(),",
-    "occurrence": 1
   },
   {
     "rule": "home-dir",
