@@ -452,6 +452,10 @@ shared redactor. It withholds results on unavailable, incomplete, oversized or
 credential-preserving answers; batches are bounded to 256 strings, 512 KiB and
 15 seconds. Regressions cover unrelated bearer credentials, incomplete module
 answers and the size limit.
+Tool-result credential scrubbing also withholds when TinySecurity is not built
+or armed; the diagnostic floor no longer authorizes unverified model-visible
+tool output. A feature-off regression first failed by returning the unchanged
+result, then passed after removing the harness scrubber fallback.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
