@@ -216,7 +216,7 @@ const SecurityPanel = () => {
               </p>
             ) : toolTrustError && toolTrust.length === 0 ? (
               <div className="flex flex-wrap items-center gap-3" role="alert">
-                <p className="text-sm text-danger-700 dark:text-danger-300">{toolTrustError}</p>
+                <p className="text-sm text-coral-600 dark:text-coral-200">{toolTrustError}</p>
                 <Button
                   type="button"
                   variant="secondary"
@@ -233,7 +233,7 @@ const SecurityPanel = () => {
                   <li
                     key={grant.request_id}
                     className="flex items-center justify-between gap-3 py-3">
-                    <span className="min-w-0 truncate text-sm text-content-primary">
+                    <span className="min-w-0 truncate text-sm text-content">
                       {grant.tool}
                     </span>
                     <Button
@@ -251,7 +251,7 @@ const SecurityPanel = () => {
               </ul>
             )}
             {toolTrustError && toolTrust.length > 0 && (
-              <p className="text-sm text-danger-700 dark:text-danger-300" role="alert">
+              <p className="text-sm text-coral-600 dark:text-coral-200" role="alert">
                 {toolTrustError}
               </p>
             )}
