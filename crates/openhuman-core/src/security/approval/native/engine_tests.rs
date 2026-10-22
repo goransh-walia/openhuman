@@ -326,7 +326,11 @@ async fn operator_tool_trust_can_be_listed_and_revoked_by_durable_id() {
 
     let shown = Arc::new(Shown::default());
     assert!(matches!(
-        world.engine.check(input("gmail_send", &shown)).await.unwrap(),
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
         Checked::Pending { .. }
     ));
 }

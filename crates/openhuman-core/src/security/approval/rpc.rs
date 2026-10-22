@@ -123,9 +123,7 @@ pub async fn approval_list_tool_trust(
 }
 
 /// Revoke one live durable whole-tool grant from the current tenant's scope.
-pub async fn approval_revoke_tool_trust(
-    request_id: &str,
-) -> anyhow::Result<Outcome<bool>> {
+pub async fn approval_revoke_tool_trust(request_id: &str) -> anyhow::Result<Outcome<bool>> {
     let gate = ApprovalGate::try_global()
         .ok_or_else(|| anyhow!("approval gate is not installed; supervised mode disabled"))?;
     let revoked = gate.revoke_tool_trust(request_id)?;
