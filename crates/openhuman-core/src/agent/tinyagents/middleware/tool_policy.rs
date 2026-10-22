@@ -24,7 +24,7 @@ struct ToolPolicyHostState {
     channel: String,
 }
 
-fn session_policy_host(
+pub(crate) fn session_policy_host(
     session: tinytools::ToolPolicySession,
     tool_sets: Vec<Arc<Vec<Box<dyn Tool>>>>,
     channel: String,

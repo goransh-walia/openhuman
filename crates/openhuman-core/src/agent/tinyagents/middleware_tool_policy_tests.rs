@@ -1,6 +1,5 @@
 use super::*;
-use crate::agent::tinyagents::middleware::tool_policy::AllowAllToolPolicy;
-use crate::agent::tinyagents::middleware::tool_policy::ToolPolicyMiddleware;
+use crate::agent::tinyagents::middleware::tool_policy::session_policy_host;
 
 // ── the listing must agree with the gate (#workflow-routing) ────────────────
 //
@@ -103,12 +102,7 @@ fn non_owner_middleware_at(allowed: PermissionLevel) -> ToolPolicyMiddleware {
             .collect(),
     };
 
-    ToolPolicyMiddleware::new(
-        Arc::new(AllowAllToolPolicy),
-        session,
-        vec![tools],
-        "web_chat".to_string(),
-    )
+    session_policy_host(session, vec![tools], "web_chat".to_string())
 }
 
 #[test]
@@ -139,8 +133,7 @@ fn desktop_approval_bypass_skips_only_require_approval_channel_verdict() {
             .into_iter()
             .collect(),
         };
-        ToolPolicyMiddleware::new(
-            Arc::new(AllowAllToolPolicy),
+        session_policy_host(
             session,
             vec![Arc::new(vec![Box::new(RoutingFakeTool(name))])],
             "web_chat".to_owned(),
@@ -285,12 +278,7 @@ async fn a_session_without_the_delegate_is_not_told_to_call_it() {
         hidden_tool_names: Default::default(),
         decisions: [allow(USE_SKILL)].into_iter().collect(),
     };
-    let mw = ToolPolicyMiddleware::new(
-        Arc::new(AllowAllToolPolicy),
-        session,
-        vec![tools],
-        "web_chat".to_string(),
-    );
+    let mw = session_policy_host(session, vec![tools], "web_chat".to_string());
 
     let message = mw
         .channel_permission_block(
@@ -344,12 +332,7 @@ async fn use_skill_reaches_a_withheld_packed_tool() {
         &visible,
     );
 
-    let mw = ToolPolicyMiddleware::new(
-        Arc::new(AllowAllToolPolicy),
-        session,
-        vec![tools],
-        "web_chat".to_string(),
-    );
+    let mw = session_policy_host(session, vec![tools], "web_chat".to_string());
 
     assert!(
         mw.channel_permission_block(
@@ -404,12 +387,7 @@ async fn a_prompt_hidden_delegate_is_not_offered_as_a_direct_route() {
         &tools,
         &visible,
     );
-    let mw = ToolPolicyMiddleware::new(
-        Arc::new(AllowAllToolPolicy),
-        session,
-        vec![tools],
-        "web_chat".to_string(),
-    );
+    let mw = session_policy_host(session, vec![tools], "web_chat".to_string());
 
     let pack = crate::tools::toolpacks::pack("workflows").expect("workflows pack");
     let route = mw.route_for_pack(pack);

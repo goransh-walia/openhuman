@@ -185,13 +185,11 @@ pub(crate) fn tool_middleware(
         let resolver = Arc::new(ApprovalSecurityMiddleware::new(tool_sets.clone()));
         let mut gate = gate(policy, resolver);
         if let Some(enforcement) = enforcement {
-            gate = gate.with_session_ceiling(
-                super::tool_policy::session_ceiling(
-                    enforcement.session.clone(),
-                    tool_sets.clone(),
-                    enforcement.channel.clone(),
-                ),
-            );
+            gate = gate.with_session_ceiling(super::tool_policy::session_ceiling(
+                enforcement.session.clone(),
+                tool_sets.clone(),
+                enforcement.channel.clone(),
+            ));
             gate = gate.with_post_gate(super::tool_policy::skill_post_gate_for_session(
                 enforcement.session,
                 tool_sets,
@@ -216,13 +214,11 @@ pub(crate) fn tool_middleware(
         }
         let mut gate = gate(Arc::new(CombinedPolicy { policies }), resolver);
         if let Some(enforcement) = enforcement {
-            gate = gate.with_session_ceiling(
-                super::tool_policy::session_ceiling(
-                    enforcement.session.clone(),
-                    tool_sets.clone(),
-                    enforcement.channel.clone(),
-                ),
-            );
+            gate = gate.with_session_ceiling(super::tool_policy::session_ceiling(
+                enforcement.session.clone(),
+                tool_sets.clone(),
+                enforcement.channel.clone(),
+            ));
             gate = gate.with_post_gate(super::tool_policy::skill_post_gate_for_session(
                 enforcement.session,
                 tool_sets,
