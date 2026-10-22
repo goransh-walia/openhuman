@@ -135,7 +135,7 @@
       "trust": "operator",
       "plan": "Agent shell -> TinySecurity SandboxPlan2/ConsumeSandboxPlan2; module chooses TinyBox or an explicitly operator-disabled host run outside SaaS",
       "executor": "module-planned",
-      "test": "crates/openhuman-core/src/sandbox/spawn_plan/integration_tests.rs",
+      "test": "crates/openhuman-core/src/sandbox/spawn_plan/facts_tests.rs",
       "note": "Agent is registered TrustedHost; direct host execution is reachable only through a consumed host_run plan after operator-off facts. Untrusted hook/scheduled text uses sandbox::untrusted and the module refuses host_run (untrusted_tests.rs; spawn_plan/integration_tests.rs untrusted_text_never_gets_a_run_on_the_host)."
     },
     {
@@ -176,10 +176,10 @@
       "file": "crates/openhuman-core/src/tools/impl/system/install_tool.rs",
       "spawns": 1,
       "trust": "untrusted",
-      "plan": "model-chosen install_tool package commands -> SandboxPlan (tinysecurity Plan) -> tinybox BoxSpec",
+      "plan": "direct host package-manager process after interactive approval and allow_tool_install; no TinySecurity sandbox plan",
       "executor": "direct",
       "test": "pending",
-      "note": "operator-approved host mutation by design (interactive human approval + allow_tool_install, fixed manager argv, validated package name); a jail would block the global prefix it exists to write. Refused under SaaS (install_tool_tests.rs). Owner decision whether to scope it to a per-manager prefix"
+      "note": "operator-approved host mutation (interactive human approval + allow_tool_install, fixed manager argv, validated package name); refused under SaaS. Task 14 remains open until the package-manager capability is safely scoped to an approved TinyBox plan or removed."
     },
     {
       "file": "crates/openhuman-tui/src/app/artifacts.rs",
