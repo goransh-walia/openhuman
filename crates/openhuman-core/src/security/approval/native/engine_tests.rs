@@ -133,22 +133,6 @@ async fn a_person_approves_reserves_and_the_outcome_is_recorded() {
         world.engine.reserve(&request_id).await.is_err(),
         "an approval is reserved exactly once"
     );
-    let shown = Arc::new(Shown::default());
-    let mut first_check = input("gmail_send", &shown);
-    first_check.tenant = first.clone();
-    world
-        .engine
-        .check(first_check)
-        .await
-        .unwrap();
-    let mut second_check = input("gmail_send", &shown);
-    second_check.tenant = second.clone();
-    world
-        .engine
-        .check(second_check)
-        .await
-        .unwrap();
-
     world
         .engine
         .record_execution(&request_id, ExecutionOutcome::Success)
@@ -325,6 +309,14 @@ async fn a_listed_whole_tool_grant_can_be_revoked_by_its_opaque_id() {
         profile: Some("another-profile".into()),
         agent: Some("another-agent".into()),
     };
+
+    let shown = Arc::new(Shown::default());
+    let mut first_check = input("gmail_send", &shown);
+    first_check.tenant = first.clone();
+    world.engine.check(first_check).await.unwrap();
+    let mut second_check = input("gmail_send", &shown);
+    second_check.tenant = second.clone();
+    world.engine.check(second_check).await.unwrap();
 
     world
         .engine
