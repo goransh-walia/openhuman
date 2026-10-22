@@ -162,7 +162,7 @@ missing behaviors are RED, not removed or marked successful.
    config/env fallback for SaaS. Secret settings never enter PolicyInfo or logs.
 **Exit:** round-trip old config fixtures and isolated new effective policies pass.
 
-**Host status (tinysecurity v0.4.0 repinned):** done: `[security]` table
+**Host status (TinySecurity v0.16.0, published 2026-10-22):** done: `[security]` table
 (`config/schema/security.rs`, audit and approval TTL wired from it, folded
 `[security.autonomy|sandbox|privacy]` overlay), migration 14->15
 (`security_policy.rs`, `max_cost_per_day_cents` deleted with a notice), single
@@ -172,9 +172,10 @@ driver, `SecurityPolicy::from_full_config` (privacy no longer hard-coded), the
 trusted-host binding in `module_config`, and a released-module two-tenant test.
 Open: routing shell/filesystem/network gates through the client and deleting the
 `tinybox_core::shell` calls in `command_checks.rs` (needs `security-module`
-default-on and a sync-to-async seam), a `PolicyChanged` signal subscriber,
-scoped audited variants, and physically moving `[autonomy]/[sandbox]/[privacy]`
-under `[security]` in `Config`.
+default-on and a sync-to-async seam), scoped audited variants, and physically
+moving `[autonomy]/[sandbox]/[privacy]` under `[security]` in `Config`. The
+host already subscribes to `PolicyChanged`; the earlier inventory entry was
+stale. Task 7's released durable whole-tool grant support is tracked below.
 
 ## Task 3 — Command grammar, tool rules and action accounting
 
@@ -304,9 +305,22 @@ imports legacy `autonomy.auto_approve` entries through `ImportTrustSource2`, and
 registers no transient whole-tool grants in each call's approval scope. A native
 test against the published Linux archive verifies an imported grant still
 authorizes a fresh engine with an empty transient grant list. Host list/revoke
-surfaces and the wider approval/SaaS cases remain open. These changes are on
-the existing draft PR #7331; its cross-platform native-policy and release
-latency jobs are running.
+surfaces were completed in the v0.17.0 follow-up below; the wider approval/SaaS
+cases remain open. These changes are on the existing draft PR #7331; its
+cross-platform native-policy and release latency jobs are running.
+
+**Follow-up (2026-10-22):** TinySecurity v0.17.0 is now published and pinned
+with all eleven host checksums from its release manifest. The v0.17 bus adds
+`RevokeToolById2`; the host approval engine and `approval.list_tool_trust` /
+`approval.revoke_tool_trust` controllers now expose the tenant-scoped durable
+grant lifecycle. The new native regression passes against the published Linux
+archive. The settings history panel now lists those grants and revokes the
+selected opaque grant id, with translations in all supported locales and a
+passing component/API test. A Windows native run also exposed a Unix-only
+absolute-path fixture; it now uses the platform temp directory and its focused
+test passes locally. That required TinyBus's already-merged secure-extraction
+fix at `11b0a72`, because v0.17 release archives mark their root directory
+group writable. A fresh three-OS released-artifact run remains open.
 
 ## Task 8 — Rules and optional Jev judge
 
@@ -424,6 +438,18 @@ related fragments; `agent/tinyagents/middleware/tinysecurity.rs`, middleware.rs,
    mocked desktop E2E helpers and existing approval component/API suites.
 4. Run i18n:check, i18n:english:check and i18n coverage; no user text/IDs in analytics.
 
+**SaaS approval progress (2026-10-22):** A routable, authenticated WebChat call
+that falls outside the deployment's tool allowlist now continues through the
+tenant-scoped approval engine and existing `ApprovalRequested` surface. Its
+approval is one-time and cannot be auto-approved by profile posture or durable
+grants. Allowlisted tools retain their audited automatic path; non-chat SaaS
+origins remain denied. Durable tool-grant list/revoke, the localized history
+panel, and judged-verdict scores/expiry are implemented; component tests cover
+those states, and a Playwright browser test now exercises judged history and
+grant revocation through mocked core RPC. The targeted SaaS gate/profile tests
+pass. Task 13's single-middleware consolidation and full interactive prompt /
+decision browser flow remain open.
+
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
 **Host files:** sandbox/{ops,types,grants,docker}.rs,
@@ -450,6 +476,24 @@ TinyComputer browser process startup/egress contracts.
    SaaS+env off ordering/boot_guard stays pinned. Explicit unsupported platforms
    deny instead of silently skipping product behavior.
 
+**TinyBox dependency status (2026-10-22):** upstream PR
+[#100](https://github.com/tinyhumansai/tinybox/pull/100) merged at
+`83ca264fbc41d603119e58e162cd990a961c5621`, removing TinyBox-owned command
+classification from contract 2.0. OpenHuman no longer imports that removed
+command-policy API, but TinyBox v0.2.0 has not been released and OpenHuman still
+pins the released v0.1.42 / contract 1.22 module. Do not update the host pin or
+registry until the owner publishes the new artifact and checksum.
+[#103](https://github.com/tinyhumansai/tinybox/pull/103) remains draft and adds
+Linux native resource limits; it is only part of the TinyBox #27 work and does
+not complete cross-platform jail, microVM, Docker, or process-launch coverage.
+The spawner inventory now distinguishes `sandbox/ops.rs`'s module-planned
+operator host-run mode from an untrusted direct bypass: the module registers
+that source `TrustedHost`, while scheduled/hook text has a separate
+`UntrustedSkill` source that cannot receive a host-run plan. The inventory
+still reports one untrusted direct spawner: `install_tool`, whose host package
+manager command has no TinySecurity/TinyBox plan yet. Its human approval and
+SaaS denial do not satisfy Task 14; a safe scoped install design remains open.
+
 ## Task 15 — Host audit, scan/consequence gates and crypto facades
 
 **Files:** shell audit consumers, `mcp/audit/`, security encryption/keyring/device/
@@ -466,6 +510,13 @@ pairing adapters, web3/seams.rs, x402/seams.rs, TinyComputer/TinySkills adapters
    deleting old code; device networking/credentials/consent surface remain host.
 4. Remove obsolete aliases, unused redaction/PII helpers, unused_import allowances,
    config fields and old tests only together with passing replacement coverage.
+
+**TinyComputer progress (2026-10-22):** upstream PR [#152](https://github.com/tinyhumansai/tinycomputer/pull/152)
+merged at `82d0aa6`. Its live Chromium test exercises the TinyComputer module's
+host authorization callback and verifies that changed policy produces no new
+socket to either the old allowed listener or the denied rebound listener. This
+does not supply TinyComputer consequence/payment gates or prove native OS process
+confinement; both remain open under Tasks 14–15.
 
 ## Task 16 — Final matrix, documentation and completion evidence
 

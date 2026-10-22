@@ -27,6 +27,12 @@ fn cache_never_stores_the_input_in_the_clear() {
 }
 
 #[test]
+fn redaction_cache_is_disabled_for_saas_tenants() {
+    assert!(!redaction_cache_enabled(true));
+    assert!(redaction_cache_enabled(false));
+}
+
+#[test]
 fn oversized_inputs_are_not_cached_and_the_cache_is_bounded() {
     let mut cache = RedactCache::default();
     assert!(!cache.put(&mode_text(), &"a".repeat(CACHE_MAX_INPUT_BYTES + 1), "x"));

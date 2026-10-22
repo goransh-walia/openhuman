@@ -558,5 +558,205 @@
     "category": "A",
     "reason": "The module's shipped queues.json and pipeline.json, parsed once; immutable process configuration with no tenant data.",
     "verification": "inbound/settings_tests.rs: the_defaults_resolve_to_the_shipped_files_in_storage"
+  },
+  {
+    "file": "crates/openhuman-core/src/agent/tinyagents/middleware/approval.rs",
+    "scope": "",
+    "name": "REQUIRED_AUDIT_FAILURE",
+    "type": "AtomicBool",
+    "count": 1,
+    "category": "A",
+    "reason": "This process-wide latch records failure of a required audit write and deliberately denies later external effects globally; it contains no caller data and only tightens policy.",
+    "verification": "agent/tinyagents/middleware/approval_tests.rs: a_latched_audit_failure_routes_external_tools_even_when_desktop_approvals_are_off"
+  },
+  {
+    "file": "crates/openhuman-core/src/core/log_redaction.rs",
+    "scope": "",
+    "name": "MODULE_SCRUBBER",
+    "type": "std::sync::OnceLock<ModuleScrubber>",
+    "count": 1,
+    "category": "A",
+    "reason": "The process installs one function pointer to the process-wide TinySecurity log scrubber; the pointer holds no log content or tenant state.",
+    "verification": "core/log_redaction_tests.rs: scrubs_bearer_token"
+  },
+  {
+    "file": "crates/openhuman-core/src/mcp/stdio_sandbox.rs",
+    "scope": "",
+    "name": "PREPARED",
+    "type": "OnceLock<Prepared>",
+    "count": 1,
+    "category": "B",
+    "reason": "Prepared jail grants are keyed by the canonical MCP server directory and only widen that directory's sandbox; no grant is shared by matching user-provided ids.",
+    "verification": "mcp/stdio_sandbox_tests.rs: prepared_toolchain_grants_widen_only_that_workspaces_jail"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security.rs",
+    "scope": "",
+    "name": "STATE",
+    "type": "OnceLock<tokio::sync::Mutex<ClientState>>",
+    "count": 1,
+    "category": "D",
+    "reason": "This is the single process client to the loaded TinySecurity module; per-request caller subjects and immutable policy ids cross the bus, and module failure is latched rather than switching tenants or reloading.",
+    "verification": "modules/security_tenant_tests.rs: two_tenants_get_isolated_decisions_through_the_scoped_client"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_crypto.rs",
+    "scope": "",
+    "name": "KEYRING_CONSENT_TEST_LOCK",
+    "type": "tokio::sync::Mutex<()>",
+    "count": 1,
+    "category": "A",
+    "reason": "Test-only serialization for process keyring consent fixtures; it stores no consent, credentials or tenant data.",
+    "verification": "modules/security_crypto_tests.rs: consent_is_granted_only_when_the_host_policy_proceeds"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_egress.rs",
+    "scope": "",
+    "name": "CACHE",
+    "type": "std::sync::OnceLock<std::sync::Mutex<Vec<(EgressPolicy,EgressPolicyId)>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Each cache key is the complete immutable policy, including its verified SubjectScope; registering one subject's destination cannot supply another subject's policy id.",
+    "verification": "modules/security_egress_tests.rs: local_only_registers_no_destination_instead_of_open_public_egress"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_gap.rs",
+    "scope": "",
+    "name": "OVERRIDE",
+    "type": "std::cell::RefCell<Option<Arc<dyn GapPort>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "A thread-local test seam for substituting the path-gap port; the override is scoped by its guard and is not production tenant state.",
+    "verification": "modules/security_gap_tests.rs: the_port_is_restored_when_the_guard_drops"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_scoped.rs",
+    "scope": "",
+    "name": "STATE",
+    "type": "std::sync::OnceLock<tokio::sync::Mutex<ScopedState>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Active registrations and cache entries are keyed by the verified SubjectScope and full immutable policy generation; cross-subject decisions cannot hit.",
+    "verification": "modules/security_scoped_tests.rs: a_cached_decision_is_scoped_to_policy_generation_and_subject"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_sync.rs",
+    "scope": "",
+    "name": "TARGET",
+    "type": "OnceLock<Handle>",
+    "count": 1,
+    "category": "D",
+    "reason": "The handle routes synchronous calls to the one host runtime; each call still carries its explicit dispatch context and cannot authorize a caller.",
+    "verification": "modules/security_sync_tests.rs: answers_from_worker_thread_of_the_module_runtime"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_sync.rs",
+    "scope": "",
+    "name": "MODULE_TARGET",
+    "type": "OnceLock<Handle>",
+    "count": 1,
+    "category": "D",
+    "reason": "The handle routes synchronous calls to the one TinySecurity module runtime; request subjects and policies remain on each call, and runtime selection grants no authority.",
+    "verification": "modules/security_sync_tests.rs: answers_from_outside_any_runtime"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_sync.rs",
+    "scope": "",
+    "name": "IN_FLIGHT",
+    "type": "AtomicUsize",
+    "count": 1,
+    "category": "A",
+    "reason": "A process-wide bounded concurrency counter for the synchronous module bridge; it contains no request data and only limits resource use.",
+    "verification": "modules/security_sync_tests.rs: a_slow_module_times_out_within_the_bound"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_text.rs",
+    "scope": "",
+    "name": "CACHE",
+    "type": "std::sync::OnceLock<Mutex<RedactCache>>",
+    "count": 1,
+    "category": "A",
+    "reason": "The bounded cache is used only in single-user mode; SaaS redaction bypasses it so one tenant's redacted text is never retained in a cache shared with another tenant.",
+    "verification": "modules/security_text_tests.rs: redaction_cache_is_disabled_for_saas_tenants"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_text.rs",
+    "scope": "",
+    "name": "LOG_BRIDGE",
+    "type": "std::sync::OnceLock<LogBridge>",
+    "count": 1,
+    "category": "A",
+    "reason": "A single process-wide logger adapter forwards synchronous log text to the process module and suppresses it on failure; it stores only the non-sensitive host config, not user log entries.",
+    "verification": "modules/security_text_tests.rs: bridge_without_a_ready_module_leaves_the_floor_result"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_text.rs",
+    "scope": "",
+    "name": "IN_BRIDGE",
+    "type": "std::cell::Cell<bool>",
+    "count": 1,
+    "category": "A",
+    "reason": "A thread-local recursion guard prevents the logger bridge from recursively redacting its own diagnostic; it stores no log text or tenant state.",
+    "verification": "modules/security_text_tests.rs: bridge_without_a_ready_module_leaves_the_floor_result"
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/security_watch.rs",
+    "scope": "",
+    "name": "WATCHING",
+    "type": "AtomicBool",
+    "count": 1,
+    "category": "A",
+    "reason": "The process starts exactly one subscriber for the process-wide TinySecurity module signal stream; policy-change invalidation remains keyed to the subject and generation.",
+    "verification": "modules/security_watch_tests.rs: a_policy_changed_signal_from_the_module_is_decoded"
+  },
+  {
+    "file": "crates/openhuman-core/src/sandbox/spawn_plan/registry.rs",
+    "scope": "",
+    "name": "LIVE",
+    "type": "OnceLock<tokio::sync::Mutex<VecDeque<String>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "The bounded registry remembers registered spawn-plan scope identities only; ids are derived from the verified scoped subject and no plan payload is retained in this LRU.",
+    "verification": "sandbox/spawn_plan/mod_tests.rs: a_spawn_asks_for_its_workspace_and_every_mount_the_policy_names"
+  },
+  {
+    "file": "crates/openhuman-core/src/sandbox/untrusted.rs",
+    "scope": "",
+    "name": "NO_ENV",
+    "type": "BTreeMap<String,String>",
+    "count": 1,
+    "category": "A",
+    "reason": "An immutable empty environment map shared as a default for untrusted process launches; it contains no process or tenant data.",
+    "verification": "sandbox/untrusted_tests.rs: empty_environment_does_not_inherit_process_secrets"
+  },
+  {
+    "file": "crates/openhuman-core/src/security/approval/native/history_import.rs",
+    "scope": "",
+    "name": "IMPORTED",
+    "type": "std::sync::OnceLock<tokio::sync::Mutex<HashSet<(String,String)>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Imported grants are memoized by the immutable approval scope id and tool name, so receipts from one verified subject cannot suppress another subject's import.",
+    "verification": "security/approval/native/history_import_tests.rs: an_agent_scoped_row_keeps_its_agent_and_a_row_without_expiry_gets_the_default_window"
+  },
+  {
+    "file": "crates/openhuman-core/src/security/approval/native/history_import.rs",
+    "scope": "",
+    "name": "ATTEMPTED",
+    "type": "std::sync::OnceLock<tokio::sync::Mutex<HashSet<PathBuf>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Attempted legacy imports are keyed by the tenant's resolved workspace path and never contain imported history or grants.",
+    "verification": "security/approval/native/history_import_tests.rs: a_workspace_with_no_legacy_file_has_nothing_to_import_and_records_nothing"
+  },
+  {
+    "file": "crates/openhuman-core/src/security/approval/native/state.rs",
+    "scope": "",
+    "name": "HOST",
+    "type": "OnceLock<Host>",
+    "count": 1,
+    "category": "B",
+    "reason": "The process host maps each immutable subject scope to its own rows, audit stream and module registration; user-provided ids are not used as the isolation key.",
+    "verification": "security/approval/native/engine_tests.rs: a_person_approves_reserves_and_the_outcome_is_recorded"
   }
 ]

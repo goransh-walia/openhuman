@@ -65,7 +65,7 @@ fn one_runtime_hosts_independently_configured_agents() {
 
     let rt = runtime();
     rt.block_on(async {
-        tokio::spawn(async move {
+        let workspace_dir = tokio::spawn(async move {
             let backend = wiremock::MockServer::start().await;
             // Managed inference for an agent with no route of its own: the
             // runtime's API key must arrive as a bearer, and nothing else.
@@ -592,12 +592,13 @@ fn one_runtime_hosts_independently_configured_agents() {
                 panic!("the test is the runtime's sole owner once every agent is dropped");
             };
             drop(runtime);
-            assert!(
-                !workspace_dir.exists(),
-                "an ephemeral workspace must be removed with its runtime"
-            );
+            workspace_dir
         })
         .await
         .expect("library host task did not panic");
+        common::eventually("the ephemeral workspace to be removed", || {
+            (!workspace_dir.exists()).then_some(())
+        })
+        .await;
     });
 }

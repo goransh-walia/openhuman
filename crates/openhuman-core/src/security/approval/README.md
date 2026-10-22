@@ -59,9 +59,9 @@ Namespace `approval` (registered via `all_approval_registered_controllers`, cons
 | `approval.decide` | `request_id: string`, `decision: string` (`approve_once` / `approve_always_for_tool` / `approve_always_for_flow` / `deny`) | `decided: PendingApproval` |
 | `approval.preauthorize_flow` | `flow_id: string`, `tool_names: string[]` | `result: FlowPreauthorizationResult` (idempotent flow-scoped trust grants; succeeds with `gate_installed=false` when the gate is off) |
 
-`list_pending` / `list_recent_decisions` return empty (not an error) when the gate is not installed; `decide` errors when the gate is absent or the `request_id` is unknown/already decided. `list_pending` lists the requests parked in this process; `list_recent_decisions` is the module's decided rows plus the history older installs wrote.
+`list_pending` / `list_recent_decisions` / `list_tool_trust` return empty (not an error) when the gate is not installed; `decide` and `revoke_tool_trust` error when the gate is absent. `list_pending` lists the requests parked in this process; `list_recent_decisions` is the module's decided rows plus the history older installs wrote. Tool-grant revocation uses TinySecurity's opaque durable row id and is tenant-scoped; the caller cannot name another tenant's scope or tool.
 
-Whole-tool grants can be listed and revoked through the core approval JSON-RPC controllers. The current UI does not yet expose grant management; that frontend follow-up remains open.
+Whole-tool grants can be listed and revoked through the core approval JSON-RPC controllers and the Security settings panel. The approval history panel also displays Jev verdict evidence when present.
 
 ## Agent tools
 

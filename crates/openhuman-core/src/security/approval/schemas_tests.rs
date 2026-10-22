@@ -44,6 +44,19 @@ fn all_registered_controllers_has_handler_per_schema() {
 }
 
 #[test]
+fn tool_trust_schemas_list_grants_and_revoke_by_opaque_id() {
+    let list = schemas("list_tool_trust");
+    assert!(list.inputs.is_empty());
+    assert_eq!(list.outputs[0].name, "grants");
+
+    let revoke = schemas("revoke_tool_trust");
+    assert_eq!(revoke.inputs.len(), 1);
+    assert_eq!(revoke.inputs[0].name, "request_id");
+    assert!(revoke.inputs[0].required);
+    assert_eq!(revoke.outputs[0].name, "revoked");
+}
+
+#[test]
 fn schemas_preauthorize_flow_requires_flow_id_and_tool_names() {
     let s = schemas("preauthorize_flow");
     assert_eq!(s.namespace, "approval");

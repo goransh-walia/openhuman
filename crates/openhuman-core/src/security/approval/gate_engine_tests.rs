@@ -601,7 +601,7 @@ async fn a_saas_call_the_deployment_allows_is_recorded_as_an_automatic_approval(
 }
 
 #[tokio::test]
-async fn a_saas_call_that_would_need_a_person_is_refused_not_parked() {
+async fn the_saas_automatic_path_refuses_when_the_engine_needs_a_person() {
     let (gate, _dir) = test_gate();
     let stub = stub_of(&gate);
     // An engine that insists on a person gets a surface that refuses to ask one.

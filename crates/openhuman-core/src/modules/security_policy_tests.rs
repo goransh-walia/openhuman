@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::PrivacyMode as HostPrivacy;
+use std::path::PathBuf;
 use tinytools::rules::{Patterns, ToolRules};
 
 fn tenant(profile: Option<&str>, agent: Option<&str>) -> Tenant {
@@ -38,6 +39,17 @@ fn desktop_default_orchestrator_has_a_local_subject() {
     assert_eq!(
         (subject.user.as_str(), subject.agent.as_str()),
         ("local", "orchestrator")
+    );
+}
+
+#[test]
+fn saas_security_policy_never_uses_the_operator_home() {
+    let operator_home = PathBuf::from("/operator/home");
+    assert_eq!(security_home_dir_for(true, Some(operator_home)), None);
+    let local_home = std::env::temp_dir().join("openhuman-local-home");
+    assert_eq!(
+        security_home_dir_for(false, Some(local_home.clone())),
+        Some(local_home)
     );
 }
 

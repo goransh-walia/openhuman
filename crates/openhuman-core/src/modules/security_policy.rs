@@ -51,6 +51,28 @@ pub(crate) fn path_policy(config: &Config) -> PathPolicy {
     SecurityPolicy::from_full_config(config).native_path_policy()
 }
 
+/// The local operator's home is not a tenant home. SaaS workers do not inherit
+/// the process user's home when constructing a tenant policy.
+pub(crate) fn security_home_dir() -> Option<std::path::PathBuf> {
+    let saas = crate::core::runtime::is_saas();
+    let local_home = (!saas)
+        .then(crate::config::default_root_openhuman_dir)
+        .and_then(Result::ok)
+        .and_then(|root| root.parent().map(std::path::Path::to_path_buf));
+    security_home_dir_for(saas, local_home)
+}
+
+fn security_home_dir_for(
+    saas: bool,
+    local_home: Option<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
+    if saas {
+        None
+    } else {
+        local_home.filter(|home| home.is_absolute())
+    }
+}
+
 /// Command scope of `config`. The execution mode stays an explicit argument:
 /// `HarnessGated` (class gate plus hidden-execution defense) and `Allowlisted`
 /// (legacy curated allowlist) are different products of the same settings.
