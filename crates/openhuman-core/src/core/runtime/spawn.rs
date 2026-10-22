@@ -18,11 +18,17 @@ use tokio::task::JoinHandle;
 
 use super::{CoreContext, DispatchCtx};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BlockOnError {
+    Runtime,
+    Panicked,
+}
+
 impl DispatchCtx {
     /// Run a future on a dedicated current-thread runtime while preserving
     /// this dispatch context. This is for synchronous APIs that must bridge to
     /// async module calls and may be called outside a Tokio runtime.
-    pub fn block_on<F, T>(&self, future: F) -> Result<T, ()>
+    pub fn block_on<F, T>(&self, future: F) -> Result<T, BlockOnError>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
@@ -32,11 +38,11 @@ impl DispatchCtx {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .map_err(|_| ())?;
+                .map_err(|_| BlockOnError::Runtime)?;
             Ok(runtime.block_on(dispatch.enter(future)))
         })
         .join()
-        .map_err(|_| ())?
+        .map_err(|_| BlockOnError::Panicked)?
     }
 
     /// `fut`, wrapped to run under this context wherever it is polled. An
