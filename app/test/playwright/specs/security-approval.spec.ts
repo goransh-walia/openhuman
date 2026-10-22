@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { bootAuthenticatedPage, dismissWalkthroughIfPresent } from '../helpers/core-rpc';
 import { browserElements } from '../../e2e/helpers/element-helpers';
+import { bootAuthenticatedPage, dismissWalkthroughIfPresent } from '../helpers/core-rpc';
 
 test('approval history shows judged decisions and revokes durable tool trust', async ({ page }) => {
   const auditRows = [
@@ -53,9 +53,7 @@ test('approval history shows judged decisions and revokes durable tool trust', a
         return;
     }
 
-    await route.fulfill({
-      json: { jsonrpc: '2.0', id: request.id, result },
-    });
+    await route.fulfill({ json: { jsonrpc: '2.0', id: request.id, result } });
   });
 
   await bootAuthenticatedPage(page, 'pw-security-approval', '/settings/approval-history');
