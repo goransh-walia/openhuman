@@ -220,7 +220,10 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
             (target(&policy_id.0, info.generation, "8.8.8.8", 443),),
         )
         .await;
-    assert!(spoofed.is_err(), "a plain peer cannot impersonate TinyComputer");
+    assert!(
+        spoofed.is_err(),
+        "a plain peer cannot impersonate TinyComputer"
+    );
     let proxy = fixture
         .client
         .proxy(
