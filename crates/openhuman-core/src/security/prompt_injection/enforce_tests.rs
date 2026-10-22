@@ -1,5 +1,5 @@
 use super::*;
-use crate::security::prompt_injection::scanner::with_scanner;
+use crate::security::prompt_injection::with_scanner;
 use crate::security::prompt_injection::scanner_stub::StubScanner;
 
 fn context() -> PromptEnforcementContext<'static> {

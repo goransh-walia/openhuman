@@ -213,4 +213,4 @@ pub async fn screen_tool_definition(
 
 #[cfg(test)]
 #[path = "scanner_tests.rs"]
-mod tests;
+pub(crate) mod tests;
