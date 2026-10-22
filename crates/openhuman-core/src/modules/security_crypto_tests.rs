@@ -272,6 +272,7 @@ fn fx_dir() -> tempfile::TempDir {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn keyring_round_trip_through_the_served_consent_callback() {
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
     let _consent_test_guard = KEYRING_CONSENT_TEST_LOCK.lock().await;
     use crate::security::keyring_consent::policy;
     let config = crypto_config(fx_dir().path());
