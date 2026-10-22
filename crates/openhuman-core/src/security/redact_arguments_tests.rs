@@ -339,7 +339,7 @@ fn non_string_sensitive_values_redact_to_kind_markers_and_nested_values_recurse(
 /// Every ported case through the released module, from a runtime worker.
 #[cfg(feature = "security-module")]
 #[test]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 fn approval_argument_contract_holds_on_the_released_archive() {
     super::tests::shared_runtime().block_on(async {
         let (_dir, config) = super::tests::released_config();

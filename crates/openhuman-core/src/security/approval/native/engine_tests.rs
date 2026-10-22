@@ -93,7 +93,7 @@ fn pending(checked: Checked) -> (String, u64) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_person_approves_reserves_and_the_outcome_is_recorded() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -152,7 +152,7 @@ async fn a_person_approves_reserves_and_the_outcome_is_recorded() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_denial_leaves_nothing_to_reserve() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -185,7 +185,7 @@ async fn a_denial_leaves_nothing_to_reserve() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn the_users_tool_grant_approves_without_a_prompt_and_is_audited() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -218,7 +218,7 @@ async fn the_users_tool_grant_approves_without_a_prompt_and_is_audited() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn an_imported_tool_grant_survives_an_empty_transient_grant_list() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -241,7 +241,7 @@ async fn an_imported_tool_grant_survives_an_empty_transient_grant_list() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_flow_grant_applies_to_that_flow_only() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -273,7 +273,7 @@ async fn a_flow_grant_applies_to_that_flow_only() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_durable_operator_tool_grant_is_reused_by_the_module() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -306,7 +306,7 @@ async fn a_durable_operator_tool_grant_is_reused_by_the_module() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn legacy_auto_approve_is_imported_as_durable_tool_trust() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -333,7 +333,7 @@ async fn legacy_auto_approve_is_imported_as_durable_tool_trust() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn auto_approve_all_is_the_posture_and_a_forced_call_ignores_it() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -365,7 +365,7 @@ async fn auto_approve_all_is_the_posture_and_a_forced_call_ignores_it() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_request_nobody_answers_expires_and_is_recorded_as_denied() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -388,7 +388,7 @@ async fn a_request_nobody_answers_expires_and_is_recorded_as_denied() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_cancelled_request_cannot_be_decided() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -410,7 +410,7 @@ async fn a_cancelled_request_cannot_be_decided() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_reserved_tool_name_is_refused_as_a_host_tool() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -427,7 +427,7 @@ async fn a_reserved_tool_name_is_refused_as_a_host_tool() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn concurrent_calls_of_one_subject_all_get_their_own_request() {
     let world = world().await;
     let engine = Arc::new(NativeEngine::on(
@@ -465,7 +465,7 @@ async fn concurrent_calls_of_one_subject_all_get_their_own_request() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn two_workspaces_are_two_subjects_with_their_own_rows() {
     let world = world().await;
     let other_dir = tempfile::tempdir().unwrap();
@@ -495,7 +495,7 @@ async fn two_workspaces_are_two_subjects_with_their_own_rows() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_ticket_the_host_never_issued_decides_nothing() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
@@ -553,7 +553,7 @@ async fn a_ticket_the_host_never_issued_decides_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn only_the_module_may_call_the_hosts_approval_callbacks() {
     let world = world().await;
     let stranger = tinybus::Connection::connect(world.fixture.transport.connect().await.unwrap())
@@ -583,7 +583,7 @@ async fn only_the_module_may_call_the_hosts_approval_callbacks() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn the_legacy_history_and_flow_trust_are_carried_into_the_module_once() {
     use crate::security::approval::native::history_import;
     use crate::security::approval::store_import::with_connection;
@@ -648,7 +648,7 @@ async fn the_legacy_history_and_flow_trust_are_carried_into_the_module_once() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn a_flow_trust_the_module_holds_approves_that_tool_in_that_flow_after_a_restart() {
     let world = world().await;
     let tenant = crate::core::runtime::Tenant::default();

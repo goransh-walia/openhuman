@@ -165,7 +165,7 @@ async fn browser_egress_callback_fails_closed_without_a_host_registered_scope() 
 /// Exercises the authenticated callback against a real TinySecurity cdylib.
 /// The fixture is supplied by `scripts/ci/security-browser-egress-fixture.sh`.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires OPENHUMAN_TEST_SECURITY_MODULE pointing to the locally built TinySecurity module"]
+#[cfg(feature = "native-security-tests")] pointing to the locally built TinySecurity module"]
 async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
     use crate::modules::security::native_tests::native_fixture_configured;
 

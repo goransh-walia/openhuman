@@ -318,7 +318,7 @@ fn egress_descriptor_reports_both_body_and_headers() {
 /// can and asks for approval.
 #[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 async fn the_network_gate_is_answered_by_the_released_module() {
     use crate::modules::security::released_support::Released;
 
@@ -413,7 +413,7 @@ fn other_modes_never_assess_the_arguments() {
 /// under Sensitive, one whose headers carry a credential is refused.
 #[cfg(feature = "security-module")]
 #[test]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 fn sensitive_network_gate_on_the_released_archive() {
     crate::security::redact::tests::shared_runtime().block_on(async {
         use crate::config::PrivacyMode;

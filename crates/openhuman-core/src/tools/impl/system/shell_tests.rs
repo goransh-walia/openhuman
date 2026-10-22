@@ -70,7 +70,7 @@ mod timeout_tests;
 /// anything is launched, and the run spends the module's hourly budget.
 #[cfg(feature = "security-module")]
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 async fn shell_tool_gates_commands_on_the_released_module() {
     use crate::modules::security::released_support::Released;
 

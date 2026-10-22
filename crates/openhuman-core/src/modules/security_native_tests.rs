@@ -206,7 +206,7 @@ pub(crate) async fn native_fixture_configured(
 /// The native CI lane loads the real release through its compiled archive pin.
 /// An explicitly selected local fixture remains available for module development.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn attested_native_path_policy_resolves_and_denies_through_host_client() {
     let NativeFixture {
         _fixtures,
@@ -611,7 +611,7 @@ async fn verify_host_translation(proxy: &tinybus::Proxy, root: &std::path::Path)
 
 /// A tampered archive digest must be refused at admission, before any code runs.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 async fn released_archive_with_tampered_digest_is_denied() {
     let host_key = std::env::var("OPENHUMAN_TEST_SECURITY_RELEASE_HOST")
         .expect("set OPENHUMAN_TEST_SECURITY_RELEASE_HOST");

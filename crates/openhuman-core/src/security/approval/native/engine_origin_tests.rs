@@ -3,7 +3,7 @@ use crate::security::approval::engine::{ApprovalEngine, CallOrigin, Checked, Eng
 use std::sync::Arc;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn the_module_decides_what_each_origin_class_is_allowed() {
     let world = world().await;
     let shown = Arc::new(Shown::default());

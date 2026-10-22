@@ -44,7 +44,7 @@ fn tool(name: &str) -> tinysecurity_bus::ToolCall {
 /// from that tenant's own registered policy, a tenant cannot use the other's
 /// policy id, and the settings the module reports match the translation.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
     use super::super::security::scoped_client::{
         activate_on, evaluate_on, Activation, ScopedState,
@@ -276,7 +276,7 @@ async fn two_tenants_get_isolated_decisions_through_the_scoped_client() {
 /// audited member answers with evidence and a never-cacheable decision. The
 /// fixture configures no audit client, so the audited call must not allow.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn audited_scoped_members_never_allow_without_committed_evidence() {
     use super::super::security::scoped_client::{
         activate_on, check_audited_on, evaluate_audited_on, Activation, AuditCorrelation,
@@ -347,7 +347,7 @@ async fn audited_scoped_members_never_allow_without_committed_evidence() {
 /// The operator's real forbidden list registers (tilde, relative, floor entries)
 /// instead of an empty one.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn real_forbidden_paths_register_with_the_module() {
     use super::super::security::scoped_client::{activate_on, Activation, ScopedState};
     use tinysecurity_bus::{CommandExecutionMode, SubjectScope};

@@ -81,7 +81,7 @@ fn corpus(name: &str) -> serde_json::Value {
 /// forms are the ones the removed host helpers produced.
 #[cfg(feature = "security-module")]
 #[test]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
     shared_runtime().block_on(async {
         let (_dir, config) = released_config();
@@ -124,7 +124,7 @@ fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
 /// keeps ordinary text, from a plain thread and from a runtime worker.
 #[cfg(feature = "security-module")]
 #[test]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
     shared_runtime().block_on(async {
         let (_dir, config) = released_config();
@@ -161,7 +161,7 @@ fn text_helper_redacts_the_text_corpus_on_the_released_archive() {
 /// card with an issuer prefix does not.
 #[cfg(feature = "security-module")]
 #[test]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 fn text_helper_keeps_timestamps_and_removes_corroborated_cards() {
     shared_runtime().block_on(async {
         let (_dir, config) = released_config();
@@ -191,7 +191,7 @@ fn text_prefers_the_module_answer() {
 /// body unchanged, and the halt-summary error line loses the secret.
 #[cfg(feature = "security-module")]
 #[test]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 fn moved_text_callers_redact_through_the_released_archive() {
     shared_runtime().block_on(async {
         use tinyagents_harness::artifacts::ArtifactRedactor;
@@ -280,7 +280,7 @@ fn arguments_without_an_armed_module_never_return_the_original() {
 /// so this is pinned on the released archive rather than assumed.
 #[cfg(feature = "security-module")]
 #[test]
-#[ignore = "requires a released host key (downloads the published archive)"]
+#[cfg(feature = "native-security-tests")]
 fn whole_url_log_fields_lose_their_credentials_with_the_module_armed() {
     shared_runtime().block_on(async {
         let (_dir, config) = released_config();

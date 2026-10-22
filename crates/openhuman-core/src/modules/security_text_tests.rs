@@ -86,7 +86,7 @@ fn clean_verdict_passes_through() {
 /// Phase 0 corpus through the real module: every needle is gone in Text mode and
 /// the result is a fixed point.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn shared_corpus_text_cases_are_redacted_by_the_module() {
     let fx = super::super::native_tests::native_fixture().await;
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
@@ -208,7 +208,7 @@ fn log_redaction_refuses_re_entry_instead_of_recursing() {
 /// shape the corpus pins as a credential goes, source code that talks about
 /// tokens (#6954) and PII-free prose stay.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn credentials_only_scrub_matches_the_corpus_and_keeps_source_code() {
     use crate::agent::tinyagents::middleware::credential_scrub::scrub_for_tool;
     let fx = super::super::native_tests::native_fixture().await;
@@ -280,7 +280,7 @@ async fn credentials_only_scrub_matches_the_corpus_and_keeps_source_code() {
 /// answered in chunks, and the shared corpus keeps the behaviour the deleted
 /// host redactor pinned.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires a released host key or an explicitly selected local native fixture"]
+#[cfg(feature = "native-security-tests")]
 async fn call_secrets_redact_through_the_module_per_call_and_in_chunks() {
     let fx = super::super::native_tests::native_fixture().await;
     let short = "abcdefgh".to_string();
