@@ -453,8 +453,12 @@ decision browser flow remain open.
 The TinySecurity tool-call adapter now sends the effective caller tier derived
 from the registered autonomy level and the dispatch's narrower agent ceiling;
 it no longer hard-codes `Full`. The tier mapping regression and all 15 focused
-adapter tests pass. Duplicate host access-policy enforcement remains in place
-until the complete middleware consolidation and replacement coverage land.
+adapter tests pass. Interactive approval browser coverage is already present
+in `agent-harness-behaviors.spec.ts`: it drives the TinySecurity-backed
+outermost gate through approve and deny, then proves the tool execution outcome.
+Its targeted run currently cannot start in this container because `xvfb-run` is
+missing. Duplicate host access-policy enforcement remains in place until the
+complete middleware consolidation and replacement coverage land.
 
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
