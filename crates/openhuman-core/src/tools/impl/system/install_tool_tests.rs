@@ -47,6 +47,26 @@ async fn blocked_when_install_disabled() {
 }
 
 #[tokio::test]
+async fn refuses_host_package_manager_execution_until_an_isolated_installer_exists() {
+    let tool = InstallToolTool::new(policy(true, AutonomyLevel::Full));
+    let result = tool
+        .execute_with_context(
+            json!({ "package": "jq", "manager": "apt" }),
+            tinytools::ToolCallOptions::default(),
+            Some(&chat_tool_context(chat_ctx())),
+        )
+        .await
+        .unwrap();
+
+    assert!(result.is_error);
+    assert!(
+        result.output().contains("isolated package installer"),
+        "{}",
+        result.output()
+    );
+}
+
+#[tokio::test]
 async fn rejects_injection_in_package_name() {
     let tool = InstallToolTool::new(policy(true, AutonomyLevel::Full));
     let result = tool
