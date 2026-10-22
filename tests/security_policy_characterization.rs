@@ -13,7 +13,7 @@ mod env_guard;
 
 use std::path::Path;
 
-use tinybox_bus::CommandClass;
+use tinysecurity_bus::CommandClass;
 
 use openhuman_core::{
     config::AutonomyConfig,
