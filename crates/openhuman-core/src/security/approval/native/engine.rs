@@ -9,10 +9,9 @@ use tinysecurity_bus::{
     ApprovalLifecycle2, ApprovalRecordRequest2, ApprovalRow2, AuditCorrelation2, CallerContext,
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
     ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
-    GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo,
-    ListToolTrustRequest2, RecordExecutionRequest2, RevokeFlowToolRequest2,
-    RevokeToolByIdRequest2, SubjectScope, ToolCall, ToolTrustList2, ToolTrustOutcome2,
-    ToolTrustReceipt2, Verdict,
+    GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, ListToolTrustRequest2, Origin,
+    PolicyInfo, RecordExecutionRequest2, RevokeFlowToolRequest2, RevokeToolByIdRequest2,
+    SubjectScope, ToolCall, ToolTrustList2, ToolTrustOutcome2, ToolTrustReceipt2, Verdict,
 };
 
 use super::super::engine::{
@@ -666,9 +665,9 @@ impl ApprovalEngine for NativeEngine {
         }
         let proxy = self.proxy().await?;
         let subject = self.subject(tenant, variant)?;
-        let scope = scopes::existing(&subject).await.ok_or_else(|| {
-            unavailable("the TinySecurity approval scope is unavailable")
-        })?;
+        let scope = scopes::existing(&subject)
+            .await
+            .ok_or_else(|| unavailable("the TinySecurity approval scope is unavailable"))?;
         let _guard = scope.stream.lock().await;
         let listed: ToolTrustList2 = proxy
             .call_confidential(
@@ -703,9 +702,9 @@ impl ApprovalEngine for NativeEngine {
         }
         let proxy = self.proxy().await?;
         let subject = self.subject(tenant, variant)?;
-        let scope = scopes::existing(&subject).await.ok_or_else(|| {
-            unavailable("the TinySecurity approval scope is unavailable")
-        })?;
+        let scope = scopes::existing(&subject)
+            .await
+            .ok_or_else(|| unavailable("the TinySecurity approval scope is unavailable"))?;
         let _guard = scope.stream.lock().await;
         let generation = Self::generation(&proxy).await?;
         let audit = Self::correlation(&scope, generation).await?;

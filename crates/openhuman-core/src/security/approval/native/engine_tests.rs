@@ -365,7 +365,11 @@ async fn a_listed_whole_tool_grant_can_be_revoked_by_its_opaque_id() {
 
     let shown = Arc::new(Shown::default());
     assert!(matches!(
-        world.engine.check(input("gmail_send", &shown)).await.unwrap(),
+        world
+            .engine
+            .check(input("gmail_send", &shown))
+            .await
+            .unwrap(),
         Checked::Pending { .. }
     ));
 }
