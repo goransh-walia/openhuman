@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Build the vendored TinySecurity module at the pinned epic gitlink and exercise
+# the authenticated browser-dial host callbacks against that native module.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+security_dir="$repo_root/vendor/tinysecurity"
+
+case "$(uname -s)" in
+  Darwin) module_path="$security_dir/target/debug/libtinysecurity_module.dylib" ;;
+  Linux) module_path="$security_dir/target/debug/libtinysecurity_module.so" ;;
+  MINGW* | MSYS* | CYGWIN*) module_path="$security_dir/target/debug/tinysecurity_module.dll" ;;
+  *) echo "Unsupported TinySecurity browser egress fixture host" >&2; exit 1 ;;
+esac
+
+# TinySecurity's .cargo/config.toml selects polyval_force_soft, which is
+# required by its GHASH zeroization assertion. Cargo must run from that repo.
+(
+  cd -- "$security_dir"
+  bash "$repo_root/scripts/ci-cancel-aware.sh" cargo build -p tinysecurity-module
+)
+
+test -f "$module_path" || {
+  echo "TinySecurity module artifact was not produced: $module_path" >&2
+  exit 1
+}
+
+cd -- "$repo_root"
+export OPENHUMAN_TEST_SECURITY_MODULE="$module_path"
+bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
+  --no-default-features --features modules,security-module \
+  modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases \
+  -- --ignored --exact
