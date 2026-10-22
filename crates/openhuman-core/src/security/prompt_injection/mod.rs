@@ -14,12 +14,12 @@ pub(crate) mod scanner_stub;
 mod types;
 
 pub use enforce::enforce_prompt_input;
+#[cfg(test)]
+pub(crate) use scanner::tests::with_scanner;
 pub use scanner::{
     screen, screen_tool_definition, windows, DefinitionScan, DefinitionVerdict, PromptScan,
     PromptScanner, Tier, CALL_DEADLINE, MAX_SCANNED_BYTES, OVERLAP_BYTES, WINDOW_BYTES,
 };
-#[cfg(test)]
-pub(crate) use scanner::tests::with_scanner;
 pub use types::{
     PromptEnforcementAction, PromptEnforcementContext, PromptEnforcementDecision,
     PromptInjectionReason, PromptInjectionVerdict,

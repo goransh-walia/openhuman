@@ -6,7 +6,10 @@ tokio::task_local! {
     static SCOPED: Arc<dyn PromptScanner>;
 }
 
-pub(crate) async fn with_scanner<F: Future>(scanner: Arc<dyn PromptScanner>, future: F) -> F::Output {
+pub(crate) async fn with_scanner<F: Future>(
+    scanner: Arc<dyn PromptScanner>,
+    future: F,
+) -> F::Output {
     SCOPED.scope(scanner, future).await
 }
 
