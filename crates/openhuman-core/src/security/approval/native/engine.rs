@@ -15,8 +15,7 @@ use tinysecurity_bus::{
 };
 
 use super::super::engine::{
-    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Posture, Sealed,
-    Variant,
+    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Sealed, Variant,
 };
 use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
 use super::scopes::{self, ScopeEntry};
