@@ -371,7 +371,8 @@ impl ApprovalResolver<crate::agent::tinyagents::host::OpenHumanRunContext>
             return ApprovalResolution::Allow { ticket: None };
         }
         let gate = ApprovalGate::try_global();
-        if REQUIRED_AUDIT_FAILURE.load(Ordering::SeqCst)
+        if gate.is_none()
+            || REQUIRED_AUDIT_FAILURE.load(Ordering::SeqCst)
             || gate
                 .as_ref()
                 .is_some_and(|gate| gate.audit_failure_latched())
