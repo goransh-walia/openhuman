@@ -1,8 +1,10 @@
 use super::*;
+#[cfg(feature = "security-module")]
 use crate::security::SecurityPolicy;
 use serde_json::json;
 use std::sync::Arc;
 use tinyagents_harness::artifacts::tool_results::apply_per_result_persistence;
+#[cfg(feature = "security-module")]
 use tinytools::Tool;
 
 /// End to end through OpenHuman's wiring: the real `security::redact::text` pass redacts the
