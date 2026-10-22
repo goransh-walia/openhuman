@@ -236,11 +236,10 @@ async fn through_combined_gate(
     });
     let human = Arc::new(Human::default());
     *human.answer.lock().unwrap() = Some(human_answer);
-    let policies: Vec<Arc<dyn ToolCallPolicy<OpenHumanRunContext>>> = vec![
-        Arc::new(TinySecurityPolicy::new(module.clone())),
-        Arc::new(BuilderPolicy(builder)),
-    ];
-    let policy = Arc::new(CombinedPolicy { policies });
+    let policy = Arc::new(
+        TinySecurityPolicy::new(module.clone())
+            .with_policy_source(Arc::new(BuilderPolicy(builder))),
+    );
     let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
     stack.push_tool_middleware(Arc::new(gate(policy, human.clone())));
     let runs = Arc::new(AtomicUsize::new(0));
