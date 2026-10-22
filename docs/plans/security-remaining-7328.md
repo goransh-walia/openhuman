@@ -309,6 +309,15 @@ surfaces and the wider approval/SaaS cases remain open. These changes are on
 the existing draft PR #7331; its cross-platform native-policy and release
 latency jobs are running.
 
+**Follow-up (2026-10-22):** TinySecurity v0.17.0 is now published and pinned
+with all eleven host checksums from its release manifest. The v0.17 bus adds
+`RevokeToolById2`; the host approval engine and `approval.list_tool_trust` /
+`approval.revoke_tool_trust` controllers now expose the tenant-scoped durable
+grant lifecycle. The new native regression passes against the published Linux
+archive. That required TinyBus's already-merged secure-extraction fix at
+`11b0a72`, because v0.17 release archives mark their root directory group
+writable. UI management and a fresh three-OS released-artifact run remain open.
+
 ## Task 8 — Rules and optional Jev judge
 
 **Owner files:** new `crates/tinysecurity-auto/{Cargo.toml,src/lib.rs}`, internal
