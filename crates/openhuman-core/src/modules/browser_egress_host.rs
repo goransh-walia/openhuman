@@ -101,7 +101,8 @@ pub(super) async fn install(connection: &Connection) -> Result<()> {
                 connection: connection.clone(),
             },
         )
-        .await
+        .await?;
+    connection.request_name(contract::INTERFACE).await
 }
 
 #[cfg(test)]
