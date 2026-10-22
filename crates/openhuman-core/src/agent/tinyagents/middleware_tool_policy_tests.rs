@@ -1,5 +1,7 @@
 use super::*;
-use crate::agent::tinyagents::middleware::tool_policy::session_policy_host;
+use crate::agent::tinyagents::middleware::tool_policy::{
+    session_policy_host, ToolPolicyHostState,
+};
 
 // ── the listing must agree with the gate (#workflow-routing) ────────────────
 //
@@ -55,14 +57,14 @@ fn allow(name: &str) -> (String, ToolPolicyDecision) {
 /// a `build_workflow` delegate, but may only call the delegate and the pack
 /// tool — exactly the orchestrator's shape. Anything not named here is denied,
 /// because `decision_for` defaults to `Deny`.
-fn non_owner_middleware() -> ToolPolicyMiddleware {
+fn non_owner_middleware() -> Arc<ToolPolicyHostState> {
     non_owner_middleware_at(PermissionLevel::Dangerous)
 }
 
 /// The same session at a chosen ceiling, so a test can sit a channel BELOW the
 /// pack's permission ceiling — where `use_skill` reports the pack-wide maximum
 /// for an inner name it cannot resolve (#6302).
-fn non_owner_middleware_at(allowed: PermissionLevel) -> ToolPolicyMiddleware {
+fn non_owner_middleware_at(allowed: PermissionLevel) -> Arc<ToolPolicyHostState> {
     let mut tools: Vec<Box<dyn tinytools::Tool>> = vec![
         Box::new(RoutingFakeTool("build_workflow")),
         Box::new(RoutingFakeTool("propose_workflow")),
@@ -107,7 +109,7 @@ fn non_owner_middleware_at(allowed: PermissionLevel) -> ToolPolicyMiddleware {
 
 #[test]
 fn desktop_approval_bypass_skips_only_require_approval_channel_verdict() {
-    fn middleware(action: ToolPolicyAction) -> ToolPolicyMiddleware {
+    fn middleware(action: ToolPolicyAction) -> Arc<ToolPolicyHostState> {
         let name = "desktop_goal";
         let session = ToolPolicySession {
             profile: TaskProfile {

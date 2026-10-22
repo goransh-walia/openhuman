@@ -15,7 +15,7 @@ use crate::agent::tinyagents::host::OpenHumanRunContext;
 use crate::agent::tinyagents::policy_denial::PolicyDenial;
 use tinytools::Tool;
 
-struct ToolPolicyHostState {
+pub(crate) struct ToolPolicyHostState {
     session: tinytools::ToolPolicySession,
     /// Shared tool sets (same `Arc`s the runner registers) so a call's OpenHuman
     /// `Tool` can be resolved for its generated-tool runtime context and its
@@ -385,21 +385,3 @@ impl ToolCallPolicy<OpenHumanRunContext> for DesktopApprovalPolicy {
     }
 }
 
-#[async_trait]
-impl ToolMiddleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
-    for ToolPolicyMiddleware
-{
-    fn name(&self) -> &str {
-        "tool_policy"
-    }
-
-    async fn wrap_tool(
-        &self,
-        ctx: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
-        state: &(),
-        call: TaToolCall,
-        next: ToolHandler<'_, (), crate::agent::tinyagents::host::OpenHumanRunContext>,
-    ) -> TaResult<MiddlewareToolOutcome> {
-        self.gate.wrap_tool(ctx, state, call, next).await
-    }
-}
