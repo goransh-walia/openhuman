@@ -306,9 +306,8 @@ async fn a_listed_whole_tool_grant_can_be_revoked_by_its_opaque_id() {
     let world = world().await;
     let first = crate::core::runtime::Tenant::default();
     let second = crate::core::runtime::Tenant {
-        user: "another-user".into(),
-        workspace: "another-workspace".into(),
-        agent: "another-agent".into(),
+        profile: Some("another-profile".into()),
+        agent: Some("another-agent".into()),
     };
 
     world
