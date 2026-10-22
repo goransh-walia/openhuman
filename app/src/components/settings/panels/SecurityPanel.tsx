@@ -76,7 +76,7 @@ const SecurityPanel = () => {
   };
 
   useEffect(() => {
-    void loadToolTrust();
+    void Promise.resolve().then(() => loadToolTrust());
     // Load once when the settings panel mounts. Retry is explicit after an error.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
