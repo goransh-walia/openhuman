@@ -166,14 +166,18 @@ translator (`modules/security_policy.rs`), scoped client with generation-keyed
 decision cache (`modules/security_scoped.rs`), `live_policy::reload_from_config`
 driver, `SecurityPolicy::from_full_config` (privacy no longer hard-coded), the
 trusted-host binding in `module_config`, and a released-module two-tenant test.
+Host follow-up is done: `Config.security` owns typed autonomy, sandbox and
+privacy fields; the pre-decode rewrite folds legacy top-level tables into the
+canonical nested shape with nested values taking precedence. Save emits only
+`[security.*]`. Config consumers across core/embed/TinyHumans and profile-owned
+config overlays use the nested fields. Regression coverage checks legacy decode,
+precedence, save shape, sandbox retirement and profile refresh.
 Filesystem, network and shell gates route through TinySecurity clients; the
 former TinyBox shell calls are gone from `command_checks.rs`, which now only
 parses the model's escalate-only class hint. The host subscribes to
-`PolicyChanged`. Still open: scoped audited variants, physically moving
-`[autonomy]`, `[sandbox]` and `[privacy]` into the typed `Config.security`
-structure (currently a pre-decode overlay), and completing the redaction/egress
-consumers in Task 12. Task 7's released durable whole-tool grant support is
-tracked below.
+`PolicyChanged`. Still open: scoped audited variants and completing the
+redaction/egress consumers in Task 12. Task 7's released durable whole-tool
+grant support is tracked below.
 
 ## Task 3 — Command grammar, tool rules and action accounting
 
