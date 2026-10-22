@@ -3500,6 +3500,18 @@ const messages: TranslationMap = {
     'Scegli come vengono archiviati i segreti quando il portachiavi del SO non è disponibile.',
   'keyring.settings.grantConsent': 'Consenti archiviazione locale crittografata',
   'keyring.settings.revokeConsent': 'Rifiuta archiviazione locale',
+  'keyring.settings.toolTrustTitle': 'Strumenti attendibili',
+  'keyring.settings.toolTrustDescription':
+    "Gli strumenti che hai scelto di autorizzare sempre possono essere eseguiti senza chiedere di nuovo. Revoca un'autorizzazione per ripristinare le richieste di approvazione.",
+  'keyring.settings.toolTrustLoading': 'Caricamento degli strumenti attendibili…',
+  'keyring.settings.toolTrustEmpty': 'Nessuno strumento attendibile',
+  'keyring.settings.toolTrustRevoke': 'Revoca',
+  'keyring.settings.toolTrustRevoking': 'Revoca in corso…',
+  'keyring.settings.toolTrustRetry': 'Riprova',
+  'keyring.settings.toolTrustLoadFailed':
+    'Impossibile caricare gli strumenti attendibili. Riprova.',
+  'keyring.settings.toolTrustRevokeFailed':
+    "Impossibile revocare l'autorizzazione dello strumento. Riprova.",
   'pages.settings.account.security': 'Sicurezza',
   'pages.settings.account.securityDesc': 'Modalità archiviazione segreti e stato del portachiavi',
   // Chat: agent-generated artifacts (#2779)

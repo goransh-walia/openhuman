@@ -3441,6 +3441,17 @@ const messages: TranslationMap = {
     'चुनें कि OS कीचेन अनुपलब्ध होने पर रहस्य कैसे संग्रहीत किए जाएं।',
   'keyring.settings.grantConsent': 'स्थानीय एन्क्रिप्टेड भंडारण की अनुमति दें',
   'keyring.settings.revokeConsent': 'स्थानीय भंडारण अस्वीकार करें',
+  'keyring.settings.toolTrustTitle': 'विश्वसनीय टूल',
+  'keyring.settings.toolTrustDescription':
+    'जिन टूल को आपने हमेशा अनुमति दी है, वे दोबारा पूछे बिना चल सकते हैं। अनुमति रद्द करने पर अनुमोदन अनुरोध फिर से दिखाई देंगे।',
+  'keyring.settings.toolTrustLoading': 'विश्वसनीय टूल लोड हो रहे हैं…',
+  'keyring.settings.toolTrustEmpty': 'कोई विश्वसनीय टूल नहीं',
+  'keyring.settings.toolTrustRevoke': 'रद्द करें',
+  'keyring.settings.toolTrustRevoking': 'रद्द किया जा रहा है…',
+  'keyring.settings.toolTrustRetry': 'पुनः प्रयास करें',
+  'keyring.settings.toolTrustLoadFailed': 'विश्वसनीय टूल लोड नहीं हो सके। फिर से प्रयास करें।',
+  'keyring.settings.toolTrustRevokeFailed':
+    'विश्वसनीय टूल की अनुमति रद्द नहीं हो सकी। फिर से प्रयास करें।',
   'pages.settings.account.security': 'सुरक्षा',
   'pages.settings.account.securityDesc': 'रहस्य भंडारण मोड और कीचेन स्थिति',
   // Chat: agent-generated artifacts (#2779)

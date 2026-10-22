@@ -86,6 +86,13 @@ export interface ApprovalJudgeVerdict {
   cached: boolean;
 }
 
+/** A live whole-tool trust grant with a redacted label and opaque revoke ID. */
+export interface ToolTrustGrant {
+  tool: string;
+  request_id: string;
+  granted_at_ms: number;
+}
+
 /**
  * Normalize the two possible wire shapes into a plain row array:
  * - gate installed → `{ result: T[], logs: string[] }`
@@ -198,6 +205,21 @@ const unwrapValue = <T>(raw: unknown): T => {
     return (raw as { result: T }).result;
   }
   return raw as T;
+};
+
+/** Fetch live whole-tool approval grants in the current tenant scope. */
+export const fetchToolTrust = async (): Promise<ToolTrustGrant[]> => {
+  const raw = await callCoreRpc<unknown>({ method: 'openhuman.approval_list_tool_trust' });
+  return unwrapRows<ToolTrustGrant>(raw);
+};
+
+/** Revoke a listed whole-tool grant using its opaque request ID. */
+export const revokeToolTrust = async (requestId: string): Promise<boolean> => {
+  const raw = await callCoreRpc<unknown>({
+    method: 'openhuman.approval_revoke_tool_trust',
+    params: { request_id: requestId },
+  });
+  return unwrapValue<boolean>(raw);
 };
 
 /**

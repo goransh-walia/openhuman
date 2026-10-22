@@ -3467,6 +3467,16 @@ const messages: TranslationMap = {
     'Pilih bagaimana rahasia disimpan saat keychain OS tidak tersedia.',
   'keyring.settings.grantConsent': 'Izinkan penyimpanan lokal terenkripsi',
   'keyring.settings.revokeConsent': 'Tolak penyimpanan lokal',
+  'keyring.settings.toolTrustTitle': 'Alat tepercaya',
+  'keyring.settings.toolTrustDescription':
+    'Alat yang Anda pilih untuk selalu diizinkan dapat berjalan tanpa bertanya lagi. Cabut izin agar permintaan persetujuan muncul kembali.',
+  'keyring.settings.toolTrustLoading': 'Memuat alat tepercaya…',
+  'keyring.settings.toolTrustEmpty': 'Tidak ada alat tepercaya',
+  'keyring.settings.toolTrustRevoke': 'Cabut',
+  'keyring.settings.toolTrustRevoking': 'Mencabut…',
+  'keyring.settings.toolTrustRetry': 'Coba lagi',
+  'keyring.settings.toolTrustLoadFailed': 'Alat tepercaya tidak dapat dimuat. Coba lagi.',
+  'keyring.settings.toolTrustRevokeFailed': 'Izin alat tepercaya tidak dapat dicabut. Coba lagi.',
   'pages.settings.account.security': 'Keamanan',
   'pages.settings.account.securityDesc': 'Mode penyimpanan rahasia dan status keychain',
   // Chat: agent-generated artifacts (#2779)
