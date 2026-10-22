@@ -42,10 +42,13 @@ fn config_fn_final_autonomy_is_captured_on_the_built_agent_context() {
             config_path: dir.path().join("config.toml"),
             workspace_dir: dir.path().join("workspace"),
             action_dir: dir.path().join("action"),
-            autonomy: AutonomyConfig {
-                enabled: true,
-                level: AutonomyLevel::ReadOnly,
-                ..AutonomyConfig::default()
+            security: openhuman_core::config::SecurityConfig {
+                autonomy: AutonomyConfig {
+                    enabled: true,
+                    level: AutonomyLevel::ReadOnly,
+                    ..AutonomyConfig::default()
+                },
+                ..openhuman_core::config::SecurityConfig::default()
             },
             ..Config::default()
         };
