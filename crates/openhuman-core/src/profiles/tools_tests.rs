@@ -76,6 +76,15 @@ fn the_gate_allows_only_allowlisted_groups() {
 }
 
 #[test]
+fn allowlist_rejections_are_human_approvable_only_when_a_group_did_not_admit_them() {
+    assert!(requires_user_approval_with("shell", &[]));
+    assert!(!requires_user_approval_with(
+        "shell",
+        &[SaasToolGroup::HostShell]
+    ));
+}
+
+#[test]
 fn outside_saas_the_filter_is_the_domain_filter() {
     assert!(admits("shell", true));
     assert!(!admits("memory_recall", false));
