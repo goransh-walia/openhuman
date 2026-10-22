@@ -438,6 +438,14 @@ related fragments; `agent/tinyagents/middleware/tinysecurity.rs`, middleware.rs,
    mocked desktop E2E helpers and existing approval component/API suites.
 4. Run i18n:check, i18n:english:check and i18n coverage; no user text/IDs in analytics.
 
+**SaaS approval progress (2026-10-22):** A routable, authenticated WebChat call
+that falls outside the deployment's tool allowlist now continues through the
+tenant-scoped approval engine and existing `ApprovalRequested` surface. Its
+approval is one-time and cannot be auto-approved by profile posture or durable
+grants. Allowlisted tools retain their audited automatic path; non-chat SaaS
+origins remain denied. Per-user approval tests are being verified; the broader
+Task 13 middleware consolidation and judge UI remain open.
+
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
 **Host files:** sandbox/{ops,types,grants,docker}.rs,
