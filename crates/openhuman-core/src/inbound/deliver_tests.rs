@@ -459,9 +459,8 @@ async fn a_failed_pinned_run_is_retried_and_stored_as_failed_on_its_last_attempt
     let triage = ScriptedTriage::new(Vec::<Step>::new());
     let agent = ScriptedAgent::new([Reply::Fail("down"), Reply::Fail("still down")]);
     let results = memory_results();
-    let deliverer = pinned_deliverer(&triage, &agent, &results);
     let first = deliver_with_prompt_scanner(
-        deliverer.clone(),
+        pinned_deliverer(&triage, &agent, &results),
         turn(vec![mention("t1")], Lane::Interactive, 1),
     )
         .await;
@@ -471,7 +470,7 @@ async fn a_failed_pinned_run_is_retried_and_stored_as_failed_on_its_last_attempt
         ResultStatus::Running
     );
     let last = deliver_with_prompt_scanner(
-        deliverer,
+        pinned_deliverer(&triage, &agent, &results),
         turn(vec![mention("t1")], Lane::Interactive, 3),
     )
         .await;
