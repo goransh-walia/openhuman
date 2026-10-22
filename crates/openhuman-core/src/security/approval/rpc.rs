@@ -268,9 +268,8 @@ pub async fn approval_decide(
         decision.as_str()
     )];
 
-    // "Always allow": persist the tool onto the user's `autonomy.auto_approve`
-    // allowlist (config save + live-policy reload) so the gate skips prompting
-    // for it on future turns — this session and across restarts. Best-effort:
+    // "Always allow": persist the exact tool in TinySecurity's durable scope.
+    // Agent approvals never widen operator authority. Best-effort:
     // `gate.decide` already resolved the current call, so a persistence failure
     // must not fail the RPC. It degrades safely — the tool simply prompts again
     // next time rather than being silently auto-approved.
@@ -285,11 +284,11 @@ pub async fn approval_decide(
             row.tool_name
         ));
     } else if decision == ApprovalDecision::ApproveAlwaysForTool {
-        match crate::config::ops::add_auto_approve_tool(ctx, &row.tool_name).await {
+        match gate.insert_tool_trust(&row.tool_name) {
             Ok(()) => {
                 tracing::info!(
                     tool = row.tool_name.as_str(),
-                    "[rpc:approval_decide] tool persisted to auto_approve allowlist"
+                    "[rpc:approval_decide] tool persisted to TinySecurity"
                 );
                 logs.push(format!(
                     "[approval] '{}' added to the Always-allow list",
@@ -300,7 +299,7 @@ pub async fn approval_decide(
                 tracing::warn!(
                     tool = row.tool_name.as_str(),
                     error = %err,
-                    "[rpc:approval_decide] failed to persist auto_approve; tool will prompt again next time"
+                    "[rpc:approval_decide] failed to persist TinySecurity grant; tool will prompt again next time"
                 );
                 logs.push(format!(
                     "[approval] WARNING: could not save 'Always allow' for '{}': {err}",

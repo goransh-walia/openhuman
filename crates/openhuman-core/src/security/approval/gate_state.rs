@@ -373,6 +373,14 @@ impl ApprovalGate {
         .map_err(|error| anyhow::anyhow!("could not save the flow trust: {error}"))
     }
 
+    /// Persist an operator's whole-tool trust in TinySecurity for this tenant.
+    pub fn insert_tool_trust(&self, tool_name: &str) -> anyhow::Result<()> {
+        let tenant = current_route_tenant();
+        let tool = tool_name.to_owned();
+        self.run_engine(|engine| async move { engine.grant_tool_trust(&tenant, &tool).await })?
+            .map_err(|error| anyhow::anyhow!("could not save the tool trust: {error}"))
+    }
+
     /// Whether `(flow_id, tool_name)` currently holds "approve always for
     /// this flow" trust. Exposed for tests and diagnostics.
     pub fn is_flow_tool_trusted(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<bool> {

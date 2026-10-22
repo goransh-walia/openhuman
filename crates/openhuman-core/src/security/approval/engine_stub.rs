@@ -73,6 +73,7 @@ pub(crate) struct StubEngine {
     always_pending: AtomicBool,
     /// The durable flow trust the module keeps: `(flow, tool)` pairs.
     trust: Mutex<std::collections::BTreeSet<(String, String)>>,
+    grants: Mutex<std::collections::BTreeSet<String>>,
 }
 
 impl std::fmt::Debug for StubEngine {
@@ -495,6 +496,14 @@ impl ApprovalEngine for StubEngine {
                 }
             })
             .collect())
+    }
+
+    async fn grant_tool_trust(&self, _tenant: &Tenant, tool: &str) -> Result<(), EngineError> {
+        if self.refuse.load(Ordering::SeqCst) {
+            return Err(EngineError::Unavailable("the stub engine refuses".into()));
+        }
+        self.grants.lock().unwrap_or_else(PoisonError::into_inner).insert(tool.to_owned());
+        Ok(())
     }
 }
 
