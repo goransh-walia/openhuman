@@ -9,15 +9,15 @@ use tinysecurity_bus::{
     ApprovalLifecycle2, ApprovalRecordRequest2, ApprovalRow2, AuditCorrelation2, CallerContext,
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
     ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
-    GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo,
-    RecordExecutionRequest2, RevokeFlowToolRequest2, SubjectScope, ToolCall, ToolTrustOutcome2,
-    ToolTrustReceipt2, Verdict,
+    GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, ListToolTrustRequest2, Origin,
+    PolicyInfo, RecordExecutionRequest2, RevokeFlowToolRequest2, RevokeToolByIdRequest2,
+    SubjectScope, ToolCall, ToolTrustList2, ToolTrustOutcome2, ToolTrustReceipt2, Verdict,
 };
 
 use super::super::engine::{
     ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Sealed, Variant,
 };
-use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
+use super::super::types::{ApprovalAuditEntry, ExecutionOutcome, ToolTrustEntry};
 use super::scopes::{self, ScopeEntry};
 use super::state::{host, CallEntry, RequestEntry, Ticket};
 use crate::config::Config;
@@ -187,6 +187,22 @@ impl NativeEngine {
         )
         .await
         .map_err(EngineError::Unavailable)
+    }
+
+    /// The standard subject used by the live whole-tool grant management API.
+    /// Register it with the restrictive posture until a gated call supplies the
+    /// user's current settings.
+    async fn tool_scope(
+        &self,
+        proxy: &Proxy,
+        tenant: &crate::core::runtime::Tenant,
+        posture: &super::super::engine::Posture,
+    ) -> Result<std::sync::Arc<ScopeEntry>, EngineError> {
+        let subject = self.subject(tenant, Variant::Standard)?;
+        let generation = Self::generation(proxy).await?;
+        scopes::ensure(&self.config, proxy, subject, posture, generation)
+            .await
+            .map_err(EngineError::Unavailable)
     }
 
     /// The module's current generation, which every correlation carries.
@@ -651,6 +667,84 @@ impl ApprovalEngine for NativeEngine {
         }
         tracing::debug!(outcome = ?receipt.outcome, "{LOG} whole-tool grant recorded");
         Ok(())
+    }
+
+    async fn tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        posture: super::super::engine::Posture,
+    ) -> Result<Vec<ToolTrustEntry>, EngineError> {
+        if variant != Variant::Standard {
+            return Err(unavailable(
+                "whole-tool grants are unavailable for strict or forced approval scopes",
+            ));
+        }
+        let proxy = self.proxy().await?;
+        let scope = self.tool_scope(&proxy, tenant, &posture).await?;
+        let _guard = scope.stream.lock().await;
+        let listed: ToolTrustList2 = proxy
+            .call_confidential(
+                names::methods::LIST_TOOL_TRUST2,
+                (ListToolTrustRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                },),
+            )
+            .await
+            .map_err(|error| unavailable(format!("TinySecurity ListToolTrust2 failed: {error}")))?;
+        Ok(listed
+            .entries
+            .into_iter()
+            .map(|entry| ToolTrustEntry {
+                tool: entry.tool,
+                request_id: entry.request_id,
+                granted_at_ms: entry.granted_at_ms,
+            })
+            .collect())
+    }
+
+    async fn revoke_tool_trust_by_id(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        posture: super::super::engine::Posture,
+        request_id: &str,
+    ) -> Result<bool, EngineError> {
+        if variant != Variant::Standard {
+            return Err(unavailable(
+                "whole-tool grants are unavailable for strict or forced approval scopes",
+            ));
+        }
+        let proxy = self.proxy().await?;
+        let scope = self.tool_scope(&proxy, tenant, &posture).await?;
+        let _guard = scope.stream.lock().await;
+        let generation = Self::generation(&proxy).await?;
+        let audit = Self::correlation(&scope, generation).await?;
+        let receipt: ToolTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::REVOKE_TOOL_BY_ID2,
+                (RevokeToolByIdRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    request_id: request_id.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = %error, "{LOG} the module refused to revoke whole-tool trust");
+                unavailable(format!("TinySecurity RevokeToolById2 failed: {error}"))
+            })?;
+        if receipt.scope_id != scope.scope_id
+            || !matches!(
+                receipt.outcome,
+                ToolTrustOutcome2::Revoked | ToolTrustOutcome2::Absent
+            )
+        {
+            return Err(unavailable(
+                "TinySecurity returned a mismatched whole-tool revocation receipt",
+            ));
+        }
+        Ok(receipt.outcome == ToolTrustOutcome2::Revoked)
     }
 
     async fn grant_flow_trust(

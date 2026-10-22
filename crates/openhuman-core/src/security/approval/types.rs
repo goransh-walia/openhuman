@@ -138,6 +138,18 @@ pub struct ApprovalAuditEntry {
     pub judge: Option<JudgeVerdict>,
 }
 
+/// A live durable whole-tool approval grant in one approval scope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ToolTrustEntry {
+    /// Redacted display label returned by TinySecurity.
+    pub tool: String,
+    /// Opaque identity to pass back when revoking this grant.
+    pub request_id: String,
+    /// When the grant was recorded, in epoch milliseconds.
+    pub granted_at_ms: u64,
+}
+
 /// Nonsensitive judge evidence shown in approval history: the fixed outcome
 /// and scores in thousandths, never provider text or credentials.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

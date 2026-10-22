@@ -53,11 +53,15 @@ Namespace `approval` (registered via `all_approval_registered_controllers`, cons
 | --- | --- | --- |
 | `approval.list_pending` | none | `pending: PendingApproval[]` |
 | `approval.list_recent_decisions` | `limit?: u64` (1-500, default 50) | `decisions: ApprovalAuditEntry[]` |
+| `approval.list_tool_trust` | none | `grants: ToolTrustEntry[]` (live grants in the authenticated dispatch tenant's standard scope) |
+| `approval.revoke_tool_trust` | `request_id: string` (opaque ID from `list_tool_trust`) | `revoked: bool` |
 | `approval.get_gate_state` | none | `state: ApprovalGateBootState` (installed / disabled-by-env / override-ignored / host tag) |
 | `approval.decide` | `request_id: string`, `decision: string` (`approve_once` / `approve_always_for_tool` / `approve_always_for_flow` / `deny`) | `decided: PendingApproval` |
 | `approval.preauthorize_flow` | `flow_id: string`, `tool_names: string[]` | `result: FlowPreauthorizationResult` (idempotent flow-scoped trust grants; succeeds with `gate_installed=false` when the gate is off) |
 
 `list_pending` / `list_recent_decisions` return empty (not an error) when the gate is not installed; `decide` errors when the gate is absent or the `request_id` is unknown/already decided. `list_pending` lists the requests parked in this process; `list_recent_decisions` is the module's decided rows plus the history older installs wrote.
+
+Whole-tool grants can be listed and revoked through the core approval JSON-RPC controllers. The current UI does not yet expose grant management; that frontend follow-up remains open.
 
 ## Agent tools
 

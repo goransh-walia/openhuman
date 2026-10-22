@@ -27,13 +27,15 @@ fn schemas_decide_requires_request_id_and_decision() {
 #[test]
 fn all_registered_controllers_has_handler_per_schema() {
     let controllers = all_registered_controllers();
-    assert_eq!(controllers.len(), 5);
+    assert_eq!(controllers.len(), 7);
     let names: Vec<_> = controllers.iter().map(|c| c.schema.function).collect();
     assert_eq!(
         names,
         vec![
             "list_pending",
             "list_recent_decisions",
+            "list_tool_trust",
+            "revoke_tool_trust",
             "decide",
             "get_gate_state",
             "preauthorize_flow",
