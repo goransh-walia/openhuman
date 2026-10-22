@@ -259,6 +259,7 @@ async fn every_terminal_outcome_is_audited_once_without_recording_payloads() {
         ("aborted", ApprovalExecutionOutcome::Control(&control)),
         ("abandoned", ApprovalExecutionOutcome::Abandoned),
     ];
+    let outcome_count = outcomes.len();
     let recorded = Arc::new(std::sync::Mutex::new(Vec::new()));
     let writes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
@@ -309,7 +310,7 @@ async fn every_terminal_outcome_is_audited_once_without_recording_payloads() {
         }
     }
 
-    assert_eq!(recorded.lock().unwrap().len(), outcomes.len());
+    assert_eq!(recorded.lock().unwrap().len(), outcome_count);
 }
 
 #[tokio::test]
