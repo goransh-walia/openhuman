@@ -439,9 +439,11 @@ unavailable or malformed responses suppress the complete parameter value.
 Flow memory writes now route both agent-tool and TinyFlows node guards through
 the released module's `CredentialsOnly` redactor and fail closed when it cannot
 answer. The existing `api_key=abc123` characterization exposed a short-value
-parity gap in v0.17.0; TinySecurity PR #42 adds that case while preserving source
-identifiers and must release before the host integration is publishable. The
-host guard tests and no-security-module RPC-log suppression test pass locally;
+parity gap in v0.17.0. TinySecurity PR [#42](https://github.com/tinyhumansai/tinysecurity/pull/42)
+merged upstream at `0990d97159ddb12a214749d6aa03a4fbf022779f`, adding the short-key
+case while preserving source identifiers. A release containing that merge is
+still required before the host integration is publishable. The host guard tests
+and no-security-module RPC-log suppression test pass locally;
 the flow-node short-key test remains red against the currently pinned archive.
 Network destination gates also deny when `security-module` is compiled out;
 regressions cover both direct and routed gates, and the enabled native gate

@@ -3347,12 +3347,12 @@ pub fn is_user_config_provider_event(event: &sentry::protocol::Event<'_>) -> boo
     false
 }
 
-/// Defense-in-depth `before_send` filter for **connectivity/network flakiness**
-/// events — transient, self-resolving failures like timeouts, gateways, and
-/// "Failed to fetch" messages from the frontend.
-///
-/// Primary suppression lives at the caller sites. This is the outermost net for
-/// any future call site that bypasses those classifiers. Target: ~8 issues.
+// Defense-in-depth `before_send` filter for **connectivity/network flakiness**
+// events — transient, self-resolving failures like timeouts, gateways, and
+// "Failed to fetch" messages from the frontend.
+//
+// Primary suppression lives at the caller sites. This is the outermost net for
+// any future call site that bypasses those classifiers. Target: ~8 issues.
 #[cfg(feature = "crash-reporting")]
 include!("observability_connectivity.rs");
 
