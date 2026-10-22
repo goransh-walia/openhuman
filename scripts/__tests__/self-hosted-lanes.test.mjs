@@ -426,11 +426,11 @@ test("private gates-off and Tauri execute equivalent coverage suites with nextes
   assert.match(checks["gate-contract-tests-features"].run, /--test-threads=1/);
   assert.match(
     checks["gate-contract-tests"].run,
-    /integrations::composio::builder_tools::tests:: integrations::composio::flow_gate::tests::/,
+    /test\(integrations::composio::builder_tools::tests::\).*test\(integrations::composio::flow_gate::tests::\)/,
   );
   assert.match(
     checks["gate-contract-tests-features"].run,
-    /mcp::registry::tests::/,
+    /test\(mcp::registry::tests::\)/,
   );
   assert.equal(
     checks["tauri-coverage"].env.CARGO_BUILD_TARGET_DIR,
