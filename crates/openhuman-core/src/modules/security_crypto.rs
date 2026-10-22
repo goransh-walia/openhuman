@@ -74,7 +74,11 @@ async fn password_call(
             (PasswordRequest2 { operation },),
         )
         .await
-        .map_err(|_| "TinySecurity PasswordCrypt2 failed".to_string())
+        .map_err(|error| {
+            #[cfg(test)]
+            eprintln!("PasswordCrypt2 bus failure: {error:?}");
+            "TinySecurity PasswordCrypt2 failed".to_string()
+        })
 }
 
 /// Reads a named secret; `None` only when the backend confirms absence.
@@ -153,7 +157,11 @@ async fn keyring_call(
             },),
         )
         .await
-        .map_err(|_| "TinySecurity KeyringAccess2 failed".to_string())
+        .map_err(|error| {
+            #[cfg(test)]
+            eprintln!("KeyringAccess2 bus failure: {error:?}");
+            "TinySecurity KeyringAccess2 failed".to_string()
+        })
 }
 
 /// One pairing operation on an account registered at module init.
