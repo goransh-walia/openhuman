@@ -8,16 +8,12 @@ Binding owner design: `vendor/tinysecurity/docs/specs/security-module.md`,
 
 ## Delivery boundary and starting evidence
 
-Bootstrap plus immutable path scopes exist. TinySecurity #4 merged at
-`f2b7ebd77c1f1109e08f6f38de87ad594841a0e3`. The module currently advertises
-Evaluate, Check, PolicyInfo and four immutable path members. Its command engine
-only allows argument-free diagnostics. `future.rs` contains reserved payloads,
-not working approvals, scans, egress, audit or sandbox engines. The host's
-`modules/security.rs::module_config` deliberately returns bootstrap defaults.
-Do not treat any reserved type or passing bootstrap test as tracker completion.
-Root is releasing that path milestone as v0.2.3 (run 38080694935). The next owner
-implementer is already executing Task 3's immutable command registry. Finish and
-review that task first; do not restart it or wait for the full migration plan.
+TinySecurity v0.17.0 is published and pinned. It includes immutable command
+policy registration, command classification and execution checks with atomic
+hourly reservations, plus scoped policy and durable approval operations. OpenHuman
+has host clients for those contracts. The remaining owner engines and host
+consumers listed below are still required; a reserved bus type or a passing
+bootstrap test is not evidence that its engine is implemented.
 
 Deliver **one further cumulative TinySecurity PR**, against canonical upstream,
 containing all owner work below. Continue the existing OpenHuman #7331 for host
