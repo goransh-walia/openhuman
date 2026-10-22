@@ -218,8 +218,12 @@ pub(super) async fn import_tool_grants(
         }
         let _guard = scope.stream.lock().await;
         let result = async {
-            let generation = NativeEngine::generation(proxy).await?;
-            let audit = NativeEngine::correlation(scope, generation).await?;
+            let generation = NativeEngine::generation(proxy)
+                .await
+                .map_err(|error| error.to_string())?;
+            let audit = NativeEngine::correlation(scope, generation)
+                .await
+                .map_err(|error| error.to_string())?;
             let receipt: ImportTrustReceipt2 = proxy
                 .call_confidential(
                     names::methods::IMPORT_TRUST_SOURCE2,
