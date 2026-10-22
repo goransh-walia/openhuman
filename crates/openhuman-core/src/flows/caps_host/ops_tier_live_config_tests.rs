@@ -265,7 +265,7 @@ async fn captured_agent_and_config_fn_tiers_are_not_replaced_by_parent_file() {
 #[tokio::test]
 async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
     use crate::config::AutonomyConfig;
-    use crate::security::{AutonomyLevel, SecurityPolicy};
+    use crate::security::AutonomyLevel;
 
     let dir = tempfile::tempdir().unwrap();
     let mut config = Config::default();
@@ -323,7 +323,7 @@ async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
 
 #[tokio::test]
 async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
-    use crate::security::{AutonomyLevel, SecurityPolicy};
+    use crate::security::AutonomyLevel;
 
     let _gap_port = allow_tinysecurity_gap();
     let dir = tempfile::tempdir().unwrap();
@@ -355,7 +355,7 @@ async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
 
 #[tokio::test]
 async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
-    use crate::security::{AutonomyLevel, SecurityPolicy};
+    use crate::security::AutonomyLevel;
 
     let _gap_port = allow_tinysecurity_gap();
     let dir = tempfile::tempdir().unwrap();
@@ -403,7 +403,7 @@ async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
 
 #[tokio::test]
 async fn http_adapter_passes_its_live_upgrade_to_the_http_gate_without_egress() {
-    use crate::security::{AutonomyLevel, SecurityPolicy};
+    use crate::security::AutonomyLevel;
 
     let _gap_port = allow_tinysecurity_gap();
     let dir = tempfile::tempdir().unwrap();
