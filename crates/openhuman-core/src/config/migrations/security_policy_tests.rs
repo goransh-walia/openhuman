@@ -74,7 +74,7 @@ fn rewritten_document_round_trips_through_save_shape() {
 #[test]
 fn saving_legacy_security_tables_uses_the_canonical_security_namespace() {
     let config = crate::config::schema::config_from_toml_str(
-        "[autonomy]\nenabled = true\n[sandbox]\nbackend = \"docker\"\n[privacy]\nmode = \"strict\"\n",
+        "[autonomy]\nenabled = true\n[sandbox]\nbackend = \"docker\"\n[privacy]\nmode = \"sensitive\"\n",
     )
     .unwrap();
     let saved = toml::to_string(&config).unwrap();
