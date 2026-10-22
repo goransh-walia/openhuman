@@ -223,6 +223,24 @@ pub fn gate_verdict_with(tool: &str, groups: &[SaasToolGroup]) -> Result<(), Str
     ))
 }
 
+/// Whether a rejected tool is specifically withheld pending a person's
+/// approval, rather than denied by the hosted capability boundary.
+pub fn requires_user_approval(ctx: &crate::core::runtime::DispatchCtx, tool: &str) -> bool {
+    if super::capabilities::ProfileCapabilities::in_ctx(ctx)
+        .is_some_and(|caps| caps.authorizes_approval(ctx, tool))
+    {
+        false
+    } else {
+        requires_user_approval_with(tool, &allowlisted())
+    }
+}
+
+/// Whether the deployment's allowlisted groups leave `tool` for a per-user
+/// approval decision.
+pub fn requires_user_approval_with(tool: &str, groups: &[SaasToolGroup]) -> bool {
+    !admits_with(tool, false, groups)
+}
+
 /// [`gate_verdict_with`] for the running deployment.
 pub fn gate_verdict(ctx: &crate::core::runtime::DispatchCtx, tool: &str) -> Result<(), String> {
     let verdict = if super::capabilities::ProfileCapabilities::in_ctx(ctx)

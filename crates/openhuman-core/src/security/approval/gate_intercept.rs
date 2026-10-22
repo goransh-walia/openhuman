@@ -70,13 +70,17 @@ impl ApprovalGate {
         // overrides.
         let turn_ctx = crate::core::runtime::DispatchCtx::ambient_turn();
         let origin = turn_ctx.turn_origin().unwrap_or(AgentTurnOrigin::Unknown);
-        // SaaS has no per-user approval surface: never park, allow only what
-        // the deployment's sandboxed tool groups open. What they open is the
-        // pre-authorization, and the engine records it as an audited automatic
-        // approval under the tenant's own subject and audit stream.
+        let dispatch = crate::core::runtime::DispatchCtx::ambient();
+        let saas = crate::core::runtime::is_saas();
+        let saas_human_approval = saas_prompt_needed(&dispatch, saas, &origin, tool_name, forced);
+        // Deployment-allowlisted tools retain their audited automatic path.
+        // A rejected tool can reach the normal approval engine only when this
+        // exact SaaS WebChat turn has an authenticated, routable user surface.
         match saas_outcome_with(
-            &crate::core::runtime::DispatchCtx::ambient(),
-            crate::core::runtime::is_saas(),
+            &dispatch,
+            saas,
+            &origin,
+            forced,
             tool_name,
         ) {
             Some(GateOutcome::Allow) => {
@@ -315,10 +319,19 @@ impl ApprovalGate {
             surface: Arc::clone(&surface),
             armed: true,
         };
+        let mut posture = self.posture(&turn_ctx, variant);
+        if saas_human_approval {
+            // A deployment-level rejection cannot be turned into an automatic
+            // approval by profile settings. It must receive this call's human
+            // decision through the WebChat surface.
+            posture.require_approval = true;
+            posture.auto_approve_all = false;
+            posture.tool_grants.clear();
+        }
         let input = CheckInput {
             tenant: route_tenant,
             variant,
-            posture: self.posture(&turn_ctx, variant),
+            posture,
             call_id: fresh_call_id(),
             tool: tool_name.to_string(),
             args: object_arguments(args_redacted),

@@ -237,25 +237,48 @@ impl ApprovalGate {
     }
 }
 
-/// The gate's outcome in SaaS, `None` outside it. SaaS has no per-user approval
-/// surface, so the gate never parks there; the verdict comes from the
-/// deployment's allowlisted tool groups.
+/// Whether this SaaS call can ask the user through its authenticated WebChat
+/// route. Calls without a routable thread/client remain subject to the closed
+/// deployment allowlist.
 pub(crate) fn saas_prompt_needed(
-    _ctx: &crate::core::runtime::DispatchCtx,
-    _saas: bool,
-    _origin: &AgentTurnOrigin,
-    _tool_name: &str,
+    ctx: &crate::core::runtime::DispatchCtx,
+    saas: bool,
+    origin: &AgentTurnOrigin,
+    tool_name: &str,
+    forced: bool,
 ) -> bool {
-    false
+    let routable_web_chat = matches!(
+        origin,
+        AgentTurnOrigin::WebChat { thread_id, client_id, .. }
+            if !thread_id.trim().is_empty() && !client_id.trim().is_empty()
+    );
+    saas
+        && routable_web_chat
+        && (forced || crate::profiles::tools::requires_user_approval(ctx, tool_name))
 }
 
+/// The gate's outcome in SaaS, `None` when an authenticated per-user surface
+/// should handle the approval (or outside SaaS). Without that route, calls use
+/// the deployment allowlist and forced approvals fail closed.
 pub(crate) fn saas_outcome_with(
     ctx: &crate::core::runtime::DispatchCtx,
     saas: bool,
+    origin: &AgentTurnOrigin,
+    forced: bool,
     tool_name: &str,
 ) -> Option<GateOutcome> {
     if !saas {
         return None;
+    }
+    if saas_prompt_needed(ctx, saas, origin, tool_name, forced) {
+        return None;
+    }
+    if forced {
+        return Some(GateOutcome::Deny {
+            reason: format!(
+                "{POLICY_DENIED_MARKER} A forced approval for '{tool_name}' needs a routable WebChat surface."
+            ),
+        });
     }
     Some(saas_outcome(crate::profiles::tools::gate_verdict(
         ctx, tool_name,
