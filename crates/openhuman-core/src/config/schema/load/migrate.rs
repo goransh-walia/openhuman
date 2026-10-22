@@ -34,7 +34,7 @@ pub(crate) fn migrate_legacy_inference_url(config: &mut Config) {
     };
     let logged = match moved.as_deref() {
         None => "<derived>".to_string(),
-        Some(u) => crate::core::log_redaction::scrub_secrets(u),
+        Some(u) => crate::security::redact::endpoint_origin(u),
     };
     tracing::info!(
         "[config][migrate] splitting legacy api_url -> inference_url (api_url cleared, inference_url={})",
