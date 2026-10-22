@@ -289,15 +289,15 @@ async fn keyring_round_trip_through_the_served_consent_callback() {
     policy::apply_consent(&policy::build_consent_preference("local_encrypted"));
     let name = "user:token-7328";
 
-    keyring_set(
+    let stored = keyring_set(
         &proxy,
         caller(),
         "store a token",
         name,
         b"value-1".to_vec(),
     )
-    .await
-    .unwrap();
+    .await;
+    assert!(stored.is_ok(), "{stored:?}; module: {:#?}", fx.host.list());
     assert_eq!(
         keyring_get(&fx.proxy, caller(), "read a token", name)
             .await
