@@ -72,6 +72,22 @@ fn rewritten_document_round_trips_through_save_shape() {
 }
 
 #[test]
+fn saving_legacy_security_tables_uses_the_canonical_security_namespace() {
+    let config = crate::config::schema::config_from_toml_str(
+        "[autonomy]\nenabled = true\n[sandbox]\nbackend = \"docker\"\n[privacy]\nmode = \"strict\"\n",
+    )
+    .unwrap();
+    let saved = toml::to_string(&config).unwrap();
+
+    assert!(saved.contains("[security.autonomy]"), "{saved}");
+    assert!(saved.contains("[security.sandbox]"), "{saved}");
+    assert!(saved.contains("[security.privacy]"), "{saved}");
+    assert!(!saved.lines().any(|line| line == "[autonomy]"), "{saved}");
+    assert!(!saved.lines().any(|line| line == "[sandbox]"), "{saved}");
+    assert!(!saved.lines().any(|line| line == "[privacy]"), "{saved}");
+}
+
+#[test]
 fn retired_sandbox_backends_become_auto_with_a_notice() {
     for (legacy, from) in [("firejail", "firejail"), ("bubblewrap", "bubblewrap")] {
         let text = format!("[sandbox]\nbackend = \"{legacy}\"\nfirejail_args = [\"--net=none\"]\n");
