@@ -461,6 +461,27 @@ async fn learnings_are_shared_under_a_root_and_a_team_root_is_kept_apart() {
         .any(|hit| hit.text.contains("british english")));
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_bound_dispatch_can_write_memory_without_nesting_runtimes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = config_in(&tmp);
+    bind_reference(&config);
+    let dispatch = DispatchCtx::new(crate::core::runtime::CoreContext::for_test_with_config(
+        crate::core::runtime::DomainSet::full(),
+        config.clone(),
+    ));
+
+    let result = run_action(
+        &dispatch,
+        &config,
+        &json!({"action":"learn","text":"The user likes oolong tea"}),
+        &facts(),
+    )
+    .await;
+
+    assert!(!result.is_error, "{}", text(&result));
+}
+
 /// The reference engine, recording how far each single store waited.
 struct WaitRecorder {
     inner: tinymemory_api::conformance::ReferenceEngine,

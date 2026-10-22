@@ -140,14 +140,55 @@ pub(crate) fn run_policy_for_provider(
     local_provider: bool,
     tool_call_cap: Option<usize>,
 ) -> RunPolicy {
-    run_policy(&TurnPolicyOptions {
+    run_policy_for_provider_with_backoff(
+        max_iterations,
+        response_cache_enabled,
+        local_provider,
+        tool_call_cap,
+        env_str("OPENHUMAN_MODEL_RETRY_BACKOFF_MS").as_deref(),
+    )
+}
+
+/// [`run_policy_for_provider`] with the retry-backoff override passed in rather
+/// than read from the process environment.
+pub(crate) fn run_policy_for_provider_with_backoff(
+    max_iterations: usize,
+    response_cache_enabled: bool,
+    local_provider: bool,
+    tool_call_cap: Option<usize>,
+    retry_backoff_ms: Option<&str>,
+) -> RunPolicy {
+    let mut policy = run_policy(&TurnPolicyOptions {
         max_model_calls: max_iterations,
         max_tool_calls: tool_call_limit(max_iterations, tool_call_cap),
         max_depth: MAX_SPAWN_DEPTH,
         local_provider,
         response_cache_enabled,
         overrides: env_overrides(),
-    })
+    });
+    apply_retry_backoff_override(&mut policy, retry_backoff_ms);
+    policy
+}
+
+/// Scale the model-call retry schedule down to `initial` milliseconds
+/// (`OPENHUMAN_MODEL_RETRY_BACKOFF_MS`). The attempt count and the doubling
+/// shape are kept; only the waits shrink, so suites that drive a failing
+/// upstream do not sit through the 3/6/12/24 s production schedule. Values
+/// above the production initial wait, as well as unset, empty, `0` or
+/// unparsable values, leave the production schedule untouched.
+pub(crate) fn apply_retry_backoff_override(policy: &mut RunPolicy, raw: Option<&str>) {
+    let Some(ms) = raw
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|ms| *ms > 0 && *ms <= policy.retry.initial_backoff_ms)
+    else {
+        return;
+    };
+    policy.retry.initial_backoff_ms = ms;
+    policy.retry.max_backoff_ms = ms.saturating_mul(10);
+    tracing::debug!(
+        initial_backoff_ms = ms,
+        "[turn_policy] model retry backoff overridden"
+    );
 }
 
 /// Default per-turn tool budget, narrowed by an explicit host cap.

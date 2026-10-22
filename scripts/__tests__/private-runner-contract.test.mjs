@@ -58,6 +58,15 @@ test("private workflow pins checkout, image and signed Tinymold without artifact
   assert.match(privateJob, /allow-unsafe-pr-checkout: true/);
   assert.match(privateJob, /tinyhumansai\/tinymold@[a-f0-9]{40}/);
   assert.match(privateJob, /install: none/);
+  // The per-compile log is what ranks misses and uncacheable compiles.
+  assert.match(
+    privateJob,
+    /TINYMOLD_LOG=\$RUNNER_TEMP\/tinymold\.log.*GITHUB_ENV/s,
+  );
+  assert.ok(
+    privateJob.indexOf("TINYMOLD_LOG=$RUNNER_TEMP/tinymold.log") <
+      privateJob.indexOf("- name: Setup Tinymold"),
+  );
   assert.match(privateJob, /backend: remote/);
   assert.match(privateJob, /remote-signing-key:/);
   assert.match(privateJob, /remote-trusted-keys:/);

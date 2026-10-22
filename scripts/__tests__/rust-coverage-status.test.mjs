@@ -496,3 +496,12 @@ test("coverage suites record why cargo rebuilt and drop the verbose noise", () =
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("the nextest coverage run scales the model retry backoff down, overridably", () => {
+  const source = fs.readFileSync(runner, "utf8");
+  const block = source.slice(source.indexOf('if [ "${OH_COV_RUNNER:-cargo}" = "nextest" ]; then\n  # One process per test'));
+  assert.match(
+    block.split("\nfi\n")[0],
+    /export OPENHUMAN_MODEL_RETRY_BACKOFF_MS="\$\{OPENHUMAN_MODEL_RETRY_BACKOFF_MS:-100\}"/,
+  );
+});
