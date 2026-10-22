@@ -3004,6 +3004,10 @@ const messages: TranslationMap = {
   'settings.sandbox.envPassthroughDesc': 'Variables de entorno reenviadas al sandbox.',
   'settings.sandbox.noEnvVars': 'No hay variables de entorno configuradas.',
   'settings.approvalHistory.title': 'Historial de aprobaciones',
+  'settings.approvalHistory.toolTrustTitle': 'Herramientas de confianza',
+  'settings.approvalHistory.toolTrustDescription': 'Herramientas que permitiste ejecutar sin volver a preguntar.',
+  'settings.approvalHistory.toolTrustEmpty': 'No hay herramientas de confianza.',
+  'settings.approvalHistory.toolTrustError': 'No se pudieron cargar ni actualizar las herramientas de confianza.',
   'settings.approvalHistory.subtitle':
     'Decisiones recientes de aprobación de herramientas, las más nuevas primero.',
   'settings.approvalHistory.refresh': 'Actualizar',

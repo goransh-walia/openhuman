@@ -3469,6 +3469,10 @@ const en: TranslationMap = {
   'settings.sandbox.noEnvVars': 'No environment variables configured.',
 
   'settings.approvalHistory.title': 'Approval history',
+  'settings.approvalHistory.toolTrustTitle': 'Trusted tools',
+  'settings.approvalHistory.toolTrustDescription': 'Tools you have allowed to run without asking each time.',
+  'settings.approvalHistory.toolTrustEmpty': 'No trusted tools.',
+  'settings.approvalHistory.toolTrustError': 'Could not load or update trusted tools.',
   'settings.approvalHistory.tableTitle': 'Decisions',
   'settings.approvalHistory.tableDesc':
     'Every approve or deny, with the tool and what it was asked to do.',

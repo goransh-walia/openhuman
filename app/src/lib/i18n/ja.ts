@@ -3487,6 +3487,10 @@ const messages: TranslationMap = {
   'settings.sandbox.noEnvVars': '環境変数は設定されていません。',
 
   'settings.approvalHistory.title': '承認履歴',
+  'settings.approvalHistory.toolTrustTitle': '信頼済みツール',
+  'settings.approvalHistory.toolTrustDescription': '毎回確認せずに実行を許可したツールです。',
+  'settings.approvalHistory.toolTrustEmpty': '信頼済みツールはありません。',
+  'settings.approvalHistory.toolTrustError': '信頼済みツールを読み込むか更新できませんでした。',
   'settings.approvalHistory.tableTitle': '決定事項',
   'settings.approvalHistory.tableDesc': 'すべての承認または拒否と、対象ツールおよび実行内容。',
   'settings.approvalHistory.subtitle': '最近のツール承認決定事項（新しい順）。',

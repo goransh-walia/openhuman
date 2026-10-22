@@ -2999,6 +2999,10 @@ const messages: TranslationMap = {
   'settings.sandbox.envPassthroughDesc': "Variabili d'ambiente inoltrate nella sandbox.",
   'settings.sandbox.noEnvVars': "Nessuna variabile d'ambiente configurata.",
   'settings.approvalHistory.title': 'Cronologia approvazioni',
+  'settings.approvalHistory.toolTrustTitle': 'Strumenti attendibili',
+  'settings.approvalHistory.toolTrustDescription': 'Strumenti autorizzati a essere eseguiti senza chiedere ogni volta.',
+  'settings.approvalHistory.toolTrustEmpty': 'Nessuno strumento attendibile.',
+  'settings.approvalHistory.toolTrustError': 'Impossibile caricare o aggiornare gli strumenti attendibili.',
   'settings.approvalHistory.subtitle':
     'Decisioni recenti di approvazione degli strumenti, le più recenti per prime.',
   'settings.approvalHistory.refresh': 'Aggiorna',
