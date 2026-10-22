@@ -269,6 +269,18 @@ async fn a_flow_grant_applies_to_that_flow_only() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
+async fn a_durable_operator_tool_grant_is_reused_by_the_module() {
+    let world = world().await;
+    let shown = Arc::new(Shown::default());
+    world.engine.grant_tool_trust(&crate::core::runtime::Tenant::default(), "gmail_send")
+        .await.expect("TinySecurity persists the exact operator grant");
+    assert!(matches!(world.engine.check(input("gmail_send", &shown)).await.unwrap(), Checked::Approved { .. }));
+    assert!(shown.deliveries.lock().unwrap().is_empty());
+    assert!(matches!(world.engine.check(input("slack_post", &shown)).await.unwrap(), Checked::Pending { .. }));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn auto_approve_all_is_the_posture_and_a_forced_call_ignores_it() {
     let world = world().await;
     let shown = Arc::new(Shown::default());
