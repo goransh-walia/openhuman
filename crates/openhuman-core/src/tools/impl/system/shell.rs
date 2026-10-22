@@ -1,6 +1,10 @@
 use super::shell_description::{command_param_description, shell_description};
-use super::shell_support::{exec_result, python_utf8_env};
-use crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool;
+#[cfg(feature = "modules")]
+use super::shell_support::container_environment;
+use super::shell_support::{command_failure, exec_result, tool_timeout_message};
+use crate::agent::tinyagents::host::run_context::{
+    command_environment_for_tool, dispatch_ctx_for_tool,
+};
 use crate::config::Config;
 use crate::core::runtime::DispatchCtx;
 use crate::modules::tinybox::host_runtime::RuntimeAdapter;
@@ -17,6 +21,47 @@ use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolResult, ToolTimeout}
 
 /// Maximum output size in bytes (1MB).
 const MAX_OUTPUT_BYTES: usize = 1_048_576;
+
+#[cfg(feature = "modules")]
+fn docker_module_result(
+    output: crate::modules::tinybox::contract::DockerRunOutput,
+    explicit_timeout: Option<Duration>,
+) -> ToolResult {
+    let mut stdout = output.stdout;
+    let mut stderr = output.stderr;
+    if stdout.len() > MAX_OUTPUT_BYTES {
+        stdout.truncate(crate::util::floor_char_boundary(&stdout, MAX_OUTPUT_BYTES));
+        stdout.push_str("\n... [output truncated at 1MB]");
+    }
+    if stderr.len() > MAX_OUTPUT_BYTES {
+        stderr.truncate(crate::util::floor_char_boundary(&stderr, MAX_OUTPUT_BYTES));
+        stderr.push_str("\n... [stderr truncated at 1MB]");
+    }
+
+    if output.timed_out {
+        let secs = explicit_timeout
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        let mut message = tool_timeout_message(secs);
+        if !stdout.is_empty() {
+            message.push_str("\n[stdout]\n");
+            message.push_str(&stdout);
+        }
+        if !stderr.is_empty() {
+            message.push_str("\n[stderr]\n");
+            message.push_str(&stderr);
+        }
+        ToolResult::error(message)
+    } else if output.exit_code == 0 {
+        if stderr.is_empty() {
+            ToolResult::success(stdout)
+        } else {
+            ToolResult::success(format!("{stdout}\n[stderr]\n{stderr}"))
+        }
+    } else {
+        command_failure(Some(output.exit_code), &stdout, &stderr)
+    }
+}
 
 /// Shell command execution tool with sandboxing
 pub struct ShellTool {
@@ -284,6 +329,7 @@ impl ShellTool {
         context: Option<&dyn ToolRunContext>,
         meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
+        let command_environment = command_environment_for_tool(context);
         // Ask the security module again immediately before execution. The
         // harness gate asked before the approval prompt, without spending
         // budget; this is the call that admits the run (and spends one action
@@ -328,8 +374,16 @@ impl ShellTool {
             let action_dir = saas_action_dir;
             return match resolved {
                 Ok(policy) => {
-                    self.run_in_policy(ctx, policy, command, requested_timeout, &action_dir, meter)
-                        .await
+                    self.run_in_policy(
+                        ctx,
+                        policy,
+                        command,
+                        requested_timeout,
+                        &action_dir,
+                        context,
+                        meter,
+                    )
+                    .await
                 }
                 Err(why) => {
                     tracing::warn!(reason = %why, "[shell] SaaS sandbox refused the command");
@@ -358,13 +412,88 @@ impl ShellTool {
         if sandbox_required {
             let action_dir = self.effective_action_dir_for_context(context);
             return self
-                .run_sandboxed(ctx, command, requested_timeout, &action_dir, meter)
+                .run_sandboxed(ctx, command, requested_timeout, &action_dir, context, meter)
                 .await;
         }
 
         // Clear the environment to prevent leaking API keys and other secrets
         // (CWE-200), then re-add only safe, functional variables.
         let action_dir = self.effective_action_dir_for_context(context);
+        #[cfg(feature = "modules")]
+        if let Some((mut request, mount_workspace)) =
+            self.runtime.build_docker_request(command, &action_dir)
+        {
+            let Some(config) = self.module_config.as_deref() else {
+                return (
+                    false,
+                    ToolResult::error("Docker module execution is unavailable."),
+                );
+            };
+
+            let explicit_timeout = self.explicit_timeout(requested_timeout);
+            if let Some(timeout) = explicit_timeout {
+                let timeout_ms = timeout
+                    .as_nanos()
+                    .saturating_add(999_999)
+                    .checked_div(1_000_000)
+                    .unwrap_or(0)
+                    .max(1);
+                let Ok(timeout_ms) = u64::try_from(timeout_ms) else {
+                    return (
+                        false,
+                        ToolResult::error("Docker timeout exceeds the supported limit."),
+                    );
+                };
+                if timeout_ms > crate::modules::tinybox::contract::MAX_DOCKER_RUN_TIMEOUT_MS {
+                    return (
+                        false,
+                        ToolResult::error("Docker timeout exceeds the supported limit."),
+                    );
+                }
+                request.timeout_ms = timeout_ms;
+            }
+
+            let Some(mut env) = container_environment(command_environment.as_deref()) else {
+                return (
+                    false,
+                    ToolResult::error("Docker environment contains a non-UTF-8 value."),
+                );
+            };
+            for (name, value) in tinytools_std::filesystem::shell_git_env() {
+                let (Ok(name), Ok(value)) = (name.into_string(), value.into_string()) else {
+                    return (
+                        false,
+                        ToolResult::error("Docker environment contains a non-UTF-8 value."),
+                    );
+                };
+                env.insert(name, value);
+            }
+
+            let scratch_dir = crate::security::openhuman_scratch_dir();
+            if scratch_dir.is_dir() {
+                let Some(scratch_dir) = scratch_dir.to_str() else {
+                    return (
+                        false,
+                        ToolResult::error("Docker scratch directory is not valid UTF-8."),
+                    );
+                };
+                for name in ["TMPDIR", "TMP", "TEMP"] {
+                    env.insert(name.to_owned(), scratch_dir.to_owned());
+                }
+            }
+            request.env = env;
+
+            let result = if mount_workspace {
+                crate::modules::tinybox::run_docker(config, request).await
+            } else {
+                crate::modules::tinybox::run_docker_without_workspace(config, request).await
+            };
+            let result = match result {
+                Ok(output) => docker_module_result(output, explicit_timeout),
+                Err(_) => ToolResult::error("Docker module execution failed."),
+            };
+            return (true, result);
+        }
         // The module spawns the shell: it selects cmd or bash, starts from its
         // own safe environment (no API keys or other secrets, CWE-200) and owns
         // the per-call scratch directory. The host adds only what it approves.
@@ -375,6 +504,14 @@ impl ShellTool {
             );
         }
         let mut env = std::collections::BTreeMap::new();
+
+        if let Some(overrides) = command_environment.as_deref() {
+            env.extend(
+                overrides
+                    .iter()
+                    .map(|(name, value)| (name.clone(), value.clone())),
+            );
+        }
 
         // A turn that owns its child environment (library agents) keeps it: the
         // module starts from the process snapshot, so the turn's own values for
@@ -456,7 +593,7 @@ impl ShellTool {
             &self.security.workspace_dir,
             effective,
         );
-        run.env = env;
+        run.env = super::shell_support::with_unbuffered_python(env, command_environment.is_some());
         run.python_utf8 = true;
         run.hide_window = self.runtime.hide_window();
         run.meter = meter;
@@ -472,6 +609,7 @@ impl ShellTool {
         command: &str,
         requested_timeout: Option<u64>,
         action_dir: &Path,
+        context: Option<&dyn ToolRunContext>,
         meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
         // The operator's configured backend is filled in at the spawn boundary.
@@ -482,8 +620,16 @@ impl ShellTool {
             &crate::config::RuntimeConfig::default(),
             false,
         );
-        self.run_in_policy(ctx, policy, command, requested_timeout, action_dir, meter)
-            .await
+        self.run_in_policy(
+            ctx,
+            policy,
+            command,
+            requested_timeout,
+            action_dir,
+            context,
+            meter,
+        )
+        .await
     }
 
     /// Execute a command under a resolved sandbox `policy`.
@@ -494,6 +640,7 @@ impl ShellTool {
         command: &str,
         requested_timeout: Option<u64>,
         action_dir: &Path,
+        context: Option<&dyn ToolRunContext>,
         meter: Option<crate::sandbox::shell_progress::ShellOutputMeter>,
     ) -> (bool, ToolResult) {
         use crate::sandbox;
@@ -504,11 +651,27 @@ impl ShellTool {
             "[shell] routing to sandbox backend"
         );
 
-        let mut extra_env = std::collections::HashMap::new();
+        let mut extra_env =
+            std::collections::HashMap::<std::ffi::OsString, std::ffi::OsString>::new();
+        let command_environment = command_environment_for_tool(context);
+        super::shell_support::extend_explicit_environment(
+            &mut extra_env,
+            command_environment.as_deref(),
+        );
         // Apply the same Git config hardening to local and sandboxed shells.
         extra_env.extend(tinytools_std::filesystem::shell_git_env());
-        // And the same Python UTF-8 defaults the native path sets.
-        for (var, val) in python_utf8_env(|name| std::env::var_os(name)) {
+        // And the same Python defaults the native path sets.
+        for (var, val) in super::shell_support::python_env_defaults(|name| {
+            command_environment
+                .as_ref()
+                .and_then(|overrides| overrides.get(name).map(std::ffi::OsString::from))
+                .or_else(|| {
+                    command_environment
+                        .is_none()
+                        .then(|| std::env::var_os(name))
+                        .flatten()
+                })
+        }) {
             extra_env.insert(var.into(), val);
         }
 

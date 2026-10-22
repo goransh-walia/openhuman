@@ -17,6 +17,10 @@ struct InferenceAgentChatParams {
     api_key: Option<String>,
     #[serde(default)]
     inference_headers: Vec<(String, String)>,
+    #[serde(default)]
+    inference_provider_options: Option<Value>,
+    #[serde(default)]
+    inference_reasoning_effort: Option<String>,
 }
 
 pub(crate) fn schemas(function: &str) -> ControllerSchema {
@@ -61,6 +65,17 @@ pub(crate) fn schemas(function: &str) -> ControllerSchema {
                         "Custom header name/value pairs for inference_url only; never persisted.",
                     required: false,
                 },
+                FieldSchema {
+                    name: "inference_provider_options",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::Json)),
+                    comment:
+                        "Provider-specific defaults for inference_url; request options override them by key.",
+                    required: false,
+                },
+                optional_string(
+                    "inference_reasoning_effort",
+                    "Reasoning effort for the model selected by inference_url.",
+                ),
             ],
             outputs: vec![json_output(
                 "response",
@@ -135,7 +150,12 @@ fn handle_agent_chat(
                 params.inference_url,
                 params.api_key,
             )
-            .map(|route| route.with_headers(params.inference_headers)),
+            .map(|route| {
+                route
+                    .with_headers(params.inference_headers)
+                    .with_provider_options(params.inference_provider_options)
+                    .with_reasoning_effort(params.inference_reasoning_effort)
+            }),
             super::AgentChatEnv::default(),
         )
         .await?

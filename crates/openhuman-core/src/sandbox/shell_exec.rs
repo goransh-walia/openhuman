@@ -243,7 +243,7 @@ async fn collect_process(
     mut abandoned: tokio::sync::oneshot::Receiver<std::convert::Infallible>,
     meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
-    use contract::{ExecutionFailure, ExecutionState, OutputStream};
+    use contract::{ExecutionState, OutputStream};
     use tokio::sync::oneshot::error::TryRecvError;
 
     let deadline = tokio::time::Instant::now() + timeout;
@@ -298,27 +298,49 @@ async fn collect_process(
             }
             ExecutionState::Cancelled if has_chunks => continue,
             ExecutionState::Cancelled => break requested_cancel,
-            ExecutionState::Failed {
-                code: ExecutionFailure::CleanupFailed,
-            } => anyhow::bail!("TinyBox retained native process cleanup for retry"),
-            ExecutionState::Failed { .. } => {
-                anyhow::bail!("TinyBox native shell execution failed")
+            ExecutionState::Failed { .. } if has_chunks => continue,
+            ExecutionState::Failed { code } => {
+                tracing::debug!(?code, "[sandbox:shell] TinyBox reported a failed execution");
+                break failure_timed_out(code)?;
             }
         }
     };
     tinybox::release_output(config, process)
         .await
         .map_err(|_| anyhow::anyhow!("TinyBox could not release command output"))?;
+    // What the command printed before it was stopped, both streams: a build
+    // or test killed at its deadline has usually written its progress and
+    // first errors by then. `timed_out` says why it stopped; the shell tool
+    // writes the timeout line.
     Ok(SandboxExecResult {
         exit_code: -1,
         stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: if timed_out {
-            format!("Command timed out after {}s", timeout.as_secs())
-        } else {
-            String::from_utf8_lossy(&stderr).into_owned()
-        },
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
         timed_out,
     })
+}
+
+/// What a terminal TinyBox failure means for the command. The module enforces
+/// the same runtime budget the host waits for, so a command that runs to its
+/// limit usually ends as `TimedOut` before the host's own cancel lands: that is
+/// the command's timeout, reported like one (`Ok(true)`). Anything else is a
+/// real sandbox failure, named by its code.
+#[cfg(feature = "modules")]
+fn failure_timed_out(code: contract::ExecutionFailure) -> anyhow::Result<bool> {
+    use contract::ExecutionFailure;
+    match code {
+        ExecutionFailure::TimedOut => Ok(true),
+        ExecutionFailure::CleanupFailed => {
+            anyhow::bail!("TinyBox retained native process cleanup for retry")
+        }
+        ExecutionFailure::OutputLimit => anyhow::bail!(
+            "TinyBox stopped the command: its output exceeded the execution output limit"
+        ),
+        ExecutionFailure::StartFailed => {
+            anyhow::bail!("TinyBox native shell execution failed: the command could not start")
+        }
+        other => anyhow::bail!("TinyBox native shell execution failed ({other:?})"),
+    }
 }
 
 #[cfg(feature = "modules")]
