@@ -71,7 +71,7 @@ test("keeps server-controlled conversation ids on create and patch routes", asyn
   const started = await startMockServer(0);
   const baseUrl = `http://127.0.0.1:${started.port}`;
 
-  const createdConversation = await fetch(`${baseUrl}/conversations`, {
+  const createdConversationResponse = await fetch(`${baseUrl}/conversations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id: "client-conv", title: "Client title" }),
@@ -83,7 +83,7 @@ test("keeps server-controlled conversation ids on create and patch routes", asyn
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id: "client-conv", title: "Client conversation" }),
   }).then((response) => response.json());
-  const conversationId = createdConversation?.data?.id;
+  const conversationId = createdConversationResponse?.data?.id;
   assert.notEqual(conversationId, "client-conv");
 
   await fetch(`${baseUrl}/conversations/${conversationId}`, {
