@@ -41,9 +41,9 @@ fn the_component_switch_reads_the_context_the_call_runs_under() {
 fn the_saved_configuration_turns_the_sandbox_off_by_flag_or_component() {
     let mut config = Config::default();
     assert!(!config_off(&config));
-    config.sandbox.enabled = Some(false);
+    config.security.sandbox.enabled = Some(false);
     assert!(config_off(&config));
-    config.sandbox.enabled = None;
+    config.security.sandbox.enabled = None;
     config.components.sandbox = false;
     assert!(config_off(&config));
 }

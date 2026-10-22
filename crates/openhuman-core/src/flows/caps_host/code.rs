@@ -98,7 +98,7 @@ impl OpenHumanCode {
         let mut policy = spawn_policy(
             &self.config.action_dir,
             &self.config.workspace_dir,
-            &self.config.sandbox,
+            &self.config.security.sandbox,
             &self.config.runtime,
             false,
         );

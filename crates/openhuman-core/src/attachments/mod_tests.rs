@@ -196,7 +196,7 @@ async fn ready_media_artifact_in_files_folder_can_be_attached() {
     let files = temp.path().join("Files");
     tokio::fs::create_dir_all(&files).await.unwrap();
     config.files_dir_override = Some(files.clone());
-    config.autonomy.enabled = true;
+    config.security.autonomy.enabled = true;
 
     let (artifact, path) = crate::artifacts::create_artifact(
         &config.workspace_dir,

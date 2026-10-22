@@ -9,7 +9,7 @@ fn untouched_document_keeps_policy_off() {
     let mut d = doc("schema_version = 14\n");
     assert!(rewrite_document(&mut d).is_empty());
     let config = crate::config::schema::config_from_toml_str("schema_version = 14\n").unwrap();
-    assert!(!config.autonomy.enabled);
+    assert!(!config.security.autonomy.enabled);
 }
 
 #[test]
@@ -30,14 +30,14 @@ backend = "landlock"
 mode = "sensitive"
 "#;
     let config = crate::config::schema::config_from_toml_str(text).unwrap();
-    assert!(config.autonomy.enabled);
-    assert_eq!(config.autonomy.level, crate::security::AutonomyLevel::Full);
-    assert_eq!(config.autonomy.max_actions_per_hour, 7);
+    assert!(config.security.autonomy.enabled);
+    assert_eq!(config.security.autonomy.level, crate::security::AutonomyLevel::Full);
+    assert_eq!(config.security.autonomy.max_actions_per_hour, 7);
     assert!(matches!(
-        config.sandbox.backend,
+        config.security.sandbox.backend,
         crate::config::SandboxBackend::Landlock
     ));
-    assert_eq!(config.privacy.mode, crate::config::PrivacyMode::Sensitive);
+    assert_eq!(config.security.privacy.mode, crate::config::PrivacyMode::Sensitive);
 }
 
 #[test]
@@ -111,7 +111,7 @@ fn retired_sandbox_backends_become_auto_with_a_notice() {
         assert!(notices.contains(&Notice::DroppedFirejailArgs { table: "sandbox" }));
         let config = crate::config::schema::config_from_toml_str(&text).unwrap();
         assert!(matches!(
-            config.sandbox.backend,
+            config.security.sandbox.backend,
             crate::config::SandboxBackend::Auto
         ));
     }
@@ -122,7 +122,7 @@ fn retired_sandbox_backend_in_the_security_table_wins_as_auto() {
     let text = "[sandbox]\nbackend = \"landlock\"\n[security.sandbox]\nbackend = \"bubblewrap\"\n";
     let config = crate::config::schema::config_from_toml_str(text).unwrap();
     assert!(matches!(
-        config.sandbox.backend,
+        config.security.sandbox.backend,
         crate::config::SandboxBackend::Auto
     ));
     let saved = toml::to_string(&config).unwrap();

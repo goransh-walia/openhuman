@@ -227,7 +227,7 @@ async fn tools_report_external_effect_from_the_live_turn() {
         ..Config::default()
     });
     let security = Arc::new(SecurityPolicy::from_config(
-        &config.autonomy,
+        &config.security.autonomy,
         &config.workspace_dir,
         &config.workspace_dir,
     ));

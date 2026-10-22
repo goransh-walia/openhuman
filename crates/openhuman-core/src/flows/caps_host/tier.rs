@@ -134,9 +134,9 @@ pub(crate) fn tier_policy_from_config(
 
     let config =
         live_config.ok_or_else(|| tier_config_error("live config snapshot was not provided"))?;
-    if config.autonomy.enabled {
+    if config.security.autonomy.enabled {
         policy.enabled = true;
-        policy.autonomy = config.autonomy.level;
+        policy.autonomy = config.security.autonomy.level;
         if let Some(ceiling) = ceiling {
             policy.autonomy = stricter_tier(policy.autonomy, ceiling);
         }

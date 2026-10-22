@@ -133,7 +133,7 @@ pub fn classify_tool_call(
     args: &serde_json::Value,
 ) -> Result<CommandClass, String> {
     let security = Arc::new(SecurityPolicy::from_config(
-        &config.autonomy,
+        &config.security.autonomy,
         &config.workspace_dir,
         &config.action_dir,
     ));

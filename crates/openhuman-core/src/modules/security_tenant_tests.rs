@@ -11,8 +11,8 @@ fn two_tenant_config(root: &std::path::Path, name: &str, enabled: bool, deny: &s
         action_dir: action,
         ..Config::default()
     };
-    config.autonomy.enabled = enabled;
-    config.autonomy.level = crate::security::AutonomyLevel::Supervised;
+    config.security.autonomy.enabled = enabled;
+    config.security.autonomy.level = crate::security::AutonomyLevel::Supervised;
     config.tool_rules.rules = vec![tinytools::rules::ToolRule::names(
         tinytools::rules::RuleEffect::Deny,
         [deny],
@@ -356,7 +356,7 @@ async fn real_forbidden_paths_register_with_the_module() {
     let root = fixture.acting.path().canonicalize().unwrap();
     let state = tokio::sync::Mutex::new(ScopedState::default());
     let mut config = two_tenant_config(&root, "forbid", false, "unused_tool");
-    config.autonomy.forbidden_paths = vec!["~/.ssh".into(), "private".into(), "/etc".into()];
+    config.security.autonomy.forbidden_paths = vec!["~/.ssh".into(), "private".into(), "/etc".into()];
     let activation = activate_on(
         &fixture.proxy,
         &state,

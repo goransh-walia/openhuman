@@ -25,7 +25,7 @@ pub(super) fn config(tmp: &TempDir) -> Config {
 async fn host(config: &Config, agent_only: bool) -> (HostRegistration, tinybus::Proxy) {
     module::proxy(config).await.expect("module attaches");
     let security = Arc::new(SecurityPolicy::from_config(
-        &config.autonomy,
+        &config.security.autonomy,
         &config.workspace_dir,
         &config.action_dir,
     ));
@@ -472,7 +472,7 @@ async fn triggered_run_guard_keeps_a_long_lived_run_deduplicated_past_1024_start
         &DispatchCtx::ambient(),
         &config,
         Arc::new(SecurityPolicy::from_config(
-            &config.autonomy,
+            &config.security.autonomy,
             &config.workspace_dir,
             &config.action_dir,
         )),

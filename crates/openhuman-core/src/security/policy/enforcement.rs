@@ -159,7 +159,7 @@ impl SecurityPolicy {
             // separate `[privacy]` block), and `from_config` has ~40 call sites
             // that only hold the autonomy block — so we default to `Standard`
             // here and let the install / reload chokepoints layer the real
-            // `config.privacy.mode` on via [`with_privacy_mode`]. The live-policy
+            // `config.security.privacy.mode` on via [`with_privacy_mode`]. The live-policy
             // paths (`install` seeds from the built policy, `reload_from`
             // re-applies the stored mode, `reload_privacy` swaps it) keep the
             // effective enforcement mode correct without touching every caller.
@@ -191,15 +191,15 @@ impl SecurityPolicy {
     /// `Config` is in hand.
     #[must_use]
     pub fn from_full_config(config: &crate::config::Config) -> Self {
-        Self::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir)
-            .with_privacy_mode(config.privacy.mode)
+        Self::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir)
+            .with_privacy_mode(config.security.privacy.mode)
     }
 
     /// Return a copy of this policy with `privacy_mode` set. Used by the live-
-    /// policy install / reload chokepoints to layer `config.privacy.mode` onto a
+    /// policy install / reload chokepoints to layer `config.security.privacy.mode` onto a
     /// policy that [`from_config`](Self::from_config) built with the `Standard`
     /// default. Builder-style so call sites read as
-    /// `SecurityPolicy::from_config(..).with_privacy_mode(config.privacy.mode)`.
+    /// `SecurityPolicy::from_config(..).with_privacy_mode(config.security.privacy.mode)`.
     #[must_use]
     pub fn with_privacy_mode(mut self, privacy_mode: crate::config::PrivacyMode) -> Self {
         log::debug!(

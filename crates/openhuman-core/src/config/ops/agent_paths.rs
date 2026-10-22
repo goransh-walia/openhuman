@@ -73,7 +73,7 @@ pub async fn ensure_agent_dirs(config: &mut Config) {
         .iter()
         .any(|r| r.path == projects_path)
     {
-        config.autonomy.trusted_roots.push(TrustedRoot {
+        config.security.autonomy.trusted_roots.push(TrustedRoot {
             path: projects_path,
             access: TrustedAccess::ReadWrite,
         });
@@ -103,7 +103,7 @@ pub async fn ensure_agent_dirs(config: &mut Config) {
             .iter()
             .any(|r| r.path == action_path)
     {
-        config.autonomy.trusted_roots.push(TrustedRoot {
+        config.security.autonomy.trusted_roots.push(TrustedRoot {
             path: action_path,
             access: TrustedAccess::ReadWrite,
         });

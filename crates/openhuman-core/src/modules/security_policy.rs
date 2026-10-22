@@ -81,7 +81,7 @@ pub(crate) fn command_policy(
     mode: CommandExecutionMode,
     home_dir: Option<std::path::PathBuf>,
 ) -> CommandPolicy {
-    let autonomy = &config.autonomy;
+    let autonomy = &config.security.autonomy;
     CommandPolicy {
         enabled: autonomy.enabled,
         execution_mode: mode,
@@ -115,7 +115,7 @@ pub(crate) fn privacy_mode(mode: crate::config::PrivacyMode) -> PrivacyMode {
 /// Origins that may be approved automatically. `auto_approve_all` is the only
 /// blanket opt-in; a remote caller (`Saas`) never inherits it.
 fn auto_origins(config: &Config) -> Vec<Origin> {
-    if config.autonomy.auto_approve_all {
+    if config.security.autonomy.auto_approve_all {
         vec![
             Origin::Operator,
             Origin::Copilot,
@@ -249,16 +249,16 @@ pub(crate) fn tool_rules(config: &Config) -> ToolRuleTranslation {
 pub(crate) fn settings(config: &Config) -> PolicySettings {
     PolicySettings {
         policy: PolicyConfig {
-            enabled: config.autonomy.enabled,
+            enabled: config.security.autonomy.enabled,
             action_dir: config.action_dir.to_string_lossy().into_owned(),
             workspace_dir: config.workspace_dir.to_string_lossy().into_owned(),
-            allowed_commands: config.autonomy.allowed_commands.clone(),
+            allowed_commands: config.security.autonomy.allowed_commands.clone(),
             // tinysecurity >= 0.5.0 (contract 1.13) folds `~`, relative
             // (against `action_dir`) and floor-covered entries, so the real
             // operator list is registered rather than an empty one.
-            forbidden_paths: config.autonomy.forbidden_paths.clone(),
+            forbidden_paths: config.security.autonomy.forbidden_paths.clone(),
         },
-        privacy: privacy_mode(config.privacy.mode),
+        privacy: privacy_mode(config.security.privacy.mode),
         egress_hosts: Vec::new(),
         command_classes: Vec::new(),
         auto_origins: auto_origins(config),
@@ -277,7 +277,7 @@ pub(crate) fn registered_policy(
     let translation = tool_rules(config);
     log::debug!(
         "[security][policy] translated enabled={} tool_rules={} host_only_rules={}",
-        config.autonomy.enabled,
+        config.security.autonomy.enabled,
         translation.rules.len(),
         translation.host_only
     );

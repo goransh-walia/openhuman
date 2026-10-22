@@ -27,8 +27,8 @@ fn persisted_tier_config(
     config.config_path = dir.join("config.toml");
     config.workspace_dir = dir.join("workspace");
     config.action_dir = dir.join("action");
-    config.autonomy.enabled = enabled;
-    config.autonomy.level = level;
+    config.security.autonomy.enabled = enabled;
+    config.security.autonomy.level = level;
     config
 }
 
@@ -72,7 +72,7 @@ async fn one_live_capability_observes_full_readonly_full_updates() {
     let ctx = live_tier_context(&config).with_turn_origin(origin.clone());
     assert!(has_issue48_workflow_origin(&ctx));
     let mut baseline =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
     baseline.trusted_roots.push(crate::security::TrustedRoot {
         path: dir.path().join("trusted").display().to_string(),
         access: crate::security::TrustedAccess::ReadWrite,
@@ -100,7 +100,7 @@ async fn one_live_capability_observes_full_readonly_full_updates() {
         has_issue48_workflow_origin(&ctx),
         "refreshing the policy must retain the dispatch's workflow origin"
     );
-    config.autonomy.level = AutonomyLevel::ReadOnly;
+    config.security.autonomy.level = AutonomyLevel::ReadOnly;
     save_tier_config(&config).await;
     assert!(
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
@@ -108,7 +108,7 @@ async fn one_live_capability_observes_full_readonly_full_updates() {
             .is_err()
     );
 
-    config.autonomy.level = AutonomyLevel::Full;
+    config.security.autonomy.level = AutonomyLevel::Full;
     save_tier_config(&config).await;
     assert_eq!(
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
@@ -129,7 +129,7 @@ async fn live_tier_reload_failure_fails_closed() {
     std::fs::create_dir_all(&config.config_path).unwrap();
     let ctx = live_tier_context(&config);
     let baseline =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
     let error =
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
             .await
@@ -154,7 +154,7 @@ async fn malformed_live_config_is_denied_without_echoing_its_contents() {
     .unwrap();
     let ctx = live_tier_context(&config);
     let baseline =
-        SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, &config.action_dir);
+        SecurityPolicy::from_config(&config.security.autonomy, &config.workspace_dir, &config.action_dir);
     let error =
         enforce_current_node_tier_gate(&ctx, &config, &baseline, CommandClass::Write, "code")
             .await
@@ -274,7 +274,7 @@ async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
         "blocks code staging after the tier gate",
     )
     .unwrap();
-    config.autonomy = AutonomyConfig {
+    config.security.autonomy = AutonomyConfig {
         enabled: true,
         level: AutonomyLevel::Full,
         ..AutonomyConfig::default()
@@ -293,7 +293,7 @@ async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
     let code = OpenHumanCode {
         ctx: crate::core::runtime::DispatchCtx::new(context),
         security: Arc::new(SecurityPolicy::from_config(
-            &config.autonomy,
+            &config.security.autonomy,
             &config.workspace_dir,
             &config.action_dir,
         )),
