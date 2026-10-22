@@ -3,11 +3,8 @@
 //! Runs on the parsed document before the typed decode, on every load, so the
 //! result does not depend on whether the workspace crossed schema version 15:
 //!
-//! * `[security.autonomy]`, `[security.sandbox]` and `[security.privacy]` are
-//!   the canonical spelling. They are overlaid key by key onto the legacy
-//!   top-level `[autonomy]`, `[sandbox]` and `[privacy]` tables, and the
-//!   `[security.*]` value wins. Consumers keep reading `Config::{autonomy,
-//!   sandbox, privacy}`.
+//! * Legacy top-level `[autonomy]`, `[sandbox]` and `[privacy]` tables are
+//!   moved under `[security]`. Existing `[security.*]` values win key by key.
 //! * A document with neither spelling is untouched, so the policy stays off
 //!   (`autonomy.enabled` defaults to `false`).
 //! * `autonomy.max_cost_per_day_cents` is deleted: nothing enforced it, and the
@@ -67,18 +64,33 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
     let Some(root) = document.as_table_mut() else {
         return notices;
     };
-    if let Some(Value::Table(autonomy)) = root.get_mut("autonomy") {
-        if autonomy.remove("max_cost_per_day_cents").is_some() {
-            notices.push(Notice::DroppedMaxCost { table: "autonomy" });
+    let security_value = root.remove("security");
+    let mut security = match security_value {
+        Some(Value::Table(table)) => table,
+        Some(other) => {
+            root.insert("security".to_owned(), other);
+            return notices;
         }
-    }
-    if let Some(Value::Table(sandbox)) = root.get_mut("sandbox") {
-        notices.extend(retire_sandbox_keys(sandbox, "sandbox"));
-    }
-    let mut overlays = Vec::new();
-    if let Some(Value::Table(security)) = root.get_mut("security") {
-        for name in FOLDED {
-            if let Some(Value::Table(mut table)) = security.remove(name) {
+        None => Default::default(),
+    };
+    let had_security = !security.is_empty();
+    for name in FOLDED {
+        let legacy = root.remove(name);
+        let canonical = security.remove(name);
+        let mut merged = match legacy {
+            Some(Value::Table(mut table)) => {
+                if name == "autonomy" && table.remove("max_cost_per_day_cents").is_some() {
+                    notices.push(Notice::DroppedMaxCost { table: "autonomy" });
+                }
+                if name == "sandbox" {
+                    notices.extend(retire_sandbox_keys(&mut table, "sandbox"));
+                }
+                table
+            }
+            _ => Default::default(),
+        };
+        let canonical = match canonical {
+            Some(Value::Table(mut table)) => {
                 if name == "autonomy" && table.remove("max_cost_per_day_cents").is_some() {
                     notices.push(Notice::DroppedMaxCost {
                         table: "security.autonomy",
@@ -87,23 +99,22 @@ pub(crate) fn rewrite_document(document: &mut Value) -> Vec<Notice> {
                 if name == "sandbox" {
                     notices.extend(retire_sandbox_keys(&mut table, "security.sandbox"));
                 }
-                overlays.push((name, table));
+                Some(table)
             }
+            _ => None,
+        };
+        if let Some(canonical) = canonical {
+            for (key, value) in canonical {
+                merged.insert(key, value);
+            }
+        }
+        if !merged.is_empty() {
+            security.insert(name.to_owned(), Value::Table(merged));
+            notices.push(Notice::Overlaid { table: name });
         }
     }
-    for (name, table) in overlays {
-        let target = root
-            .entry(name.to_string())
-            .or_insert_with(|| Value::Table(Default::default()));
-        if !target.is_table() {
-            *target = Value::Table(Default::default());
-        }
-        if let Value::Table(target) = target {
-            for (key, value) in table {
-                target.insert(key, value);
-            }
-        }
-        notices.push(Notice::Overlaid { table: name });
+    if had_security || !security.is_empty() {
+        root.insert("security".to_owned(), Value::Table(security));
     }
     for notice in &notices {
         match notice {

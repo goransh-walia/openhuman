@@ -9,6 +9,7 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use super::{AutonomyConfig, PrivacyConfig};
 
 /// `[security]`: everything that decides what an agent may do.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
