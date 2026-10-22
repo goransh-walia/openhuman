@@ -446,6 +446,12 @@ the flow-node short-key test remains red against the currently pinned archive.
 Network destination gates also deny when `security-module` is compiled out;
 regressions cover both direct and routed gates, and the enabled native gate
 suite passes.
+Composio result and error handling now sends every distinct string (including
+object keys and strings without the configured Composio credential) through the
+shared redactor. It withholds results on unavailable, incomplete, oversized or
+credential-preserving answers; batches are bounded to 256 strings, 512 KiB and
+15 seconds. Regressions cover unrelated bearer credentials, incomplete module
+answers and the size limit.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 

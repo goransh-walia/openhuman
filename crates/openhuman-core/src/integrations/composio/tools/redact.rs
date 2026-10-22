@@ -20,6 +20,7 @@ use crate::config::Config;
 const MIN_SECRET_LEN: usize = 8;
 const MAX_OUTCOME_STRINGS: usize = 256;
 const MAX_OUTCOME_REDACTION_BYTES: usize = 512 * 1024;
+const OUTCOME_REDACTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// The Composio keys `config` can resolve to: a host-pinned key, the inline
 /// `composio.api_key`, and in unpinned direct mode the stored key.
@@ -242,15 +243,20 @@ where
 async fn module_answers(config: &Config, secrets: &[String], strings: Vec<String>) -> Answers {
     use futures::StreamExt;
 
-    futures::stream::iter(strings.into_iter().map(|text| async move {
-        let answer =
-            crate::modules::security::text::redact_credentials_with(config, &text, secrets).await;
-        (text, answer)
-    }))
-    .buffer_unordered(8)
-    .map(|(text, answer)| answer.map(|redacted| (text, redacted)))
-    .collect::<Vec<_>>()
+    tokio::time::timeout(
+        OUTCOME_REDACTION_TIMEOUT,
+        futures::stream::iter(strings.into_iter().map(|text| async move {
+            let answer =
+                crate::modules::security::text::redact_credentials_with(config, &text, secrets)
+                    .await;
+            (text, answer)
+        }))
+        .buffer_unordered(8)
+        .map(|(text, answer)| answer.map(|redacted| (text, redacted)))
+        .collect::<Vec<_>>(),
+    )
     .await
+    .map_err(|_| "TinySecurity Composio result redaction timed out".to_string())?
     .into_iter()
     .collect()
 }
