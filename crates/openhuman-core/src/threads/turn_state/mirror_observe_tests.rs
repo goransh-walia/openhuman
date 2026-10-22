@@ -539,6 +539,9 @@ fn subagent_lifecycle_records_and_clears_active() {
     assert!(s.active_subagent.is_none());
 }
 
+#[path = "mirror_observe_thinking_and_subagent_tests.rs"]
+mod thinking_and_subagent_tests;
+
 #[test]
 fn thinking_blocks_record_start_and_end_timing() {
     // Regression: the "Thought for Ns" label reads these; a coalesced block

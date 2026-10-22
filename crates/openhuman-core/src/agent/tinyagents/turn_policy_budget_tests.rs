@@ -105,3 +105,32 @@ fn hosted_openai_keeps_the_hosted_ceilings_in_the_policy() {
     assert_eq!(policy.limits.max_model_call_ms, Some(900_000));
     assert_eq!(policy.limits.max_wall_clock_ms, Some(3_600_000));
 }
+
+#[test]
+fn retry_backoff_override_shrinks_the_schedule_and_ignores_junk() {
+    let production = run_policy_for_provider_with_backoff(8, false, false, None, None).retry;
+    for raw in [
+        None,
+        Some(""),
+        Some("0"),
+        Some("abc"),
+        Some("-5"),
+        Some("60000"),
+    ] {
+        let mut policy = run_policy_for_provider_with_backoff(8, false, false, None, None);
+        apply_retry_backoff_override(&mut policy, raw);
+        assert_eq!(
+            policy.retry.initial_backoff_ms, production.initial_backoff_ms,
+            "{raw:?}"
+        );
+        assert_eq!(
+            policy.retry.max_backoff_ms, production.max_backoff_ms,
+            "{raw:?}"
+        );
+    }
+    let mut policy = run_policy_for_provider_with_backoff(8, false, false, None, None);
+    apply_retry_backoff_override(&mut policy, Some(" 20 "));
+    assert_eq!(policy.retry.initial_backoff_ms, 20);
+    assert_eq!(policy.retry.max_backoff_ms, 200);
+    assert_eq!(policy.retry.max_attempts, production.max_attempts);
+}
