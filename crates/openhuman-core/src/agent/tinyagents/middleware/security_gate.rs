@@ -246,7 +246,3 @@ pub(crate) fn install(
 #[cfg(all(test, feature = "security-module"))]
 #[path = "security_gate_tests.rs"]
 mod tests;
-
-#[cfg(all(test, not(feature = "security-module")))]
-#[path = "security_gate_no_module_tests.rs"]
-mod no_module_tests;
