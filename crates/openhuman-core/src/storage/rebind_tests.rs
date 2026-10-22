@@ -217,7 +217,7 @@ fn rebinding_to_a_fresh_v2_profile_opens_its_storage_db_and_leaves_a_v1_one_alon
         [format!("sqlite:{}", layout.storage_db.display())]
     );
     assert!(!rebound.to.contains(v1.path().to_string_lossy().as_ref()));
-    assert!(!rebound.to.contains(v2.path().to_string_lossy().as_ref()));
+    assert!(!rebound.to.contains(root.path().to_string_lossy().as_ref()));
     assert!(layout.storage_db.is_file(), "the profile got its database");
     assert!(
         !layout.workspace_dir.join("storage").exists(),
