@@ -1,6 +1,7 @@
 use super::*;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -151,6 +152,49 @@ async fn an_allowed_call_runs_without_asking_a_human() {
     let out = through_the_gate(Ok(Verdict::Allow), None).await;
     assert!(!out.result.is_error);
     assert_eq!((out.runs, out.module_asks, out.human_asks), (1, 1, 0));
+}
+
+#[tokio::test]
+async fn sandbox_required_tools_are_denied_by_the_shared_gate_without_a_sandboxed_workspace() {
+    let module = Arc::new(Module {
+        answer: Ok(Verdict::Allow),
+        asked: AtomicUsize::new(0),
+    });
+    let policy = TinySecurityPolicy::new(module).with_policy_source(Arc::new(
+        super::super::sandbox_requirement::SandboxRequirementPolicy::new(HashMap::from([(
+            "send_email".into(),
+            tinytools::ToolPolicy::classified().with_runtime(tinytools::ToolRuntime {
+                sandbox: tinytools::SandboxMode::Required,
+                ..tinytools::ToolRuntime::default()
+            }),
+        )])),
+    ));
+    let mut stack: MiddlewareStack<(), OpenHumanRunContext> = MiddlewareStack::new();
+    stack.push_tool_middleware(Arc::new(gate(
+        Arc::new(policy),
+        Arc::new(Human::default()),
+    )));
+    let runs = Arc::new(AtomicUsize::new(0));
+    let ctx = RunContext::new(RunConfig::new("security-gate"), OpenHumanRunContext::new());
+    let result = stack
+        .run_wrapped_tool(
+            &ctx,
+            &(),
+            TaToolCall {
+                id: "c1".into(),
+                name: "send_email".into(),
+                arguments: serde_json::json!({}),
+                invalid: None,
+            },
+            &Tool { runs: runs.clone() },
+        )
+        .await
+        .unwrap()
+        .into_result();
+
+    assert!(result.is_error);
+    assert!(result.output().contains("requires a sandbox"));
+    assert_eq!(runs.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
