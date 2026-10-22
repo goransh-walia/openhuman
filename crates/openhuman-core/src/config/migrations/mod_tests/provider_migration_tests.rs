@@ -29,3 +29,26 @@ async fn a_v10_workspace_that_already_has_providers_is_left_alone() {
     );
     assert_eq!(config.cloud_providers[0].id, "prov_user_owned");
 }
+
+/// picker's managed pane renders "Could not load models from this provider."
+#[tokio::test]
+async fn a_v10_workspace_with_no_cloud_providers_is_reseeded() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("workspace")).unwrap();
+
+    let mut config = config_in(&tmp);
+    config.schema_version = 10;
+    config.cloud_providers = Vec::new();
+
+    run_pending(&mut config).await;
+
+    assert!(
+        config.cloud_providers.iter().any(|e| e.slug == "openhuman"),
+        "a v10 workspace with an empty provider list must gain the managed entry, \
+         otherwise the model picker can never load the managed catalog"
+    );
+    assert_eq!(
+        config.schema_version, CURRENT_SCHEMA_VERSION,
+        "the re-seed step must advance the schema version"
+    );
+}
