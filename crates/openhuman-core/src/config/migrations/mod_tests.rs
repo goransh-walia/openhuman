@@ -589,5 +589,5 @@ async fn run_pending_v5_to_v6_reconciles_orphaned_providers() {
     );
 }
 
-#[path = "security_policy_tests.rs"]
-mod security_policy_tests;
+#[path = "mod_policy_tests.rs"]
+mod policy_tests;
