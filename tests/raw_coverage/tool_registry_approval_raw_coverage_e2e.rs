@@ -850,7 +850,7 @@ async fn approval_rpc_decision_paths_persist_always_allow_and_recent_audit() {
         .expect("reload config after always allow");
     assert!(
         config_after
-            .autonomy
+            .security.autonomy
             .auto_approve
             .iter()
             .any(|tool| tool == "tools.composio_execute"),

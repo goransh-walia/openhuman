@@ -1203,7 +1203,7 @@ async fn config_env_overlay_public_loader_applies_runtime_and_tool_overrides() {
 
     assert_eq!(config.default_model.as_deref(), Some("env-model"));
     assert_eq!(config.default_temperature, 1.25);
-    assert_eq!(config.autonomy.max_actions_per_hour, 17);
+    assert_eq!(config.security.autonomy.max_actions_per_hour, 17);
     assert_eq!(config.output_language.as_deref(), Some("ja"));
     assert_eq!(config.runtime.reasoning_enabled, Some(true));
     assert!(config.seltz.enabled);
@@ -2575,7 +2575,7 @@ async fn config_auto_approve_public_helper_persists_once_and_is_idempotent() {
         .expect("load config after auto approve helper");
     assert_eq!(
         loaded
-            .autonomy
+            .security.autonomy
             .auto_approve
             .iter()
             .filter(|tool| tool.as_str() == "tool.config.round10")

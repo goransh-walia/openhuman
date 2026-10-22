@@ -48,8 +48,8 @@ async fn scratch_config(
     config.workspace_dir = dir.path().to_path_buf();
     config.config_path = dir.path().join("config.toml");
     config.action_dir = dir.path().join("action");
-    config.sandbox.backend = backend;
-    config.sandbox.enabled = enabled;
+    config.security.sandbox.backend = backend;
+    config.security.sandbox.enabled = enabled;
     config.save().await.unwrap();
     (dir, config)
 }

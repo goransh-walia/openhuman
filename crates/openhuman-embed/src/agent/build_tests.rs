@@ -69,7 +69,10 @@ fn config_fn_final_autonomy_is_captured_on_the_built_agent_context() {
             }))
             .expect("AgentSpec config_fn builds");
 
-        assert_eq!(agent.inner.config.autonomy.level, AutonomyLevel::Full);
+        assert_eq!(
+            agent.inner.config.security.autonomy.level,
+            AutonomyLevel::Full
+        );
         assert_eq!(
             agent.inner.ctx.autonomy_tier_source(),
             AutonomyTierSource::Captured

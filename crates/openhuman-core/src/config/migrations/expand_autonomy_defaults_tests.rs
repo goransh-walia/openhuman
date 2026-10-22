@@ -43,6 +43,7 @@ fn adds_new_commands_to_narrow_list() {
         assert!(
             config
                 .security
+                .security
                 .autonomy
                 .allowed_commands
                 .iter()
@@ -55,6 +56,7 @@ fn adds_new_commands_to_narrow_list() {
     for cmd in &["git", "npm", "cargo", "ls", "cat", "grep"] {
         assert!(
             config
+                .security
                 .security
                 .autonomy
                 .allowed_commands
@@ -79,6 +81,7 @@ fn adds_new_auto_approve_tools_to_narrow_list() {
         assert!(
             config
                 .security
+                .security
                 .autonomy
                 .auto_approve
                 .iter()
@@ -92,6 +95,7 @@ fn adds_new_auto_approve_tools_to_narrow_list() {
         assert!(
             !config
                 .security
+                .security
                 .autonomy
                 .auto_approve
                 .iter()
@@ -104,6 +108,7 @@ fn adds_new_auto_approve_tools_to_narrow_list() {
     for tool in &["file_read", "memory_search", "memory_list"] {
         assert!(
             config
+                .security
                 .security
                 .autonomy
                 .auto_approve
@@ -178,6 +183,7 @@ fn preserves_user_custom_commands_not_in_new_set() {
     let mut config = old_v3_config();
     config
         .security
+        .security
         .autonomy
         .allowed_commands
         .push("my_custom_tool".to_string());
@@ -186,6 +192,7 @@ fn preserves_user_custom_commands_not_in_new_set() {
 
     assert!(
         config
+            .security
             .security
             .autonomy
             .allowed_commands
@@ -201,10 +208,12 @@ fn no_duplicate_commands_when_some_already_present() {
     // Pre-seed a subset of new commands so we can check no duplicates appear.
     config
         .security
+        .security
         .autonomy
         .allowed_commands
         .push("pnpm".to_string());
     config
+        .security
         .security
         .autonomy
         .allowed_commands
@@ -214,12 +223,14 @@ fn no_duplicate_commands_when_some_already_present() {
 
     let pnpm_count = config
         .security
+        .security
         .autonomy
         .allowed_commands
         .iter()
         .filter(|c| *c == "pnpm")
         .count();
     let yarn_count = config
+        .security
         .security
         .autonomy
         .allowed_commands

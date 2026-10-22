@@ -99,6 +99,7 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
     for &cmd in NEW_COMMANDS {
         if !config
             .security
+            .security
             .autonomy
             .allowed_commands
             .iter()
@@ -109,6 +110,7 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
                 cmd
             );
             config
+                .security
                 .security
                 .autonomy
                 .allowed_commands
@@ -158,6 +160,7 @@ pub fn run(config: &mut Config) -> anyhow::Result<MigrationStats> {
     // Merge new auto-approve tools (additive only).
     for &tool in NEW_AUTO_APPROVE_TOOLS {
         if !config
+            .security
             .security
             .autonomy
             .auto_approve
