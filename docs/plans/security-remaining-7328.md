@@ -433,6 +433,9 @@ TinySecurity `EndpointOrigin`, so database names and local SQLite paths do not
 reach logs or the `Rebound` display fields. Inference URL migration logs use the
 same mode; regressions assert paths and credentials stay out of captured logs.
 Config snapshot URL suppression is covered under Task 2.
+RPC dispatch parameter logs now use TinySecurity `StructuredLogArguments`;
+unavailable or malformed responses suppress the complete parameter value.
+`core::rpc_log` regression tests cover valid JSON projection and suppression.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
