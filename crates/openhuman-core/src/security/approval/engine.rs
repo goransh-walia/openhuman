@@ -243,6 +243,9 @@ pub(crate) trait ApprovalEngine: sealed::Sealed + std::fmt::Debug + Send + Sync 
 
     /// The tools currently trusted inside `flow_id`, sorted.
     async fn flow_trust(&self, tenant: &Tenant, flow_id: &str) -> Result<Vec<String>, EngineError>;
+
+    /// Durably trust one exact tool in the tenant's operator scope.
+    async fn grant_tool_trust(&self, tenant: &Tenant, tool: &str) -> Result<(), EngineError>;
 }
 
 /// The shared engine handle a gate holds.
