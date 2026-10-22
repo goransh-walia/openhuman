@@ -76,13 +76,6 @@ test("keeps server-controlled conversation ids on create and patch routes", asyn
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id: "client-conv", title: "Client title" }),
   }).then((response) => response.json());
-  assert.notEqual(createdConversation?.data?.id, "client-conv");
-
-  const createdConversation = await fetch(`${baseUrl}/conversations`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: "client-conv", title: "Client conversation" }),
-  }).then((response) => response.json());
   const conversationId = createdConversationResponse?.data?.id;
   assert.notEqual(conversationId, "client-conv");
 
