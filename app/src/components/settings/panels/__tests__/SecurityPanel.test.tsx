@@ -65,6 +65,11 @@ function setupState(keyringStatus: ReturnType<typeof makeKeyringStatus>) {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+beforeEach(() => {
+  mockFetchToolTrust.mockResolvedValue([]);
+  mockRevokeToolTrust.mockResolvedValue(true);
+});
+
 describe('SecurityPanel — storage mode badge (lines 11, 27)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
