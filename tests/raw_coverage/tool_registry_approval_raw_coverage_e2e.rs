@@ -737,15 +737,6 @@ async fn approval_rpc_decision_paths_persist_always_allow_and_recent_audit() {
         .expect("load config for approval gate");
     let test_session_id = format!("session-{}", uuid::Uuid::new_v4());
     let gate = ApprovalGate::init_global(config.clone(), test_session_id.clone());
-    let empty_grant_id = rpc(
-        &harness.rpc_base,
-        19,
-        "openhuman.approval_revoke_tool_trust",
-        json!({ "request_id": "  " }),
-    )
-    .await;
-    assert!(error_message(&empty_grant_id, "blank grant id")
-        .contains("request_id must not be empty"));
     let gate_for_task = gate.clone();
 
     let approval_task = tokio::spawn(async move {
@@ -1155,4 +1146,19 @@ async fn approval_rpc_decision_paths_persist_always_allow_and_recent_audit() {
         .is_none());
 
     harness.rpc_join.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn approval_revoke_tool_trust_rpc_rejects_blank_id() {
+    let _lock = env_lock_async().await;
+    let harness = setup("").await;
+    let response = rpc(
+        &harness.rpc_base,
+        1,
+        "openhuman.approval_revoke_tool_trust",
+        json!({ "request_id": "  " }),
+    )
+    .await;
+    assert!(error_message(&response, "blank grant id")
+        .contains("request_id must not be empty"));
 }
