@@ -499,6 +499,12 @@ async fn without_the_module_network_destination_is_denied() {
         NetGate::authorize_destination(&security, &destination).await,
         routed.authorize_destination(&destination).await,
     ] {
-        assert!(matches!(answer, Some(Err(_))), "missing module must deny");
+        let refusal = answer
+            .expect("missing module must not fall back to tool-local DNS")
+            .expect_err("missing module must deny");
+        assert!(
+            refusal.starts_with(tinytools::status::POLICY_BLOCKED_MARKER),
+            "missing module refusal must carry the policy marker: {refusal}"
+        );
     }
 }
