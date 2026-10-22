@@ -176,7 +176,6 @@ pub async fn add_auto_approve_tool(ctx: &DispatchCtx, tool_name: &str) -> Result
     let mut config = ctx.load_config().await?;
     if config
         .security
-        .security
         .autonomy
         .auto_approve
         .iter()
