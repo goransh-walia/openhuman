@@ -511,6 +511,11 @@ single-middleware consolidation remains open. The unused OpenHuman
 `ToolPolicyMiddleware` wrapper and trait implementation are removed; the
 security gate now calls the session policy adapters directly, and their tests
 exercise the session host state without constructing a second middleware.
+Builder policy decisions are now folded into `TinySecurityPolicy` as another
+source, removing the separate `CombinedPolicy` wrapper while retaining the
+shared approval resolver. The SDK's `ToolPolicyMiddleware(require_sandbox)`
+still filters model-visible tools and remains until TinySecurity's sandbox plan
+can replace that behavior through the released module contract.
 
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
