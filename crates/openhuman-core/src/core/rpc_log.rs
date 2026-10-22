@@ -11,14 +11,6 @@
 
 use serde_json::Value;
 
-/// Redacts sensitive keys from a JSON parameters object before logging.
-///
-/// This is used to prevent accidental leakage of API keys, tokens, and passwords
-/// in debug logs.
-pub fn redact_params_for_log(params: &Value) -> Value {
-    redact_value(params)
-}
-
 /// Redacts JSON params with TinySecurity's structured-argument policy.
 ///
 /// If the module is unavailable or returns malformed JSON, suppress the whole
