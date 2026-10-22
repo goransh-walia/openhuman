@@ -54,7 +54,7 @@ impl tinybus::Interface for AuthenticatedComputerPeer {
 async fn authenticated_computer_setup(connection: Connection) -> tinybus::Result<()> {
     connection
         .serve_at(
-            tinycomputer_bus::names::OBJECT_PATH,
+            tinycomputer_bus::names::OBJECT_PATH.try_into().unwrap(),
             AuthenticatedComputerPeer(connection.clone()),
         )
         .await?;
@@ -200,6 +200,27 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
             serde_json::json!({}),
         )
         .unwrap();
+    let attacker = Connection::connect(fixture.transport.connect().await.unwrap())
+        .await
+        .unwrap();
+    attacker
+        .request_name("ai.tinyhumans.tinycomputer.Desktop")
+        .await
+        .unwrap_err();
+    let attacker_callback = attacker
+        .proxy(
+            contract::INTERFACE,
+            contract::OBJECT_PATH,
+            contract::INTERFACE,
+        )
+        .unwrap();
+    let spoofed: tinybus::Result<contract::BrowserEgressGrant> = attacker_callback
+        .call(
+            methods::AUTHORIZE,
+            (target(&policy_id.0, info.generation, "8.8.8.8", 443),),
+        )
+        .await;
+    assert!(spoofed.is_err(), "a plain peer cannot impersonate TinyComputer");
     let proxy = fixture
         .client
         .proxy(
