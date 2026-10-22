@@ -396,10 +396,18 @@ mod imp {
 #[path = "tinyflows_fixture.rs"]
 mod fixture;
 
+#[cfg(all(feature = "modules", any(feature = "flows", feature = "skills")))]
+pub(crate) use imp::copilot_proxy;
+#[cfg(all(
+    test,
+    feature = "modules",
+    not(any(feature = "flows", feature = "skills"))
+))]
+pub(crate) use imp::copilot_proxy;
 #[cfg(all(feature = "modules", feature = "flows"))]
 pub(crate) use imp::{
     authoring_proxy, catalog_proxy, catalog_proxy_for_migration, copilot_invoke_proxy,
-    copilot_proxy, portability_proxy, runs_proxy, serve_pair,
+    portability_proxy, runs_proxy, serve_pair,
 };
 #[cfg(feature = "modules")]
 pub(crate) use imp::{proxy, run_proxy, serve, unserve};
