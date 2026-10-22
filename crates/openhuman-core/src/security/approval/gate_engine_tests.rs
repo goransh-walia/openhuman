@@ -98,6 +98,20 @@ async fn the_users_configuration_reaches_the_engine_as_the_calls_posture() {
     assert!(matches!(handle.await.unwrap(), GateOutcome::Deny { .. }));
 }
 
+#[test]
+fn durable_operator_tool_trust_is_listed_and_revoked_by_id() {
+    let (gate, _dir) = test_gate();
+    gate.insert_tool_trust("gmail_send").unwrap();
+    let grants = gate.list_tool_trust().unwrap();
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].tool, "gmail_send");
+    let request_id = grants[0].request_id.clone();
+
+    assert!(gate.revoke_tool_trust(&request_id).unwrap());
+    assert!(gate.list_tool_trust().unwrap().is_empty());
+    assert!(!gate.revoke_tool_trust(&request_id).unwrap());
+}
+
 #[tokio::test]
 async fn an_agent_whose_approvals_are_off_reaches_the_engine_as_no_requirement() {
     let (gate, _dir) = test_gate();
