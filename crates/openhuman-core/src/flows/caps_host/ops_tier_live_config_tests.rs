@@ -47,9 +47,9 @@ fn tiered_policy(config: &Config) -> crate::security::SecurityPolicy {
     .with_gateway(crate::security::policy::native_commands_stub::StubGateway::tiered())
 }
 
-fn allow_tinysecurity_gap() -> crate::modules::security_gap::PortGuard {
-    crate::modules::security_gap::install_port(Arc::new(
-        crate::modules::security_gap::stub::StubPort::allowing(),
+fn allow_tinysecurity_gap() -> crate::modules::security::gap::PortGuard {
+    crate::modules::security::gap::install_port(Arc::new(
+        crate::modules::security::gap::stub::StubPort::allowing(),
     ))
 }
 
