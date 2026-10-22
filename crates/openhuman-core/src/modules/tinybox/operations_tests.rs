@@ -139,6 +139,10 @@ fn host_and_module_contract_versions_must_cover_the_full_host_surface() {
         require_compatible((major + 1, minor)).expect_err("different major is refused"),
         ModuleCallError::IncompatibleContract
     );
+    assert_eq!(
+        require_compatible((major - 1, u32::MAX)).expect_err("older major is refused"),
+        ModuleCallError::IncompatibleContract
+    );
 }
 
 #[tokio::test]

@@ -296,6 +296,7 @@ impl ApprovalGate {
                 chat_client_id,
                 tool_call_id: tool_call_id.map(str::to_string),
                 forced,
+                variant,
                 agent_id,
                 approval_scope: scope.clone(),
                 thread_key: thread_key.clone(),

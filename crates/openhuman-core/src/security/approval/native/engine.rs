@@ -10,13 +10,12 @@ use tinysecurity_bus::{
     Check, DecideRequest2, EvaluateApprovalRequest2, EvaluateApprovalResponse2, EvaluateRequest,
     ExecutionOutcome as ModuleOutcome, FlowTrustList2, FlowTrustOutcome2, FlowTrustReceipt2,
     GrantFlowToolRequest2, GrantToolRequest2, ListFlowTrustRequest2, Origin, PolicyInfo,
-    RecordExecutionRequest2, RevokeFlowToolRequest2, SubjectScope, ToolCall, ToolTrustReceipt2,
-    Verdict,
+    RecordExecutionRequest2, RevokeFlowToolRequest2, SubjectScope, ToolCall, ToolTrustOutcome2,
+    ToolTrustReceipt2, Verdict,
 };
 
 use super::super::engine::{
-    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Posture, Sealed,
-    Variant,
+    ApprovalEngine, CallOrigin, CheckInput, Checked, Choice, Decided, EngineError, Sealed, Variant,
 };
 use super::super::types::{ApprovalAuditEntry, ExecutionOutcome};
 use super::scopes::{self, ScopeEntry};
@@ -607,6 +606,53 @@ impl ApprovalEngine for NativeEngine {
             .map_err(|error| unavailable(error.to_string()))
     }
 
+    async fn grant_tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        tool: &str,
+    ) -> Result<(), EngineError> {
+        if variant != Variant::Standard {
+            return Err(unavailable(
+                "whole-tool grants are unavailable for strict or forced approval scopes",
+            ));
+        }
+        let proxy = self.proxy().await?;
+        let subject = self.subject(tenant, variant)?;
+        let scope = scopes::existing(&subject).await.ok_or_else(|| {
+            unavailable("the parked request's TinySecurity approval scope is unavailable")
+        })?;
+        let _guard = scope.stream.lock().await;
+        let generation = Self::generation(&proxy).await?;
+        let audit = Self::correlation(&scope, generation).await?;
+        let receipt: ToolTrustReceipt2 = proxy
+            .call_confidential(
+                names::methods::GRANT_TOOL2,
+                (GrantToolRequest2 {
+                    scope_id: scope.scope_id.clone(),
+                    tool: tool.to_owned(),
+                    audit,
+                },),
+            )
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = %error, "{LOG} the module refused the whole-tool grant");
+                unavailable(format!("TinySecurity GrantTool2 failed: {error}"))
+            })?;
+        if receipt.scope_id != scope.scope_id
+            || !matches!(
+                receipt.outcome,
+                ToolTrustOutcome2::Granted | ToolTrustOutcome2::Unchanged
+            )
+        {
+            return Err(unavailable(
+                "TinySecurity returned a mismatched whole-tool grant receipt",
+            ));
+        }
+        tracing::debug!(outcome = ?receipt.outcome, "{LOG} whole-tool grant recorded");
+        Ok(())
+    }
+
     async fn grant_flow_trust(
         &self,
         tenant: &crate::core::runtime::Tenant,
@@ -634,51 +680,6 @@ impl ApprovalEngine for NativeEngine {
                 unavailable(format!("TinySecurity GrantFlowTool2 failed: {error}"))
             })?;
         tracing::debug!(outcome = ?receipt.outcome, "{LOG} flow trust granted");
-        Ok(())
-    }
-
-    async fn grant_tool_trust(
-        &self,
-        tenant: &crate::core::runtime::Tenant,
-        tool: &str,
-    ) -> Result<(), EngineError> {
-        if !is_host_tool_name2(tool) {
-            return Err(unavailable("TinySecurity refuses this tool name"));
-        }
-        let proxy = self.proxy().await?;
-        let subject = self.subject(tenant, Variant::Standard)?;
-        let generation = Self::generation(&proxy).await?;
-        let scope = scopes::ensure(
-            &self.config,
-            &proxy,
-            subject,
-            &Posture {
-                require_approval: true,
-                ..Default::default()
-            },
-            generation,
-        )
-        .await
-        .map_err(EngineError::Unavailable)?;
-        let _guard = scope.stream.lock().await;
-        let generation = Self::generation(&proxy).await?;
-        let audit = Self::correlation(&scope, generation).await?;
-        let receipt: ToolTrustReceipt2 = proxy
-            .call_confidential(
-                names::methods::GRANT_TOOL2,
-                (GrantToolRequest2 {
-                    scope_id: scope.scope_id.clone(),
-                    tool: tool.to_owned(),
-                    audit,
-                },),
-            )
-            .await
-            .map_err(|error| unavailable(format!("TinySecurity GrantTool2 failed: {error}")))?;
-        if receipt.scope_id != scope.scope_id {
-            return Err(unavailable(
-                "TinySecurity returned a receipt for another scope",
-            ));
-        }
         Ok(())
     }
 

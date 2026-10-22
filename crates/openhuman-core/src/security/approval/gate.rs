@@ -4,10 +4,11 @@
 //! Flow (issue #1339):
 //! 1. Agent harness calls [`ApprovalGate::intercept`] with the tool
 //!    name, a redacted JSON of the arguments, and a short summary.
-//! 2. Gate supplies the current approval posture. TinySecurity checks its
-//!    durable tool and flow grants before requiring a human. Legacy
-//!    `autonomy.auto_approve` entries are imported once through immutable
-//!    source receipts; scope registration never replays that list.
+//! 2. Gate registers the call's posture with TinySecurity. Durable whole-tool
+//!    trust is resolved by the module under the exact approval scope;
+//!    `autonomy.auto_approve` is not replayed, so revocations cannot be
+//!    resurrected from legacy config. `ApproveAlwaysForTool` records a grant
+//!    through `GrantTool2` after resolving the current call.
 //! 3. Otherwise: persist a row in `pending_approvals`, publish a
 //!    [`DomainEvent::ApprovalRequested`] event so the UI can pop a
 //!    toast, and park the call on a `oneshot::Sender` keyed by
@@ -69,6 +70,9 @@ pub enum ApprovalError {
     /// The request was parked by a different agent than the one deciding it.
     #[error("approval request {request_id} belongs to another agent")]
     WrongAgent { request_id: String },
+    /// The decision came from a different profile than the parked request.
+    #[error("approval request {request_id} belongs to another tenant")]
+    WrongTenant { request_id: String },
 }
 
 /// The key `thread_to_request` files a parked chat thread under, keyed by
@@ -274,6 +278,7 @@ pub(crate) struct RequestRoute {
     pub(crate) tool_call_id: Option<String>,
     pub(crate) forced: bool,
     pub(crate) agent_id: Option<String>,
+    pub(crate) variant: Variant,
     /// Instance barrier captured at registration, independent of decision context.
     pub(crate) approval_scope: Option<Arc<super::ApprovalScope>>,
     /// The [`thread_route_key`] the request was parked under, so a decision
@@ -333,6 +338,7 @@ struct ParkContext {
     chat_client_id: Option<String>,
     tool_call_id: Option<String>,
     forced: bool,
+    variant: Variant,
     agent_id: Option<String>,
     approval_scope: Option<Arc<super::ApprovalScope>>,
     thread_key: Option<String>,

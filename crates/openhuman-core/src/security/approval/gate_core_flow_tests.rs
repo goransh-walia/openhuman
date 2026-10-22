@@ -185,32 +185,19 @@ async fn aborting_older_chat_waiter_preserves_newer_thread_route() {
 }
 
 #[tokio::test]
-async fn auto_approve_tool_skips_prompt() {
-    // The gate reads the "Always allow" allowlist from the process-global
-    // live policy. Serialize with the other tests that install/reload it
-    // (the `live_policy` module test + the autonomy `ops` tests, which all
-    // take this same lock) so a parallel install can't clobber ours mid-test.
-    let _env = crate::config::TEST_ENV_LOCK.lock().await;
-    let (gate, dir) = test_gate();
-
-    // A tool name unique to this test so leaving it in the global allowlist
-    // afterwards can't make a sibling gate test (which use "composio" /
-    // "pushover") skip its expected prompt.
+async fn durable_tool_trust_skips_prompt() {
+    let (gate, _dir) = test_gate();
     let tool = "openhuman_test_always_allow_tool";
-    let policy = crate::security::SecurityPolicy {
-        auto_approve: vec![tool.into()],
-        ..crate::security::SecurityPolicy::default()
-    };
-    crate::security::live_policy::install(
-        Arc::new(policy),
-        dir.path().to_path_buf(),
-        dir.path().to_path_buf(),
-    );
+    gate.grant_tool_trust(
+        &crate::core::runtime::Tenant::default(),
+        Variant::Standard,
+        tool,
+    )
+    .unwrap();
 
-    // An allow-listed tool is approved without parking — even with a live chat
+    // A durable module grant is approved without parking — even with a live chat
     // context present — as an audited automatic approval, not a pending request.
-    // The grant holds regardless of origin (it's the user's persisted "Always
-    // allow" allowlist), so we do not need to scope an origin for this case.
+    // The granted tool scope is the process subject for this test.
     let outcome = gate
         .intercept(
             &ApprovalTurnContext::chat(chat_ctx()),
@@ -228,10 +215,9 @@ async fn auto_approve_tool_skips_prompt() {
     let ids = stub.request_ids();
     assert_eq!(ids.len(), 1, "the grant is a recorded approval");
     assert_eq!(stub.attribution(&ids[0]), Some("auto:tool-grant"));
-    assert_eq!(
-        stub.seen()[0].posture.tool_grants,
-        [tool],
-        "the engine was told the user's grant"
+    assert!(
+        stub.seen()[0].posture.tool_grants.is_empty(),
+        "durable grants are resolved by the module, not replayed as posture"
     );
 }
 

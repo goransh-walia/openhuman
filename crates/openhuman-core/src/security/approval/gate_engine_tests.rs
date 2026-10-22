@@ -85,7 +85,10 @@ async fn the_users_configuration_reaches_the_engine_as_the_calls_posture() {
     assert_eq!(seen.variant, Variant::Standard);
     assert!(seen.posture.require_approval);
     assert!(!seen.posture.auto_approve_all);
-    assert!(seen.posture.tool_grants.iter().any(|t| t == tool));
+    assert!(
+        seen.posture.tool_grants.is_empty(),
+        "legacy config grants must not be replayed into TinySecurity posture"
+    );
     assert_eq!(seen.tool, "not_on_the_list");
     assert_eq!(seen.origin, CallOrigin::Operator);
     assert_eq!(seen.thread.as_deref(), Some("t-test"));
@@ -238,16 +241,21 @@ async fn copilot_and_sub_agent_parks_name_their_origin_class_and_window() {
 #[tokio::test]
 async fn an_unlabelled_call_is_approved_only_by_the_users_grant_of_that_exact_tool() {
     let _env = crate::config::TEST_ENV_LOCK.lock().await;
-    let (gate, dir) = test_gate();
+    let (gate, _dir) = test_gate();
     let tool = "openhuman_test_unlabelled_grant";
+    gate.grant_tool_trust(
+        &crate::core::runtime::Tenant::default(),
+        Variant::Standard,
+        tool,
+    )
+    .unwrap();
     let _policy = crate::security::live_policy::install_scoped(
         Arc::new(crate::security::SecurityPolicy {
-            auto_approve: vec![tool.into()],
             auto_approve_all: true,
             ..crate::security::SecurityPolicy::default()
         }),
-        dir.path().to_path_buf(),
-        dir.path().to_path_buf(),
+        std::env::temp_dir(),
+        std::env::temp_dir(),
     );
     let (outcome, request_id) = gate
         .intercept_audited(
@@ -264,11 +272,11 @@ async fn an_unlabelled_call_is_approved_only_by_the_users_grant_of_that_exact_to
         Some("auto:tool-grant"),
         "the grant approved it, not auto-approve-everything"
     );
-    // The gate labels the call and hands over the user's posture as it is; that
-    // only a whole-tool grant approves an unlabelled call is the module's rule.
+    // The gate carries no legacy grant in its posture; TinySecurity's durable
+    // whole-tool state is the only reason an unlabelled call is approved.
     let seen = stub.seen().remove(0);
     assert_eq!(seen.origin, CallOrigin::Unlabelled);
-    assert_eq!(seen.posture.tool_grants, [tool]);
+    assert!(seen.posture.tool_grants.is_empty());
 
     // Auto-approve-everything does not approve an unlabelled call to any other tool.
     let (outcome, id) = gate

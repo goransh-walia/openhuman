@@ -274,7 +274,11 @@ async fn a_durable_operator_tool_grant_is_reused_by_the_module() {
     let shown = Arc::new(Shown::default());
     world
         .engine
-        .grant_tool_trust(&crate::core::runtime::Tenant::default(), "gmail_send")
+        .grant_tool_trust(
+            &crate::core::runtime::Tenant::default(),
+            Variant::Standard,
+            "gmail_send",
+        )
         .await
         .expect("TinySecurity persists the exact operator grant");
     assert!(matches!(

@@ -7,13 +7,13 @@ Interactive approval workflow for supervised mode (issue #1339). `ApprovalGate` 
 ## Responsibilities
 
 - Label the call's origin (`origin_class`) and hand it to the engine; what each class is allowed is the module's decision (contract 1.22): a cron turn's external effect is denied, an unlabelled call is denied unless the user's Always-allow list names that exact tool, and internal background jobs, pre-declared workflow actions and the CLI are audited automatic approvals that never park. The host only renders the refusal in its own words (`engine_denial`). SaaS never parks: there is no per-user prompt channel, so the deployment's tool groups are the pre-authorization, a call they allow is recorded as an audited automatic approval under the tenant's own subject and audit stream (`saas_approved`), and anything else is denied.
-- Hand the engine the current approval posture, including the auto-approve-everything setting and the agent's approvals-off setting. Whole-tool and flow grants live durably in TinySecurity (`GrantTool2`, `RevokeTool2`, `ListToolTrust2`, `GrantFlowTool2`, `RevokeFlowTool2`, `ListFlowTrust2`). Legacy `autonomy.auto_approve` entries are imported once with `ImportTrustSource2`; immutable receipts prevent a later scope registration or restart from recreating a revoked grant. A workflow whose flow requires approval is its own posture and never inherits the whole-tool grants.
+- Hand the engine the current call posture, including the auto-approve-everything setting and the agent's approvals-off setting. Legacy `autonomy.auto_approve` entries are imported once with `ImportTrustSource2`; they are never replayed during scope registration, so a revoked durable grant cannot be resurrected. Whole-tool grants use `GrantTool2` under the exact user/workspace/agent scope of the parked request. Per-flow grants use `GrantFlowTool2`, `RevokeFlowTool2` and `ListFlowTrust2` and approve only the exact tool in the exact flow. Strict-flow approvals never become global whole-tool grants; forced approvals remain one-time.
 - Park the tool-call future when a person must decide, resolve it on a decision (`approve_once` / `approve_always_for_tool` / `approve_always_for_flow` / `deny`), expiry, or channel drop, failing closed in every non-approve path.
 - Reserve an approval for execution exactly once, right before the tool runs, and record the call's terminal outcome after it ends (`record_execution`).
 - Authenticate the decision: the RPC that carries it is the authenticated human action, so the host issues an opaque ticket for exactly that request and choice, and the module verifies it against the exact pending row (`VerifyHuman`).
 - Build safe action summaries (`summarize_action`) before anything leaves the gate; argument redaction is the TinySecurity module's (`security::redact::arguments`, `StructuredArguments` mode).
 - Route a thread's yes/no chat reply back to a parked approval (`pending_for_thread` + `parse_approval_reply`).
-- On `approve_always_for_tool`, persist the tool grant in TinySecurity; on `approve_always_for_flow`, persist flow trust in TinySecurity.
+- On `approve_always_for_tool`, resolve the current call first and then persist its tool grant in TinySecurity; if persistence fails, report a warning and let later calls prompt. On `approve_always_for_flow`, persist the flow trust in TinySecurity.
 
 ## Key files
 
@@ -93,7 +93,7 @@ The module's rows live in the document store of the current call's storage scope
 - `crate::core::all`: `ControllerFuture` / `RegisteredController` for the controller registry.
 - `crate::core` (`ControllerSchema`, `FieldSchema`, `TypeSchema`): schema definitions.
 - `crate::core::Outcome`: RPC return contract.
-- `crate::config::Config`: workspace dir plus the boot-time `autonomy.auto_approve` snapshot, used only as a legacy import source.
+- `crate::config::Config`: workspace dir and call posture settings; the boot-time `autonomy.auto_approve` snapshot is only a one-time legacy import source. Durable whole-tool trust is stored by TinySecurity.
 - `crate::modules::security` (`approval_proxy`, `approval_init_config`, `audit_init_config`) and `modules/security_host.rs`: the attested module and the callbacks served for it. The host links only `tinysecurity-bus`.
 - `crate::security`: `live_policy::current()` for the live "Always allow" list and `POLICY_DENIED_MARKER` for deny reasons.
 
@@ -119,7 +119,7 @@ The module's rows live in the document store of the current call's storage scope
 - **The host's correlation survives the module's hashing.** The prompt callback finds its call by the call id the host chose, an eight-hex-character value the module's identifier hashing leaves unchanged.
 - **`intercept` and `intercept_forced` do not reserve.** Their callers never learn the request id and cannot report how the call ended, so the approval stays as granted instead of leaving a reservation open for ever. The `*_audited*` entry points reserve and the caller records the outcome.
 - **Orphan requests are not resumable** (see Persistence). The old gate kept them to show and dismiss; the module's engine refuses to resume another instance's request, so the gate does not list them.
-- **`approve_always_for_tool` persistence is the RPC handler's job**, not the gate's: `gate.decide` records the decision for this call; `rpc::approval_decide` creates the durable TinySecurity grant (best-effort; failure degrades to prompting again).
+- **`approve_always_for_tool` persistence is the RPC handler's job**, not the gate's: `gate.decide` releases this call first; `rpc::approval_decide` then calls TinySecurity `GrantTool2` for the parked request's exact scope. A failed write warns and later calls prompt again. The module owns the durable grant and applies it on the next check.
 - `OPENHUMAN_APPROVAL_GATE=0`/`false` skips installing the gate for CLI, Docker, and library hosts only (`approval_gate_boot_decision` in `crates/openhuman-core/src/core/types.rs`, applied in `core/runtime/bootstrap.rs`); the Tauri shell always installs it and ignores the override. Where honored, `Prompt`-class calls run unprompted.
 - **A disabled autonomy policy parks nothing.** With `[autonomy] enabled = false` (the shipped default, see `security/README.md`) the module's class gate (`SecurityPolicy::command_class_gate`) answers `Allow` for every class, so the acting tools' `external_effect_with_args` (which asks for `GateDecision::Prompt`) is `false` and the gate is never reached. The gate is still installed and still works the moment the policy is turned on; nothing here is special-cased on the flag.
 - A tool name the module reserves (its own effect classes, the human-only tools, `native_*`) cannot be gated as a host tool and is refused rather than approved.

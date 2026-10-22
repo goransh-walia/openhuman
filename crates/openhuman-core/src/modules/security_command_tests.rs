@@ -15,16 +15,6 @@ fn host_class(name: &str) -> tinysecurity_bus::CommandClass {
     }
 }
 
-fn bus_class(class: tinysecurity_bus::CommandClass) -> CommandClass {
-    match class {
-        tinysecurity_bus::CommandClass::Read => CommandClass::Read,
-        tinysecurity_bus::CommandClass::Write => CommandClass::Write,
-        tinysecurity_bus::CommandClass::Network => CommandClass::Network,
-        tinysecurity_bus::CommandClass::Install => CommandClass::Install,
-        tinysecurity_bus::CommandClass::Destructive => CommandClass::Destructive,
-    }
-}
-
 fn policy(autonomy: AutonomyLevel, enabled: bool) -> SecurityPolicy {
     SecurityPolicy {
         enabled,
@@ -122,7 +112,7 @@ async fn released_module_gives_the_answers_the_deleted_host_command_tests_pinned
                         CommandOp::Classify,
                     )
                     .await;
-                let expected = bus_class(host_class(case["expect"].as_str().unwrap()));
+                let expected = host_class(case["expect"].as_str().unwrap());
                 if decision.class != expected {
                     mismatches.push(format!(
                         "class({command:?}) module={:?} expected={expected:?}",
@@ -183,7 +173,7 @@ async fn released_module_tier_gate_matches_the_inlined_table() {
                     .ask(
                         scope(&host, CommandFlow::Harness, CommandStage::Authorize),
                         "",
-                        Some(bus_class(class)),
+                        Some(class),
                         CommandOp::Classify,
                     )
                     .await;

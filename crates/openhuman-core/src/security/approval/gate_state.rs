@@ -1,6 +1,48 @@
 use crate::core::runtime::DispatchCtx;
 
 impl ApprovalGate {
+    /// Check the authenticated dispatch against the live parked request before
+    /// allowing an approval decision. A process-scoped UI may project into one
+    /// agent's request only by naming that exact agent; an agent-scoped
+    /// dispatch cannot decide for another agent or the process.
+    pub(crate) fn validate_decision_context(
+        &self,
+        request_id: &str,
+        dispatch_tenant: &crate::core::runtime::Tenant,
+        requested_agent: Option<&str>,
+    ) -> anyhow::Result<(crate::core::runtime::Tenant, Variant)> {
+        let route = self
+            .parked
+            .request_routes
+            .lock()
+            .get(request_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("approval request is not parked in this host session"))?;
+        validate_decision_tenant(
+            dispatch_tenant,
+            requested_agent,
+            &route.tenant,
+            request_id,
+        )?;
+        Ok((route.tenant, route.variant))
+    }
+
+    /// Persist a whole-tool grant under the parked request's exact subject.
+    /// Called only after `decide` has resolved the current request.
+    pub(crate) fn grant_tool_trust(
+        &self,
+        tenant: &crate::core::runtime::Tenant,
+        variant: Variant,
+        tool: &str,
+    ) -> anyhow::Result<()> {
+        let tenant = tenant.clone();
+        let tool = tool.to_owned();
+        self.run_engine(|engine| async move {
+            engine.grant_tool_trust(&tenant, variant, &tool).await
+        })?
+        .map_err(|error| anyhow::anyhow!("could not save the whole-tool grant: {error}"))
+    }
+
     /// Run an engine call from synchronous code. The decision side of the gate is
     /// synchronous by contract (the embedding API, an agent's teardown, the
     /// harness's record hook), so the engine's async call runs on the shared
@@ -119,10 +161,9 @@ impl ApprovalGate {
                 anyhow::bail!("the approval engine could not apply the decision: {message}")
             }
         }
-        // `ApproveAlwaysForTool` is persisted by the `approval_decide` RPC
-        // handler through the approval engine after this one-time decision.
-        // The module owns the durable grant; legacy `autonomy.auto_approve`
-        // entries are imported through immutable receipts and are not scope grants.
+        // `ApproveAlwaysForTool` persistence is handled by the `approval_decide`
+        // RPC handler after this call has been released. The module records the
+        // whole-tool grant under the parked request's exact subject.
         if let Some(tx) = self.parked.take_waiter(request_id) {
             let _ = tx.send(decision);
         }
@@ -372,14 +413,6 @@ impl ApprovalGate {
         .map_err(|error| anyhow::anyhow!("could not save the flow trust: {error}"))
     }
 
-    /// Persist an operator's whole-tool trust in TinySecurity for this tenant.
-    pub fn insert_tool_trust(&self, tool_name: &str) -> anyhow::Result<()> {
-        let tenant = current_route_tenant();
-        let tool = tool_name.to_owned();
-        self.run_engine(|engine| async move { engine.grant_tool_trust(&tenant, &tool).await })?
-            .map_err(|error| anyhow::anyhow!("could not save the tool trust: {error}"))
-    }
-
     /// Whether `(flow_id, tool_name)` currently holds "approve always for
     /// this flow" trust. Exposed for tests and diagnostics.
     pub fn is_flow_tool_trusted(&self, flow_id: &str, tool_name: &str) -> anyhow::Result<bool> {
@@ -551,4 +584,31 @@ impl ApprovalGate {
             .get(request_id)
             .is_some_and(|route| route.detached)
     }
+}
+
+fn validate_decision_tenant(
+    dispatch: &crate::core::runtime::Tenant,
+    requested_agent: Option<&str>,
+    parked: &crate::core::runtime::Tenant,
+    request_id: &str,
+) -> Result<(), ApprovalError> {
+    if dispatch.profile != parked.profile {
+        return Err(ApprovalError::WrongTenant {
+            request_id: request_id.to_owned(),
+        });
+    }
+    if dispatch.agent.is_some() && dispatch.agent != parked.agent {
+        return Err(ApprovalError::WrongAgent {
+            request_id: request_id.to_owned(),
+        });
+    }
+    // The legacy process-scoped RPC may omit `agent_id`. Its authenticated
+    // tenant is still checked above, and the decision and any durable grant
+    // remain bound to this exact parked route. An explicit target must match.
+    if requested_agent.is_some_and(|agent| parked.agent.as_deref() != Some(agent)) {
+        return Err(ApprovalError::WrongAgent {
+            request_id: request_id.to_owned(),
+        });
+    }
+    Ok(())
 }

@@ -289,10 +289,8 @@ async fn intercept_audited_id_is_none_for_denied_some_for_approved() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
     // `ApproveAlwaysForTool` resolves the parked prompt to Allow and, because
-    // the prompt persisted a row, returns its id. (Persisting the tool onto
-    // the `auto_approve` allowlist for *future* calls is the RPC handler's
-    // job — see `approval::rpc::approval_decide` — and the gate's allowlist
-    // short-circuit is covered by `auto_approve_tool_skips_prompt`.)
+    // the prompt persisted a row, returns its id. The RPC handler persists the
+    // future grant under this request's exact TinySecurity scope.
     gate.decide(&pending.request_id, ApprovalDecision::ApproveAlwaysForTool)
         .unwrap();
     let (first_outcome, first_id) = first.await.unwrap();
