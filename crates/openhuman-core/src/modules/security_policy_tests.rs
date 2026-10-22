@@ -46,9 +46,10 @@ fn desktop_default_orchestrator_has_a_local_subject() {
 fn saas_security_policy_never_uses_the_operator_home() {
     let operator_home = PathBuf::from("/operator/home");
     assert_eq!(security_home_dir_for(true, Some(operator_home)), None);
+    let local_home = std::env::temp_dir().join("openhuman-local-home");
     assert_eq!(
-        security_home_dir_for(false, Some(PathBuf::from("/local/home"))),
-        Some(PathBuf::from("/local/home"))
+        security_home_dir_for(false, Some(local_home.clone())),
+        Some(local_home)
     );
 }
 
