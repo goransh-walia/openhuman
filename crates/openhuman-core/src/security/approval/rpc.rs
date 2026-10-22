@@ -108,6 +108,36 @@ pub async fn approval_list_recent_decisions(
     Ok(Outcome::single_log(rows, log))
 }
 
+/// List live durable whole-tool grants in the current tenant's approval scope.
+pub async fn approval_list_tool_trust(
+) -> anyhow::Result<Outcome<Vec<tinysecurity_bus::ToolTrustEntry2>>> {
+    let Some(gate) = ApprovalGate::try_global() else {
+        return Ok(Outcome::new(Vec::new(), vec![]));
+    };
+    let grants = gate.list_tool_trust()?;
+    Ok(Outcome::single_log(
+        grants.clone(),
+        format!("[approval] list_tool_trust returned {} grant(s)", grants.len()),
+    ))
+}
+
+/// Revoke one live durable whole-tool grant from the current tenant's scope.
+pub async fn approval_revoke_tool_trust(
+    request_id: &str,
+) -> anyhow::Result<Outcome<bool>> {
+    let gate = ApprovalGate::try_global()
+        .ok_or_else(|| anyhow!("approval gate is not installed; supervised mode disabled"))?;
+    let revoked = gate.revoke_tool_trust(request_id)?;
+    Ok(Outcome::single_log(
+        revoked,
+        if revoked {
+            "[approval] revoked one durable tool grant"
+        } else {
+            "[approval] durable tool grant was already absent"
+        },
+    ))
+}
+
 /// Batch-grant "approve always for this flow" trust at save+enable time
 /// (consolidated pre-authorization card). Loops the idempotent
 /// `INSERT OR IGNORE` per tool and writes one born-decided audit row per

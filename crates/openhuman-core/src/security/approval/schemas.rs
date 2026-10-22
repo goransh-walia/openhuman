@@ -17,6 +17,8 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
     vec![
         schemas("list_pending"),
         schemas("list_recent_decisions"),
+        schemas("list_tool_trust"),
+        schemas("revoke_tool_trust"),
         schemas("decide"),
         schemas("get_gate_state"),
         schemas("preauthorize_flow"),
@@ -32,6 +34,14 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("list_recent_decisions"),
             handler: handle_list_recent_decisions,
+        },
+        RegisteredController {
+            schema: schemas("list_tool_trust"),
+            handler: handle_list_tool_trust,
+        },
+        RegisteredController {
+            schema: schemas("revoke_tool_trust"),
+            handler: handle_revoke_tool_trust,
         },
         RegisteredController {
             schema: schemas("decide"),
@@ -82,6 +92,35 @@ pub fn schemas(function: &str) -> ControllerSchema {
                 name: "decisions",
                 ty: TypeSchema::Array(Box::new(TypeSchema::Ref("ApprovalAuditEntry"))),
                 comment: "Recently decided approval rows.",
+                required: true,
+            }],
+        },
+        "list_tool_trust" => ControllerSchema {
+            namespace: "approval",
+            function: "list_tool_trust",
+            description: "List durable whole-tool grants in the current tenant's approval scope.",
+            inputs: vec![],
+            outputs: vec![FieldSchema {
+                name: "grants",
+                ty: TypeSchema::Array(Box::new(TypeSchema::Ref("ApprovalToolTrustGrant"))),
+                comment: "Live tool grants with opaque revocation ids.",
+                required: true,
+            }],
+        },
+        "revoke_tool_trust" => ControllerSchema {
+            namespace: "approval",
+            function: "revoke_tool_trust",
+            description: "Revoke one durable tool grant by its opaque id.",
+            inputs: vec![FieldSchema {
+                name: "request_id",
+                ty: TypeSchema::String,
+                comment: "Opaque grant id returned by approval.list_tool_trust.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "revoked",
+                ty: TypeSchema::Bool,
+                comment: "Whether a live grant was revoked.",
                 required: true,
             }],
         },
@@ -194,6 +233,25 @@ fn handle_list_recent_decisions(_ctx: DispatchCtx, params: Map<String, Value>) -
     Box::pin(async move {
         let limit = read_optional_u64(&params, "limit")?.map(|value| value as usize);
         let outcome = approval_rpc::approval_list_recent_decisions(limit)
+            .await
+            .map_err(|e| e.to_string())?;
+        to_json(outcome)
+    })
+}
+
+fn handle_list_tool_trust(_ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let outcome = approval_rpc::approval_list_tool_trust()
+            .await
+            .map_err(|e| e.to_string())?;
+        to_json(outcome)
+    })
+}
+
+fn handle_revoke_tool_trust(_ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let request_id = read_required_string(&params, "request_id")?;
+        let outcome = approval_rpc::approval_revoke_tool_trust(request_id.trim())
             .await
             .map_err(|e| e.to_string())?;
         to_json(outcome)
