@@ -230,7 +230,6 @@ mod native {
             external_effect,
         })
         .await
-        .map(|decision| decision)
     }
 
     impl SecurityPolicy {
