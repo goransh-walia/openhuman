@@ -603,7 +603,7 @@
     "file": "crates/openhuman-core/src/modules/security_crypto.rs",
     "scope": "",
     "name": "KEYRING_CONSENT_TEST_LOCK",
-    "type": "tokio::sync::Mutex<()> ",
+    "type": "tokio::sync::Mutex<()>",
     "count": 1,
     "category": "A",
     "reason": "Test-only serialization for process keyring consent fixtures; it stores no consent, credentials or tenant data.",
