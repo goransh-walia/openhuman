@@ -200,6 +200,7 @@ fn corpus_payload() -> (String, String, LegacyPayload) {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a released host key or an explicitly selected local native fixture"]
 async fn corpus_payload_decrypts_and_tampering_is_refused_through_the_module() {
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
     let directory = fx_dir();
     let fx = super::super::native_tests::native_fixture_with(Some(crypto_config(directory.path())))
         .await;
