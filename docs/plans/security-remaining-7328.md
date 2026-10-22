@@ -468,6 +468,13 @@ pairing adapters, web3/seams.rs, x402/seams.rs, TinyComputer/TinySkills adapters
 4. Remove obsolete aliases, unused redaction/PII helpers, unused_import allowances,
    config fields and old tests only together with passing replacement coverage.
 
+**TinyComputer progress (2026-10-22):** upstream PR [#152](https://github.com/tinyhumansai/tinycomputer/pull/152)
+merged at `82d0aa6`. Its live Chromium test exercises the TinyComputer module's
+host authorization callback and verifies that changed policy produces no new
+socket to either the old allowed listener or the denied rebound listener. This
+does not supply TinyComputer consequence/payment gates or prove native OS process
+confinement; both remain open under Tasks 14–15.
+
 ## Task 16 — Final matrix, documentation and completion evidence
 
 **Files:** `.github/workflows/{security-native,ci-full,test-reusable}.yml`,
