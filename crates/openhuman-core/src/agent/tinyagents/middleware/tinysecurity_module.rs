@@ -128,14 +128,16 @@ impl VerdictSource for ModuleVerdicts {
         call: &TaToolCall,
     ) -> Result<Verdict, String> {
         let shell = call.name == SHELL_TOOL;
-        let workflow_run = false;
+        let workflow_run = call.name == crate::skills::run_workflow::RUN_WORKFLOW_TOOL_NAME;
         // Unknown name: nothing to reason about, and "unknown" never means fine.
-        let Some((resolved_level, declared_external)) = self.effects.resolve_tool(&call.name).map(|tool| {
-            (
-                tool.permission_level_with_args(&call.arguments),
-                tool.external_effect_with_args(&call.arguments),
-            )
-        }) else {
+        let Some((resolved_level, declared_external)) =
+            self.effects.resolve_tool(&call.name).map(|tool| {
+                (
+                    tool.permission_level_with_args(&call.arguments),
+                    tool.external_effect_with_args(&call.arguments),
+                )
+            })
+        else {
             tracing::warn!(tool = %call.name, "{LOG} denied: tool is not registered in this session");
             return Ok(Verdict::Deny {
                 reason: DenialReason::UnsupportedEffect,
@@ -182,15 +184,13 @@ impl VerdictSource for ModuleVerdicts {
                     .filter(|value| !value.trim().is_empty())
                     .ok_or_else(|| "run_workflow is missing a workflow id".to_string())?;
                 let workspace = crate::skills::schemas::resolve_workspace_dir().await;
-                let (workflow, source) = crate::skills::registry::get_workflow_with_source(
-                    &workspace,
-                    workflow_id,
-                )
-                .ok_or_else(|| format!("run_workflow references unknown workflow '{workflow_id}'"))?;
-                let scan = crate::skills::runtime::skill_scan::scan_workflow(
-                    &workflow,
-                    source.as_ref(),
-                )?;
+                let (workflow, source) =
+                    crate::skills::registry::get_workflow_with_source(&workspace, workflow_id)
+                        .ok_or_else(|| {
+                            format!("run_workflow references unknown workflow '{workflow_id}'")
+                        })?;
+                let scan =
+                    crate::skills::runtime::skill_scan::scan_workflow(&workflow, source.as_ref())?;
                 checks.push(Check::SkillScan {
                     verdict: match scan.verdict {
                         tinyskills::Verdict::Pass => SkillScanVerdict::Pass,

@@ -208,7 +208,10 @@ async fn workflow_launch_is_not_skipped_as_a_no_permission_read() {
     let module = Recorder::answering(Ok(Verdict::Allow));
     let answer = verdict(&module, registry(), call("run_workflow", json!({}))).await;
 
-    assert!(answer.is_err(), "a workflow launch must validate and scan its target");
+    assert!(
+        answer.is_err(),
+        "a workflow launch must validate and scan its target"
+    );
     assert!(module.asked().is_empty());
 }
 
