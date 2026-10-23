@@ -279,6 +279,16 @@ including the real host callback's public-to-loopback DNS-rebinding denial. PR
 checks and reviewer re-review are still pending; this does not change the
 production module pin.
 
+**Coverage follow-up (2026-10-23):** PR #46's Linux per-file coverage gate
+identified `native_test_resolver.rs` at 79.67%. The owner branch now exercises
+fixture bounds, malformed shapes, hostname validation, resolver argument
+limits, normalized-key collisions and valid/invalid configuration selection.
+The resolver-specific suite passes 7/7; a focused `cargo llvm-cov` report shows
+94.44% line coverage for that source file, and strict module Clippy plus format
+checks pass. The update is pushed as `ed63e62`; hosted checks and the requested
+CodeRabbit re-review are pending. This remains test-fixture work and does not
+change the production module pin.
+
 ## Task 6 — Audit engine and callback infrastructure
 
 **Owner files:** new `crates/tinysecurity-audit/{Cargo.toml,src/lib.rs}`, internal
