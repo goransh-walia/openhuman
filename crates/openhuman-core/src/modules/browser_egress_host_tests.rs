@@ -318,6 +318,7 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
 #[cfg(all(feature = "native-security-tests", target_os = "linux"))]
 async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
     use crate::modules::security::native_tests::native_fixture_configured;
+    use std::os::unix::fs::PermissionsExt;
     use tinycomputer_bus::DesktopResponse;
 
     let computer_artifact = std::path::PathBuf::from(
@@ -325,6 +326,11 @@ async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
             .expect("fixture script builds the TinyComputer module"),
     );
     let computer_fixtures = tempfile::tempdir().expect("private TinyComputer fixture directory");
+    std::fs::set_permissions(
+        computer_fixtures.path(),
+        std::fs::Permissions::from_mode(0o700),
+    )
+    .expect("restrict TinyComputer fixture directory");
     let file_name = computer_artifact.file_name().unwrap();
     let computer_module = computer_fixtures.path().join(file_name);
     std::fs::copy(&computer_artifact, &computer_module).expect("stage TinyComputer module");
