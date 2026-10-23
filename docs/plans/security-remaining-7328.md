@@ -737,6 +737,18 @@ containing it before adding the host adapter; the adapter must validate and
 consume the short-lived host-issued context, bind the exact task/action, and
 fail closed on missing, stale, mismatched or reused context.
 
+**TinySecurity runtime secret-scope lifecycle review (2026-10-23):** TinySecurity
+PR [#47](https://github.com/tinyhumansai/tinysecurity/pull/47) now serializes
+`RegisterSecretScope2`, approval-scope replacement, and retirement through one
+module lifecycle lock. Secret registrations are retired only after the approval
+engine accepts the replacement or retirement, so rejected changes preserve the
+live resolver. Regression coverage exercises invalid replacement, initialized
+scope retirement followed by valid replacement, and queued registration during
+replacement. The owner branch is pushed at `3eb7e6a`; focused module tests and
+all-target Clippy pass locally. Cross-platform CI and a fresh review are
+pending. OpenHuman remains pinned to released TinySecurity `c18b56f` until the
+owner change is merged and released.
+
 ## Task 16 — Final matrix, documentation and completion evidence
 
 **Files:** `.github/workflows/{security-native,ci-full,test-reusable}.yml`,
