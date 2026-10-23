@@ -8,16 +8,16 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use tinyskills::{
-    fetch_skill_document, write_installed_document, DocumentWrite, FetchPolicy,
-    FetchedDocument, RegistryError, RegistryLimits, SystemResolver, MAX_INSTALL_DOCUMENT_BYTES,
+    fetch_skill_document, write_installed_document, DocumentWrite, FetchPolicy, FetchedDocument,
+    RegistryError, RegistryLimits, SystemResolver, MAX_INSTALL_DOCUMENT_BYTES,
 };
 
 use super::super::ops_discover::{discover_workflows_inner, is_workspace_trusted};
 use super::scan_gate::{fetch_scanned, gate_install, ScanAcknowledgement, SkillInstallOutcome};
 use super::url_validation::read_allow_local_http_env;
 use super::url_validation::{normalize_install_url, validate_install_url_with_config};
-use crate::skills::catalog::ReqwestTransport;
 use crate::security::redact::endpoint;
+use crate::skills::catalog::ReqwestTransport;
 
 /// Default wall-clock budget for the SKILL.md fetch.
 pub const DEFAULT_INSTALL_TIMEOUT_SECS: u64 = 60;
