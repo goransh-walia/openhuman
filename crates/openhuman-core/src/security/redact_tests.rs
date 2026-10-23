@@ -117,6 +117,10 @@ fn endpoint_helpers_match_the_url_corpus_on_the_released_archive() {
             endpoint_origin("http://example.com:8080/path?token=secret"),
             "http://example.com:8080"
         );
+        assert_eq!(
+            endpoint("https://user:pass@example.com/v1/skills?apiKey=123#private"),
+            "https://example.com/v1/skills"
+        );
     });
 }
 
