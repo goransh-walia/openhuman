@@ -61,6 +61,6 @@ test("native browser egress fixture runs security and opt-in Chromium tests", ()
   assert.match(rebindingTest, /-- --ignored --exact$/);
   assert.match(
     invocations.join("\n"),
-    /DNS \{"rebind\.test":\["8\.8\.8\.8","127\.0\.0\.1"\]\}/,
+    /DNS \{"rebind\.test":\["8\.8\.8\.8","127\.0\.0\.1"\],"metadata\.test":\["8\.8\.8\.8","169\.254\.169\.254","169\.254\.169\.254"\]\}/,
   );
 });

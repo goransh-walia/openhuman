@@ -53,7 +53,7 @@ if [[ "$(uname -s)" == Linux ]]; then
       modules::browser_egress_host::tests::loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials \
       -- --ignored --exact
 
-  TINYSECURITY_TEST_DNS_SEQUENCE='{"rebind.test":["8.8.8.8","127.0.0.1"]}' \
+  TINYSECURITY_TEST_DNS_SEQUENCE='{"rebind.test":["8.8.8.8","127.0.0.1"],"metadata.test":["8.8.8.8","169.254.169.254","169.254.169.254"]}' \
     OPENHUMAN_TEST_TINYCOMPUTER_MODULE="$computer_module" \
     bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
       --no-default-features --features modules,security-module,native-security-tests,legacy-import,storage-sqlite,secret-file \
