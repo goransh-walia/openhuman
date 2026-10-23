@@ -468,11 +468,11 @@ async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
 async fn loaded_tinycomputer_rejects_public_to_loopback_dns_rebinding() {
     use crate::modules::security::native_tests::native_fixture_configured;
     use std::os::unix::fs::PermissionsExt;
+    use tinycomputer_bus::DesktopResponse;
     use tinysecurity_bus::{
         AccessTier, DataCategory, EgressPolicy, EgressTransport, PrivacyMode, ScopedEgressRequest,
         SubjectScope,
     };
-    use tinycomputer_bus::DesktopResponse;
 
     let computer_artifact = std::path::PathBuf::from(
         std::env::var_os("OPENHUMAN_TEST_TINYCOMPUTER_MODULE")
