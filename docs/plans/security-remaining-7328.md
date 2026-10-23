@@ -267,6 +267,18 @@ Composio loopback gates and `util/url.rs` callers.
    All inference/embedding/memory/integration/browser paths supply descriptors.
 **Exit:** native URL/privacy tests and real pinned-transport tests pass.
 
+**Native DNS fixture progress (2026-10-23):** TinySecurity PR
+[#46](https://github.com/tinyhumansai/tinysecurity/pull/46) adds a bounded,
+debug-test-only resolver with per-host answer sequences for native module tests.
+Its parser rejects missing, malformed, exhausted, case-colliding, and exact
+duplicate hostname entries. The exact-duplicate regression was observed failing
+before the duplicate-aware visitor was added. The focused resolver tests pass
+(3), Clippy and format checks pass, and
+`scripts/ci/security-browser-egress-fixture.sh` passes against the native module,
+including the real host callback's public-to-loopback DNS-rebinding denial. PR
+checks and reviewer re-review are still pending; this does not change the
+production module pin.
+
 ## Task 6 — Audit engine and callback infrastructure
 
 **Owner files:** new `crates/tinysecurity-audit/{Cargo.toml,src/lib.rs}`, internal
@@ -616,11 +628,12 @@ callback knows the paused task and action, but not the tenant-bound dispatch
 context that initiated `ContinueTask`. TinyComputer PR
 [#153](https://github.com/tinyhumansai/tinycomputer/pull/153) adds an opaque,
 redacted `HostContext` field to `ContinueTask`, relays it to
-`ConsequenceHost.Review`, and bumps the wire contract to 2.27. It is awaiting
-upstream CI/review. OpenHuman must wait for that owner change to land and be
-released before adding the host adapter; the adapter must validate and consume
-the short-lived host-issued context, bind the exact task/action, and fail
-closed on missing, stale, mismatched or reused context.
+`ConsequenceHost.Review`, and bumps the wire contract to 2.27. It merged to
+canonical `main` at `e52203cc`, but the latest published release is still
+v0.15.0 and predates the contract change. OpenHuman must wait for a release
+containing it before adding the host adapter; the adapter must validate and
+consume the short-lived host-issued context, bind the exact task/action, and
+fail closed on missing, stale, mismatched or reused context.
 
 ## Task 16 — Final matrix, documentation and completion evidence
 
