@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the vendored TinySecurity module at the pinned epic gitlink and exercise
-# the authenticated browser-dial host callbacks against that native module.
+# Build TinySecurity with its test-only controlled resolver and exercise the
+# authenticated browser-dial host callbacks against that native module.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -22,7 +22,7 @@ fi
 # required by its GHASH zeroization assertion. Cargo must run from that repo.
 (
   cd -- "$security_dir"
-  bash "$repo_root/scripts/ci-cancel-aware.sh" cargo build -p tinysecurity-module
+  bash "$repo_root/scripts/ci-cancel-aware.sh" cargo build -p tinysecurity-module --features native-security-tests
 )
 
 test -f "$module_path" || {
@@ -51,5 +51,12 @@ if [[ "$(uname -s)" == Linux ]]; then
     bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
       --no-default-features --features modules,security-module,native-security-tests,legacy-import,storage-sqlite,secret-file \
       modules::browser_egress_host::tests::loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials \
+      -- --ignored --exact
+
+  TINYSECURITY_TEST_DNS_SEQUENCE='{"rebind.test":["8.8.8.8","127.0.0.1"]}' \
+    OPENHUMAN_TEST_TINYCOMPUTER_MODULE="$computer_module" \
+    bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
+      --no-default-features --features modules,security-module,native-security-tests,legacy-import,storage-sqlite,secret-file \
+      modules::browser_egress_host::tests::loaded_tinycomputer_rejects_public_to_loopback_dns_rebinding \
       -- --ignored --exact
 fi
