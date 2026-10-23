@@ -28,21 +28,11 @@ pub fn expand_tilde(path: &str) -> String {
     out.to_string_lossy().into_owned()
 }
 
-/// Redact a path for logging by replacing the user's home-directory prefix with
-/// `~`. Keeps the path *shape* (e.g. `~/OpenHuman/projects`) useful for
-/// diagnosis while not leaking the OS username / full home path (PII). Paths
-/// outside the home dir are returned unchanged.
+/// Redact a path for logging through TinySecurity's `Text` mode. Keep the
+/// conventional `~/...` display when the module replaces a home directory, and
+/// suppress the complete path while TinySecurity is unavailable.
 pub fn redact_home(path: &Path) -> String {
-    let s = path.to_string_lossy();
-    if let Some(home) = dirs::home_dir() {
-        let home = home.to_string_lossy();
-        if !home.is_empty() {
-            if let Some(rest) = s.strip_prefix(home.as_ref()) {
-                return format!("~{rest}");
-            }
-        }
-    }
-    s.into_owned()
+    crate::security::redact::text(&path.to_string_lossy()).replace("<HOME>", "~")
 }
 
 /// Ensure the agent's action sandbox + default projects home exist and the

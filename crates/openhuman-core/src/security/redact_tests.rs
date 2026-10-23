@@ -221,6 +221,16 @@ fn moved_text_callers_redact_through_the_released_archive() {
         let line = crate::agent::session_host::stop_summary::short_error_line(&failure);
         assert!(!line.contains("abcdefghijklmnopqrstuvwxyz"), "{line}");
         assert!(line.contains("request failed"), "{line}");
+
+        let home = dirs::home_dir().expect("home dir resolvable in native test");
+        let path = home.join("OpenHuman").join("projects");
+        let redacted = crate::config::ops::agent_paths::redact_home(&path);
+        assert!(redacted.starts_with("~/"), "{redacted}");
+        assert!(
+            !redacted.contains(&*home.to_string_lossy()),
+            "home path leaked: {redacted}"
+        );
+        assert!(redacted.contains("OpenHuman/projects"), "{redacted}");
     });
 }
 
