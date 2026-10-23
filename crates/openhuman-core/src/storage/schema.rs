@@ -4,7 +4,7 @@
 //! linked owner for its declarations and calls `ensure_collection` for each
 //! one. Owners retain control of their record shapes and migrations.
 
-use tinystoragedrivers::{CollectionSpec, IndexSpec, StorageError};
+use tinystoragedrivers::{CollectionSpec, StorageError};
 
 /// One linked crate's collection declarations.
 #[derive(Clone, Debug)]
