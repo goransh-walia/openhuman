@@ -35,7 +35,7 @@ pub fn redact_home(path: &Path) -> String {
     normalize_redacted_path(crate::security::redact::text(&path.to_string_lossy()))
 }
 
-fn normalize_redacted_path(redacted: String) -> String {
+pub(crate) fn normalize_redacted_path(redacted: String) -> String {
     redacted.replace("<HOME>", "~")
 }
 
