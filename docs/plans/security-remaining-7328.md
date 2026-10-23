@@ -285,17 +285,21 @@ fixture bounds, malformed shapes, hostname validation, resolver argument
 limits, normalized-key collisions and valid/invalid configuration selection.
 The resolver-specific suite passes 7/7; a focused `cargo llvm-cov` report shows
 94.44% line coverage for that source file, and strict module Clippy plus format
-checks pass. The update is pushed as `ed63e62`; hosted checks and the requested
-CodeRabbit re-review are pending. This remains test-fixture work and does not
-change the production module pin.
+checks pass. The update was pushed as `ed63e62`; subsequent Windows CI exposed
+that coverage-instrumented cipher fixtures were using 50 ms backend and
+5-second bus deadlines. Test-only timeout adjustments are now pushed to PR #46
+at `d8707a0`. Formatting passes. The focused local test cannot compile in this
+checkout: Rust 1.99 fails the existing `needs_drop::<ghash::GHash>()` assertion
+in `tinysecurity-crypto/src/password.rs`; the new hosted run must verify the
+change. This remains test-fixture work and does not change the production pin.
 
-**Hosted Windows follow-up (2026-10-23):** the first PR #46 Windows Rust job
-failed in `secret_cipher_native_contract` at mode 13, where
-`ExecuteSecretCipher2` exceeded the fixture's 5-second bus timeout while the
-test configuration had secret-cipher encryption disabled. Modes 0–12 passed;
-the failure is in native contract verification, not the resolver coverage test.
-The other platforms and a second parallel CI run are still in progress, so the
-cause is not yet classified as a repeatable defect or a runner timing issue.
+**Hosted Windows follow-up (2026-10-23):** one PR #46 Windows Rust job failed
+in `secret_cipher_native_contract` at mode 13, where `ExecuteSecretCipher2`
+exceeded the fixture's 5-second bus timeout while secret-cipher encryption was
+disabled. A second Windows coverage run failed the confidential-cipher fixture
+with a generic authority denial. Both failures are covered by the test-only
+timeout adjustment pushed as `d8707a0`; its Windows and other platform checks
+are pending, so it is not yet verified green.
 
 ## Task 6 — Audit engine and callback infrastructure
 
