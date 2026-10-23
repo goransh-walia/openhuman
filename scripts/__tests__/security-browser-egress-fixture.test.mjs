@@ -10,7 +10,7 @@ const fixture = fileURLToPath(
   new URL("../ci/security-browser-egress-fixture.sh", import.meta.url),
 );
 
-test("native browser egress fixture runs its TinySecurity test", () => {
+test("native browser egress fixture runs security and opt-in Chromium tests", () => {
   const dir = mkdtempSync(join(tmpdir(), "security-browser-egress-fixture-"));
   const log = join(dir, "invocations.txt");
   const bash = join(dir, "bash");
@@ -32,11 +32,23 @@ test("native browser egress fixture runs its TinySecurity test", () => {
   assert.equal(result.status, 0, result.stderr);
   const calls = readFileSync(log, "utf8");
   assert.match(calls, /cargo build -p tinysecurity-module/);
+  assert.match(calls, /cargo build -p tinycomputer/);
   assert.match(calls, /cargo test -p openhuman --lib/);
   assert.match(calls, /--features[^\n]*native-security-tests/);
-  assert.match(
-    calls,
-    /modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases -- --exact/,
+  const invocations = calls.split("\n");
+  const securityTest = invocations.find((line) =>
+    line.includes(
+      "modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases",
+    ),
   );
-  assert.doesNotMatch(calls, /-- --ignored/);
+  assert.ok(securityTest, "TinySecurity callback test is selected");
+  assert.match(securityTest, /-- --exact$/);
+  assert.doesNotMatch(securityTest, /--ignored/);
+  const browserTest = invocations.find((line) =>
+    line.includes(
+      "modules::browser_egress_host::tests::loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials",
+    ),
+  );
+  assert.ok(browserTest, "real-module Chromium test is selected");
+  assert.match(browserTest, /-- --ignored --exact$/);
 });
