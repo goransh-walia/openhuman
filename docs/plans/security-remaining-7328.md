@@ -279,7 +279,7 @@ debug-test-only resolver with per-host answer sequences for native module tests.
 Its parser rejects missing, malformed, exhausted, case-colliding, and exact
 duplicate hostname entries. The exact-duplicate regression was observed failing
 before the duplicate-aware visitor was added. The focused resolver tests pass
-(3), Clippy and format checks pass, and
+(7), Clippy and format checks pass, and
 `scripts/ci/security-browser-egress-fixture.sh` passes against the native module,
 including the real host callback's public-to-loopback DNS-rebinding denial. PR
 checks and reviewer re-review are still pending; this does not change the
@@ -294,10 +294,12 @@ The resolver-specific suite passes 7/7; a focused `cargo llvm-cov` report shows
 checks pass. The update was pushed as `ed63e62`; subsequent Windows CI exposed
 that coverage-instrumented cipher fixtures were using 50 ms backend and
 5-second bus deadlines. Test-only timeout adjustments are now pushed to PR #46
-at `d8707a0`. Formatting passes. The focused local test cannot compile in this
-checkout: Rust 1.99 fails the existing `needs_drop::<ghash::GHash>()` assertion
-in `tinysecurity-crypto/src/password.rs`; the new hosted run must verify the
-change. This remains test-fixture work and does not change the production pin.
+through `d8707a0` and `c18b56f`. The focused resolver command
+(`cargo test -p tinysecurity-module --features native-security-tests
+native_test_resolver --lib`) passes 7/7 locally. A broad `--all-features`
+invocation still hits the existing `needs_drop::<ghash::GHash>()` assertion in
+`tinysecurity-crypto/src/password.rs`; it does not affect the focused resolver
+build. This remains test-fixture work and does not change the production pin.
 
 **Hosted Windows follow-up (2026-10-23):** one PR #46 Windows Rust job failed
 in `secret_cipher_native_contract` at mode 13, where `ExecuteSecretCipher2`
@@ -605,14 +607,15 @@ Linux native resource limits; it is only part of the TinyBox #27 work and does
 not complete cross-platform jail, microVM, Docker, or process-launch coverage.
 TinyBox PR [#112](https://github.com/tinyhumansai/tinybox/pull/112) has since
 merged as `b0b5969ab6d04b64c478e1f012b6af2ac53fc171`, bringing canonical TSD v2
-storage to main. The current PR #103 head is
-`97e82cfe38fd18cd01dd8a38f381cfb845e16a68`; GitHub reports it mergeable but
-behind `main`. Its latest hosted CI run `39873052970` passed the native-resource,
-module, coverage, lint, MSRV and cross-platform checks. OpenHuman's local
-`vendor/tinybox` branch incorporates current main and fixes the
-`grants_manifest_e2e.rs` storage fixture, but that branch is not the PR head and
-must not be pushed over PR #103. Keep the PR in draft until a compatible TinyBox
-release is available and the OpenHuman host adapter is updated.
+storage to main. PR #103 was refreshed by merging current TinyBox main into its
+branch; its current head is `98b541c7fb737ee546c6943f524f39823941a058`. The
+refresh also updates its TinyBus dependency and preserves the PR history. The
+new exact-head CI run `39889111817` has passed formatting, Clippy, docs, MSRV and
+supply-chain checks; tests, coverage, cross-platform feature/module suites and
+`native-resource-live` are still running. The full workspace test suite,
+strict Clippy, formatting, locked metadata and diff checks pass locally. Keep
+the PR in draft until a compatible TinyBox release is available and OpenHuman's
+host adapter is updated.
 The first post-merge CI run passed all 51 native jail unit tests but failed the
 separate resource cancellation proof because it constructed production storage
 without a served host callback. The test now uses TinyBox's testkit-backed
@@ -685,6 +688,15 @@ only the exact host-authorized socket, even when a denied host shares the same
 port. All module CI checks passed. This is transport evidence only; TinyComputer
 #111 remains open for controlled DNS rebinding, TinySecurity-backed authority,
 worker/direct-socket confinement and cross-platform acceptance.
+
+**TinyComputer handshake follow-up (2026-10-23):** upstream PR
+[#159](https://github.com/tinyhumansai/tinycomputer/pull/159) adds focused
+transport-class coverage for the `/socket` WebSocket upgrade headers. The
+current head passes the module test, coverage, formatting, Clippy, docs, MSRV,
+supply-chain and Ubuntu feature-test jobs. Windows/macOS feature tests and
+cross-platform module E2E jobs are still running. This test improvement does
+not close TinyComputer #111 or replace its controlled-DNS and native
+confinement acceptance.
 
 The consequence gate still lacks a trusted host caller context: the module
 callback knows the paused task and action, but not the tenant-bound dispatch
