@@ -1,4 +1,6 @@
 use super::*;
+use super::skill_scan::scan_bundle_snapshot;
+use tinyskills::Verdict as ScanVerdict;
 
 #[test]
 fn scan_snapshot_binds_document_and_resource_content() {
