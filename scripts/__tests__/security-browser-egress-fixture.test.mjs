@@ -36,6 +36,7 @@ test("native browser egress fixture runs its ignored TinySecurity test", () => {
   assert.match(calls, /--features[^\n]*native-security-tests/);
   assert.match(
     calls,
-    /modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases -- --ignored --exact/,
+    /modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases -- --exact/,
   );
+  assert.doesNotMatch(calls, /-- --ignored/);
 });
