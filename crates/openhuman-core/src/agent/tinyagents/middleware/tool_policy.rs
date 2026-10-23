@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use tinyagents_harness::context::RunContext;
 use tinyagents_harness::middleware::{PolicyDecision, ToolCallPolicy};
-use tinyagents_harness_tools::skills::PackRegistryHandle;
+use tinyagents_harness_tools::skills::{PackRegistryHandle, USE_SKILL};
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinytools::ToolResult as TaToolResult;
 
@@ -192,10 +192,15 @@ impl ToolPolicyHostState {
     /// has no idea who is calling it. Only the disclosure half is rendered here:
     /// a call that names a `tool` is the execution half, which
     /// `channel_permission_block` has already gated and the tool's own
-    /// `execute` dispatches. Returns `None` when there is nothing to scope (a
-    /// tool named, no `skill` argument, no pack handle), so the call falls
+    /// `execute` dispatches. Returns `None` when there is nothing to scope (not
+    /// `use_skill`, a tool named, no `skill` argument), so the call falls
     /// through to the tool's own `execute` unchanged.
     pub(crate) fn render_skill_for_session(&self, call: &TaToolCall) -> Option<TaToolResult> {
+        // Only `use_skill` discloses a pack. Another tool whose arguments carry
+        // a `skill` key (an MCP schema, a stray key) must run as itself.
+        if call.name != USE_SKILL {
+            return None;
+        }
         if tinyagents_harness_tools::skills::named_tool(&call.arguments).is_some() {
             return None;
         }
@@ -266,7 +271,7 @@ impl ToolPolicyHostState {
         // channel sitting under that ceiling, an invented name came back as
         // `PermissionTooLow`: a permission denial for a tool that does not
         // exist. Existence is not a policy question (#6302).
-        if call.name == "use_skill" {
+        if call.name == USE_SKILL {
             if let Some(inner_tool) = call
                 .arguments
                 .get("tool")

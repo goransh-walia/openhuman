@@ -501,3 +501,16 @@ fn a_pack_member_this_session_never_registered_is_not_found_not_forbidden() {
         "absence must not read as a permission denial: {message}"
     );
 }
+
+/// Only `use_skill` renders a pack listing. Any other registered tool whose
+/// arguments carry a string `skill` (an MCP schema, a stray key) must fall
+/// through to its own `execute`.
+#[tokio::test]
+async fn a_non_use_skill_call_with_a_skill_argument_is_not_rendered_as_a_listing() {
+    let mw = non_owner_middleware();
+    assert!(
+        mw.render_skill_for_session(&call("build_workflow", json!({ "skill": "workflows" })))
+            .is_none(),
+        "build_workflow was answered with a pack listing instead of executing"
+    );
+}
