@@ -6,12 +6,16 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 security_dir="$repo_root/vendor/tinysecurity"
 
-case "$(uname -s)" in
-  Darwin) module_path="$security_dir/target/debug/libtinysecurity_module.dylib" ;;
-  Linux) module_path="$security_dir/target/debug/libtinysecurity_module.so" ;;
-  MINGW* | MSYS* | CYGWIN*) module_path="$security_dir/target/debug/tinysecurity_module.dll" ;;
-  *) echo "Unsupported TinySecurity browser egress fixture host" >&2; exit 1 ;;
-esac
+if [[ -n "${OPENHUMAN_TEST_SECURITY_MODULE:-}" ]]; then
+  module_path="$OPENHUMAN_TEST_SECURITY_MODULE"
+else
+  case "$(uname -s)" in
+    Darwin) module_path="$security_dir/target/debug/libtinysecurity_module.dylib" ;;
+    Linux) module_path="$security_dir/target/debug/libtinysecurity_module.so" ;;
+    MINGW* | MSYS* | CYGWIN*) module_path="$security_dir/target/debug/tinysecurity_module.dll" ;;
+    *) echo "Unsupported TinySecurity browser egress fixture host" >&2; exit 1 ;;
+  esac
+fi
 
 # TinySecurity's .cargo/config.toml selects polyval_force_soft, which is
 # required by its GHASH zeroization assertion. Cargo must run from that repo.
@@ -28,6 +32,6 @@ test -f "$module_path" || {
 cd -- "$repo_root"
 export OPENHUMAN_TEST_SECURITY_MODULE="$module_path"
 bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
-  --no-default-features --features modules,security-module,legacy-import,storage-sqlite,secret-file \
+  --no-default-features --features modules,security-module,native-security-tests,legacy-import,storage-sqlite,secret-file \
   modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases \
   -- --ignored --exact
