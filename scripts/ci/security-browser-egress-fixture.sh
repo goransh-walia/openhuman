@@ -51,5 +51,5 @@ if [[ "$(uname -s)" == Linux ]]; then
     bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
       --no-default-features --features modules,security-module,native-security-tests,legacy-import,storage-sqlite,secret-file \
       modules::browser_egress_host::tests::loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials \
-      -- --exact
+      -- --ignored --exact
 fi

@@ -316,6 +316,7 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
 /// supplied by `scripts/ci/security-browser-egress-fixture.sh` on Linux.
 #[tokio::test(flavor = "multi_thread")]
 #[cfg(all(feature = "native-security-tests", target_os = "linux"))]
+#[ignore = "requires local TinyComputer cdylib and Chromium; run the browser-egress fixture script"]
 async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
     use crate::modules::security::native_tests::native_fixture_configured;
     use std::os::unix::fs::PermissionsExt;
