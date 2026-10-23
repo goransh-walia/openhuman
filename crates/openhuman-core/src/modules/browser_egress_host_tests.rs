@@ -552,7 +552,7 @@ async fn loaded_tinycomputer_rejects_public_to_loopback_dns_rebinding() {
         .proxy
         .call_confidential(
             tinysecurity_bus::names::methods::SCOPED_URL_GUARD,
-            (preflight,),
+            (preflight.clone(),),
         )
         .await
         .expect("TinySecurity answers the public-name preflight");
@@ -560,6 +560,30 @@ async fn loaded_tinycomputer_rejects_public_to_loopback_dns_rebinding() {
     assert!(
         preflight_response.denial.is_none(),
         "the first controlled DNS answer is public and should pass preflight"
+    );
+    let mut metadata_preflight = preflight.clone();
+    metadata_preflight.url = "http://metadata.test/latest/meta-data/".into();
+    let metadata_preflight_response: tinysecurity_bus::ScopedEgressResponse = fixture
+        .proxy
+        .call_confidential(
+            tinysecurity_bus::names::methods::SCOPED_URL_GUARD,
+            (metadata_preflight,),
+        )
+        .await
+        .expect("TinySecurity answers the public metadata-name preflight");
+    assert_eq!(metadata_preflight_response.generation, info.generation);
+    assert!(
+        metadata_preflight_response.denial.is_none(),
+        "the first controlled metadata DNS answer is public and should pass preflight"
+    );
+    let mut metadata_target = target(&policy_id.0, info.generation, "metadata.test", 80);
+    metadata_target.scheme = "http".into();
+    let metadata_dial = crate::modules::security::egress::authorize_browser_dial(metadata_target)
+        .await
+        .expect_err("TinySecurity must reject a connection-time metadata address");
+    assert!(
+        metadata_dial.contains("TinySecurity denied browser dial"),
+        "{metadata_dial}"
     );
 
     fixture
@@ -617,6 +641,21 @@ async fn loaded_tinycomputer_rejects_public_to_loopback_dns_rebinding() {
             .await
             .is_err(),
         "rebinding request must never reach the loopback listener"
+    );
+    let metadata_navigation: DesktopResponse = proxy
+        .call(
+            tinycomputer_bus::browser::names::methods::NAVIGATE,
+            (serde_json::json!({
+                "session": session,
+                "url": "http://metadata.test/latest/meta-data/"
+            }),),
+        )
+        .await
+        .expect("TinyComputer reports the connection-time metadata denial");
+    assert!(
+        !metadata_navigation.ok,
+        "connection-time metadata DNS answer must be denied: {:?}",
+        metadata_navigation.data
     );
     let closed: DesktopResponse = proxy
         .call(
