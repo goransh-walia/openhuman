@@ -16,7 +16,7 @@ test("native browser egress fixture runs security and opt-in Chromium tests", ()
   const bash = join(dir, "bash");
   writeFileSync(
     bash,
-    `#!/bin/sh\nprintf 'ARGS %s\\nDNS %s\\n' "$*" "${TINYSECURITY_TEST_DNS_SEQUENCE:-}" >> "${log}"\n`,
+    `#!/bin/sh\nprintf 'ARGS %s\\nDNS %s\\n' "$*" "\${TINYSECURITY_TEST_DNS_SEQUENCE:-}" >> "${log}"\n`,
   );
   chmodSync(bash, 0o755);
 
