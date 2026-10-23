@@ -310,3 +310,150 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
         .expect("replay is a denial, not a transport error");
     assert!(!second_consume.allowed, "one-use grants cannot be replayed");
 }
+
+/// Exercises private-address rejection through the real TinyComputer module,
+/// Chromium, the host callback, and a real TinySecurity cdylib. The fixture is
+/// supplied by `scripts/ci/security-browser-egress-fixture.sh` on Linux.
+#[tokio::test(flavor = "multi_thread")]
+#[cfg(all(feature = "native-security-tests", target_os = "linux"))]
+async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
+    use crate::modules::security::native_tests::native_fixture_configured;
+    use std::os::unix::fs::PermissionsExt;
+    use tinycomputer_bus::DesktopResponse;
+
+    let computer_artifact = std::path::PathBuf::from(
+        std::env::var_os("OPENHUMAN_TEST_TINYCOMPUTER_MODULE")
+            .expect("fixture script builds the TinyComputer module"),
+    );
+    let computer_fixtures = tempfile::tempdir().expect("private TinyComputer fixture directory");
+    std::fs::set_permissions(
+        computer_fixtures.path(),
+        std::fs::Permissions::from_mode(0o700),
+    )
+    .expect("restrict TinyComputer fixture directory");
+    let file_name = computer_artifact.file_name().unwrap();
+    let computer_module = computer_fixtures.path().join(file_name);
+    std::fs::copy(&computer_artifact, &computer_module).expect("stage TinyComputer module");
+    let digest = tinybus::module::sha256_file(&computer_module).expect("TinyComputer digest");
+    std::fs::write(
+        computer_fixtures.path().join("modules.toml"),
+        format!("{file_name:?} = {digest:?}\n"),
+    )
+    .expect("pin staged TinyComputer fixture");
+    let fixture = native_fixture_configured(false, |_| {}).await;
+    install(&fixture.client).await.unwrap();
+    let owner = tinysecurity_bus::SubjectScope {
+        user: "native-test-user".into(),
+        workspace: "native-test-workspace".into(),
+        agent: "native-test-agent".into(),
+    };
+    let policy = tinysecurity_bus::EgressPolicy {
+        owner,
+        ceiling: tinysecurity_bus::AccessTier::Full,
+        privacy: tinysecurity_bus::PrivacyMode::Standard,
+        destinations: Vec::new(),
+        data_categories: vec![tinysecurity_bus::DataCategory::OpaqueBrowserTraffic],
+        local_capabilities: Vec::new(),
+        validity_ms: 30_000,
+        open_public: true,
+        preflight_transports: vec![tinysecurity_bus::EgressTransport::Browser],
+    };
+    let policy_id: tinysecurity_bus::EgressPolicyId = fixture
+        .proxy
+        .call_confidential(
+            tinysecurity_bus::names::methods::REGISTER_EGRESS_POLICY,
+            (policy,),
+        )
+        .await
+        .expect("trusted host registers browser policy");
+    let info: tinysecurity_bus::PolicyInfo = fixture
+        .proxy
+        .call(tinysecurity_bus::names::methods::POLICY_INFO, ())
+        .await
+        .expect("read actual module generation");
+    crate::modules::security::egress::remember_browser_dial_binding_for_test(
+        policy_id.clone(),
+        info.generation,
+        fixture.proxy.clone(),
+    );
+
+    fixture
+        .host
+        .load_file_with_config(
+            computer_module,
+            serde_json::json!({
+                "browser": {
+                    "egress": {
+                        "policy_id": policy_id.0,
+                        "generation": info.generation
+                    }
+                }
+            }),
+        )
+        .expect("load the actual TinyComputer cdylib with the TinySecurity policy");
+    let proxy = fixture
+        .client
+        .proxy(
+            tinycomputer_bus::names::INTERFACE,
+            tinycomputer_bus::names::OBJECT_PATH,
+            tinycomputer_bus::names::INTERFACE,
+        )
+        .unwrap()
+        .with_timeout(std::time::Duration::from_secs(30));
+
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .expect("bind local denial fixture");
+    let port = listener.local_addr().unwrap().port();
+    let mut private_target = target(&policy_id.0, info.generation, "127.0.0.1", port);
+    private_target.scheme = "http".into();
+    let direct = crate::modules::security::egress::authorize_browser_dial(private_target)
+        .await
+        .expect_err("TinySecurity must reject loopback before a browser dial");
+    assert!(
+        direct.contains("TinySecurity denied browser dial"),
+        "{direct}"
+    );
+
+    let opened: DesktopResponse = proxy
+        .call(
+            tinycomputer_bus::browser::names::methods::OPEN_SESSION,
+            (serde_json::json!({}),),
+        )
+        .await
+        .expect("real TinyComputer opens a Chromium session");
+    assert!(opened.ok, "browser session failed: {:?}", opened.error);
+    let session = opened.data.as_ref().unwrap()["id"]
+        .as_str()
+        .expect("browser session id")
+        .to_owned();
+    let navigated: DesktopResponse = proxy
+        .call(
+            tinycomputer_bus::browser::names::methods::NAVIGATE,
+            (serde_json::json!({
+                "session": session,
+                "url": format!("http://127.0.0.1:{port}/private")
+            }),),
+        )
+        .await
+        .expect("TinyComputer reports the denied browser navigation");
+    assert!(
+        !navigated.ok,
+        "navigation to the private listener must be denied: {:?}",
+        navigated.data
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(250), listener.accept())
+            .await
+            .is_err(),
+        "the denied browser request must never reach the loopback listener"
+    );
+    let closed: DesktopResponse = proxy
+        .call(
+            tinycomputer_bus::browser::names::methods::CLOSE_SESSION,
+            (serde_json::json!({ "session": session }),),
+        )
+        .await
+        .expect("close the Chromium session");
+    assert!(closed.ok, "browser cleanup failed: {:?}", closed.error);
+}

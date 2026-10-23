@@ -5,6 +5,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 security_dir="$repo_root/vendor/tinysecurity"
+computer_dir="$repo_root/vendor/tinycomputer"
 
 if [[ -n "${OPENHUMAN_TEST_SECURITY_MODULE:-}" ]]; then
   module_path="$OPENHUMAN_TEST_SECURITY_MODULE"
@@ -35,3 +36,20 @@ bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
   --no-default-features --features modules,security-module,native-security-tests,legacy-import,storage-sqlite,secret-file \
   modules::browser_egress_host::tests::browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases \
   -- --exact
+
+if [[ "$(uname -s)" == Linux ]]; then
+  computer_module="$computer_dir/target/debug/libtinycomputer.so"
+  (
+    cd -- "$computer_dir"
+    bash "$repo_root/scripts/ci-cancel-aware.sh" cargo build -p tinycomputer
+  )
+  test -f "$computer_module" || {
+    echo "TinyComputer module artifact was not produced: $computer_module" >&2
+    exit 1
+  }
+  OPENHUMAN_TEST_TINYCOMPUTER_MODULE="$computer_module" \
+    bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
+      --no-default-features --features modules,security-module,native-security-tests,legacy-import,storage-sqlite,secret-file \
+      modules::browser_egress_host::tests::loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials \
+      -- --exact
+fi
