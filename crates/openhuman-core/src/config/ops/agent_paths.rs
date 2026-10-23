@@ -32,7 +32,11 @@ pub fn expand_tilde(path: &str) -> String {
 /// conventional `~/...` display when the module replaces a home directory, and
 /// suppress the complete path while TinySecurity is unavailable.
 pub fn redact_home(path: &Path) -> String {
-    crate::security::redact::text(&path.to_string_lossy()).replace("<HOME>", "~")
+    normalize_redacted_path(crate::security::redact::text(&path.to_string_lossy()))
+}
+
+fn normalize_redacted_path(redacted: String) -> String {
+    redacted.replace("<HOME>", "~")
 }
 
 /// Ensure the agent's action sandbox + default projects home exist and the
