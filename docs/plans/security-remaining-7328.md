@@ -419,17 +419,19 @@ encrypted_store,encrypted_file_backend,backend}.rs`, `security/devices/crypto.rs
    dispatch semantic release workflow. Verify published artifacts by real loader
    allow/deny/callback flow. Only now can production host pins change.
 
-**Upstream checkpoint (2026-10-22):** TinySecurity PR #42 (redaction) merged as
-`0990d97159ddb12a214749d6aa03a4fbf022779f`, but no release containing it is
-published; the host must keep its current pin. PR #43
+**Upstream checkpoint (2026-10-23):** TinySecurity PR #42 (redaction) merged as
+`0990d97159ddb12a214749d6aa03a4fbf022779f` and is included in the published
+v0.17.1 release (`b62ad69ce28bc3178ad91e12f3074f21007055c4`). The host's
+registry version and checksums already pin v0.17.1, so the short-key redaction
+parity gap recorded under Task 12 is resolved by the released module. PR #43
 ([abandoned execution outcome](https://github.com/tinyhumansai/tinysecurity/pull/43))
 adds the incompatible `ExecutionOutcome::Abandoned` bus variant and bumps the
 contract to 2.0. Its CI exposed and fixed an old-major reinit fixture and a
-Windows native verifier assumption; hosted checks are still running on
-`611590fb15145dcf4d3ce6d57ce79d45c7ac8f64`. The earlier CodeRabbit finding has
-no unresolved thread, and re-review has been requested. PR #43 is a focused
-slice, not the cumulative owner migration required by this task; Tasks 1–10
-remain prerequisites before release and host pin changes.
+Windows native verifier assumption. The currently open review requests are
+addressed, but CodeRabbit's changes-requested verdict remains pending a fresh
+review. PR #43 is a focused slice, not the cumulative owner migration required
+by this task; Tasks 1–10 remain prerequisites before the next production host
+pin changes.
 
 ## Task 12 — Host pins and config/command/redaction migration
 
