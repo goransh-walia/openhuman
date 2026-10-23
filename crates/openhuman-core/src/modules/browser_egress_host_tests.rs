@@ -410,7 +410,10 @@ async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
     let direct = crate::modules::security::egress::authorize_browser_dial(private_target)
         .await
         .expect_err("TinySecurity must reject loopback before a browser dial");
-    assert!(direct.contains("TinySecurity denied browser dial"), "{direct}");
+    assert!(
+        direct.contains("TinySecurity denied browser dial"),
+        "{direct}"
+    );
 
     let opened: DesktopResponse = proxy
         .call(
