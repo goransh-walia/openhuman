@@ -36,7 +36,7 @@ pub fn redact_home(path: &Path) -> String {
 }
 
 pub(crate) fn normalize_redacted_path(redacted: String) -> String {
-    redacted.replace("<HOME>", "~")
+    redacted.replace("<HOME>", "~").replace('\\', "/")
 }
 
 /// Ensure the agent's action sandbox + default projects home exist and the
