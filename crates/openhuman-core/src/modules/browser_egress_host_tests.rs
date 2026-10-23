@@ -318,7 +318,7 @@ async fn browser_egress_callbacks_use_tinysecurity_one_use_grants_and_leases() {
 #[cfg(all(feature = "native-security-tests", target_os = "linux"))]
 async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
     use crate::modules::security::native_tests::native_fixture_configured;
-    use tinycomputer_bus::agent::DesktopResponse;
+    use tinycomputer_bus::DesktopResponse;
 
     let computer_module = std::env::var_os("OPENHUMAN_TEST_TINYCOMPUTER_MODULE")
         .expect("fixture script builds the TinyComputer module");
@@ -396,7 +396,7 @@ async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
 
     let opened: DesktopResponse = proxy
         .call(
-            tinycomputer_bus::browser::methods::OPEN_SESSION,
+            tinycomputer_bus::browser::names::methods::OPEN_SESSION,
             (serde_json::json!({}),),
         )
         .await
@@ -408,7 +408,7 @@ async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
         .to_owned();
     let navigated: DesktopResponse = proxy
         .call(
-            tinycomputer_bus::browser::methods::NAVIGATE,
+            tinycomputer_bus::browser::names::methods::NAVIGATE,
             (serde_json::json!({
                 "session": session,
                 "url": format!("http://127.0.0.1:{port}/private")
@@ -429,7 +429,7 @@ async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
     );
     let closed: DesktopResponse = proxy
         .call(
-            tinycomputer_bus::browser::methods::CLOSE_SESSION,
+            tinycomputer_bus::browser::names::methods::CLOSE_SESSION,
             (serde_json::json!({ "session": session }),),
         )
         .await
