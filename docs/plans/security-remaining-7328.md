@@ -701,6 +701,18 @@ generic OS backend's historical `Unavailable` read/delete mapping remains
 unchanged; this audit found no master-key replacement or legacy-import data-loss
 path through it.
 
+**TinySkills scan policy contract (2026-10-23):** TinySecurity PR
+[#48](https://github.com/tinyhumansai/tinysecurity/pull/48) adds the trusted
+host-derived `SkillScan` verdict and bundle digest to contract 1.29. It binds
+the scan identity into approval evaluation, makes `Warn` require a fresh human
+approval even under broad grants or auto-approval, and makes `Block` a hard
+denial. The owner PR's local bus/policy/approval/module checks pass; Linux,
+macOS, Windows and release-latency CI are running. OpenHuman has not yet added
+the run-time scan adapter. Keep the production registry pin on the released
+TinySecurity artifact until this owner change is merged and released; then
+revalidate the exact scanned bundle snapshot at both `skills.run` and
+`run_workflow` before exposing its resources to the agent.
+
 **TinyComputer progress (2026-10-22):** upstream PR [#152](https://github.com/tinyhumansai/tinycomputer/pull/152)
 merged at `82d0aa6`. Its live Chromium test exercises the TinyComputer module's
 host authorization callback and verifies that changed policy produces no new
