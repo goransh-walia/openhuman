@@ -178,4 +178,3 @@ Record shapes and migrations stay with their owners.
 | Collection | Indexes | Expiry field | Search fields |
 | --- | --- | --- | --- |
 | `wallet.budgets` |  |  |  |
-| `wallet.migrations` |  |  |  |
