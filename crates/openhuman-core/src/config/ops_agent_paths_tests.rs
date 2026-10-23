@@ -372,6 +372,16 @@ fn redact_home_suppresses_paths_when_tinysecurity_is_unavailable() {
     assert_eq!(redact_home(outside), crate::core::log_redaction::SUPPRESSED);
 }
 
+#[test]
+fn redacted_windows_paths_use_forward_slashes_for_display() {
+    assert_eq!(
+        crate::config::ops::agent_paths::normalize_redacted_path(
+            r"~\OpenHuman\projects".to_owned()
+        ),
+        "~/OpenHuman/projects"
+    );
+}
+
 #[tokio::test]
 async fn ensure_agent_dirs_creates_missing_action_dir_and_trusted_root() {
     use crate::security::TrustedAccess;
