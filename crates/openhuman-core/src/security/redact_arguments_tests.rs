@@ -237,7 +237,8 @@ fn multiple_home_paths_in_same_string_all_scrubbed() {
     assert_eq!(summary.matches("<HOME>").count(), 2);
 }
 
-#[test]
+// Kept as a case in `approval_argument_contract_holds_on_the_released_archive`:
+// this host entry point deliberately suppresses content until the module is armed.
 fn file_handoff_links_are_redacted() {
     // A presigned storage link is a bearer capability: anyone holding the
     // URL can fetch the file until it expires. Redacted args are shown on
