@@ -10,7 +10,7 @@ const fixture = fileURLToPath(
   new URL("../ci/security-browser-egress-fixture.sh", import.meta.url),
 );
 
-test("native browser egress fixture runs its ignored TinySecurity test", () => {
+test("native browser egress fixture runs its TinySecurity test", () => {
   const dir = mkdtempSync(join(tmpdir(), "security-browser-egress-fixture-"));
   const log = join(dir, "invocations.txt");
   const bash = join(dir, "bash");
