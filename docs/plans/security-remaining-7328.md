@@ -189,6 +189,14 @@ parses the model's escalate-only class hint. The host subscribes to
 redaction/egress consumers in Task 12. Task 7's released durable whole-tool
 grant support is tracked below.
 
+**Windows native redaction follow-up (2026-10-23):** OpenHuman's Windows
+`moved_text_callers_redact_through_the_released_archive` test caught that
+TinySecurity's redacted home path retained Windows backslashes while the host
+display contract uses `~/...`. `normalize_redacted_path` now normalizes
+separators only after the home marker; both the focused display test and the
+released-archive caller test pass locally. The fix is on OpenHuman PR #7331;
+the refreshed hosted native matrix is running.
+
 ## Task 3 — Command grammar, tool rules and action accounting
 
 **Released and integrated (TinySecurity v0.17.0):** the owner implements immutable
@@ -466,6 +474,18 @@ addressed, but CodeRabbit's changes-requested verdict remains pending a fresh
 review. PR #43 is a focused slice, not the cumulative owner migration required
 by this task; Tasks 1–10 remain prerequisites before the next production host
 pin changes.
+
+**Runtime secret scopes (2026-10-23):** TinySecurity PR #47 is stacked on #46
+and adds host-only runtime secret registration for live approval scopes. Review
+exposed that a revoked native registration ID could be re-accepted after an
+approval generation replacement when the policy reference stayed the same. A
+regression first failed against that path; revoked IDs are now tombstoned for
+the native registry lifetime, while the trusted static-scope replacement path
+can reactivate configured scopes after fencing old handles. Native registry
+tests (29), the module lifecycle regression, strict crypto/module Clippy and
+format checks pass locally. The refreshed Linux/macOS/Windows owner checks are
+running. OpenHuman remains pinned to released v0.17.1 until the owner change is
+merged and released.
 
 ## Task 12 — Host pins and config/command/redaction migration
 
