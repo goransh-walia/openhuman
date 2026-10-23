@@ -30,6 +30,12 @@ host or TinySecurity as workarounds. Their upstream changes must merge/release
 before dependent production pins. One TinySecurity PR does not prohibit required
 PRs in those other owners.
 
+**Base verification (2026-10-23):** fetched canonical `upstream/main`. The
+`epic-7328-continue` worktree's base is exactly `74d2a79612`, the fetched
+upstream head. The primary checkout's `main` has an extra local checkpoint
+commit updating 21 submodule pointers and untracked submodule state, so it was
+left untouched rather than force-reset or fast-forwarded over that commit.
+
 ## Invariants for every task
 
 - Host normal dependencies name only `tinysecurity-bus`; its normal dependencies
@@ -299,7 +305,11 @@ exceeded the fixture's 5-second bus timeout while secret-cipher encryption was
 disabled. A second Windows coverage run failed the confidential-cipher fixture
 with a generic authority denial. Both failures are covered by the test-only
 timeout adjustment pushed as `d8707a0`; its Windows and other platform checks
-are pending, so it is not yet verified green.
+are pending, so it is not yet verified green. A follow-up at `c18b56f` gives the
+fixture proxy a 35-second timeout so the duplicate-execution assertion observes
+the module's replay rejection instead of a client timeout. This also addresses
+CodeRabbit's specific review request on that assertion. The change is on PR #46;
+the current CI runs are `39889136776` and `39889142841` and are still running.
 
 ## Task 6 — Audit engine and callback infrastructure
 
