@@ -5,7 +5,7 @@
 //! unambiguous and stable across platforms.
 
 use sha2::{Digest, Sha256};
-use tinyskills::{ScanDocument, ScanResource, ScanReport, Verdict};
+use tinyskills::{ScanDocument, ScanReport, ScanResource, Verdict};
 
 /// Scan verdict and content identity for one workflow bundle snapshot.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1,11 +1,12 @@
-use super::*;
 use super::skill_scan::scan_bundle_snapshot;
+use super::*;
 use tinyskills::Verdict as ScanVerdict;
 
 #[test]
 fn scan_snapshot_binds_document_and_resource_content() {
     let clean = scan_bundle_snapshot("---\nname: demo\ndescription: safe\n---\nbody", &[]);
-    let changed_document = scan_bundle_snapshot("---\nname: demo\ndescription: changed\n---\nbody", &[]);
+    let changed_document =
+        scan_bundle_snapshot("---\nname: demo\ndescription: changed\n---\nbody", &[]);
     let changed_resource = scan_bundle_snapshot(
         "---\nname: demo\ndescription: safe\n---\nbody",
         &[("references/guide.md", "resource")],
@@ -17,10 +18,8 @@ fn scan_snapshot_binds_document_and_resource_content() {
 
 #[test]
 fn scanner_verdict_covers_the_document_and_bundled_resources() {
-    let document_block = scan_bundle_snapshot(
-        "---\nname: demo\ndescription: safe\n---\nbody\u{200b}",
-        &[],
-    );
+    let document_block =
+        scan_bundle_snapshot("---\nname: demo\ndescription: safe\n---\nbody\u{200b}", &[]);
     let resource_block = scan_bundle_snapshot(
         "---\nname: demo\ndescription: safe\n---\nbody",
         &[("references/guide.md", "safe\u{200b}text")],
