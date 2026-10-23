@@ -707,11 +707,17 @@ host-derived `SkillScan` verdict and bundle digest to contract 1.29. It binds
 the scan identity into approval evaluation, makes `Warn` require a fresh human
 approval even under broad grants or auto-approval, and makes `Block` a hard
 denial. The owner PR's local bus/policy/approval/module checks pass; Linux,
-macOS, Windows and release-latency CI are running. OpenHuman has not yet added
-the run-time scan adapter. Keep the production registry pin on the released
-TinySecurity artifact until this owner change is merged and released; then
-revalidate the exact scanned bundle snapshot at both `skills.run` and
-`run_workflow` before exposing its resources to the agent.
+macOS, Windows and release-latency CI are running. OpenHuman's runtime adapter
+is in progress on draft PR #7331: the workflow registry now returns the
+discovered bundle beside its runnable definition, the host hashes and scans the
+prompt plus bounded resources, and `run_workflow` sends a host-derived
+`SkillScan` check with an Execute effect check through TinySecurity. The shared
+spawn path rejects Block and currently fails closed on Warn. Remaining before
+this is complete: route direct `skills.run` through the native
+policy/approval flow, carry the approved digest through resume to the spawned
+run, and revalidate resources at their exposure point. Keep the production
+registry pin on the released TinySecurity artifact until this owner change is
+merged and released.
 
 **TinyComputer progress (2026-10-22):** upstream PR [#152](https://github.com/tinyhumansai/tinycomputer/pull/152)
 merged at `82d0aa6`. Its live Chromium test exercises the TinyComputer module's
