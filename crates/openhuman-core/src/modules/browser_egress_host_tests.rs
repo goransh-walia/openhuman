@@ -320,8 +320,20 @@ async fn loaded_tinycomputer_uses_tinysecurity_to_block_loopback_dials() {
     use crate::modules::security::native_tests::native_fixture_configured;
     use tinycomputer_bus::DesktopResponse;
 
-    let computer_module = std::env::var_os("OPENHUMAN_TEST_TINYCOMPUTER_MODULE")
-        .expect("fixture script builds the TinyComputer module");
+    let computer_artifact = std::path::PathBuf::from(
+        std::env::var_os("OPENHUMAN_TEST_TINYCOMPUTER_MODULE")
+            .expect("fixture script builds the TinyComputer module"),
+    );
+    let computer_fixtures = tempfile::tempdir().expect("private TinyComputer fixture directory");
+    let file_name = computer_artifact.file_name().unwrap();
+    let computer_module = computer_fixtures.path().join(file_name);
+    std::fs::copy(&computer_artifact, &computer_module).expect("stage TinyComputer module");
+    let digest = tinybus::module::sha256_file(&computer_module).expect("TinyComputer digest");
+    std::fs::write(
+        computer_fixtures.path().join("modules.toml"),
+        format!("{file_name:?} = {digest:?}\n"),
+    )
+    .expect("pin staged TinyComputer fixture");
     let fixture = native_fixture_configured(false, |_| {}).await;
     install(&fixture.client).await.unwrap();
     let owner = tinysecurity_bus::SubjectScope {
