@@ -5,7 +5,6 @@
 //! one. Owners retain control of their record shapes and migrations.
 
 use tinystoragedrivers::{CollectionSpec, IndexSpec, StorageError};
-use tinystoragedrivers_core::schema::{Item, Schema, ScopeClass};
 
 /// One linked crate's collection declarations.
 #[derive(Clone, Debug)]
@@ -66,10 +65,7 @@ fn declared_collections() -> Vec<CollectionOwner> {
                 .map(|collection| CollectionSpec::new(collection.name))
                 .collect(),
         ));
-        owners.push(owner(
-            "tinybox-bus",
-            schema_collections(tinybox_bus::storage::storage_schema()),
-        ));
+        owners.push(owner("tinybox-bus", tinybox_bus::storage::collections()));
         owners.push(owner(
             "tinyjuice-bus",
             tinyjuice_bus::storage::collections(),
@@ -143,7 +139,7 @@ pub fn module_collections(owner: &str) -> Vec<CollectionSpec> {
             );
         }
         "box" => {
-            return module_schema_collections(tinybox_bus::storage::storage_schema());
+            return module_owned_collections(tinybox_bus::storage::collections());
         }
         "juice" => return module_owned_collections(tinyjuice_bus::storage::collections()),
         _ => {}
@@ -173,47 +169,6 @@ pub fn module_collections(owner: &str) -> Vec<CollectionSpec> {
 fn module_owned_collections(mut collections: Vec<CollectionSpec>) -> Vec<CollectionSpec> {
     collections.retain(|collection| !collection.name.starts_with("tsd."));
     collections
-}
-
-fn schema_collections(schema: Schema) -> Vec<CollectionSpec> {
-    schema
-        .items
-        .into_iter()
-        .filter_map(|item| match item {
-            Item::Collection { spec, .. } => Some(convert_collection_spec(spec)),
-            _ => None,
-        })
-        .collect()
-}
-
-fn module_schema_collections(schema: Schema) -> Vec<CollectionSpec> {
-    schema
-        .items
-        .into_iter()
-        .filter_map(|item| match item {
-            Item::Collection {
-                spec,
-                scope: ScopeClass::Module,
-                ..
-            } => Some(convert_collection_spec(spec)),
-            _ => None,
-        })
-        .collect()
-}
-
-fn convert_collection_spec(spec: tinystoragedrivers_core::CollectionSpec) -> CollectionSpec {
-    let mut converted = CollectionSpec::new(spec.name);
-    for source in spec.indexes {
-        let index = IndexSpec::new(source.name, source.fields);
-        converted = converted.index(if source.unique { index.unique() } else { index });
-    }
-    if let Some(ttl_field) = spec.ttl_field {
-        converted = converted.ttl(ttl_field);
-    }
-    if let Some(search) = spec.search {
-        converted = converted.searchable(search.fields);
-    }
-    converted
 }
 
 #[cfg(test)]
