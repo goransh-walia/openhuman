@@ -594,7 +594,8 @@ merged as `b0b5969ab6d04b64c478e1f012b6af2ac53fc171`, bringing canonical TSD v2
 storage to main. The current PR #103 head is
 `97e82cfe38fd18cd01dd8a38f381cfb845e16a68`; GitHub reports it mergeable but
 behind `main`. Its latest hosted CI run `39873052970` passed the native-resource,
-module, coverage, lint, MSRV and cross-platform checks. OpenHuman's local `vendor/tinybox` branch incorporates current main and fixes the
+module, coverage, lint, MSRV and cross-platform checks. OpenHuman's local
+`vendor/tinybox` branch incorporates current main and fixes the
 `grants_manifest_e2e.rs` storage fixture, but that branch is not the PR head and
 must not be pushed over PR #103. Keep the PR in draft until a compatible TinyBox
 release is available and the OpenHuman host adapter is updated.
