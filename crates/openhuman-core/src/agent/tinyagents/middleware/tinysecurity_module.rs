@@ -26,7 +26,8 @@ use async_trait::async_trait;
 use tinyagents_harness::context::RunContext;
 use tinyinference_llm::tool::ToolCall as TaToolCall;
 use tinysecurity_bus::{
-    AccessTier, CallerContext, Check, DenialReason, Origin, ToolCall, ToolPermission, Verdict,
+    AccessTier, CallerContext, Check, DenialReason, Origin, SkillScanVerdict, ToolCall,
+    ToolPermission, Verdict,
 };
 use tinytools::{PermissionLevel, Tool};
 
@@ -127,8 +128,9 @@ impl VerdictSource for ModuleVerdicts {
         call: &TaToolCall,
     ) -> Result<Verdict, String> {
         let shell = call.name == SHELL_TOOL;
+        let workflow_run = false;
         // Unknown name: nothing to reason about, and "unknown" never means fine.
-        let Some((level, declared_external)) = self.effects.resolve_tool(&call.name).map(|tool| {
+        let Some((resolved_level, declared_external)) = self.effects.resolve_tool(&call.name).map(|tool| {
             (
                 tool.permission_level_with_args(&call.arguments),
                 tool.external_effect_with_args(&call.arguments),
@@ -139,10 +141,18 @@ impl VerdictSource for ModuleVerdicts {
                 reason: DenialReason::UnsupportedEffect,
             });
         };
+        // A workflow launches a separate autonomous agent. Its tool declaration
+        // is intentionally `None` because its target policy differs; admission
+        // still needs a host-effect check paired with the exact bundle scan.
+        let level = if workflow_run {
+            PermissionLevel::Execute
+        } else {
+            resolved_level
+        };
         // Approval posture may waive a human prompt, but it must not rewrite
         // the tool's declared external effect. TinySecurity needs the real
         // effect metadata to enforce privacy and policy in every posture.
-        let external = declared_external;
+        let external = declared_external || workflow_run;
         let acts = level_acts(level);
         let (checks, redact) = if shell {
             let Some(check) = shell_check(&call.arguments) else {
@@ -159,10 +169,38 @@ impl VerdictSource for ModuleVerdicts {
                 permission: permission(level),
                 external_effect: external,
                 // An allowed acting call spends one action of the hourly budget.
-                spend: acts,
+                spend: acts && !workflow_run,
                 command_policy: None,
             };
-            (vec![check], external)
+            let mut checks = vec![check];
+            if workflow_run {
+                let workflow_id = call
+                    .arguments
+                    .get("workflow_id")
+                    .or_else(|| call.arguments.get("skill_id"))
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| "run_workflow is missing a workflow id".to_string())?;
+                let workspace = crate::skills::schemas::resolve_workspace_dir().await;
+                let (workflow, source) = crate::skills::registry::get_workflow_with_source(
+                    &workspace,
+                    workflow_id,
+                )
+                .ok_or_else(|| format!("run_workflow references unknown workflow '{workflow_id}'"))?;
+                let scan = crate::skills::runtime::skill_scan::scan_workflow(
+                    &workflow,
+                    source.as_ref(),
+                )?;
+                checks.push(Check::SkillScan {
+                    verdict: match scan.verdict {
+                        tinyskills::Verdict::Pass => SkillScanVerdict::Pass,
+                        tinyskills::Verdict::Warn => SkillScanVerdict::Warn,
+                        tinyskills::Verdict::Block => SkillScanVerdict::Block,
+                    },
+                    bundle_sha256: scan.bundle_sha256,
+                });
+            }
+            (checks, external)
         };
         self.module.ask(ctx, call, checks, redact).await
     }

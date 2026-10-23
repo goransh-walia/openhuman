@@ -56,6 +56,7 @@ fn registry() -> Vec<Arc<Vec<Box<dyn Tool>>>> {
         tool("wipe_disk", PermissionLevel::Dangerous, false),
         tool("gmail_send", PermissionLevel::Write, true),
         tool("web_fetch", PermissionLevel::ReadOnly, true),
+        tool("run_workflow", PermissionLevel::None, false),
         tool(SHELL_TOOL, PermissionLevel::Execute, false),
         Box::new(FakeTool {
             name: "desktop_launch",
@@ -199,6 +200,15 @@ async fn a_tool_that_only_reads_is_allowed_without_asking_the_module() {
         let answer = verdict(&module, registry(), call(name, json!({"path": "a"}))).await;
         assert_eq!(answer, Ok(Verdict::Allow), "{name}");
     }
+    assert!(module.asked().is_empty());
+}
+
+#[tokio::test]
+async fn workflow_launch_is_not_skipped_as_a_no_permission_read() {
+    let module = Recorder::answering(Ok(Verdict::Allow));
+    let answer = verdict(&module, registry(), call("run_workflow", json!({}))).await;
+
+    assert!(answer.is_err(), "a workflow launch must validate and scan its target");
     assert!(module.asked().is_empty());
 }
 

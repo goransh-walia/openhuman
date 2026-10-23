@@ -41,7 +41,7 @@ mod stub;
 #[cfg(not(feature = "skills"))]
 pub use stub::*;
 #[cfg(feature = "skills")]
-mod skill_scan;
+pub(crate) mod skill_scan;
 
 #[cfg(all(feature = "skills", test))]
 #[path = "skill_scan_tests.rs"]
