@@ -558,11 +558,9 @@ surfaces plus the full approval UI and cross-path verification.
 ## Task 14 — Every untrusted process uses approved TinyBox execution
 
 **Host files:** sandbox/{ops,types,grants,docker}.rs,
-`agent/host_runtime.rs`, `cron/scheduler/shell_job.rs`, `hooks/host.rs`,
-`runtime/python_server/{server,kompress}.rs`, `runtime/pool/`,
-`tools/impl/system/install_tool.rs`, MCP/runtime/flow host adapters.
-**Owner seams:** TinyMCP transport/stdio/mod.rs; TinyRuntime pool/worker.rs and
-tinyruntime-pyserver/src/server.rs; TinyFlows caps/host/script/runner.rs;
+`cron/scheduler/shell_job.rs`, `hooks/host.rs`,
+`tools/impl/system/install_tool.rs`, MCP and flow host adapters.
+**Owner seams:** TinyMCP transport/stdio/mod.rs; TinyFlows caps/host/script/runner.rs;
 TinyComputer browser process startup/egress contracts.
 
 1. Replace resolve_* with module Plan→TinyBox BoxSpec/Placement conversion.
@@ -618,6 +616,17 @@ unavailable result after its access and approval gates and contains no process
 spawn; the sandbox README now records that accurately. Installing packages
 remains an unimplemented capability until a safe scoped installer can run through
 the TinySecurity plan and TinyBox executor.
+
+**Process inventory scope check (2026-10-23):** rechecked the current tracked
+tree and Cargo manifests. This checkout has no `tinyruntime` submodule or
+dependency, `runtime/python_server/{server,kompress}.rs`, `runtime/pool/`, or
+`agent/host_runtime.rs`; those paths from the original task list are not current
+OpenHuman spawn sites. TinyFlows' direct `ProcessCodeRunner` and
+`ProcessShellRunner` are behind its `host-caps` feature, which OpenHuman does not
+enable. The linked module's `CapsHostPorts` instead delegates code execution to
+OpenHuman's `OpenHumanCode`, which runs through `sandbox::untrusted::run` and is
+covered by the committed spawner inventory. TinyComputer's worker and browser
+processes remain module-owned and require the owner-side acceptance tracked below.
 
 ## Task 15 — Host audit, scan/consequence gates and crypto facades
 
