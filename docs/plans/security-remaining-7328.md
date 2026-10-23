@@ -616,6 +616,17 @@ pairing adapters, web3/seams.rs, x402/seams.rs, TinyComputer/TinySkills adapters
 4. Remove obsolete aliases, unused redaction/PII helpers, unused_import allowances,
    config fields and old tests only together with passing replacement coverage.
 
+**Keyring and legacy import audit (2026-10-23):** `OsMasterKeySource` treats
+only `NoEntry` as absence; denied and platform failures return errors and do not
+mint or fall back to a workspace key. The OS availability probe fails closed
+when a write is denied and retries after its backend is replaced. Legacy
+`dev-keychain.json` data is retained when invalid, and is removed only after
+the encrypted copy is durable and verified. Focused suites pass: keyring
+backend 9/9, master-key source 7/7, and encrypted-file migration 29/29. The
+generic OS backend's historical `Unavailable` read/delete mapping remains
+unchanged; this audit found no master-key replacement or legacy-import data-loss
+path through it.
+
 **TinyComputer progress (2026-10-22):** upstream PR [#152](https://github.com/tinyhumansai/tinycomputer/pull/152)
 merged at `82d0aa6`. Its live Chromium test exercises the TinyComputer module's
 host authorization callback and verifies that changed policy produces no new
