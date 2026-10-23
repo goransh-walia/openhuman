@@ -5,13 +5,54 @@
 //! unambiguous and stable across platforms.
 
 use sha2::{Digest, Sha256};
-use tinyskills::{ScanDocument, ScanReport, ScanResource, Verdict};
+use tinyskills::{ScanDocument, ScanReport, ScanResource, Skill, Verdict};
+
+use crate::skills::registry::WorkflowDefinition;
 
 /// Scan verdict and content identity for one workflow bundle snapshot.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SkillScanSnapshot {
     pub(crate) verdict: Verdict,
     pub(crate) bundle_sha256: String,
+}
+
+/// Scan the exact workflow prompt plus every discovered text resource.
+///
+/// Resource reads use TinySkills' path and size validation. A stale, unsafe,
+/// non-text, or unreadable resource makes the scan fail closed.
+pub(crate) fn scan_workflow(
+    workflow: &WorkflowDefinition,
+    source: Option<&Skill>,
+) -> Result<SkillScanSnapshot, String> {
+    let document = match &workflow.definition.system_prompt {
+        tinyagents_definition::PromptSource::Inline(document) => document,
+        _ => return Err("workflow scan requires an inline document".into()),
+    };
+    let mut resources = Vec::new();
+    if let Some(source) = source {
+        for path in &source.resources {
+            let relative = path
+                .to_str()
+                .ok_or_else(|| "workflow resource path is not valid UTF-8".to_string())?;
+            let text = tinyskills::read_resource(source, path)
+                .map_err(|error| format!("workflow resource could not be scanned: {error}"))?;
+            resources.push((relative.to_owned(), text));
+        }
+    }
+    let borrowed = resources
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect::<Vec<_>>();
+    Ok(scan_bundle_snapshot(document, &borrowed))
+}
+
+/// Return a refusal until a warning verdict has been approved by TinySecurity.
+pub(crate) fn unapproved_scan_refusal(snapshot: &SkillScanSnapshot) -> Option<&'static str> {
+    match snapshot.verdict {
+        Verdict::Pass => None,
+        Verdict::Warn => Some("workflow scan warning requires human approval"),
+        Verdict::Block => Some("workflow scan blocked this bundle"),
+    }
 }
 
 /// Scan the document and resources and bind the result to their exact content.

@@ -44,7 +44,7 @@ pub async fn spawn_workflow_run_background(
     parent_origin: Option<crate::security::turn_origin::AgentTurnOrigin>,
 ) -> Result<WorkflowRunStarted, String> {
     let workspace = resolve_workspace_dir().await;
-    let skill = registry::get_workflow(&workspace, &skill_id_param)
+    let (skill, scan_source) = registry::get_workflow_with_source(&workspace, &skill_id_param)
         .ok_or_else(|| format!("workflow_run: unknown skill '{skill_id_param}'"))?;
     let inputs = inputs_param.unwrap_or(Value::Null);
     let missing = registry::missing_required_inputs(&skill.inputs, &inputs);
@@ -53,6 +53,14 @@ pub async fn spawn_workflow_run_background(
             "workflow_run: missing required inputs: {}",
             missing.join(", ")
         ));
+    }
+
+    // Scan before any workflow instructions or resources reach the orchestrator.
+    // Warnings stay fail-closed here until the caller's TinySecurity approval
+    // handoff can bind the decision to this exact scan digest.
+    let scan = super::skill_scan::scan_workflow(&skill, scan_source.as_ref())?;
+    if let Some(reason) = super::skill_scan::unapproved_scan_refusal(&scan) {
+        return Err(format!("workflow_run: {reason}"));
     }
 
     // ── Preflight gates ─────────────────────────────────────────────

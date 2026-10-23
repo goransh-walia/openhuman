@@ -1,4 +1,4 @@
-use super::skill_scan::scan_bundle_snapshot;
+use super::skill_scan::{scan_bundle_snapshot, unapproved_scan_refusal};
 use super::*;
 use tinyskills::Verdict as ScanVerdict;
 
@@ -27,4 +27,24 @@ fn scanner_verdict_covers_the_document_and_bundled_resources() {
 
     assert_eq!(document_block.verdict, ScanVerdict::Block);
     assert_eq!(resource_block.verdict, ScanVerdict::Block);
+}
+
+#[test]
+fn only_a_clean_scan_can_run_without_a_security_approval() {
+    let clean = scan_bundle_snapshot("ordinary workflow text", &[]);
+    let warning = scan_bundle_snapshot(
+        "ordinary workflow text",
+        &[("scripts/runner.exe", "executable resource")],
+    );
+    let blocked = scan_bundle_snapshot("text\u{200b}with invisible control", &[]);
+
+    assert_eq!(unapproved_scan_refusal(&clean), None);
+    assert_eq!(
+        unapproved_scan_refusal(&warning),
+        Some("workflow scan warning requires human approval")
+    );
+    assert_eq!(
+        unapproved_scan_refusal(&blocked),
+        Some("workflow scan blocked this bundle")
+    );
 }
