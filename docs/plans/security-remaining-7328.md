@@ -646,6 +646,13 @@ socket to either the old allowed listener or the denied rebound listener. This
 does not supply TinyComputer consequence/payment gates or prove native OS process
 confinement; both remain open under Tasks 14–15.
 
+**TinyComputer transport follow-up (2026-10-23):** PR [#158](https://github.com/tinyhumansai/tinycomputer/pull/158)
+merged at `6b0a3c8`. Its live Chromium test confirms the browser transport dials
+only the exact host-authorized socket, even when a denied host shares the same
+port. All module CI checks passed. This is transport evidence only; TinyComputer
+#111 remains open for controlled DNS rebinding, TinySecurity-backed authority,
+worker/direct-socket confinement and cross-platform acceptance.
+
 The consequence gate still lacks a trusted host caller context: the module
 callback knows the paused task and action, but not the tenant-bound dispatch
 context that initiated `ContinueTask`. TinyComputer PR
