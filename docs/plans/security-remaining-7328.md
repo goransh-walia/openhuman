@@ -289,6 +289,14 @@ checks pass. The update is pushed as `ed63e62`; hosted checks and the requested
 CodeRabbit re-review are pending. This remains test-fixture work and does not
 change the production module pin.
 
+**Hosted Windows follow-up (2026-10-23):** the first PR #46 Windows Rust job
+failed in `secret_cipher_native_contract` at mode 13, where
+`ExecuteSecretCipher2` exceeded the fixture's 5-second bus timeout while the
+test configuration had secret-cipher encryption disabled. Modes 0–12 passed;
+the failure is in native contract verification, not the resolver coverage test.
+The other platforms and a second parallel CI run are still in progress, so the
+cause is not yet classified as a repeatable defect or a runner timing issue.
+
 ## Task 6 — Audit engine and callback infrastructure
 
 **Owner files:** new `crates/tinysecurity-audit/{Cargo.toml,src/lib.rs}`, internal
