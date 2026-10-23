@@ -591,12 +591,14 @@ Linux native resource limits; it is only part of the TinyBox #27 work and does
 not complete cross-platform jail, microVM, Docker, or process-launch coverage.
 TinyBox PR [#112](https://github.com/tinyhumansai/tinybox/pull/112) has since
 merged as `b0b5969ab6d04b64c478e1f012b6af2ac53fc171`, bringing canonical TSD v2
-storage to main. PR #103 conflicted with that storage migration in
-`grants_manifest_e2e.rs`; its updated head `873f9789fa0cca5006ddb0779462be441d40a836`
-merges current main and preserves both the storage test host and canonical
-private staging path. GitHub reports it mergeable and CI is running. Keep it in
-draft until a compatible TinyBox release is available and OpenHuman's host
-adapter is updated.
+storage to main. The current PR #103 head is
+`97e82cfe38fd18cd01dd8a38f381cfb845e16a68`; GitHub reports it mergeable but
+behind `main`. Its latest hosted CI run `39873052970` passed the native-resource,
+module, coverage, lint, MSRV and cross-platform checks. A separate OpenHuman
+worktree has a local TinyBox branch that incorporates current main and fixes the
+`grants_manifest_e2e.rs` storage fixture, but that branch is not the PR head and
+must not be pushed over PR #103. Keep the PR in draft until a compatible TinyBox
+release is available and the OpenHuman host adapter is updated.
 The first post-merge CI run passed all 51 native jail unit tests but failed the
 separate resource cancellation proof because it constructed production storage
 without a served host callback. The test now uses TinyBox's testkit-backed
