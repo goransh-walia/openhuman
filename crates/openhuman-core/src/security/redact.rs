@@ -1,8 +1,9 @@
 //! The host's one redaction entry point for synchronous callers, answered by
 //! the TinySecurity module.
 //!
-//! The module owns what text and endpoints may reveal (`Text`, `EndpointOrigin`,
-//! `EndpointHost`): credentials, paths, queries and fragments never survive.
+//! The module owns what text and endpoints may reveal (`Text`, `Endpoint`,
+//! `EndpointOrigin`, `EndpointHost`): credentials, queries and fragments never
+//! survive endpoint rendering.
 //! These helpers exist because `tracing` fields, durable audit rows and
 //! artifact writers are synchronous; they go through the shared sync seam and
 //! answer the suppression marker, never the original text, when the module
@@ -13,6 +14,13 @@
 #[must_use]
 pub fn endpoint_origin(url: &str) -> String {
     redact(Kind::Origin, url)
+}
+
+/// URL with credentials, query and fragment removed while preserving its safe
+/// path, for diagnostics and install output that benefit from endpoint context.
+#[must_use]
+pub fn endpoint(url: &str) -> String {
+    redact(Kind::Endpoint, url)
 }
 
 /// Hostname of `url` only (no scheme, port, credentials or path).
@@ -207,6 +215,7 @@ fn module_text(_input: &str) -> Option<String> {
 const TEXT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 enum Kind {
+    Endpoint,
     Origin,
     Host,
 }
@@ -215,6 +224,7 @@ enum Kind {
 fn redact(kind: Kind, input: &str) -> String {
     use crate::modules::security::text::{redact_for_log, RedactMode};
     let mode = match kind {
+        Kind::Endpoint => RedactMode::Endpoint,
         Kind::Origin => RedactMode::EndpointOrigin,
         Kind::Host => RedactMode::EndpointHost,
     };
