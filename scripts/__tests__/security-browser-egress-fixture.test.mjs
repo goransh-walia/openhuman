@@ -16,7 +16,7 @@ test("native browser egress fixture runs security and opt-in Chromium tests", ()
   const bash = join(dir, "bash");
   writeFileSync(
     bash,
-    `#!/bin/sh\nprintf 'ARGS %s\\n' "$*" >> "${log}"\n`,
+    `#!/bin/sh\nprintf 'ARGS %s\\nDNS %s\\n' "$*" "${TINYSECURITY_TEST_DNS_SEQUENCE:-}" >> "${log}"\n`,
   );
   chmodSync(bash, 0o755);
 
@@ -32,6 +32,7 @@ test("native browser egress fixture runs security and opt-in Chromium tests", ()
   assert.equal(result.status, 0, result.stderr);
   const calls = readFileSync(log, "utf8");
   assert.match(calls, /cargo build -p tinysecurity-module/);
+  assert.match(calls, /cargo build -p tinysecurity-module --features native-security-tests/);
   assert.match(calls, /cargo build -p tinycomputer/);
   assert.match(calls, /cargo test -p openhuman --lib/);
   assert.match(calls, /--features[^\n]*native-security-tests/);
@@ -51,4 +52,15 @@ test("native browser egress fixture runs security and opt-in Chromium tests", ()
   );
   assert.ok(browserTest, "real-module Chromium test is selected");
   assert.match(browserTest, /-- --ignored --exact$/);
+  const rebindingTest = invocations.find((line) =>
+    line.includes(
+      "modules::browser_egress_host::tests::loaded_tinycomputer_rejects_public_to_loopback_dns_rebinding",
+    ),
+  );
+  assert.ok(rebindingTest, "controlled DNS rebinding test is selected");
+  assert.match(rebindingTest, /-- --ignored --exact$/);
+  assert.match(
+    invocations.join("\n"),
+    /DNS \{"rebind\.test":\["8\.8\.8\.8","127\.0\.0\.1"\]\}/,
+  );
 });
