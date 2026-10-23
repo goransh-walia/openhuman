@@ -360,29 +360,16 @@ fn expand_tilde_has_no_mixed_separators_on_windows() {
 }
 
 #[test]
-fn redact_home_replaces_home_prefix_and_passes_through_others() {
+fn redact_home_suppresses_paths_when_tinysecurity_is_unavailable() {
     let home = dirs::home_dir().expect("home dir resolvable in test env");
 
-    // A path under home is redacted to `~/...` — the username/home prefix is
-    // stripped but the diagnostic suffix is preserved.
     let under_home = home.join("OpenHuman").join("projects");
-    let redacted = redact_home(&under_home);
-    assert!(
-        redacted.starts_with('~'),
-        "expected a `~`-prefixed path, got: {redacted}"
-    );
-    assert!(
-        !redacted.contains(&*home.to_string_lossy()),
-        "redacted path must not contain the raw home dir: {redacted}"
-    );
-    assert!(
-        redacted.contains("OpenHuman"),
-        "diagnostic suffix should be preserved: {redacted}"
-    );
-
-    // A path outside the home dir is returned unchanged.
     let outside = std::path::Path::new("/var/lib/openhuman/action");
-    assert_eq!(redact_home(outside), "/var/lib/openhuman/action");
+    assert_eq!(
+        redact_home(&under_home),
+        crate::core::log_redaction::SUPPRESSED
+    );
+    assert_eq!(redact_home(outside), crate::core::log_redaction::SUPPRESSED);
 }
 
 #[tokio::test]
