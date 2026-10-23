@@ -522,6 +522,13 @@ The synchronous `Text` redactor now suppresses the complete value when the
 module cannot answer. Its consumers persist artifact bodies or put failure text
 back into model context, so the log-only floor no longer substitutes for the
 module there; the feature-off regression pins the suppression marker.
+The skill installer now routes URL diagnostics through TinySecurity's
+`Endpoint` mode, retaining safe paths while stripping credentials, queries and
+fragments. Startup path logging also uses the shared `Text` facade instead of a
+host-owned home-prefix redactor: it retains the conventional `~/...` display
+when the released module answers and suppresses the full path while unavailable.
+The unavailable-module regression failed against the old helper, then passed;
+the released-archive redaction test passes for the module-backed path.
 
 ## Task 13 — Host approval adapter, middleware and frontend
 
