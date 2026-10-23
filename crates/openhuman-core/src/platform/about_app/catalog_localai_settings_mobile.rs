@@ -429,7 +429,7 @@ Capability {
                       untrusted code, and hosted multi-tenant deployments ignore \
                       OPENHUMAN_SANDBOX=off. Current limitations: local sandboxing is refused \
                       on macOS (Seatbelt is best-effort) and sandboxed commands are planned \
-                      offline; both are fixed in tinysecurity#27, not yet released.",
+                      offline; TinyBox issue #27 tracks the remaining capability and network enforcement work.",
         how_to: "Set sandbox_mode = \"sandboxed\" in agent.toml, or configure runtime.kind = \
                  \"docker\" in the TOML config. Use openhuman.sandbox_status / \
                  openhuman.sandbox_resolve_policy RPC to inspect. Switched off by [components] sandbox = false (also set by the legacy [sandbox] enabled = false), which never loads the TinyBox module, runs commands unjailed under the Rust path checks, and answers COMPONENT_DISABLED:sandbox.",
