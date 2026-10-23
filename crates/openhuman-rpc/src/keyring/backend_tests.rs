@@ -230,10 +230,16 @@ fn a_denied_availability_probe_fails_closed_and_retries_after_backend_change() {
     let _lock = availability_test_lock();
 
     install_secret_backend(Arc::new(locked_os_backend()));
-    assert!(!is_available(), "a denied write must fail the OS-store probe");
+    assert!(
+        !is_available(),
+        "a denied write must fail the OS-store probe"
+    );
 
     install_secret_backend(Arc::new(fake_os_backend()));
-    assert!(is_available(), "installing an available backend resets the probe");
+    assert!(
+        is_available(),
+        "installing an available backend resets the probe"
+    );
 
     clear_secret_backend();
 }
